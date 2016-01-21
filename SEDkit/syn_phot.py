@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # Synthetic Photomotery
-import warnings, glob, os, cPickle, numpy as np, astropy.units as q, astropy.constants as ac, matplotlib.pyplot as plt, BDdb, utilities as u
+import warnings, glob, os, cPickle, numpy as np, astropy.units as q, astropy.constants as ac, matplotlib.pyplot as plt, utilities as u
 from itertools import combinations, chain, groupby
 warnings.simplefilter('ignore')
 RSR = u.get_filters()
