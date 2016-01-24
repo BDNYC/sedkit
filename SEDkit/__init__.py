@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from .mcmc_fit import *
+# from .mcmc_fit import *
 from .SED import *
 from .syn_phot import *
 from .interact import *

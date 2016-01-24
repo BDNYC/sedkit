@@ -298,14 +298,14 @@ def spectral_index(spectrum, spec_index, data_table='', plot=False):
   '''
   Return value of given *spec_index* for input *spectrum* as spectrum_id or [w,f,e]
   '''
-  db = BDdb.get_db(database_path)
+  db = astrodb.get_db(database_path)
   indeces = {'IRS-CH4':{'w11':8.2, 'w12':8.8, 'w21':9.7, 'w22':10.3},
              'IRS-NH3':{'w11':9.7, 'w12':10.3, 'w21':10.5, 'w22':11.1},
                'H2O_A':{'w11':1.55, 'w12':1.56, 'w21':1.492, 'w22':1.502}, 
                   'Na':{'w11':1.15, 'w12':1.16, 'w21':1.134, 'w22':1.144}}
   
   if isinstance(spectrum,int):
-    data = db.query("SELECT * FROM spectra WHERE id={}".format(str(spectrum)), fetch='one', DICT=True)
+    data = db.query("SELECT * FROM spectra WHERE id={}".format(str(spectrum)), fetch='one', fmt='dict')
     w, f, e = data['wavelength']/(1000. if data['wavelength'][0]>500 else 1.), data['flux'], data['unc']
   elif isinstance(spectrum,list): w, f, e = [i.value for i in spectrum]
   
@@ -849,7 +849,7 @@ class get_data(object):
 class SED(object):
   def __init__(self, source_id, spec_ids=[], dist='', pi='', age='', membership='', radius='', binary=False, pop=[], 
                SNR_trim='', SNR='', trim='', SED_trim=[], weighting=True, smoothing=[], est_mags=True, any_mag_mag=False, 
-               evo_model='hybrid_solar_age', database=database_path, fit=False, plot=False,
+               evo_model='hybrid_solar_age', database='', fit=False, plot=False,
                data_pickle=''):
     """
     Pulls all available data from the BDNYC Data Archive, constructs an SED, and stores all calculations at *pickle_path*
@@ -898,7 +898,7 @@ class SED(object):
       The get_data() object to write new data to
       
     """
-    db = BDdb.get_db(database) if isinstance(database,str) else database
+    db = astrodb.get_db(database) if isinstance(database,str) else database
     self.data, self.model_fits = {}, []
     
     try:
@@ -908,7 +908,7 @@ class SED(object):
       # =====================================================================================================================================
     
       # Retreive source metadata
-      source = db.query("SELECT * FROM sources WHERE id={0} OR unum='{0}' OR shortname='{0}' OR designation='{0}'".format(str(source_id)), fetch='one', DICT=True) 
+      source = db.query("SELECT * FROM sources WHERE id={0} OR unum='{0}' OR shortname='{0}' OR designation='{0}'".format(str(source_id)), fetch='one', fmt='dict') 
       self.name = self.data['name'] = source['names'].split(',')[0] if source['names'] else source['shortname'] or source['designation'] or source['unum'] or '-'
       for k in ['ra','dec','publication_id','shortname']: self.data[k] = source[k]
       print self.name, "="*(150-len(self.name))
@@ -919,8 +919,8 @@ class SED(object):
       # =====================================================================================================================================
   
       # Retreive OPT and IR spectral type data but choose OPT for M+L and IR for T+Y
-      OPT_SpT = dict(db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='OPT' and adopted=1".format(source['id']), fetch='one', DICT=True) or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='OPT' AND gravity<>''".format(source['id']), fetch='one', DICT=True) or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='OPT'".format(source['id']), fetch='one', DICT=True) or {'spectral_type':'', 'spectral_type_unc':'', 'gravity':'', 'suffix':''})
-      IR_SpT = dict(db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='IR' and adopted=1".format(source['id']), fetch='one', DICT=True) or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='IR' AND gravity<>''".format(source['id']), fetch='one', DICT=True) or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='IR'".format(source['id']), fetch='one', DICT=True) or {'spectral_type':'', 'spectral_type_unc':'', 'gravity':'', 'suffix':''})
+      OPT_SpT = dict(db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='OPT' and adopted=1".format(source['id']), fetch='one', fmt='dict') or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='OPT' AND gravity<>''".format(source['id']), fetch='one', fmt='dict') or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='OPT'".format(source['id']), fetch='one', fmt='dict') or {'spectral_type':'', 'spectral_type_unc':'', 'gravity':'', 'suffix':''})
+      IR_SpT = dict(db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='IR' and adopted=1".format(source['id']), fetch='one', fmt='dict') or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='IR' AND gravity<>''".format(source['id']), fetch='one', fmt='dict') or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime='IR'".format(source['id']), fetch='one', fmt='dict') or {'spectral_type':'', 'spectral_type_unc':'', 'gravity':'', 'suffix':''})
       opt_spec_type = "{}{}{}".format(u.specType(OPT_SpT.get('spectral_type')),OPT_SpT.get('suffix') or '',OPT_SpT.get('gravity').replace('\xce\xb4',r'$\delta$').replace('\xce\xb3',r'$\gamma$').replace('\xce\xb2',r'$\beta$') if OPT_SpT.get('gravity') else '') if OPT_SpT.get('spectral_type') else '-'
       ir_spec_type = "{}{}{}".format(u.specType(IR_SpT.get('spectral_type')),IR_SpT.get('suffix') or '',IR_SpT.get('gravity') or '') if IR_SpT.get('spectral_type') else '-'
       SpT = OPT_SpT if any([i in opt_spec_type for i in ['M','L','0355']]) else IR_SpT if ir_spec_type else OPT_SpT
@@ -944,7 +944,7 @@ class SED(object):
       # =====================================================================================================================================
 
       # Retreive distance manually from *dist* argument or convert parallax into distance
-      parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']), fetch='one', DICT=True) or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one', DICT=True) or {'parallax':'', 'parallax_unc':'', 'publication_id':'', 'comment':''}
+      parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']), fetch='one', fmt='dict') or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one', fmt='dict') or {'parallax':'', 'parallax_unc':'', 'publication_id':'', 'comment':''}
       self.parallax = dict(parallax)
       if pi or dist: self.parallax['parallax'], self.parallax['parallax_unc'] = u.pi2pc(dist[0], dist[1], pc2pi=True) if dist else pi
       self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = parallax['parallax'], parallax['parallax_unc'], parallax['publication_id']
@@ -1014,7 +1014,7 @@ class SED(object):
       # =====================================================================================================================================
 
       # Retreive spectra and define target units
-      spectra = db.query("SELECT * FROM spectra WHERE id IN ({}) AND source_id={}".format(','.join(map(str,spec_ids)),source['id']), fetch='all', DICT=True) if spec_ids else filter(None,[db.query("SELECT * FROM spectra WHERE source_id={} AND regime='OPT'".format(source['id']), fetch='one', DICT=True),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='NIR' AND wavelength_order=''".format(source['id']), fetch='one', DICT=True),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='MIR'".format(source['id']), fetch='one', DICT=True)])
+      spectra = db.query("SELECT * FROM spectra WHERE id IN ({}) AND source_id={}".format(','.join(map(str,spec_ids)),source['id']), fetch='all', fmt='dict') if spec_ids else filter(None,[db.query("SELECT * FROM spectra WHERE source_id={} AND regime='OPT'".format(source['id']), fetch='one', fmt='dict'),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='NIR' AND wavelength_order=''".format(source['id']), fetch='one', fmt='dict'),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='MIR'".format(source['id']), fetch='one', fmt='dict')])
       if spec_ids and len(spec_ids)!=len(spectra): print 'Check those spec_ids! One or more does not belong to source {}.'.format(source_id)
       spec_cols = zip(*db.query("pragma table_info('spectra')", fetch='all'))[1]
       self.spectra = pd.DataFrame(spectra, columns=spec_cols).set_index('id') if spectra else pd.DataFrame(columns=spec_cols)

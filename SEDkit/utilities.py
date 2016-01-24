@@ -5,7 +5,7 @@ from random import random
 from heapq import nsmallest, nlargest
 from scipy.interpolate import Rbf
 warnings.simplefilter('ignore')
-package_path = os.path.abspath(__file__)
+package_path = os.path.abspath(__file__).replace('/utilities.py','')
 
 def blackbody(lam, T, Flam=False, radius=1, dist=10, emitted=False):
   """
