@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # from .mcmc_fit import *
-from .SED import *
+from .SEDs import *
 from .syn_phot import *
 from .interact import *
 from .utilities import *

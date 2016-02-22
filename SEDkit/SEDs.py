@@ -8,9 +8,7 @@ from matplotlib.ticker import AutoMinorLocator, MaxNLocator
 from matplotlib import cm
 from astropy.coordinates.angles import Angle
 import sys, os, copy, cPickle, re, interact, pandas as pd, matplotlib.pyplot as plt, astropy.units as q, astropy.constants as ac, astropy.io.ascii as ascii, numpy as np, scipy.stats as st, scipy.interpolate as si, matplotlib.ticker
-import utilities as u
-
-package_path = os.path.dirname(os.path.abspath(__file__))
+import utilities as u, syn_phot as s
 RSR = u.get_filters()
 
 def unitless(data, dtypes=''): return np.array([np.asarray([i.value if hasattr(i,'unit') else i for i in j], dtype=d) for j,d in zip(data,dtypes or ['string']*len(data))])
@@ -27,7 +25,7 @@ def DMEstar(ages, xparam='Lbol', yparam='radius'):
     
   """
   from glob import glob
-  D, data = [], glob(package_path+'/Data/Models/Evolutionary/DMESTAR/isochrones/*.txt')
+  D, data = [], glob('./SEDkit/Data/Models/Evolutionary/DMESTAR/isochrones/*.txt')
   for f in data:
     age = int(os.path.basename(f).split('_')[1][:-5])/1000.
     if age in ages:
@@ -64,7 +62,7 @@ def mag_mag_relations(band, dictionary, consider, try_all=False, to_flux=True, m
   """
   try:
   
-    pickle_path, pop = package_path+'/Data/Pickles/mag_mag_relations.p', []
+    pickle_path, pop ='./SEDkit/Data/Pickles/mag_mag_relations.p', []
   
     # Allow name search instead of having to input the object dictionary
     if isinstance(dictionary,str) and data_table: 
@@ -249,7 +247,8 @@ def isochrones(evo_model='hybrid_solar_age', xparam='Lbol', yparam='radius', age
       fig = plt.figure()
       ax = plt.subplot(111) 
   DME = DMEstar(ages, xparam=xparam, yparam=yparam)
-  D, data = [], [d for d in np.genfromtxt(package_path+'/Data/Models/Evolutionary/{}.txt'.format(evo_model), delimiter=',', usecols=range(6)) if d[0] in ages and d[0] in zip(*DME)[0]]
+  D, data = [], [d for d in np.genfromtxt('./SEDkit/Data/Models/Evolutionary/{}.txt'.format(evo_model), delimiter=',', usecols=range(6)) if d[0] in ages and d[0] in zip(*DME)[0]]
+
   for k,g in groupby(data, key=lambda y: y[0]):
     age, mass, teff, Lbol, logg, radius = [np.array(i) for i in zip(*[list(i) for i in list(g)])[:6]]
     mass *= 1047.2
@@ -340,7 +339,7 @@ def NYMGs():
   return D
 
 class get_data(object):
-  def __init__(self, pickle_path=package_path+'/Data/Pickles/ALL_SEDs.p'):
+  def __init__(self, pickle_path):
     """
     Loads the data pickle constructed from SED calculations
     
@@ -355,7 +354,7 @@ class get_data(object):
       self.path = pickle_path
       print 'Data from {} loaded!'.format(pickle_path)
     
-    except: print "Data from {} not loaded! Try again.".format(pickle_path)
+    except IOError: print "Data from {} not loaded! Try again.".format(pickle_path)
   
   def add_source(self, data_dict, name, update=False):
     """
@@ -406,7 +405,7 @@ class get_data(object):
     
     else: print 'Source {} not found in {} pickle.'.format(name,self.data)
   
-  def generate_mag_mag_relations(self, mag_mag_pickle=package_path+'/Data/Pickles/mag_mag_relations.p', pop=[]):
+  def generate_mag_mag_relations(self, mag_mag_pickle='./SEDkit/Data/Pickles/mag_mag_relations.p', pop=[]):
     """
     Generate estimated optical and MIR magnitudes for objects with NIR photometry based on magnitude-magnitude relations of the flux calibrated sample
     
@@ -622,7 +621,7 @@ class get_data(object):
     
           if verbose: u.printer(['Name','SpT',xparam,xparam+'_unc',yparam,yparam+'_unc',zparam,zparam+'_unc','Gravity','Binary','Age'] if zparam else ['Name','SpT',xparam,xparam+'_unc',yparam,yparam+'_unc','Gravity','Binary','Age'], zip(*[N,S,X,Xsig,Y,Ysig,Z,Zsig,G,B,NYMG]) if zparam else zip(*[N,S,X,Xsig,Y,Ysig,G,B,NYMG]), empties=True)
         if return_data=='params': data_out.append(z)
-        if output_data and output_data!='polynomials': u.printer(['Name','SpT',xparam,xparam+'_unc',yparam,yparam+'_unc',zparam,zparam+'_unc','Gravity','Binary','Age'], zip(*[N,S,X,Xsig,Y,Ysig,Z,Zsig,G,B,NYMG]), empties=True, to_txt=package_path+'/Files/{} v {} v {}.txt'.format(xparam,yparam,zparam)) if zparam else u.printer(['Name',xparam,xparam+'_unc',yparam,yparam+'_unc','Gravity','Binary','Age'] if xparam=='SpT' else ['Name','SpT',xparam,xparam+'_unc',yparam,yparam+'_unc','Gravity','Binary','Age'], zip(*[N,X,Xsig,Y,Ysig,G,B,NYMG]) if xparam=='SpT' else zip(*[N,S,X,Xsig,Y,Ysig,G,B,NYMG]), empties=True, to_txt=package_path+'/Files/{} v {}.txt'.format(xparam,yparam))
+        if output_data and output_data!='polynomials': u.printer(['Name','SpT',xparam,xparam+'_unc',yparam,yparam+'_unc',zparam,zparam+'_unc','Gravity','Binary','Age'], zip(*[N,S,X,Xsig,Y,Ysig,Z,Zsig,G,B,NYMG]), empties=True, to_txt='./SEDkit/Files/{} v {} v {}.txt'.format(xparam,yparam,zparam)) if zparam else u.printer(['Name',xparam,xparam+'_unc',yparam,yparam+'_unc','Gravity','Binary','Age'] if xparam=='SpT' else ['Name','SpT',xparam,xparam+'_unc',yparam,yparam+'_unc','Gravity','Binary','Age'], zip(*[N,X,Xsig,Y,Ysig,G,B,NYMG]) if xparam=='SpT' else zip(*[N,S,X,Xsig,Y,Ysig,G,B,NYMG]), empties=True, to_txt='/Files/{} v {}.txt'.format(xparam,yparam))
   
       # Options to format axes, draw legend and save
       if 'SpT' in xparam and spt==['M','L','T','Y'] and not xticks: 
@@ -847,9 +846,9 @@ class get_data(object):
       plt.close()
 
 class SED(object):
-  def __init__(self, source_id, spec_ids=[], dist='', pi='', age='', membership='', radius='', binary=False, pop=[], 
+  def __init__(self, source_id, database, spec_ids=[], dist='', pi='', age='', membership='', radius='', binary=False, pop=[], 
                SNR_trim='', SNR='', trim='', SED_trim=[], weighting=True, smoothing=[], est_mags=True, any_mag_mag=False, 
-               evo_model='hybrid_solar_age', database='', fit=False, plot=False,
+               evo_model='hybrid_solar_age', fit=False, plot=False,
                data_pickle=''):
     """
     Pulls all available data from the BDNYC Data Archive, constructs an SED, and stores all calculations at *pickle_path*
@@ -858,6 +857,8 @@ class SED(object):
     ----------
     source_id: int, str
       The *source_id*, *unum*, *shortname* or *designation* for any source in the database.
+    database: str, database instance
+      The path to the SQL database file or the database instance to retreive data from
     spec_ids: list, tuple (optional)
       A sequence of the ids from the SPECTRA table to plot. Uses any available spectra if no list is given. Uses no spectra if 'None' is given.
     dist: list, tuple (optional)
@@ -892,8 +893,6 @@ class SED(object):
       Use any mag-mag relation to estimate missing mags, not just the relations with the tightest correllation
     evo_model: str
       The name of the evolutionary model isochrones to use for radius, logg, and mass estimations
-    database: str, database instance
-      The path to the SQL database file or the database instance to retreive data from
     data_pickle: object (optional)
       The get_data() object to write new data to
       
@@ -944,12 +943,12 @@ class SED(object):
       # =====================================================================================================================================
 
       # Retreive distance manually from *dist* argument or convert parallax into distance
-      parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']), fetch='one', fmt='dict') or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one', fmt='dict') or {'parallax':'', 'parallax_unc':'', 'publication_id':'', 'comment':''}
+      parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']), fetch='one', fmt='dict') or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one', fmt='dict') or {'parallax':'', 'parallax_unc':'', 'publication_id':'', 'comments':''}
       self.parallax = dict(parallax)
       if pi or dist: self.parallax['parallax'], self.parallax['parallax_unc'] = u.pi2pc(dist[0], dist[1], pc2pi=True) if dist else pi
       self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = parallax['parallax'], parallax['parallax_unc'], parallax['publication_id']
       self.data['d'], self.data['d_unc'] = dist or (u.pi2pc(self.data['pi'], self.data['pi_unc']) if self.data['pi_unc'] else ['',''])
-      self.data['kinematic'] = True if self.parallax['comment'] and 'kinematic' in self.parallax['comment'].lower() else False
+      self.data['kinematic'] = True if self.parallax['comments'] and 'kinematic' in self.parallax['comments'].lower() else False
       if not self.data['d']: print 'No distance for flux calibration!'
 
       # =====================================================================================================================================
@@ -957,39 +956,47 @@ class SED(object):
       # =====================================================================================================================================
 
       # Retreive all apparent photometry, get lowest SNR values, and convert to Vega system
-      all_photometry = [[('MKO_' if l==7 else 'DENIS_' if l==15 else '')+i, float(j), None if k=='null' else float(k), str(p)] for i,j,k,l,p in db.query("SELECT band,magnitude,magnitude_unc,system,publication_id FROM photometry WHERE source_id={}".format(source['id']), fetch='all') if j!='null']
+      all_photometry = db.query("SELECT band,magnitude,magnitude_unc,publication_id FROM photometry WHERE source_id=?", (source['id'],))
       self.photometry = pd.DataFrame(columns=('band', 'eff', 'm', 'm_unc', 'ref'))  
             
       # If a band has only one mag with an uncertainty or upper limit, use it. If it has multiple mags or some mags with uncertainties and others with upper limits, use the mag with the lowest uncertainty
-      for k,g in groupby(sorted(all_photometry), lambda x:x[0]):
+      # for k,g in groupby(sorted(all_photometry), lambda x:x[0]):
+      for k,g in groupby(list(all_photometry), lambda x:x[0]):
         BAND = list(g)
         try:
           bnds, mags, uncs, pubs = map(np.array,zip(*[i for i in BAND if (i[-1] and any([j[-1] for j in BAND])) or (not i[-1] and len(BAND)==1)]))
-          if k not in pop: self.photometry = self.photometry.append(pd.DataFrame([[k, RSR[k]['eff'], mags[0]-RSR[k]['toVega'], uncs[0] or '', pubs[0] if pubs[0] and pubs[0]!='None' else (284 if k in ['u','g','r','i','z'] else 1 if k in ['J','H','Ks'] else 516 if k in ['DENIS_I','DENIS_J','DENIS_Ks'] else '')]], columns=('band', 'eff', 'm', 'm_unc', 'ref')))
-        except: print '{} photometry could not be included.'.format(BAND[0][0])
+          if k not in pop: 
+            self.photometry = self.photometry.append(pd.DataFrame([[k, RSR[k]['eff'], float(mags[0])-RSR[k]['toVega'], float(uncs[0]) or '', pubs[0]]], columns=('band', 'eff', 'm', 'm_unc', 'ref')))
+        except: 
+          pass
+          # print '{} photometry could not be included.'.format(BAND[0][0])
       self.photometry.set_index('band', inplace=True)  
          
       if not self.photometry.empty:  
-        # Calculate apparent fluxes, and absolute mags and fluxes if possible
+        # Calculate apparent fluxes
         app_fluxes = pd.DataFrame([[k]+u.mag2flux(k, self.photometry.loc[:,'m'][k], sig_m=self.photometry.loc[:,'m_unc'][k], photon=False, filter_dict=RSR) for k in self.photometry.index.values], columns=('band','m_flux','m_flux_unc')).set_index('band')
+        
+        # Calculate absolute mags and fluxes if distance is provided
         if self.data['d']: 
           abs_mags = pd.DataFrame([[k]+u.flux_calibrate(self.photometry.loc[:,'m'][k], self.data['d'], sig_m=self.photometry.loc[:,'m_unc'][k], sig_d=self.data['d_unc']) for k in self.photometry.index.values], columns=('band','M','M_unc')).set_index('band')
           abs_fluxes = pd.DataFrame([[k]+u.mag2flux(k, abs_mags.loc[:,'M'][k], sig_m=abs_mags.loc[:,'M_unc'][k], photon=False, filter_dict=RSR) for k in self.photometry.index.values], columns=('band','M_flux','M_flux_unc')).set_index('band')
         else: abs_mags, abs_fluxes = pd.DataFrame([[k,None,None] for k in self.photometry.index.values], columns=('band','M','M_unc')).set_index('band'), pd.DataFrame([[k,None,None] for k in self.photometry.index.values], columns=('band','M_flux','M_flux_unc')).set_index('band')
+        
+        # Add them to the dataframe
         self.photometry = self.photometry.join([app_fluxes,abs_mags,abs_fluxes])
           
         # Generate absolute flux dictionary for missing photometry estimation
         if self.data['d'] and est_mags:
           # Create dictionary with band/abs_mag key/value pairs
           phot_dict, abs_mag_dict = df_extract(self.photometry.reset_index(), ['band','M','M_unc']), self.data.copy()
-          phot_dict = {'M_'+i:j for i,j in zip(phot_dict[0],phot_dict[1])}.items()+{'M_'+i+'_unc':j for i,j in zip(phot_dict[0],phot_dict[2])}.items()
+          phot_dict = {"M_{}".format(i):j for i,j in zip(phot_dict[0],phot_dict[1])}.items()+{"M_{}_unc".format(i):j for i,j in zip(phot_dict[0],phot_dict[2])}.items()
           abs_mag_dict.update(phot_dict)
       
           # Calculate the missing magnitudes using any mag-mag relation or just specific, well-corellated ones
-          relations = {k:RSR.keys() for k in RSR.keys()} if any_mag_mag else {'u':['Ks','MKO_K'], 'g':['J','MKO_J'], 'r':['H','MKO_H'], 'i':['H','MKO_H'], 'z':['J','MKO_J'], '[3.6]':['W1','Ks'], '[4.5]':['W2','Ks'], '[5.8]':['W1'], '[8]':['W1'], 'J':['MKO_J'], 'H':['MKO_H'], 'Ks':['MKO_K'], 'W1':['[3.6]','MKO_L','Ks'], 'W2':['[4.5]','MKO_L','Ks'], 'W3':['[8]','W2'], 'MKO_L':['[3.6]','W1']}    
-          
+          relations = {k:RSR.keys() for k in RSR.keys()} if any_mag_mag else {'SDSS_u':['2MASS_Ks','MKO_K'], 'SDSS_g':['2MASS_J','MKO_J'], 'SDSS_r':['2MASS_H','MKO_H'], 'SDSS_i':['2MASS_H','MKO_H'], 'SDSS_z':['2MASS_J','MKO_J'], 'IRAC_ch1':['WISE_W1','2MASS_Ks'], 'IRAC_ch2':['WISE_W2','2MASS_Ks'], 'IRAC_ch3':['WISE_W1'], 'IRAC_ch4':['WISE_W1'], '2MASS_J':['MKO_J'], '2MASS_H':['MKO_H'], '2MASS_Ks':['MKO_K'], 'WISE_W1':['IRAC_ch2',"MKO_L'",'2MASS_Ks'], 'WISE_W2':['IRAC_ch2',"MKO_L'",'2MASS_Ks'], 'WISE_W3':['IRAC_ch4','WISE_W2'], "MKO_L'":['IRAC_ch1','WISE_W1']}    
+
           # Get absolute magnitudes for missing bands only if there is an uncertainty
-          est_fluxes = [m for m in [[k,RSR[k]['eff']]+mag_mag_relations('M_'+k, abs_mag_dict, [i for i in relations.get(k) if abs_mag_dict.get('M_'+i+'_unc')], mag_and_flux=True, try_all=any_mag_mag) for k in list(set(relations.keys())-set(self.photometry.index.values))] if m[2] and m[3]]
+          est_fluxes = [m for m in [[k,RSR[k]['eff']]+mag_mag_relations("M_{}".format(k), abs_mag_dict, [i for i in relations.get(k) if abs_mag_dict.get("M_{}_unc".format(i))], mag_and_flux=True, try_all=any_mag_mag) for k in list(set(relations.keys())-set(self.photometry.index.values))] if m[2] and m[3]]
           if any(est_fluxes):
             abs_phot = pd.DataFrame(est_fluxes, columns=('band','eff','m','m_unc','m_flux','m_flux_unc','M','M_unc','M_flux','M_flux_unc','ref'))
             self.photometry = self.photometry.reset_index().merge(abs_phot, how='outer').set_index('band')
@@ -997,15 +1004,15 @@ class SED(object):
           
           # Generate absolute flux dictionary for flux calibration
           abs_fluxes = df_extract(self.photometry.reset_index(), ['band','M_flux','M_flux_unc'])
-          abs_fluxes = dict({i:j for i,j in zip(abs_fluxes[0],abs_fluxes[1])}.items()+{i+'_unc':j for i,j in zip(abs_fluxes[0],abs_fluxes[2])}.items())
+          abs_fluxes = dict({i:j for i,j in zip(abs_fluxes[0],abs_fluxes[1])}.items()+{"{}_unc".format(i):j for i,j in zip(abs_fluxes[0],abs_fluxes[2])}.items())
           self.abs_fluxes = abs_fluxes
       
         # Generate apparent flux dictionary for flux calibration
         app_fluxes = df_extract(self.photometry.reset_index(), ['band','m_flux','m_flux_unc'])
-        app_fluxes = dict({i:j for i,j in zip(app_fluxes[0],app_fluxes[1])}.items()+{i+'_unc':j for i,j in zip(app_fluxes[0],app_fluxes[2])}.items())
+        app_fluxes = dict({i:j for i,j in zip(app_fluxes[0],app_fluxes[1])}.items()+{"{}_unc".format(i):j for i,j in zip(app_fluxes[0],app_fluxes[2])}.items())
         self.app_fluxes = app_fluxes
         
-        self.data.update(dict(self.photometry['m_flux'].T.to_dict().items()+{k+'_unc':v for k,v in self.photometry['m_flux_unc'].T.to_dict().items()}.items()))      
+        self.data.update(dict(self.photometry['m_flux'].T.to_dict().items()+{"{}_unc".format(k):v for k,v in self.photometry['m_flux_unc'].T.to_dict().items()}.items()))      
       
       else: print 'No photometry available for SED.'
           
@@ -1013,14 +1020,24 @@ class SED(object):
       # ======================================= PROCESS SPECTRA =============================================================================
       # =====================================================================================================================================
 
-      # Retreive spectra and define target units
-      spectra = db.query("SELECT * FROM spectra WHERE id IN ({}) AND source_id={}".format(','.join(map(str,spec_ids)),source['id']), fetch='all', fmt='dict') if spec_ids else filter(None,[db.query("SELECT * FROM spectra WHERE source_id={} AND regime='OPT'".format(source['id']), fetch='one', fmt='dict'),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='NIR' AND wavelength_order=''".format(source['id']), fetch='one', fmt='dict'),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='MIR'".format(source['id']), fetch='one', fmt='dict')])
+      # Retreive spectra
+      spectra = db.query("SELECT * FROM spectra WHERE id IN ({}) AND source_id={}".format(','.join(map(str,spec_ids)),source['id']), fmt='dict') if spec_ids else filter(None,[db.query("SELECT * FROM spectra WHERE source_id={} AND regime='OPT'".format(source['id']), fetch='one', fmt='dict'),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='NIR' AND wavelength_order=''".format(source['id']), fetch='one', fmt='dict'),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='MIR'".format(source['id']), fetch='one', fmt='dict')])
       if spec_ids and len(spec_ids)!=len(spectra): print 'Check those spec_ids! One or more does not belong to source {}.'.format(source_id)
-      spec_cols = zip(*db.query("pragma table_info('spectra')", fetch='all'))[1]
+      
+      # Create data frame columns
+      spec_cols = db.query("pragma table_info('spectra')", unpack=True)[1]
+      spec_cols = list(spec_cols[spec_cols!='spectrum'])+['wavelength','flux','unc']
+      
+      # Put spectrum into arrays
+      for n,sp in enumerate(spectra):
+        spectrum = spectra[n].pop('spectrum')
+        spectra[n]['wavelength'], spectra[n]['flux'], spectra[n]['unc'] = spectrum.data
+      
+      # Make the data frame
       self.spectra = pd.DataFrame(spectra, columns=spec_cols).set_index('id') if spectra else pd.DataFrame(columns=spec_cols)
       self.data['spec_ids'] = list(self.spectra.index)
       units, spec_coverage = [q.um,q.erg/q.s/q.cm**2/q.AA,q.erg/q.s/q.cm**2/q.AA], []
-  
+
       # Add spectra metadata to SED object
       for r in ['OPT','NIR','MIR']:
         try: self.data[r+'_spec'] = db.query("SELECT id FROM spectra WHERE id in ({}) and regime='{}'".format(','.join(map(str,self.data['spec_ids'])),r), fetch='one')[-1]
@@ -1034,7 +1051,7 @@ class SED(object):
       clean_spectra = []
       for (spec_id,spec) in self.spectra.iterrows():
         # Pull out spectrum
-        w, f, e = [spec[l] for l in ['wavelength','flux','unc']]
+        w, f, e = spec['wavelength'], spec['flux'], spec['unc']
         
         # Force uncertainty array if none
         if e is None: 
@@ -1042,7 +1059,7 @@ class SED(object):
           print 'No uncertainty array for spectrum {}. Using SNR=10.'.format(spec_id)
   
         # Convert wavelength array into microns if necessary
-        w, w_units = (u.str2Q(spec['wavelength_units'], target='um')*spec['wavelength']).value, 'um'
+        w, w_units = (u.str2Q(spec['wavelength_units'], target='um')*w).value, 'um'
 
         # Insert uncertainty array of set SNR to force plotting
         for snr in SNR: 
@@ -1064,7 +1081,7 @@ class SED(object):
         if not SNR or not any([i[0]==spec_id for i in SNR]): w, f, e = [i[np.where(f/e>=snr_trim)[0][0]:np.where(f/e>=snr_trim)[0][-1]+1] for i in [w,f,e]]
         if trim and any([i[0]==spec_id for i in trim]): w, f, e = u.trim_spectrum([w,f,e], [i[1:] for i in trim if i[0]==spec_id])
         if not any(w): spectra.pop(n)
-    
+            
         # Smoothing
         if isinstance(smoothing, (float,int)): f = u.smooth(f, smoothing)
         elif smoothing and any([i[0]==spec_id for i in smoothing]): f = u.smooth(f, i[1])
@@ -1072,7 +1089,9 @@ class SED(object):
         clean_spectra.append([w,f,e])
     
       # Update the spectra in the SED object
-      self.spectra[['wavelength','flux','unc']] = zip(*clean_spectra)
+      wav, flx, err = zip(*clean_spectra)
+      self.spectra['wavelength'] = wav
+      self.spectra[['flux','unc']] = flx, err
       self.spectra[['flux_app','unc_app']] = self.spectra[['flux','unc']]
       
       if self.spectra.empty: print 'No spectra available for SED.'
@@ -1083,9 +1102,9 @@ class SED(object):
 
       # Group overlapping spectra and make composites where possible to form peacewise spectrum for flux calibration
       if len(self.spectra)>1:
-        groups, peacewise = u.group_spectra(list(zip(*self.spectra.T.to_dict().items())[1])), []
-        for group in groups: 
-          composite = u.make_composite([[spec['wavelength']*q.um,spec['flux_app']*q.erg/q.s/q.cm**2/q.AA,spec['unc_app']*q.erg/q.s/q.cm**2/q.AA] for spec in group])
+        groups, peacewise = u.group_spectra(clean_spectra), []
+        for group in groups:
+          composite = u.make_composite([[spec[0]*q.um,spec[1]*q.erg/q.s/q.cm**2/q.AA,spec[2]*q.erg/q.s/q.cm**2/q.AA] for spec in group])
           peacewise.append(composite)
       elif len(self.spectra)==1: peacewise = map(list,self.spectra[['wavelength','flux_app','unc_app']].values)
       else: peacewise = []
@@ -1101,8 +1120,8 @@ class SED(object):
       self.data['SED_spec_app'] = (W, F, E) = finalize_spec([np.asarray(i)*Q for i,Q in zip(u.trim_spectrum([np.concatenate(j) for j in zip(*self.composites[['wavelength','flux_app','unc_app']].values)], SED_trim),units)]) if not self.composites.empty else [np.array([])]*3
 
       # Calculate all spectral indeces
-      if not self.spectra.empty:
-        for sp_idx in ['IRS-CH4','IRS-NH3']: self.data[sp_idx.replace('IRS-','')], self.data[sp_idx.replace('IRS-','')+'_unc'] = spectral_index([W,F,E], sp_idx)
+      # if not self.spectra.empty:
+      #   for sp_idx in ['IRS-CH4','IRS-NH3']: self.data[sp_idx.replace('IRS-','')], self.data[sp_idx.replace('IRS-','')+'_unc'] = spectral_index([W,F,E], sp_idx)
  
       # Create purely photometric SED to fill in spectral SED gaps
       self.data['SED_phot_app'] = (WP0, FP0, EP0) = [Q*np.array([i.value if hasattr(i,'unit') else i for i in self.photometry[['eff','m_flux','m_flux_unc']].sort('eff')[self.photometry['m_flux_unc']!=''][l].values]) for l,Q in zip(['eff','m_flux','m_flux_unc'],units)] if not self.photometry.empty else [np.array([])]*3
@@ -1160,7 +1179,7 @@ class SED(object):
       # ======================================= PRINTING ====================================================================================
       # =====================================================================================================================================
 
-      db.inventory(ID=source['id'], plot=False, verbose=False)
+      # db.inventory(source['id'])
       if not self.photometry.empty: u.printer(['Band','m','m_unc','M','M_unc','Ref'], np.asarray(df_extract(self.photometry.reset_index(), ['band','m','m_unc','M','M_unc','ref'])).T)
       if not self.spectra.empty: u.printer(['Regime','Instrument','Mode','Telescope','Publication','Filename','Obs Date'], np.asarray(df_extract(self.spectra.reset_index(), ['regime','instrument_id','mode_id','telescope_id','publication_id','filename','obs_date'])).T, empties=True)
       if self.data['d']:
@@ -1188,7 +1207,7 @@ class SED(object):
         try: self.fit_SED(param_lims=[('teff', (round(self.data['teff'].value/50.)*50.)-300., (round(self.data['teff'].value/50.)*50.)+300., 50), ('logg',4.0,5.5,0.5)])
         except: plt.close(); print "Couldn't perform MCMC fit to this SED."
       if plot and (not self.spectra.empty or not self.photometry.empty): 
-        try: self.plot(integrals=True, save=package_path+'/Plots/')
+        try: self.plot(integrals=True, save='./SEDkit/Plots/')
         except: plt.close(); print "Couldn't plot this SED."
 
     except IOError: print "Could not build SED for source {}.".format(source['id'])
@@ -1513,9 +1532,6 @@ def fundamental_params(D, p=''):
         D[p+'mass'], D[p+'mass_unc'] = isochrone_interp(D[p+'Lbol'], D[p+'Lbol_unc'], D['age_min'], D['age_max'], yparam='mass')
 
     else: pass
-
-    # Simple luminosity test to reject SEDs with improperly calibrated spectra
-    # if D.get(p+'mbol')<5: D[p+'fbol'] = D[p+'fbol_unc'] = D[p+'mbol'] = D[p+'mbol_unc'] = ''
     
   except IOError: pass
       
@@ -1588,16 +1604,16 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False):
     norm = sum(weight*f1*f2/(e1**2 + e2**2))/sum(weight*f2**2/(e1**2 + e2**2))
     
     # Plotting test
-    if plot:
-      plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
-      plt.loglog(spec[0].value, spec[1].value*norm, label='new', color='b')
-      plt.scatter(w, f1, c='g')
-      plt.scatter(w, f2, c='b')
-      plt.legend()    
+    # if plot:
+    #   plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
+    #   plt.loglog(spec[0].value, spec[1].value*norm, label='new', color='b')
+    #   plt.scatter(w, f1, c='g')
+    #   plt.scatter(w, f2, c='b')
+    #   plt.legend()    
     
     return [spec[0], spec[1]/norm, spec[2]/norm] if reverse else [spec[0], spec[1]*norm, spec[2]*norm]
   
-  except:
+  except IOError:
     print 'No overlapping photometry for normalization!'
     return spec
 

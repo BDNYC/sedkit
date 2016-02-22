@@ -5,7 +5,6 @@ from random import random
 from heapq import nsmallest, nlargest
 from scipy.interpolate import Rbf
 warnings.simplefilter('ignore')
-package_path = os.path.abspath(__file__).replace('/utilities.py','')
 
 def blackbody(lam, T, Flam=False, radius=1, dist=10, emitted=False):
   """
@@ -14,19 +13,7 @@ def blackbody(lam, T, Flam=False, radius=1, dist=10, emitted=False):
   lam, T = lam.to(q.cm), T*q.K
   I = np.pi*(2*ac.h*ac.c**2 / (lam**(4 if Flam else 5) * (np.exp((ac.h*ac.c / (lam*ac.k_B*T)).decompose()) - 1))).to(q.erg/q.s/q.cm**2/(1 if Flam else q.AA))
   return I if emitted else I*((ac.R_jup*radius/(dist*q.pc))**2).decompose()
-
-def idx_include(x, include):
-  try: return np.where(np.array(map(bool,map(sum, zip(*[np.logical_and(x>i[0],x<i[1]) for i in include])))))[0]
-  except TypeError:
-    try: return np.where(np.array(map(bool,map(sum, zip(*[np.logical_and(x>i[0],x<i[1]) for i in [include]])))))[0] 
-    except TypeError: return range(len(x))
-
-def idx_exclude(x, exclude):
-  try: return np.where(~np.array(map(bool,map(sum, zip(*[np.logical_and(x>i[0],x<i[1]) for i in exclude])))))[0]
-  except TypeError: 
-    try: return np.where(~np.array(map(bool,map(sum, zip(*[np.logical_and(x>i[0],x<i[1]) for i in exclude])))))[0]
-    except TypeError: return range(len(x))
-
+  
 def filter_info(band):
   """
   Effective, min, and max wavelengths in [um] and zeropoint in [erg s-1 cm-2 A-1] and [photon s-1 cm-2 A-1] for SDSS, Bessel, 2MASS, IRAC and WISE filters IN THE VEGA SYSTEM. Values from SVO filter profile service.
@@ -34,20 +21,20 @@ def filter_info(band):
   *band*
       Name of filter band (e.g. 'J' from 2MASS, 'W1' from WISE, etc.) or list of filter systems (e.g. ['SDSS','2MASS','WISE'])
   """
-  Filters = { "FUV":     { 'eff': 0.154226, 'min': 0.134032, 'max': 0.180643, 'zp': 6.486734e-09, 'zp_photon': 5.035932e+02, 'toVega':0,      'ext': 2.62,   'system': 'GALEX' },
-              "NUV":     { 'eff': 0.227437, 'min': 0.169252, 'max': 0.300667, 'zp': 4.511628e-09, 'zp_photon': 5.165788e+02, 'toVega':0,      'ext': 2.94,   'system': 'GALEX' },
+  Filters = { "GALEX_FUV":     { 'eff': 0.154226, 'min': 0.134032, 'max': 0.180643, 'zp': 6.486734e-09, 'zp_photon': 5.035932e+02, 'toVega':0,      'ext': 2.62,   'system': 'GALEX' },
+              "GALEX_NUV":     { 'eff': 0.227437, 'min': 0.169252, 'max': 0.300667, 'zp': 4.511628e-09, 'zp_photon': 5.165788e+02, 'toVega':0,      'ext': 2.94,   'system': 'GALEX' },
 
-              "U":       { 'eff': 0.357065, 'min': 0.303125, 'max': 0.417368, 'zp': 3.656264e-09, 'zp_photon': 6.576522e+02, 'toVega':0.0915, 'ext': 1.56,   'system': 'Bessel' }, 
-              "B":       { 'eff': 0.437812, 'min': 0.363333, 'max': 0.549706, 'zp': 6.286883e-09, 'zp_photon': 1.385995e+03, 'toVega':0.0069, 'ext': 1.31,   'system': 'Bessel' }, 
-              "V":       { 'eff': 0.544579, 'min': 0.473333, 'max': 0.687500, 'zp': 3.571744e-09, 'zp_photon': 9.837109e+02, 'toVega':0,      'ext': 1.02,   'system': 'Bessel' },
-              "R":       { 'eff': 0.641420, 'min': 0.550435, 'max': 0.883333, 'zp': 2.157178e-09, 'zp_photon': 6.971704e+02, 'toVega':0.0018, 'ext': 0.83,   'system': 'Bessel' },
-              "I":       { 'eff': 0.797880, 'min': 0.704167, 'max': 0.916667, 'zp': 1.132454e-09, 'zp_photon': 4.549636e+02, 'toVega':-0.0014,'ext': 0.61,   'system': 'Bessel' },
+              "Johnson_U":       { 'eff': 0.357065, 'min': 0.303125, 'max': 0.417368, 'zp': 3.656264e-09, 'zp_photon': 6.576522e+02, 'toVega':0.0915, 'ext': 1.56,   'system': 'Johnson' }, 
+              "Johnson_B":       { 'eff': 0.437812, 'min': 0.363333, 'max': 0.549706, 'zp': 6.286883e-09, 'zp_photon': 1.385995e+03, 'toVega':0.0069, 'ext': 1.31,   'system': 'Johnson' }, 
+              "Johnson_V":       { 'eff': 0.544579, 'min': 0.473333, 'max': 0.687500, 'zp': 3.571744e-09, 'zp_photon': 9.837109e+02, 'toVega':0,      'ext': 1.02,   'system': 'Johnson' },
+              "Cousins_R":       { 'eff': 0.641420, 'min': 0.550435, 'max': 0.883333, 'zp': 2.157178e-09, 'zp_photon': 6.971704e+02, 'toVega':0.0018, 'ext': 0.83,   'system': 'Cousins' },
+              "Cousins_I":       { 'eff': 0.797880, 'min': 0.704167, 'max': 0.916667, 'zp': 1.132454e-09, 'zp_photon': 4.549636e+02, 'toVega':-0.0014,'ext': 0.61,   'system': 'Cousins' },
 
-              "u":       { 'eff': 0.3543,   'min': 0.304828, 'max': 0.402823, 'zp': 3.617963e-09, 'zp_photon': 6.546739e+02, 'toVega':0.91,   'ext': 1.58,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
-              "g":       { 'eff': 0.4770,   'min': 0.378254, 'max': 0.554926, 'zp': 5.491077e-09, 'zp_photon': 1.282871e+03, 'toVega':-0.08,  'ext': 1.23,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
-              "r":       { 'eff': 0.6231,   'min': 0.541534, 'max': 0.698914, 'zp': 2.528924e-09, 'zp_photon': 7.794385e+02, 'toVega':0.16,   'ext': 0.89,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
-              "i":       { 'eff': 0.7625,   'min': 0.668947, 'max': 0.838945, 'zp': 1.409436e-09, 'zp_photon': 5.278550e+02, 'toVega':0.37,   'ext': 0.68,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
-              "z":       { 'eff': 0.9134,   'min': 0.796044, 'max': 1.083325, 'zp': 8.501067e-10, 'zp_photon': 3.807540e+02, 'toVega':0.54,   'ext': 0.52,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
+              "SDSS_u":       { 'eff': 0.3543,   'min': 0.304828, 'max': 0.402823, 'zp': 3.617963e-09, 'zp_photon': 6.546739e+02, 'toVega':0.91,   'ext': 1.58,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
+              "SDSS_g":       { 'eff': 0.4770,   'min': 0.378254, 'max': 0.554926, 'zp': 5.491077e-09, 'zp_photon': 1.282871e+03, 'toVega':-0.08,  'ext': 1.23,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
+              "SDSS_r":       { 'eff': 0.6231,   'min': 0.541534, 'max': 0.698914, 'zp': 2.528924e-09, 'zp_photon': 7.794385e+02, 'toVega':0.16,   'ext': 0.89,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
+              "SDSS_i":       { 'eff': 0.7625,   'min': 0.668947, 'max': 0.838945, 'zp': 1.409436e-09, 'zp_photon': 5.278550e+02, 'toVega':0.37,   'ext': 0.68,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
+              "SDSS_z":       { 'eff': 0.9134,   'min': 0.796044, 'max': 1.083325, 'zp': 8.501067e-10, 'zp_photon': 3.807540e+02, 'toVega':0.54,   'ext': 0.52,   'system': 'SDSS' },  # AB to Vega transformations from Blanton et al. (2007)
               
               "DES_u":   { 'eff': 0.3543,   'min': 0.304828, 'max': 0.402823, 'zp': 5.360165e-09, 'zp_photon': 1.038526e+03, 'toVega':0,      'ext': 0,      'system': 'DES' },
               "DES_g":   { 'eff': 0.4770,   'min': 0.378254, 'max': 0.554926, 'zp': 5.215897e-09, 'zp_photon': 1.243521e+03, 'toVega':0,      'ext': 0,      'system': 'DES' },
@@ -56,56 +43,56 @@ def filter_info(band):
               "DES_z":   { 'eff': 0.9134,   'min': 0.796044, 'max': 1.083325, 'zp': 8.072777e-10, 'zp_photon': 3.712548e+02, 'toVega':0,      'ext': 0,      'system': 'DES' },
               "DES_Y":   { 'eff': 1.0289,   'min': 0.930000, 'max': 1.074600, 'zp': 6.596909e-10, 'zp_photon': 3.280450e+02, 'toVega':0,      'ext': 0,      'system': 'DES' },
 
-              "J1":      { 'eff': 1.052129, 'min': 0.990799, 'max': 1.120951, 'zp': 5.358674e-10, 'zp_photon': 2.838244e+02, 'toVega':0,      'ext': 0.40,   'system': 'FourStar' }, 
-              "J2":      { 'eff': 1.140731, 'min': 1.060065, 'max': 1.238092, 'zp': 4.088281e-10, 'zp_photon': 2.347727e+02, 'toVega':0,      'ext': 0.35,   'system': 'FourStar' }, 
-              "J3":      { 'eff': 1.283508, 'min': 1.200310, 'max': 1.377945, 'zp': 2.709316e-10, 'zp_photon': 1.750579e+02, 'toVega':0,      'ext': 0.29,   'system': 'FourStar' }, 
+              "FourStar_J1":      { 'eff': 1.052129, 'min': 0.990799, 'max': 1.120951, 'zp': 5.358674e-10, 'zp_photon': 2.838244e+02, 'toVega':0,      'ext': 0.40,   'system': 'FourStar' }, 
+              "FourStar_J2":      { 'eff': 1.140731, 'min': 1.060065, 'max': 1.238092, 'zp': 4.088281e-10, 'zp_photon': 2.347727e+02, 'toVega':0,      'ext': 0.35,   'system': 'FourStar' }, 
+              "FourStar_J3":      { 'eff': 1.283508, 'min': 1.200310, 'max': 1.377945, 'zp': 2.709316e-10, 'zp_photon': 1.750579e+02, 'toVega':0,      'ext': 0.29,   'system': 'FourStar' }, 
               
-              "J":       { 'eff': 1.2350,   'min': 1.080647, 'max': 1.406797, 'zp': 3.129e-10,    'zp_photon': 1.943482e+02, 'toVega':0,      'ext': 0.0166, 'system': '2MASS' }, # ZP from Cohen et al. (2003)
-              "H":       { 'eff': 1.6620,   'min': 1.478738, 'max': 1.823102, 'zp': 1.133e-10,    'zp_photon': 9.437966e+01, 'toVega':0,      'ext': 0.0146, 'system': '2MASS' }, # ZP from Cohen et al. (2003)
-              "Ks":      { 'eff': 2.1590,   'min': 1.954369, 'max': 2.355240, 'zp': 4.283e-11,    'zp_photon': 4.664740e+01, 'toVega':0,      'ext': 0.0710, 'system': '2MASS' }, # ZP from Cohen et al. (2003)
+              "2MASS_J":       { 'eff': 1.2350,   'min': 1.080647, 'max': 1.406797, 'zp': 3.129e-10,    'zp_photon': 1.943482e+02, 'toVega':0,      'ext': 0.0166, 'system': '2MASS' }, # ZP from Cohen et al. (2003)
+              "2MASS_H":       { 'eff': 1.6620,   'min': 1.478738, 'max': 1.823102, 'zp': 1.133e-10,    'zp_photon': 9.437966e+01, 'toVega':0,      'ext': 0.0146, 'system': '2MASS' }, # ZP from Cohen et al. (2003)
+              "2MASS_Ks":      { 'eff': 2.1590,   'min': 1.954369, 'max': 2.355240, 'zp': 4.283e-11,    'zp_photon': 4.664740e+01, 'toVega':0,      'ext': 0.0710, 'system': '2MASS' }, # ZP from Cohen et al. (2003)
 
               "MKO_Y":   { 'eff': 1.02894,  'min': 0.9635,   'max': 1.1025,   'zp': 5.869238e-10, 'zp_photon': 3.033632e+02, 'toVega':0,      'ext': 0.41,   'system': 'MKO' },
               "MKO_J":   { 'eff': 1.250,    'min': 1.148995, 'max': 1.348332, 'zp': 3.01e-10,     'zp_photon': 1.899569e+02, 'toVega':0,      'ext': 0.30,   'system': 'MKO' },   # eff and ZP from Tokunaga & Vacca (2005)
               "MKO_H":   { 'eff': 1.644,    'min': 1.450318, 'max': 1.808855, 'zp': 1.18e-10,     'zp_photon': 9.761983e+01, 'toVega':0,      'ext': 0.20,   'system': 'MKO' },   # eff and ZP from Tokunaga & Vacca (2005)
               "MKO_K":   { 'eff': 2.198,    'min': 1.986393, 'max': 2.397097, 'zp': 4.00e-11,     'zp_photon': 4.488476e+01, 'toVega':0,      'ext': 0.12,   'system': 'MKO' },   # eff and ZP from Tokunaga & Vacca (2005)
-              "MKO_L":   { 'eff': 3.754,    'min': 3.326622, 'max': 4.207764, 'zp': 5.31e-12,     'zp_photon': 1.016455e+01, 'toVega':0,      'ext': 0.06,   'system': 'MKO' },   # eff and ZP from Tokunaga & Vacca (2005)
-              "MKO_M":   { 'eff': 4.702,    'min': 4.496502, 'max': 4.865044, 'zp': 2.22e-12,     'zp_photon': 5.305197e+00, 'toVega':0,      'ext': 0.05,   'system': 'MKO' },   # eff and ZP from Tokunaga & Vacca (2005)
+              "MKO_L'":   { 'eff': 3.754,    'min': 3.326622, 'max': 4.207764, 'zp': 5.31e-12,     'zp_photon': 1.016455e+01, 'toVega':0,      'ext': 0.06,   'system': 'MKO' },   # eff and ZP from Tokunaga & Vacca (2005)
+              "MKO_M'":   { 'eff': 4.702,    'min': 4.496502, 'max': 4.865044, 'zp': 2.22e-12,     'zp_photon': 5.305197e+00, 'toVega':0,      'ext': 0.05,   'system': 'MKO' },   # eff and ZP from Tokunaga & Vacca (2005)
 
               "DENIS_I": { 'eff': 0.78621,  'min': 0.7007,   'max': 0.9140,   'zp': 1.182102e-09, 'zp_photon': 4.681495e+02, 'toVega':0,      'ext': 0.63,   'system': 'DENIS' },
               "DENIS_J": { 'eff': 1.22106,  'min': 1.0508,   'max': 1.3980,   'zp': 3.190256e-10, 'zp_photon': 1.961698e+02, 'toVega':0,      'ext': 0.31,   'system': 'DENIS' },
               "DENIS_Ks":{ 'eff': 2.14650,  'min': 1.9474,   'max': 2.3979,   'zp': 4.341393e-11, 'zp_photon': 4.691482e+01, 'toVega':0,      'ext': 0.13,   'system': 'DENIS' },              
 
-              "W1":      { 'eff': 3.3526,   'min': 2.754097, 'max': 3.872388, 'zp': 8.1787e-12,   'zp_photon': 1.375073e+01, 'toVega':0,      'ext': 0.07,   'system': 'WISE' }, # eff and ZP from Jarrett et al. (2011)
-              "W2":      { 'eff': 4.6028,   'min': 3.963326, 'max': 5.341360, 'zp': 2.4150e-12,   'zp_photon': 5.586982e+00, 'toVega':0,      'ext': 0.05,   'system': 'WISE' }, # eff and ZP from Jarrett et al. (2011)
-              "W3":      { 'eff': 11.5608,  'min': 7.443044, 'max': 17.26134, 'zp': 6.5151e-14,   'zp_photon': 3.567555e-01, 'toVega':0,      'ext': 0.06,   'system': 'WISE' }, # eff and ZP from Jarrett et al. (2011)
-              "W4":      { 'eff': 22.0883,  'min': 19.52008, 'max': 27.91072, 'zp': 5.0901e-15,   'zp_photon': 5.510352e-02, 'toVega':0,      'ext': 0.02,   'system': 'WISE' }, # eff and ZP from Jarrett et al. (2011)
+              "WISE_W1":      { 'eff': 3.3526,   'min': 2.754097, 'max': 3.872388, 'zp': 8.1787e-12,   'zp_photon': 1.375073e+01, 'toVega':0,      'ext': 0.07,   'system': 'WISE' }, # eff and ZP from Jarrett et al. (2011)
+              "WISE_W2":      { 'eff': 4.6028,   'min': 3.963326, 'max': 5.341360, 'zp': 2.4150e-12,   'zp_photon': 5.586982e+00, 'toVega':0,      'ext': 0.05,   'system': 'WISE' }, # eff and ZP from Jarrett et al. (2011)
+              "WISE_W3":      { 'eff': 11.5608,  'min': 7.443044, 'max': 17.26134, 'zp': 6.5151e-14,   'zp_photon': 3.567555e-01, 'toVega':0,      'ext': 0.06,   'system': 'WISE' }, # eff and ZP from Jarrett et al. (2011)
+              "WISE_W4":      { 'eff': 22.0883,  'min': 19.52008, 'max': 27.91072, 'zp': 5.0901e-15,   'zp_photon': 5.510352e-02, 'toVega':0,      'ext': 0.02,   'system': 'WISE' }, # eff and ZP from Jarrett et al. (2011)
 
-              "[3.6]":   { 'eff': 3.507511, 'min': 3.129624, 'max': 3.961436, 'zp': 6.755364e-12, 'zp_photon': 1.192810e+01, 'toVega':0,      'ext': 0.07,   'system': 'IRAC' },
-              "[4.5]":   { 'eff': 4.436578, 'min': 3.917328, 'max': 5.056057, 'zp': 2.726866e-12, 'zp_photon': 6.090264e+00, 'toVega':0,      'ext': 0.05,   'system': 'IRAC' },
-              "[5.8]":   { 'eff': 5.628102, 'min': 4.898277, 'max': 6.508894, 'zp': 1.077512e-12, 'zp_photon': 3.052866e+00, 'toVega':0,      'ext': 0.04,   'system': 'IRAC' },
-              "[8]":     { 'eff': 7.589159, 'min': 6.299378, 'max': 9.587595, 'zp': 3.227052e-13, 'zp_photon': 1.232887e+00, 'toVega':0,      'ext': 0.03,   'system': 'IRAC' },              
-              "[24]":    { 'eff': 23.20960, 'min': 19.88899, 'max': 30.93838, 'zp': 3.935507e-15, 'zp_photon': 4.598249e-02, 'toVega':0,      'ext': 0.02,   'system': 'MIPS' },
+              "IRAC_ch1":   { 'eff': 3.507511, 'min': 3.129624, 'max': 3.961436, 'zp': 6.755364e-12, 'zp_photon': 1.192810e+01, 'toVega':0,      'ext': 0.07,   'system': 'IRAC' },
+              "IRAC_ch2":   { 'eff': 4.436578, 'min': 3.917328, 'max': 5.056057, 'zp': 2.726866e-12, 'zp_photon': 6.090264e+00, 'toVega':0,      'ext': 0.05,   'system': 'IRAC' },
+              "IRAC_ch3":   { 'eff': 5.628102, 'min': 4.898277, 'max': 6.508894, 'zp': 1.077512e-12, 'zp_photon': 3.052866e+00, 'toVega':0,      'ext': 0.04,   'system': 'IRAC' },
+              "IRAC_ch4":     { 'eff': 7.589159, 'min': 6.299378, 'max': 9.587595, 'zp': 3.227052e-13, 'zp_photon': 1.232887e+00, 'toVega':0,      'ext': 0.03,   'system': 'IRAC' },              
+              "MIPS_ch1":    { 'eff': 23.20960, 'min': 19.88899, 'max': 30.93838, 'zp': 3.935507e-15, 'zp_photon': 4.598249e-02, 'toVega':0,      'ext': 0.02,   'system': 'MIPS' },
 
-              "G":       { 'eff': 0.60,     'min': 0.321,    'max': 1.103,    'zp': 2.862966e-09, 'zp_photon': 8.053711e+02, 'toVega':0,      'ext': 0,      'system': 'GAIA'},
-              "BP":      { 'eff': 0.55,     'min': 0.321,    'max': 0.680,    'zp': 4.298062e-09, 'zp_photon': 1.067265e+03, 'toVega':0,      'ext': 0,      'system': 'GAIA'},
-              "RP":      { 'eff': 0.75,     'min': 0.627,    'max': 1.103,    'zp': 1.294828e-09, 'zp_photon': 4.948727e+02, 'toVega':0,      'ext': 0,      'system': 'GAIA'},
+              "Gaia_G":       { 'eff': 0.60,     'min': 0.321,    'max': 1.103,    'zp': 2.862966e-09, 'zp_photon': 8.053711e+02, 'toVega':0,      'ext': 0,      'system': 'Gaia'},
+              "Gaia_BP":      { 'eff': 0.55,     'min': 0.321,    'max': 0.680,    'zp': 4.298062e-09, 'zp_photon': 1.067265e+03, 'toVega':0,      'ext': 0,      'system': 'Gaia'},
+              "Gaia_RP":      { 'eff': 0.75,     'min': 0.627,    'max': 1.103,    'zp': 1.294828e-09, 'zp_photon': 4.948727e+02, 'toVega':0,      'ext': 0,      'system': 'Gaia'},
 
-              "F090M":   { 'eff': 0.897360, 'min': 0.784317, 'max': 1.013298, 'zp': 8.395228e-10, 'zp_photon': 3.792477e+02, 'toVega':0,      'ext': 0.51,   'system': 'HST' },
-              "F110W":   { 'eff': 1.059175, 'min': 0.782629, 'max': 1.432821, 'zp': 4.726040e-10, 'zp_photon': 2.519911e+02, 'toVega':0,      'ext': 0.39,   'system': 'HST' },
-              "F140W":   { 'eff': 1.364531, 'min': 1.185379, 'max': 1.612909, 'zp': 2.133088e-10, 'zp_photon': 1.465263e+02, 'toVega':0,      'ext': 0.26,   'system': 'HST' },
-              "F164N":   { 'eff': 1.646180, 'min': 1.629711, 'max': 1.663056, 'zp': 1.109648e-10, 'zp_photon': 9.195720e+01, 'toVega':0,      'ext': 0.19,   'system': 'HST' },
-              "F170M":   { 'eff': 1.699943, 'min': 1.579941, 'max': 1.837134, 'zp': 1.015711e-10, 'zp_photon': 8.692163e+01, 'toVega':0,      'ext': 0.18,   'system': 'HST' },
-              "F190N":   { 'eff': 1.898486, 'min': 1.880845, 'max': 1.917673, 'zp': 6.957714e-11, 'zp_photon': 6.649628e+01, 'toVega':0,      'ext': 0.15,   'system': 'HST' },
-              "F215N":   { 'eff': 2.148530, 'min': 2.128579, 'max': 2.168078, 'zp': 4.355167e-11, 'zp_photon': 4.710529e+01, 'toVega':0,      'ext': 0.13,   'system': 'HST' },
-              "F336W":   { 'eff': 0.332930, 'min': 0.295648, 'max': 0.379031, 'zp': 3.251259e-09, 'zp_photon': 5.486427e+02, 'toVega':0,      'ext': 1.70,   'system': 'HST' },
-              "F390N":   { 'eff': 0.388799, 'min': 0.384000, 'max': 0.393600, 'zp': 5.673647e-09, 'zp_photon': 1.143901e+03, 'toVega':0,      'ext': 1.48,   'system': 'HST' },
-              "F475W":   { 'eff': 0.470819, 'min': 0.386334, 'max': 0.556272, 'zp': 5.331041e-09, 'zp_photon': 1.260475e+03, 'toVega':0,      'ext': 1.21,   'system': 'HST' },
-              "F555W":   { 'eff': 0.533091, 'min': 0.458402, 'max': 0.620850, 'zp': 4.062007e-09, 'zp_photon': 1.061011e+03, 'toVega':0,      'ext': 1.05,   'system': 'HST' },
-              "F625W":   { 'eff': 0.626619, 'min': 0.544589, 'max': 0.709961, 'zp': 2.478260e-09, 'zp_photon': 7.679998e+02, 'toVega':0,      'ext': 0.68,   'system': 'HST' },
-              "F656N":   { 'eff': 0.656368, 'min': 0.653838, 'max': 0.658740, 'zp': 1.434529e-09, 'zp_photon': 4.737886e+02, 'toVega':0,      'ext': 0.81,   'system': 'HST' },
-              "F673N":   { 'eff': 0.673224, 'min': 0.667780, 'max': 0.678367, 'zp': 1.908442e-09, 'zp_photon': 6.499706e+02, 'toVega':0,      'ext': 0.78,   'system': 'HST' },
-              "F775W":   { 'eff': 0.765263, 'min': 0.680365, 'max': 0.863185, 'zp': 1.323662e-09, 'zp_photon': 5.055354e+02, 'toVega':0,      'ext': 0.65,   'system': 'HST' },
-              "F850LP":  { 'eff': 0.963736, 'min': 0.832000, 'max': 1.100000, 'zp': 8.069014e-10, 'zp_photon': 3.706372e+02, 'toVega':0,      'ext': 0.46,   'system': 'HST' }}    
+              "HST_F090M":   { 'eff': 0.897360, 'min': 0.784317, 'max': 1.013298, 'zp': 8.395228e-10, 'zp_photon': 3.792477e+02, 'toVega':0,      'ext': 0.51,   'system': 'HST' },
+              "HST_F110W":   { 'eff': 1.059175, 'min': 0.782629, 'max': 1.432821, 'zp': 4.726040e-10, 'zp_photon': 2.519911e+02, 'toVega':0,      'ext': 0.39,   'system': 'HST' },
+              "HST_F140W":   { 'eff': 1.364531, 'min': 1.185379, 'max': 1.612909, 'zp': 2.133088e-10, 'zp_photon': 1.465263e+02, 'toVega':0,      'ext': 0.26,   'system': 'HST' },
+              "HST_F164N":   { 'eff': 1.646180, 'min': 1.629711, 'max': 1.663056, 'zp': 1.109648e-10, 'zp_photon': 9.195720e+01, 'toVega':0,      'ext': 0.19,   'system': 'HST' },
+              "HST_F170M":   { 'eff': 1.699943, 'min': 1.579941, 'max': 1.837134, 'zp': 1.015711e-10, 'zp_photon': 8.692163e+01, 'toVega':0,      'ext': 0.18,   'system': 'HST' },
+              "HST_F190N":   { 'eff': 1.898486, 'min': 1.880845, 'max': 1.917673, 'zp': 6.957714e-11, 'zp_photon': 6.649628e+01, 'toVega':0,      'ext': 0.15,   'system': 'HST' },
+              "HST_F215N":   { 'eff': 2.148530, 'min': 2.128579, 'max': 2.168078, 'zp': 4.355167e-11, 'zp_photon': 4.710529e+01, 'toVega':0,      'ext': 0.13,   'system': 'HST' },
+              "HST_F336W":   { 'eff': 0.332930, 'min': 0.295648, 'max': 0.379031, 'zp': 3.251259e-09, 'zp_photon': 5.486427e+02, 'toVega':0,      'ext': 1.70,   'system': 'HST' },
+              "HST_F390N":   { 'eff': 0.388799, 'min': 0.384000, 'max': 0.393600, 'zp': 5.673647e-09, 'zp_photon': 1.143901e+03, 'toVega':0,      'ext': 1.48,   'system': 'HST' },
+              "HST_F475W":   { 'eff': 0.470819, 'min': 0.386334, 'max': 0.556272, 'zp': 5.331041e-09, 'zp_photon': 1.260475e+03, 'toVega':0,      'ext': 1.21,   'system': 'HST' },
+              "HST_F555W":   { 'eff': 0.533091, 'min': 0.458402, 'max': 0.620850, 'zp': 4.062007e-09, 'zp_photon': 1.061011e+03, 'toVega':0,      'ext': 1.05,   'system': 'HST' },
+              "HST_F625W":   { 'eff': 0.626619, 'min': 0.544589, 'max': 0.709961, 'zp': 2.478260e-09, 'zp_photon': 7.679998e+02, 'toVega':0,      'ext': 0.68,   'system': 'HST' },
+              "HST_F656N":   { 'eff': 0.656368, 'min': 0.653838, 'max': 0.658740, 'zp': 1.434529e-09, 'zp_photon': 4.737886e+02, 'toVega':0,      'ext': 0.81,   'system': 'HST' },
+              "HST_F673N":   { 'eff': 0.673224, 'min': 0.667780, 'max': 0.678367, 'zp': 1.908442e-09, 'zp_photon': 6.499706e+02, 'toVega':0,      'ext': 0.78,   'system': 'HST' },
+              "HST_F775W":   { 'eff': 0.765263, 'min': 0.680365, 'max': 0.863185, 'zp': 1.323662e-09, 'zp_photon': 5.055354e+02, 'toVega':0,      'ext': 0.65,   'system': 'HST' },
+              "HST_F850LP":  { 'eff': 0.963736, 'min': 0.832000, 'max': 1.100000, 'zp': 8.069014e-10, 'zp_photon': 3.706372e+02, 'toVega':0,      'ext': 0.46,   'system': 'HST' }}    
   
   if isinstance(band,list):
     for i in Filters.keys(): 
@@ -144,7 +131,18 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
   elif hasattr(mag,'unit'): return [float('{:.4g}'.format(mag.value*(dist/scale_to).value**2))*mag.unit, float('{:.4g}'.format(np.sqrt((sig_m*(dist/scale_to).value)**2 + (2*mag*(sig_d*dist/scale_to**2).value)**2)))*mag.unit if sig_m!='' and sig_d else '']
   else: print 'Could not flux calibrate that input to distance {}.'.format(dist)
 
-def get_filters(filter_directories=[package_path+'/Data/Filters/{}/'.format(i) for i in ['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Bessel','MKO','GALEX','DENIS','GAIA','DES']], systems=['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Bessel','MKO','GALEX','DENIS','GAIA','DES']):
+def flux2mag(band, f, sig_f='', photon=False, filter_dict=''): 
+  """
+  For given band and flux returns the magnitude value (and uncertainty if *sig_f*)
+  """
+  filt = filter_dict[band]
+  if f.unit=='Jy': f, sig_f = (ac.c*f/filt['eff']**2).to(q.erg/q.s/q.cm**2/q.AA), (ac.c*sig_f/filt['eff']**2).to(q.erg/q.s/q.cm**2/q.AA)
+  if photon: f, sig_f = (f*(filt['eff']/(ac.h*ac.c)).to(1/q.erg)).to(1/q.s/q.cm**2/q.AA), (sig_f*(filt['eff']/(ac.h*ac.c)).to(1/q.erg)).to(1/q.s/q.cm**2/q.AA)
+  m = -2.5*np.log10((f/filt['zp_photon' if photon else 'zp']).value)
+  sig_m = (2.5/np.log(10))*(sig_f/f).value if sig_f else ''  
+  return [m,sig_m]
+
+def get_filters(filter_directories=['./SEDkit/Data/Filters/{}/'.format(i) for i in ['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Johnson','Cousins','MKO','GALEX','DENIS','Gaia','DES']], systems=['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Bessel','MKO','GALEX','DENIS','GAIA','DES']):
   """
   Grabs all the .txt spectral response curves and returns a dictionary of wavelength array [um], filter response [unitless], effective, min and max wavelengths [um], and zeropoint [erg s-1 cm-2 A-1]. 
   """
@@ -187,6 +185,31 @@ def group(lst, n):
     val = lst[i:i+n]
     if len(val) == n: yield tuple(val)
 
+def group_spectra(spectra):
+  """
+  Puts a list of *spectra* into groups with overlapping wavelength arrays
+  """
+  groups, idx, i = [], [], 'wavelength' if isinstance(spectra[0],dict) else 0
+  for N,S in enumerate(spectra):
+    if N not in idx:
+      group, idx = [S], idx+[N]
+      for n,s in enumerate(spectra):
+        if n not in idx and any(np.where(np.logical_and(S[i]<s[i][-1],S[i]>s[i][0]))[0]): group.append(s), idx.append(n)
+      groups.append(group)
+  return groups
+
+def idx_include(x, include):
+  try: return np.where(np.array(map(bool,map(sum, zip(*[np.logical_and(x>i[0],x<i[1]) for i in include])))))[0]
+  except TypeError:
+    try: return np.where(np.array(map(bool,map(sum, zip(*[np.logical_and(x>i[0],x<i[1]) for i in [include]])))))[0] 
+    except TypeError: return range(len(x))
+
+def idx_exclude(x, exclude):
+  try: return np.where(~np.array(map(bool,map(sum, zip(*[np.logical_and(x>i[0],x<i[1]) for i in exclude])))))[0]
+  except TypeError: 
+    try: return np.where(~np.array(map(bool,map(sum, zip(*[np.logical_and(x>i[0],x<i[1]) for i in exclude])))))[0]
+    except TypeError: return range(len(x))
+
 def inject_average(spectrum, position, direction, n=10):
   """
   Used to smooth edges after trimming a spectrum. Injects a new data point into a *spectrum* at given *position* with flux value equal to the average of the *n* elements in the given *direction*.
@@ -214,7 +237,7 @@ def mag2flux(band, mag, sig_m='', photon=False, filter_dict=''):
 
 def make_composite(spectra):
   """
-  Creates a composite spectrum from a list of overlapping *spectra*
+  Creates a composite spectrum from a list of overlapping spectra
   """
   units = [i.unit for i in spectra[0]]
   spectrum = spectra.pop(0)
@@ -230,17 +253,6 @@ def make_composite(spectra):
       spec1, spec2 = [i[np.where(spec1[0]<spectrum[0][IDX][0])[0]] for i in spec1], [i[np.where(spec2[0]>spectrum[0][IDX][-1])[0]] for i in spec2]
       spectrum = [np.concatenate([i[:-1],j[1:-1],k[1:]]) for i,j,k in zip(spec1,mean_spec,spec2)]
   return [i*Q for i,Q in zip([i.value if hasattr(i,'unit') else i for i in spectrum],units)]
-  
-def flux2mag(band, f, sig_f='', photon=False, filter_dict=''): 
-  """
-  For given band and flux returns the magnitude value (and uncertainty if *sig_f*)
-  """
-  filt = filter_dict[band]
-  if f.unit=='Jy': f, sig_f = (ac.c*f/filt['eff']**2).to(q.erg/q.s/q.cm**2/q.AA), (ac.c*sig_f/filt['eff']**2).to(q.erg/q.s/q.cm**2/q.AA)
-  if photon: f, sig_f = (f*(filt['eff']/(ac.h*ac.c)).to(1/q.erg)).to(1/q.s/q.cm**2/q.AA), (sig_f*(filt['eff']/(ac.h*ac.c)).to(1/q.erg)).to(1/q.s/q.cm**2/q.AA)
-  m = -2.5*np.log10((f/filt['zp_photon' if photon else 'zp']).value)
-  sig_m = (2.5/np.log(10))*(sig_f/f).value if sig_f else ''  
-  return [m,sig_m]
 
 def manual_legend(labels, colors, markers='', edges='', sizes='', errors='', styles='', text_colors='', fontsize=14, overplot='', bbox_to_anchor='', loc=0, ncol=1, figlegend=False):
   """
@@ -384,19 +396,6 @@ def norm_to_mag(spectrum, magnitude, band):
   Returns the flux of a given *spectrum* [W,F] normalized to the given *magnitude* in the specified photometric *band*
   """
   return [spectrum[0],spectrum[1]*magnitude/s.get_mag(band, spectrum, to_flux=True, Flam=False)[0],spectrum[2]]
-
-def group_spectra(spectra):
-  """
-  Puts a list of *spectra* into groups with overlapping wavelength arrays
-  """
-  groups, idx, i = [], [], 'wavelength' if isinstance(spectra[0],dict) else 0
-  for N,S in enumerate(spectra):
-    if N not in idx:
-      group, idx = [S], idx+[N]
-      for n,s in enumerate(spectra):
-        if n not in idx and any(np.where(np.logical_and(S[i]<s[i][-1],S[i]>s[i][0]))[0]): group.append(s), idx.append(n)
-      groups.append(group)
-  return groups
   
 def normalize(spectra, template, composite=True, plot=False, SNR=50, exclude=[], trim=[], replace=[], D_Flam=None):
   """
@@ -449,6 +448,18 @@ def normalize(spectra, template, composite=True, plot=False, SNR=50, exclude=[],
     return normalized[0][:len(template)] if composite else normalized
   else: return [W,F,E]
 
+def output_polynomial(n, m, sig='', x='x', y='y', title='', degree=1, c='k', ls='--', lw=2, legend=True, ax='', output_data=False, plot_rms='0.9'):
+  p, residuals, rank, singular_values, rcond = np.polyfit(np.array(map(float,n)), np.array(map(float,m)), degree, w=1/np.array([i if i else 1 for i in sig]) if sig!='' else None, full=True)
+  f = np.poly1d(p)
+  w = np.linspace(min(n), max(n), 50)
+  ax.plot(w, f(w), color=c, ls=ls, lw=lw, label='${}$'.format(poly_print(p, x=x, y=y)) if legend else '', zorder=10)
+  rms = np.sqrt(sum((m-f(n))**2)/len(n))
+  if plot_rms: ax.fill_between(w, f(w)-rms, f(w)+rms, color=plot_rms, zorder=-1)
+  data = [[y, (min(n),max(n)), rms]+list(reversed(p))]
+  print_data = [[y, r'{:.1f}\textless {}\textless {:.1f}'.format(min(n),x,max(n)), '{:.3f}'.format(rms)]+['{:.3e}'.format(v) for v in list(reversed(p))]]
+  printer(['P(x)','x','rms']+[r'$c_{}$'.format(str(i)) for i in range(len(p))], print_data, title=title, to_txt='./Files/{} v {}.txt'.format(x,y) if output_data else False)
+  return data 
+
 def pi2pc(parallax, parallax_unc=0, pc2pi=False):
   if parallax: 
     if pc2pi:
@@ -500,18 +511,6 @@ def polynomial(values, coeffs, plot=False, color='g', ls='-', lw=2):
   
   return out 
 
-def output_polynomial(n, m, sig='', x='x', y='y', title='', degree=1, c='k', ls='--', lw=2, legend=True, ax='', output_data=False, plot_rms='0.9'):
-  p, residuals, rank, singular_values, rcond = np.polyfit(np.array(map(float,n)), np.array(map(float,m)), degree, w=1/np.array([i if i else 1 for i in sig]) if sig!='' else None, full=True)
-  f = np.poly1d(p)
-  w = np.linspace(min(n), max(n), 50)
-  ax.plot(w, f(w), color=c, ls=ls, lw=lw, label='${}$'.format(poly_print(p, x=x, y=y)) if legend else '', zorder=10)
-  rms = np.sqrt(sum((m-f(n))**2)/len(n))
-  if plot_rms: ax.fill_between(w, f(w)-rms, f(w)+rms, color=plot_rms, zorder=-1)
-  data = [[y, (min(n),max(n)), rms]+list(reversed(p))]
-  print_data = [[y, r'{:.1f}\textless {}\textless {:.1f}'.format(min(n),x,max(n)), '{:.3f}'.format(rms)]+['{:.3e}'.format(v) for v in list(reversed(p))]]
-  printer(['P(x)','x','rms']+[r'$c_{}$'.format(str(i)) for i in range(len(p))], print_data, title=title, to_txt='./Files/{} v {}.txt'.format(x,y) if output_data else False)
-  return data 
-
 def poly_print(coeff_list, x='x', y='y'): return '{} ={}'.format(y,' '.join(['{}{:.3e}{}'.format(' + ' if i>0 else ' - ', abs(i), '{}{}'.format(x if n>0 else '', '^{}'.format(n) if n>1 else '')) for n,i in enumerate(coeff_list[::-1])][::-1]))
 
 def printer(labels, values, format='', truncate=150, to_txt=None, highlight=[], skip=[], empties=True, title=False):
@@ -550,146 +549,6 @@ def printer(labels, values, format='', truncate=150, to_txt=None, highlight=[], 
           if (row_num,col_num) in highlight: red(str(k)[:truncate].ljust(j))
           else: print str(k)[:truncate].ljust(j),
   if not to_txt: print '\n'
-
-def read_spec(specFiles, errors=True, atomicron=False, negtonan=False, plot=False, linear=False, wlog=False, verbose=True):
-    """
-    (by Alejandro N |uacute| |ntilde| ez, Jocelyn Ferrara)
-    
-    Read spectral data from fits or ascii files. It returns a list of numpy arrays with wavelength in position 0, flux in position 1 and error values (if requested) in position 2. More than one file name can be provided simultaneously.
-    
-    **Limitations**: Due to a lack of set framework for ascii file headers, this function assumes ascii files to have wavelength in column 1, flux in column 2, and (optional) error in column 3. Ascii spectra are assumed to be linear, so the kwarg *linear* is disabled for ascii files. Fits files that have multiple spectral orders will not be interpreted correctly with this function.
-    
-    *specFiles*
-      String with fits file name (with full path); it can also be a python list of file names.
-    *errors*
-      Boolean, whether to return error values for the flux data; return nans if unavailable.
-    *atomicron*
-      Boolean, if wavelength units are in Angstrom, whether to convert them to microns.
-    *negtonan*
-      Boolean, whether to set negative flux values equal to zero.
-    *plot*
-      Boolean, whether to plot the spectral data, including error bars when available.
-    *linear*
-      Boolean, whether to return spectrum only if it is linear. If it cannot verify linearity, it will assume linearity.
-    *verbose*
-      Boolean, whether to print warning messages.
-    """
-    
-    # 1. Convert specFiles into a list type if it is only one file name
-    if isinstance(specFiles, str):
-        specFiles = [specFiles,]
-    
-    try:
-        specFiles[0]
-    except TypeError:
-        print 'File name(s) in invalid format.'
-        return
-    
-    # 2. Initialize array to store spectra
-    specData = [None] * len(specFiles)
-    
-    # 3. Loop through each file name:
-    for spFileIdx,spFile in enumerate(specFiles):
-        
-        # 3.1 Determine the type of file it is
-        isFits = False
-        ext = spFile[-4:].lower()
-        if ext == 'fits' or ext == '.fit':
-            isFits = True
-            
-        # 3.2. Get data from file
-        if isFits:
-            try:
-                fitsData, fitsHeader = pf.getdata(spFile, header=True)
-            except IOError:
-                print 'Could not open ' + str(spFile) + '.'
-                continue
-        # Assume ascii file otherwise (isFits = False)
-        else:
-            try:
-                aData = ad.open(spFile)
-                specData[spFileIdx] = [aData[0].tonumpy(), aData[1].tonumpy()]
-                if len(aData) >= 3 and errors:
-                    specData[spFileIdx].append(aData[2].tonumpy())
-                # # Check (when header available) whether data is linear.
-                # if aData.header:
-                #     lindex = str(aData.header).upper().find('LINEAR')
-                #     if lindex == -1:
-                #         isLinear = False
-                #     else:
-                #         isLinear = True
-                #     if linear and not isLinear:
-                #         if verbose:
-                #             print 'Data in ' + spFile + ' is not linear.'
-                #         return
-            except IOError:
-                print 'Could not open ' + str(spFile) + '.'
-                continue
-        
-        # 3.3. Check if data in fits file is linear
-        if isFits:
-            KEY_TYPE = ['CTYPE1']
-            setType  = set(KEY_TYPE).intersection(set(fitsHeader.keys()))
-            if len(setType) == 0:
-                if verbose:
-                    print 'Data in ' + spFile + ' assumed to be linear.'
-                isLinear = True
-            else:
-                valType = fitsHeader[setType.pop()]
-                if valType.strip().upper() == 'LINEAR':
-                    isLinear = True
-                else:
-                    isLinear = False
-            if linear and not isLinear:
-                if verbose:
-                    print 'Data in ' + spFile + ' is not linear.'
-                return
-        
-        # 3.4. Get wl, flux & error data from fits file
-        #      (returns wl in pos. 0, flux in pos. 1, error values in pos. 2)
-        if isFits:
-            specData[spFileIdx] = __get_spec(fitsData, fitsHeader, spFile, errors, \
-                                             verb=verbose)
-            if specData[spFileIdx] is None:
-                continue
-        
-            # Generate wl axis when needed
-            if specData[spFileIdx][0] is None:
-                specData[spFileIdx][0] = __create_waxis(fitsHeader, len(specData[spFileIdx][1]), spFile, wlog=wlog, verb=verbose)
-            # If no wl axis generated, then clear out all retrieved data for object
-            if specData[spFileIdx][0] is None:
-                specData[spFileIdx] = None
-                continue
-        
-        # 3.5. Convert units in wl-axis from Angstrom into microns if desired
-        if atomicron:
-            if specData[spFileIdx][0][-1] > 8000:
-                specData[spFileIdx][0] = specData[spFileIdx][0] / 10000
-        
-        # 3.6. Set negative flux values equal to zero (next step sets them to nans)
-        if negtonan:
-            negIdx = np.where(specData[spFileIdx][1] < 0)
-            if len(negIdx[0]) > 0:
-                specData[spFileIdx][1][negIdx] = 0
-                if verbose:
-                    print '%i negative data points found in %s.' \
-                            % (len(negIdx[0]), spFile)
-        
-        # 3.7. Set zero flux values as nans (do this always)
-        zeros = np.where(specData[spFileIdx][1] == 0)
-        if len(zeros[0]) > 0:
-            specData[spFileIdx][1][zeros] = np.nan
-        
-    
-    # 4. Plot the spectra if desired
-    if plot:
-        plot_spec(specData, ploterrors=True)
-    
-    # 5. Clear up memory
-    fitsHeader = ''
-    fitsData   = ''
-    
-    return specData
 
 def rebin_spec(spec, wavnew, waveunits='um'):
   from pysynphot import spectrum, observation
@@ -804,144 +663,3 @@ def unc(spectrum, SNR=20):
     except: S[2] = np.array(S[1]/SNR)
   elif len(S)==2: S.append(S[1]/SNR)
   return S
-
-def __create_waxis(fitsHeader, lenData, fileName, verb=True, wlog=False):
-    # Define key names in
-    KEY_MIN  = ['COEFF0','CRVAL1']         # Min wl
-    KEY_DELT = ['COEFF1','CDELT1','CD1_1'] # Delta of wl
-    KEY_OFF  = ['LTV1']                    # Offset in wl to subsection start
-    
-    # Find key names for minimum wl, delta, and wl offset in fits header
-    setMin  = set(KEY_MIN).intersection(set(fitsHeader.keys()))
-    setDelt = set(KEY_DELT).intersection(set(fitsHeader.keys()))
-    setOff  = set(KEY_OFF).intersection(set(fitsHeader.keys()))
-    
-    # Get the values for minimum wl, delta, and wl offset, and generate axis
-    if len(setMin) >= 1 and len (setDelt) >= 1:
-        nameMin = setMin.pop()
-        valMin  = fitsHeader[nameMin]
-        
-        nameDelt = setDelt.pop()
-        valDelt  = fitsHeader[nameDelt]
-        
-        if len(setOff) == 0:
-            valOff = 0
-        else:
-            nameOff = setOff.pop()
-            valOff  = fitsHeader[nameOff]
-        
-        # generate wl axis
-        if nameMin == 'COEFF0' or wlog==True:
-            # SDSS fits files
-            wAxis = 10 ** (np.arange(lenData) * valDelt + valMin)
-        else:
-            wAxis = (np.arange(lenData) * valDelt) + valMin - (valOff * valDelt)
-        
-    else:
-        wAxis = None
-        if verb:
-            print 'Could not re-create wavelength axis for ' + fileName + '.'
-    
-    return wAxis
-
-def __get_spec(fitsData, fitsHeader, fileName, errorVals, verb=True):
-    if errorVals:
-        validData = [None] * 3
-    else:
-        validData = [None] * 2
-    
-    # Identify number of data sets in fits file
-    dimNum = len(fitsData)
-    
-    # Identify data sets in fits file
-    fluxIdx  = None
-    waveIdx  = None
-    sigmaIdx = None
-    
-    if dimNum == 1:
-        fluxIdx = 0
-    elif dimNum == 2:
-        if len(fitsData[0]) == 1:
-            sampleData = fitsData[0][0][20]
-        else:
-            sampleData = fitsData[0][20]
-        if sampleData < 0.0001:
-            # 0-flux, 1-unknown
-            fluxIdx  = 0
-        else:
-            waveIdx = 0
-            fluxIdx = 1
-    elif dimNum == 3:
-        waveIdx  = 0
-        fluxIdx  = 1
-        sigmaIdx = 2
-    elif dimNum == 4:
-    # 0-flux clean, 1-flux raw, 2-background, 3-sigma clean
-        fluxIdx  = 0
-        sigmaIdx = 3
-    elif dimNum == 5:
-    # 0-flux, 1-continuum substracted flux, 2-sigma, 3-mask array, 4-unknown
-        fluxIdx  = 0
-        sigmaIdx = 2
-    elif dimNum > 10:
-    # Implies that only one data set in fits file: flux
-        fluxIdx = -1
-        if np.isscalar(fitsData[0]):
-            fluxIdx = -1
-        elif len(fitsData[0]) == 2:
-        # Data comes in a xxxx by 2 matrix (ascii origin)
-            tmpWave = []
-            tmpFlux = []
-            for pair in fitsData:
-                tmpWave.append(pair[0])
-                tmpFlux.append(pair[1])
-            fitsData = [tmpWave,tmpFlux]
-            fitsData = np.array(fitsData)
-            
-            waveIdx = 0
-            fluxIdx = 1
-        else:
-        # Indicates that data is structured in an unrecognized way
-            fluxIdx = None
-    else:
-        fluxIdx = None
-        
-    # Fetch wave data set from fits file
-    if fluxIdx is None:
-    # No interpretation known for fits file data sets
-        validData = None
-        if verb:
-            print 'Unable to interpret data in ' + fileName + '.'
-        return validData
-    else:
-        if waveIdx is not None:
-            if len(fitsData[waveIdx]) == 1:
-            # Data set may be a 1-item list
-                validData[0] = fitsData[waveIdx][0]
-            else:
-                validData[0] = fitsData[waveIdx]
-    
-    # Fetch flux data set from fits file
-    if fluxIdx == -1:
-        validData[1] = fitsData
-    else:
-        if len(fitsData[fluxIdx]) == 1:
-            validData[1] = fitsData[fluxIdx][0]
-        else:
-            validData[1] = fitsData[fluxIdx]
-    
-    # Fetch sigma data set from fits file, if requested
-    if errorVals:
-        if sigmaIdx is None:
-            validData[2] = np.array([np.nan] * len(validData[1]))
-        else:
-            if len(fitsData[sigmaIdx]) == 1:
-                validData[2] = fitsData[sigmaIdx][0]
-            else:
-                validData[2] = fitsData[sigmaIdx]
-        
-        # If all sigma values have the same value, replace them with nans
-        if validData[2][10] == validData[2][11] == validData[2][12]:
-            validData[2] = np.array([np.nan] * len(validData[1]))
-    
-    return validData
