@@ -847,7 +847,7 @@ class get_data(object):
 
 class SED(object):
   def __init__(self, source_id, database, spec_ids=[], dist='', pi='', age='', membership='', radius='', binary=False, pop=[], 
-               SNR_trim='', SNR='', trim='', SED_trim=[], weighting=True, smoothing=[], est_mags=True, any_mag_mag=False, 
+               SNR_trim='', SNR='', trim='', SED_trim=[], weighting=True, smoothing=[], est_mags=False, any_mag_mag=False, 
                evo_model='hybrid_solar_age', fit=False, plot=False,
                data_pickle=''):
     """
@@ -955,32 +955,41 @@ class SED(object):
       # ======================================= PHOTOMETRY ==================================================================================
       # =====================================================================================================================================
 
-      # Retreive all apparent photometry, get lowest SNR values, and convert to Vega system
-      all_photometry = db.query("SELECT band,magnitude,magnitude_unc,publication_id FROM photometry WHERE source_id=?", (source['id'],))
-      self.photometry = pd.DataFrame(columns=('band', 'eff', 'm', 'm_unc', 'ref'))  
+      # Retreive all apparent photometry
+      all_photometry = db.query("SELECT band,magnitude,magnitude_unc,publication_id FROM photometry WHERE source_id=? AND magnitude_unc IS NOT NULL", (source['id'],))
             
-      # If a band has only one mag with an uncertainty or upper limit, use it. If it has multiple mags or some mags with uncertainties and others with upper limits, use the mag with the lowest uncertainty
-      # for k,g in groupby(sorted(all_photometry), lambda x:x[0]):
-      for k,g in groupby(list(all_photometry), lambda x:x[0]):
-        BAND = list(g)
-        try:
-          bnds, mags, uncs, pubs = map(np.array,zip(*[i for i in BAND if (i[-1] and any([j[-1] for j in BAND])) or (not i[-1] and len(BAND)==1)]))
-          if k not in pop: 
-            self.photometry = self.photometry.append(pd.DataFrame([[k, RSR[k]['eff'], float(mags[0])-RSR[k]['toVega'], float(uncs[0]) or '', pubs[0]]], columns=('band', 'eff', 'm', 'm_unc', 'ref')))
-        except: 
-          pass
-          # print '{} photometry could not be included.'.format(BAND[0][0])
+      # Sort and homogenize it
+      phot_data = []
+      for k,g in groupby(sorted(all_photometry, key=lambda x:x[0]), lambda x:x[0]):
+        band = list(g)
+
+        # If it has multiple mags or some mags with uncertainties and others with 
+        # upper limits, use the mag with the lowest uncertainty
+        band = sorted(band, key=lambda x: (x[2] is None, x[2]))[0]
+        
+        # Homogenize the magnitudes and add them to the dataframe
+        try: phot_data.append([k, RSR[k]['eff'], band[1]-RSR[k]['toVega'], band[2], band[3]])
+        except: print '{} photometry could not be included.'.format(k)
+
+      # Add the data to the Data Frame and index by band
+      self.photometry = pd.DataFrame(phot_data, columns=('band', 'eff', 'm', 'm_unc', 'ref'))  
       self.photometry.set_index('band', inplace=True)  
-         
+
       if not self.photometry.empty:  
+        
         # Calculate apparent fluxes
-        app_fluxes = pd.DataFrame([[k]+u.mag2flux(k, self.photometry.loc[:,'m'][k], sig_m=self.photometry.loc[:,'m_unc'][k], photon=False, filter_dict=RSR) for k in self.photometry.index.values], columns=('band','m_flux','m_flux_unc')).set_index('band')
+        app_data = []
+        for k in self.photometry.index.values:
+          app_data += [[k]+u.mag2flux(k, self.photometry.loc[:,'m'][k], sig_m=self.photometry.loc[:,'m_unc'][k], photon=False, filter_dict=RSR)]
+        app_fluxes = pd.DataFrame(app_data, columns=('band','m_flux','m_flux_unc')).set_index('band')
         
         # Calculate absolute mags and fluxes if distance is provided
         if self.data['d']: 
           abs_mags = pd.DataFrame([[k]+u.flux_calibrate(self.photometry.loc[:,'m'][k], self.data['d'], sig_m=self.photometry.loc[:,'m_unc'][k], sig_d=self.data['d_unc']) for k in self.photometry.index.values], columns=('band','M','M_unc')).set_index('band')
           abs_fluxes = pd.DataFrame([[k]+u.mag2flux(k, abs_mags.loc[:,'M'][k], sig_m=abs_mags.loc[:,'M_unc'][k], photon=False, filter_dict=RSR) for k in self.photometry.index.values], columns=('band','M_flux','M_flux_unc')).set_index('band')
-        else: abs_mags, abs_fluxes = pd.DataFrame([[k,None,None] for k in self.photometry.index.values], columns=('band','M','M_unc')).set_index('band'), pd.DataFrame([[k,None,None] for k in self.photometry.index.values], columns=('band','M_flux','M_flux_unc')).set_index('band')
+        else: 
+          abs_mags = pd.DataFrame([[k,None,None] for k in self.photometry.index.values], columns=('band','M','M_unc')).set_index('band')
+          abs_fluxes = pd.DataFrame([[k,None,None] for k in self.photometry.index.values], columns=('band','M_flux','M_flux_unc')).set_index('band')
         
         # Add them to the dataframe
         self.photometry = self.photometry.join([app_fluxes,abs_mags,abs_fluxes])
@@ -1024,7 +1033,7 @@ class SED(object):
       spectra = db.query("SELECT * FROM spectra WHERE id IN ({}) AND source_id={}".format(','.join(map(str,spec_ids)),source['id']), fmt='dict') if spec_ids else filter(None,[db.query("SELECT * FROM spectra WHERE source_id={} AND regime='OPT'".format(source['id']), fetch='one', fmt='dict'),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='NIR' AND wavelength_order=''".format(source['id']), fetch='one', fmt='dict'),db.query("SELECT * FROM spectra WHERE source_id={} AND regime='MIR'".format(source['id']), fetch='one', fmt='dict')])
       if spec_ids and len(spec_ids)!=len(spectra): print 'Check those spec_ids! One or more does not belong to source {}.'.format(source_id)
       
-      # Create data frame columns
+      # Make data frame columns
       spec_cols = db.query("pragma table_info('spectra')", unpack=True)[1]
       spec_cols = list(spec_cols[spec_cols!='spectrum'])+['wavelength','flux','unc']
       
@@ -1085,9 +1094,9 @@ class SED(object):
         # Smoothing
         if isinstance(smoothing, (float,int)): f = u.smooth(f, smoothing)
         elif smoothing and any([i[0]==spec_id for i in smoothing]): f = u.smooth(f, i[1])
-
+        
         clean_spectra.append([w,f,e])
-    
+      
       # Update the spectra in the SED object
       wav, flx, err = zip(*clean_spectra)
       self.spectra['wavelength'] = wav
@@ -1095,7 +1104,7 @@ class SED(object):
       self.spectra[['flux_app','unc_app']] = self.spectra[['flux','unc']]
       
       if self.spectra.empty: print 'No spectra available for SED.'
-        
+
       # =====================================================================================================================================
       # ======================================= CONSTRUCT SED ===============================================================================
       # =====================================================================================================================================
@@ -1210,7 +1219,7 @@ class SED(object):
         try: self.plot(integrals=True, save='./SEDkit/Plots/')
         except: plt.close(); print "Couldn't plot this SED."
 
-    except IOError: print "Could not build SED for source {}.".format(source['id'])
+    except: print "Could not build SED for source {}.".format(source['id'])
   
   def fit_SED(self, model_db_path, model_fits=[('bt_settl_2013',50,100)], mask=[(1.12,1.16),(1.35,1.42)], param_lims=[], fit_spec=True, fit_phot=False, data_pickle='', save=''):
     '''
@@ -1423,18 +1432,18 @@ class SED(object):
 
     # Plot the photometry
     if photometry:
-      
+
       # Observational photometry with uncertainties
       w, f, e = df_extract(self.photometry[(np.core.defchararray.isdigit(np.asarray(self.photometry['ref'], dtype=str))) & (self.photometry[pre+'_flux_unc']!='')], ['eff',pre+'_flux',pre+'_flux_unc'])
       ax.errorbar(w, lam([w,f,e]), yerr=lam([w,f,e], idx=2), fmt='o', color=colors[0], markeredgecolor='k', markeredgewidth=1, markersize=10, zorder=zorder+10, capsize=3)
 
       # Observational photometry upper limits
       w, f = df_extract(self.photometry[(np.core.defchararray.isdigit(np.asarray(self.photometry['ref'], dtype=str))) & (self.photometry[pre+'_flux_unc']=='')], ['eff',pre+'_flux'])
-      ax.errorbar(w, lam([w,f,e]), fmt='v', color=colors[0], markeredgecolor='k', markeredgewidth=1, lolims=[True]*len(w), markersize=10, zorder=zorder+10, capsize=3)
+      if w: ax.errorbar(w, lam([w,f,e]), fmt='v', color=colors[0], markeredgecolor='k', markeredgewidth=1, lolims=[True]*len(w), markersize=10, zorder=zorder+10, capsize=3)
 
       # Photometry estimated from mag-mag relations
       w, f, e = df_extract(self.photometry[(~np.core.defchararray.isdigit(np.asarray(self.photometry['ref'], dtype=str))) & (self.photometry[pre+'_flux_unc']!='')], ['eff',pre+'_flux',pre+'_flux_unc'])
-      ax.errorbar(w, lam([w,f,e]), yerr=lam([w,f,e], idx=2), fmt='o', color='w', markeredgecolor='k', markeredgewidth=1, markersize=10, zorder=zorder, capsize=3)
+      if w: ax.errorbar(w, lam([w,f,e]), yerr=lam([w,f,e], idx=2), fmt='o', color='w', markeredgecolor='k', markeredgewidth=1, markersize=10, zorder=zorder, capsize=3)
 
     # Plot the best fit model spectrum inferred from fits
     if models:
@@ -1507,6 +1516,7 @@ def fundamental_params(D, p=''):
   
   '''
   try:  
+
     # Calculate fbol, mbol
     D[p+'fbol'], D[p+'fbol_unc'] = (np.trapz(D[p+'SED_app'][1], x=D[p+'SED_app'][0])).to(q.erg/q.s/q.cm**2), np.sqrt(np.sum((D[p+'SED_app'][2]*np.gradient(D[p+'SED_app'][0])).to(q.erg/q.s/q.cm**2)**2))
     D[p+'mbol'], D[p+'mbol_unc'] = -2.5*np.log10(D[p+'fbol'].value)-11.482, (2.5/np.log(10))*(D[p+'fbol_unc']/D[p+'fbol']).value
@@ -1517,7 +1527,7 @@ def fundamental_params(D, p=''):
       D[p+'Mbol'], D[p+'Mbol_unc'] = D[p+'mbol']-5*np.log10((D['d']/10*q.pc).value), np.sqrt(D[p+'mbol_unc']**2 + ((2.5/np.log(10))*(D['d_unc']/D['d']).value)**2)
       D[p+'Lbol'], D[p+'Lbol_unc'] = get_Lbol(D[p+'SED_app'], D['d'], sig_d=D['d_unc'], solar_units=True)
       D[p+'Lbol_W'], D[p+'Lbol_W_unc'] = get_Lbol(D[p+'SED_app'], D['d'], sig_d=D['d_unc'])
-
+      
       if D.get('binary'):
         # Can't calculate these if it's a binary!
         for k in ['teff','mass','radius','logg']: D[p+k], D[p+k+'_unc'] = '', ''
@@ -1536,7 +1546,7 @@ def fundamental_params(D, p=''):
   except IOError: pass
       
   return D
-
+  
 def df_extract(df, keys): 
   '''
   Turns a pandas DataFrame into a list of arrays
