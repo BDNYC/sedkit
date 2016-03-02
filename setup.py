@@ -13,7 +13,7 @@ from os import path
 
 setup(
     name='SEDkit',
-    version='0.2.0.post1',
+    version='0.1.0',
     description='Spectral energy distribution creation and analysis tools that work with the astrodbkit module.',
     url='https://github.com/hover2pi/SEDkit.git',
     author='Joe Filippazzo',
