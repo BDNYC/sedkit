@@ -142,7 +142,7 @@ def flux2mag(band, f, sig_f='', photon=False, filter_dict=''):
   sig_m = (2.5/np.log(10))*(sig_f/f).value if sig_f else ''  
   return [m,sig_m]
 
-def get_filters(filter_directories=['./SEDkit/Data/Filters/{}/'.format(i) for i in ['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Johnson','Cousins','MKO','GALEX','DENIS','Gaia','DES']], systems=['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Bessel','MKO','GALEX','DENIS','GAIA','DES']):
+def get_filters(filter_directories=['./SEDkit/Data/Filters/{}/'.format(i) for i in ['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Johnson','Cousins','MKO','GALEX','DENIS','Gaia','DES']], systems=['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Johnson','Cousins','MKO','GALEX','DENIS','Gaia','DES']):
   """
   Grabs all the .txt spectral response curves and returns a dictionary of wavelength array [um], filter response [unitless], effective, min and max wavelengths [um], and zeropoint [erg s-1 cm-2 A-1]. 
   """
