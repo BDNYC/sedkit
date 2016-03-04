@@ -338,7 +338,7 @@ def NYMGs():
         'Pleiades': {'age_min':110, 'age_max':130,  'age_ref':0}}
   return D
 
-class get_data(object):
+class GetData(object):
   def __init__(self, pickle_path):
     """
     Loads the data pickle constructed from SED calculations
@@ -923,11 +923,10 @@ class get_data(object):
       print 'No spectra fulfilled that criteria.'
       plt.close()
 
-class SED(object):
+class MakeSED(object):
   def __init__(self, source_id, database, spec_ids=[], dist='', pi='', age='', membership='', radius='', binary=False, pop=[], 
                SNR_trim='', SNR='', trim='', SED_trim=[], weighting=True, smoothing=[], est_mags=False, any_mag_mag=False, 
-               evo_model='hybrid_solar_age', fit=False, plot=False,
-               data_pickle=''):
+               evo_model='hybrid_solar_age', fit=False, plot=False, data_pickle=''):
     """
     Pulls all available data from the BDNYC Data Archive, constructs an SED, and stores all calculations at *pickle_path*
   
@@ -1315,10 +1314,12 @@ class SED(object):
         if self.spectra.empty and self.photometry.empty: print "No spectra or photometry to build SED. No data saved."
         else: print "No data_pickle to save data!"
 
-      # Use approximate Teff +/- 300K as the model grid range
+      # Auto-fit and use Teff +/- 300K as the model grid range
       if fit and (not self.spectra.empty or not self.photometry.empty): 
-        try: self.fit_SED(param_lims=[('teff', (round(self.data['teff'].value/50.)*50.)-300., (round(self.data['teff'].value/50.)*50.)+300., 50), ('logg',4.0,5.5,0.5)])
+        try: self.fit_SED(fit, param_lims=[('teff', (round(self.data['teff'].value/50.)*50.)-300., (round(self.data['teff'].value/50.)*50.)+300., 50), ('logg',4.0,5.5,0.5)])
         except: plt.close(); print "Couldn't perform MCMC fit to this SED."
+      
+      # Auto-plot and save them
       if plot and (not self.spectra.empty or not self.photometry.empty): 
         try: self.plot(integrals=True, save='./SEDkit/Plots/')
         except: plt.close(); print "Couldn't plot this SED."
