@@ -971,7 +971,7 @@ class MakeSED(object):
     evo_model: str
       The name of the evolutionary model isochrones to use for radius, logg, and mass estimations
     data_pickle: object (optional)
-      The get_data() object to write new data to
+      The GetData() object to write new data to
       
     """
     db = astrodb.get_db(database) if isinstance(database,str) else database
@@ -1346,7 +1346,7 @@ class MakeSED(object):
     phot_fit: bool
       Fit model grid to photometry
     data_pickle: object (optional)
-      The get_data() object to write new data to
+      The GetData() object to write new data to
     save: str (optional)
       The directory path to save the plots in
     '''
@@ -1408,7 +1408,7 @@ class MakeSED(object):
     Parameters
     ----------
     data_pickle: object (optional)
-      The get_data() object to write new data to
+      The GetData() object to write new data to
       
     """
     (W, F, E), RJ, units = self.data['SED_spec_app'], self.data['RJ'], [q.um,q.erg/q.s/q.cm**2/q.AA,q.erg/q.s/q.cm**2/q.AA]
