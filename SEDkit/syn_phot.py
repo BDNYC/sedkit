@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # Synthetic Photomotery
-import warnings, glob, os, cPickle, numpy as np, astropy.units as q, astropy.constants as ac, matplotlib.pyplot as plt, utilities as u
+import warnings, glob, os, cPickle, numpy as np, astropy.units as q, astropy.constants as ac, matplotlib.pyplot as plt
+from SEDkit import utilities as u
 from itertools import combinations, chain, groupby
 warnings.simplefilter('ignore')
 RSR = u.get_filters()
@@ -31,7 +32,7 @@ def get_zp(band, photon=True):
   # return (np.trapz((u.rebin_spec(vega(), RSR[band]['wav'])[1]*RSR[band]['rsr']*((RSR[band]['wav']/(ac.h*ac.c)).to(1/q.erg) if photon else 1)).to((1 if photon else q.erg)/q.s/q.cm**2/q.AA), x=RSR[band]['wav'])*q.um*(1 if photon else q.erg)/q.s/q.cm**2/(np.trapz(RSR[band]['rsr'], x=RSR[band]['wav'])*q.um)).to((1 if photon else q.erg)/q.s/q.cm**2)
   return (np.trapz((u.rebin_spec(vega(), RSR[band]['wav'])[1]*RSR[band]['rsr']*((RSR[band]['wav']/(ac.h*ac.c)).to(1/q.erg) if photon else 1)).to((1 if photon else q.erg)/q.s/q.cm**2/q.AA), x=RSR[band]['wav'])/np.trapz(RSR[band]['rsr'], x=RSR[band]['wav'])).to((1 if photon else q.erg)/q.s/q.cm**2/q.AA)
 
-def get_mag(band, spectrum, exclude=[], airmass=0, photon=True, plot=False, to_flux=False, Flam=False, eff=False):
+def get_mag(band, spectrum, exclude=[], photon=True, plot=False, to_flux=False, Flam=False, eff=False):
   '''
   Returns the magnitude in *band* for given *wave* in [um] and *flux* in [erg/s/cm2/A] with *airmass* corrections if provided. If uncertainty is provided, returns [mag, mag_uncertainty] instead.
   '''
@@ -50,10 +51,10 @@ def get_mag(band, spectrum, exclude=[], airmass=0, photon=True, plot=False, to_f
     
   else: return ['','','']
 
-def all_mags(spectrum, bands=RSR.keys(), airmass=0, photon=True, to_flux=False, Flam=True, exclude=[], eff=False, to_list=False):
+def all_mags(spectrum, bands=RSR.keys(), photon=True, to_flux=False, Flam=True, exclude=[], eff=False, to_list=False):
   magDict, magList = {}, []
   for band in bands:
-    M = get_mag(band, spectrum, airmass=airmass, photon=photon, to_flux=to_flux, Flam=Flam, exclude=exclude, eff=eff)
+    M = get_mag(band, spectrum, photon=photon, to_flux=to_flux, Flam=Flam, exclude=exclude, eff=eff)
     if M[0]: 
       magDict[band], magDict[band+'_unc'], magDict[band+'_eff'] = M
       magList.append(M)

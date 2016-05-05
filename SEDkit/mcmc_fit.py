@@ -1,5 +1,14 @@
-import syn_phot, logging, cPickle, synth_fit, itertools, utilities as u, astropy.units as q, numpy as np, matplotlib.pyplot as plt, pandas as pd
-from astrodbkit.astrodbkit import astrodb
+import syn_phot
+import logging
+import cPickle
+import synth_fit
+import itertools
+import utilities as u
+import astropy.units as q
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from astrodbkit import astrodb
 
 def pd_interp_models(params, coordinates, model_grid, smoothing=1):
   """
@@ -78,7 +87,7 @@ def make_model_db(model_grid_name, model_atmosphere_db, grid_data='spec', param_
   
   '''
   # Load the model_atmospheres database and pull all the data from the specified table
-  db = astrodb.get_db(model_atmosphere_db)
+  db = astrodb.Database(model_atmosphere_db)
   if param_lims:
     limit_text = ' AND ' .join([l[0]+' IN ('+','.join(map(str,np.arange(l[1],l[2]+l[3],l[3])))+')' for l in param_lims])
     model_grid = db.dict("SELECT * FROM {} WHERE {}".format(model_grid_name,limit_text)).fetchall()  
@@ -186,7 +195,7 @@ def fit_spectrum(raw_spectrum, model_grid, walkers, steps, mask=[], db='', objec
   mask: sequence (optional)
     Tuples of wavelength ranges to exclude in the model fits, e.g. mask=[(1.12,1.16),(1.35,1.42)] for J-H-K water absorption bands
   db: instance
-    The pre-loaded astrodbkit.astrodb.get_db() database instance to pull the spectrum from
+    The pre-loaded astrodbkit.astrodb.Database() database instance to pull the spectrum from
   
   Returns
   --------

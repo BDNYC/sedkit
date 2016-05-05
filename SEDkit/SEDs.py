@@ -2,14 +2,16 @@
 # -*- coding: utf-8 -*-
 # Author: Joe Filippazzo, jcfilippazzo@gmail.com
 
-from astrodbkit.astrodbkit import astrodb
 from itertools import chain, groupby
 from matplotlib.ticker import AutoMinorLocator, MaxNLocator
 from matplotlib import cm
 from astropy.coordinates.angles import Angle
-import sys, os, copy, cPickle, re, interact, pandas as pd, matplotlib.pyplot as plt, astropy.units as q, astropy.constants as ac, astropy.io.ascii as ascii, numpy as np, scipy.stats as st, scipy.interpolate as si, matplotlib.ticker
-import utilities as u, syn_phot as s
+import astropy.units as q, astropy.constants as ac, astropy.io.ascii as ascii, astropy.table as at
+import sys, os, copy, cPickle, re, interact, pandas as pd, matplotlib.pyplot as plt, numpy as np, scipy.stats as st, scipy.interpolate as si, matplotlib.ticker
+import SEDkit.utilities as u
+import SEDkit.syn_phot as s
 RSR = u.get_filters()
+package = os.path.dirname(u.__file__)
 
 def unitless(data, dtypes=''): return np.array([np.asarray([i.value if hasattr(i,'unit') else i for i in j], dtype=d) for j,d in zip(data,dtypes or ['string']*len(data))])
 
@@ -25,7 +27,7 @@ def DMEstar(ages, xparam='Lbol', yparam='radius'):
     
   """
   from glob import glob
-  D, data = [], glob('./SEDkit/Data/Models/Evolutionary/DMESTAR/isochrones/*.txt')
+  D, data = [], glob(package+'/Data/Models/Evolutionary/DMESTAR/isochrones/*.txt')
   for f in data:
     age = int(os.path.basename(f).split('_')[1][:-5])/1000.
     if age in ages:
@@ -62,7 +64,7 @@ def mag_mag_relations(band, dictionary, consider, try_all=False, to_flux=True, m
   """
   try:
   
-    pickle_path, pop ='./SEDkit/Data/Pickles/mag_mag_relations.p', []
+    pickle_path, pop =package+'/Data/Pickles/polynomial_relations.p', []
   
     # Allow name search instead of having to input the object dictionary
     if isinstance(dictionary,str) and data_table: 
@@ -247,7 +249,7 @@ def isochrones(evo_model='hybrid_solar_age', xparam='Lbol', yparam='radius', age
       fig = plt.figure()
       ax = plt.subplot(111) 
   DME = DMEstar(ages, xparam=xparam, yparam=yparam)
-  D, data = [], [d for d in np.genfromtxt('./SEDkit/Data/Models/Evolutionary/{}.txt'.format(evo_model), delimiter=',', usecols=range(6)) if d[0] in ages and d[0] in zip(*DME)[0]]
+  D, data = [], [d for d in np.genfromtxt(package+'/Data/Models/Evolutionary/{}.txt'.format(evo_model), delimiter=',', usecols=range(6)) if d[0] in ages and d[0] in zip(*DME)[0]]
 
   for k,g in groupby(data, key=lambda y: y[0]):
     age, mass, teff, Lbol, logg, radius = [np.array(i) for i in zip(*[list(i) for i in list(g)])[:6]]
@@ -293,11 +295,10 @@ def features(spectrum, fs=20, color='k'):
     elif t=='telluric':
       plt.loglog([start,end], [height,height], c=color, ls='-'), plt.text((end+start)/2, height*1.1, r'$\oplus$', ha='center', fontsize=fs, color=color)
 
-def spectral_index(spectrum, spec_index, data_table='', plot=False):
+def spectral_index(spectrum, spec_index, db, data_table='', plot=False):
   '''
   Return value of given *spec_index* for input *spectrum* as spectrum_id or [w,f,e]
   '''
-  db = astrodb.get_db(database_path)
   indeces = {'IRS-CH4':{'w11':8.2, 'w12':8.8, 'w21':9.7, 'w22':10.3},
              'IRS-NH3':{'w11':9.7, 'w12':10.3, 'w21':10.5, 'w22':11.1},
                'H2O_A':{'w11':1.55, 'w12':1.56, 'w21':1.492, 'w22':1.502}, 
@@ -350,8 +351,10 @@ class GetData(object):
       
     """
     try:
-      self.data = cPickle.load(open(pickle_path,'rb'))
+      self.pickle = open(pickle_path,'rb')
+      self.data = cPickle.load(self.pickle)
       self.path = pickle_path
+      self.close = self.pickle.close()
       print 'Data from {} loaded!'.format(pickle_path)
     
     except IOError: print "Data from {} not loaded! Try again.".format(pickle_path)
@@ -405,7 +408,48 @@ class GetData(object):
     
     else: print 'Source {} not found in {} pickle.'.format(name,self.data)
   
-  def generate_mag_mag_relations(self, mag_mag_pickle='./SEDkit/Data/Pickles/mag_mag_relations.p', pop=[]):
+  def export_SED(self, name, filepath, key='SED_abs'):
+    """
+    Export an SEDs to an ascii file.
+    
+    Parameters
+    ----------
+    name: str
+      The name of the object in the dictionary
+    filepath: str
+      The path to the directory for the file
+    """
+    # Pull the object from the dictionary
+    data = self.data[name]
+    
+    # Get the desired SED
+    sed = data.get(key)
+    
+    if sed:
+      # Pull out all other values which are not arrays and place in the header
+      header = sorted([['# {}'.format(k),str(v)] for k,v in data.items() if 'SED' not in k and 'RJ' not in k], key=lambda x: x[0])
+
+      # Open the file
+      fn = filepath+name.replace(' ','_').replace('+','%2B')+'.txt'
+    
+      # Write the header
+      if header:
+        try: ascii.write([np.asarray(i) for i in np.asarray(header).T], fn, delimiter='=', format='no_header')
+        except IOError: pass
+  
+      # Write the data
+      names = ['# wavelength [um]', 'flux [erg s-1 cm-2 A-1]'] 
+      if len(sed)==3: names += ['unc [erg s-1 cm-2 A-1]']
+      names[-1] = names[-1]+' / {}'.format(key)
+    
+      with open(fn, mode='a') as f: 
+        ascii.write([np.asarray(i, dtype=np.float64) for i in sed], f, names=names, delimiter='\t')  
+        
+    else:
+      print 'No {} for source {}'.format(key,name)            
+  
+  def generate_mag_mag_relations(self, mag_mag_pickle=package+'/Data/Pickles/polynomial_relations.p', \
+                                 pop=['TWA 27B','CD-35 2722b','HR8799b','2MASS J11271382-3735076','WISEA J182831.08+265037.6','51 Eridani b']):
     """
     Generate estimated optical and MIR magnitudes for objects with NIR photometry based on magnitude-magnitude relations of the flux calibrated sample
     
@@ -418,16 +462,17 @@ class GetData(object):
     
     """
     bands, est_mags, rms_vals = ['M_'+i for i in RSR.keys()], [], []
-    cPickle.dump({}, open(mag_mag_pickle,'wb'))
+    # cPickle.dump({}, open(mag_mag_pickle,'wb'))
     Q = {}.fromkeys([b+'_fld' for b in bands]+[b+'_yng' for b in bands]+[b+'_all' for b in bands])
-  
+      
+    # Photometry
     for b in bands:
       Q[b+'_fld'], Q[b+'_yng'], Q[b+'_all'] = {}.fromkeys(bands), {}.fromkeys(bands), {}.fromkeys(bands)
     
       # Iterate through and create polynomials for field, young, and all objects
       for name,groups in zip(['_fld','_yng','_all'],[('fld'),('ymg','low-g'),('fld','ymg','low-g')]):
 
-        # Create band-band plots, fit polynomials, and store coefficients in mag_mag_relations.p
+        # Create band-band plots, fit polynomials, and store coefficients in polynomial_relations.p
         for c in bands:
           # See how many objects qualify
           sample = zip(*self.search(['SpT'], [c,b]+(['NYMG|gravity'] if name=='_yng' else [])) or ['none'])[0]
@@ -437,23 +482,23 @@ class GetData(object):
 
             # Pop the band on interest from the dictionary, calculate polynomial, and add it as a nested dictionary
             try:
-              P = self.mag_plot(c, b, pop=pop, fit=[(groups,3,'k','-')], weighting=False, MKOto2MASS=False)[0][1:]
+              P = self.mag_plot(c, b, pop=pop, fit=[(groups,3,'k','-')], weighting=False, est_mags=False)[0][1:]
               plt.close()
               if P[1]!=0:
-                Q[b+name][c] = {'rms':P[1], 'min':P[0][0], 'max':P[0][1]}
+                Q[b+name][c] = {'rms':P[1], 'min':P[0][0], 'max':P[0][1], 'yparam':b+name, 'xparam':c}
                 Q[b+name][c].update({'c{}'.format(n):p for n,p in enumerate(P[2:])})
                 print '{} - {} relation added!'.format(b+name,c)
             except: pass
 
     cPickle.dump(Q, open(mag_mag_pickle,'wb'))
   
-  def mag_plot(self, xparam, yparam, zparam='', add_data={}, pct_lim=1000, db_phot=False, identify=[],  label_objects='', pop=[], binaries=False, allow_null_unc=False, \
+  def mag_plot(self, xparam, yparam, zparam='', add_data={}, pct_lim=1000, db_phot=False, identify=[],  label_objects={}, pop=[], sources=[], binaries=False, allow_null_unc=False, \
            fit=[], weighting=True, spt=['M','L','T','Y'], groups=['fld','low-g','ymg'], evo_model='hybrid_solar_age', biny=False, id_NYMGs=False, legend=True, add_text=False,  \
            xlabel='', xlims='', xticks=[], invertx='', xmaglimits='', border=['#FFA821','#FFA821','k','r','r','k','#2B89D6','#2B89D6','k','#7F00FF','#7F00FF','k'], \
            ylabel='', ylims='', yticks=[], inverty='', ymaglimits='', markers=['o','o','o','o','o','o','o','o','o','o','o','o'], colors=['#FFA821','r','#2B89D6','#7F00FF'], \
            zlabel='', zlims='', zticks=[], invertz='', zmaglimits='', fill=['#FFA821','w','#FFA821','r','w','r','#2B89D6','w','#2B89D6','#7F00FF','w','#7F00FF'], \
-           overplot=False, fontsize=20, figsize=(10,8), est_mags=True, unity=False, save='', alpha=1, \
-           verbose=False, output_data=False, plot_field=True, return_data='polynomials'):
+           overplot=False, grid=False, fontsize=20, figsize=(10,8), est_mags=True, unity=False, save='', alpha=1, \
+           verbose=False, output_data=False, plot_field=True, return_data='polynomials', save_polynomial=''):
     '''
     Plots the given parameters for all available objects in the given data_table
 
@@ -483,10 +528,17 @@ class GetData(object):
     # Set limits on x and y axis data
     xmaglimits, ymaglimits = xmaglimits or (-np.inf,np.inf), ymaglimits or (-np.inf,np.inf)
 
+    # Add additional sources
     D.update(add_data)
+    
+    # Pop unwanted sources
     for name in pop: 
       try: D.pop(name)
       except: pass
+      
+    # Include specific sources
+    if sources: 
+      D = {k:v for k,v in D.items() if k in sources}
 
     def num(Q):
       ''' Strips alphanumeric strings and Quantities of chars and units and turns them into floats '''
@@ -507,34 +559,40 @@ class GetData(object):
     Y_all, Y_fld, Y_lowg, Y_ymg = [], [], [], [] 
     beta, gamma, binary, circle = [], [], [], [] 
     labels, rejected = [], []
+    
     for name,v in D.items():
   
       # Try to add an estimated mag to the dictionary
       for b in filter(None,x+y+z):
     
         # If synthetic magnitude exists but survey magnitude doesn't, use the synthetic magnitude
-        if v.get(b) and not v.get(b+'_unc') and b not in ['source_id']: v[b], v[b+'_unc'] = v.get('syn_'+b), v.get('syn_'+b+'_unc')
+        if v.get(b) and not v.get(b+'_unc') and b not in ['source_id'] and not allow_null_unc: 
+          v[b], v[b+'_unc'] = v.get('syn_'+b), v.get('syn_'+b+'_unc')
         
         # Estimate photometry based on linear mag-mag relations
-        if est_mags and v.get('d'):
-          
-          # Convert MKO JHK mags to 2MASS JHKs mags if necessary
-          TMS = ['M_2MASS_J','M_2MASS_H','M_2MASS_Ks','2MASS_J','2MASS_H','2MASS_Ks']
-          MKO = ['M_MKO_J','M_MKO_H','M_MKO_K','MKO_J','MKO_H','MKO_K']
-          Lband = np.array(['M_IRAC_ch1','M_WISE_W1',"M_MKO_L'"])
+        if est_mags:   
+          if v.get('d'):
+            # Convert MKO JHK mags to 2MASS JHKs mags if necessary
+            TMS = ['M_2MASS_J','M_2MASS_H','M_2MASS_Ks','2MASS_J','2MASS_H','2MASS_Ks']
+            MKO = ['M_MKO_J','M_MKO_H','M_MKO_K','MKO_J','MKO_H','MKO_K']
+            Lband = np.array(['M_IRAC_ch1','M_WISE_W1',"M_MKO_L'"])
 
-          for tms,mko in zip(TMS,MKO):
-            if b==tms and not v.get(b):
-              try: v[b], v[b+'_unc'], v[b+'_ref'] = mag_mag_relations(b, v, [mko], to_flux=False)
-              except: pass
-          for mko,tms in zip(MKO,TMS):
-            if b==mko and not v.get(b):
-              try: v[b], v[b+'_unc'], v[b+'_ref'] = mag_mag_relations(b, v, [tms], to_flux=False)
-              except: pass
-          for l in Lband:
-            if l[2:] in b and any([v.get(i) for i in Lband[Lband!=l]]):
-              try: v[b], v[b+'_unc'], v[b+'_ref'] = mag_mag_relations(b, v, Lband[Lband!=l], to_flux=False)
-              except: pass          
+            for tms,mko in zip(TMS,MKO):
+              if b==tms and not v.get(b):
+                try: v[b], v[b+'_unc'], v[b+'_ref'] = mag_mag_relations(b, v, [mko], to_flux=False)
+                except: pass
+            for mko,tms in zip(MKO,TMS):
+              if b==mko and not v.get(b):
+                try: v[b], v[b+'_unc'], v[b+'_ref'] = mag_mag_relations(b, v, [tms], to_flux=False)
+                except: pass
+            for l in Lband:
+              if l[2:] in b and any([v.get(i) for i in Lband[Lband!=l]]):
+                try: v[b], v[b+'_unc'], v[b+'_ref'] = mag_mag_relations(b, v, Lband[Lband!=l], to_flux=False)
+                except: pass
+        else:
+          # Exclude all magnitudes that were estimated from polynomials, i.e. have an absolute magnitude as the reference
+          if str(v.get(b.replace('M_','')+'_ref')).startswith('M_'):
+            v.pop(b)
 
       # Check to see if all the appropriate parameters are present from the SED
       if all([v.get(i) for i in filter(None,x+y+z)]):
@@ -559,9 +617,10 @@ class GetData(object):
           data = [name, i, i_unc, j, j_unc, k if zparam else True, k_unc if zparam else True, \
                   v.get('gravity') or (True if v.get('age_min')<500 else False), \
                   v.get('binary'), v.get('SpT'), v.get('SpT_unc', 0.5), v.get('NYMG')]
-    
+
           # If all the necessary data is there, drop it into the appropriate category for plotting
-          if all([data[1], data[3], data[5], binaries or (not binaries and not data[-4])]) \
+          if all([data[1], data[3], data[5]]) \
+          and (binaries or (not binaries and not data[-4])) \
           and (all([data[2], data[4], data[6]]) or allow_null_unc) \
           and all([data[1]>xmaglimits[0],data[1]<xmaglimits[1],data[3]>ymaglimits[0],data[3]<ymaglimits[1]]) \
           and all([(100*((np.e**err-1) if param in RSR.keys() or 'bol' in param \
@@ -599,7 +658,9 @@ class GetData(object):
       
             # Is it in the list of objects to identify or label?
             if data[0] in identify: circle.append(data)
-            if data[0] in label_objects: labels.append([data[0],data[1],data[3]])
+            if data[0] in label_objects.keys() and any([data in i for i in [M_all,L_all,T_all,Y_all]]):
+              labels.append([label_objects[data[0]].get('label',data[0]),data[1],data[3],\
+                             label_objects[data[0]]['dx'],label_objects[data[0]]['dy']])
       
             # If object didn't make it into any of the bins, put it in a rejection table
             if not any([data in i for i in [M_all,L_all,T_all,Y_all]]): rejected.append(data)
@@ -618,7 +679,7 @@ class GetData(object):
       if not overplot:
         if zparam: from mpl_toolkits.mplot3d import Axes3D
         fig = plt.figure(figsize=figsize)
-        ax = plt.subplot(111, projection='3d' if zparam else 'mollweide' if xparam=='ra' and yparam=='dec' else 'rectilinear')
+        ax = plt.subplot(111, projection='3d' if zparam else 'aitoff' if xparam=='ra' and yparam=='dec' else 'rectilinear')
         plt.rc('text', usetex=True, fontsize=fontsize)
         ax.set_xlabel(r'${}$'.format(xlabel or '\mbox{Spectral Type}' if 'SpT' in xparam else xparam), labelpad=fontsize*3/4, fontsize=fontsize+4)
         ax.set_ylabel(r'${}$'.format(ylabel or yparam), labelpad=fontsize*3/4, fontsize=fontsize+4)
@@ -652,9 +713,14 @@ class GetData(object):
           if sample and not zparam:
             N, X, Xsig, Y, Ysig, Z, Zsig, G, B, S, Ssig, NYMG = zip(*[i for i in sample if not i[8]])
             if return_data=='polynomials': 
-              data_out.append(u.output_polynomial(map(float,X), map(float,Y), sig=map(float,Ysig) if weighting else '', \
-                              title='{} | {}'.format(spt,grps), degree=degree, x=xlabel or xparam, y=ylabel or yparam, \
-                              c=c, ls=ls, legend=False, ax=ax)[0])
+              suffix = '_fld' if 'fld' in grps and 'ymg' not in grps and 'low-g' not in grps \
+                       else '_yng' if 'fld' not in grps and 'ymg' in grps and 'low-g' in grps \
+                       else '_all'
+              pr = u.output_polynomial(map(float,X), map(float,Y), sig=map(float,Ysig) if weighting else '', \
+                                       title='{} | {}'.format(spt,grps), degree=degree, x=xparam, y=yparam+suffix, \
+                                       c=c, ls=ls, legend=False, ax=ax)
+              if save_polynomial:
+                polynomial_relation(pr['xparam'], pr['yparam'], polynomial=pr, pickle_path=save_polynomial)
 
       # Plot the data
       for z,l,m,c,e in zip(*[[M_fld, M_lowg, M_ymg, L_fld, L_lowg, L_ymg, T_fld, T_lowg, T_ymg, Y_fld, Y_lowg, Y_ymg, beta, gamma, binary, circle],\
@@ -696,7 +762,7 @@ class GetData(object):
         if return_data=='params': data_out.append(z)
         if output_data and output_data!='polynomials': 
           u.printer(['Name','SpT',xparam,xparam+'_unc',yparam,yparam+'_unc',zparam,zparam+'_unc','Gravity','Binary','Age'], \
-          zip(*[N,S,X,Xsig,Y,Ysig,Z,Zsig,G,B,NYMG]), empties=True, to_txt='./SEDkit/Files/{} v {} v {}.txt'.format(xparam,yparam,zparam)) if zparam \
+          zip(*[N,S,X,Xsig,Y,Ysig,Z,Zsig,G,B,NYMG]), empties=True, to_txt=package+'/Files/{} v {} v {}.txt'.format(xparam,yparam,zparam)) if zparam \
           else u.printer(['Name',xparam,xparam+'_unc',yparam,yparam+'_unc','Gravity','Binary','Age'] if xparam=='SpT' \
           else ['Name','SpT',xparam,xparam+'_unc',yparam,yparam+'_unc','Gravity','Binary','Age'], zip(*[N,X,Xsig,Y,Ysig,G,B,NYMG]) if xparam=='SpT' \
           else zip(*[N,S,X,Xsig,Y,Ysig,G,B,NYMG]), empties=True, to_txt='/Files/{} v {}.txt'.format(xparam,yparam))
@@ -713,6 +779,7 @@ class GetData(object):
         ax.set_xticks([6,10,14,18,22,26,30])
     
       # Axis formatting
+      if grid: ax.grid(True)
       if xticks: ax.set_xticklabels(xticks)
       if xlabel: ax.set_xlabel(xlabel, labelpad=20)
       if invertx: ax.invert_xaxis()
@@ -736,7 +803,8 @@ class GetData(object):
       if not zparam:
         if add_text: ax.annotate(add_text[0], xy=add_text[1], xytext=add_text[2], fontsize=add_text[3]) 
         if labels:
-          for l,x,y in labels: ax.annotate(l, xy=(x,y), xytext=(x+(abs(x)*0.01),y+(abs(y)*0.01)), fontsize=14)       
+          for l,x,y,dx,dy in labels: 
+            ax.annotate(l, xy=(x,y), xytext=(x+dx,y+dy), fontsize=14)       
         if unity: 
           X, Y = ax.get_xlim(), ax.get_ylim()
           ax.plot(X, Y, c='k', ls='--')
@@ -762,7 +830,7 @@ class GetData(object):
     """
     Empties the data_pickle after a prompt
     """
-    sure = raw_input("Are you sure you want to delete all data from {} pickle? ".format(self.path))
+    sure = raw_input("Are you sure you want to delete all data from {} pickle? [No,Yes]".format(self.path))
     if sure.lower()=='yes': 
       try:
         cPickle.dump({}, open(self.path,'wb'))
@@ -771,7 +839,8 @@ class GetData(object):
 
     else: print "You must respond 'Yes' to delete all data from {} pickle!".format(self.path)
 
-  def search(self, keys, requirements, sources=[], spt=(6,32), dictionary=False, to_txt=False, delim='|', fmt='%s', keysort=''):
+  def search(self, keys, requirements, sources=[], spt='', fmt='array', to_txt=False, delim='|', keysort='', \
+             verbose=False):
     '''
     Returns list of all values for *keys* of objects that satisfy all *requirements*
   
@@ -780,27 +849,29 @@ class GetData(object):
     keys: list, tuple
       A sequence of the dictionary keys to be returned
     requirements: list, tuple
-      A sequence of the dictionary keys to be evaluated as True or False
+      A sequence of the dictionary keys to be evaluated as True or False.
+      | (or) and ~ (not) operators recognized, e.g ['WISE_W1|IRAC_ch1'] and ['~publication_id']
     sources: sequence (optional)
       A list of the sources to include exclusively
-    dictionary: bool
-      Returns a dictionary of the results if True and a list if False
+    fmt: str
+      Returns an array, dictionary, or Astropy table of the results given 'array', 'dict', and 'table' respectively
     to_txt: bool
       Writes an ascii file with delimiter **delim to the path supplied by **to_txt
     delim: str
       The delimiter to use when writing data to a text file
-    fmt: str, list, tuple
-      A formatting string (e.g. '%s' or '%d') or a sequence of formatting strings for each column
     keysort: str (option)
       Sorts the columns by the given key
+    verbose: bool
+      Print the details
   
     Returns
     -------
-    result: list, dict
+    result: list, dict, table
       A container of the values for all objects that satisfy the given requirements
   
     '''
     L = copy.deepcopy(self.data)
+    result, rejected = [], []
     
     # Option to provide a list of sources to include
     if sources:
@@ -808,19 +879,65 @@ class GetData(object):
         if k not in sources: L.pop(k)
     
     # Fetch the data that satisfy the requirements
-    if dictionary and not to_txt: result = {n:{k:v for k,v in d.items() if k in keys} for n,d in L.items() if all([any([d.get(j) for j in i.split('|')]) for i in requirements])}
-    else: result = [[d.get(k) for k in keys] for n,d in L.items() if d.get('SpT')>=spt[0] and d.get('SpT')<=spt[1] and all([any([d.get(j) for j in i.split('|')]) for i in requirements])]
-    print '{}/{} records found satisfying {}.'.format(len(result),len(L),requirements)
-      
+    for n,d in L.items():
+      if all([any([True if (not d.get(j.replace('~','')) and j.startswith('~'))  \
+      else d.get(j) for j in i.split('|')]) for i in requirements]):
+        if spt:
+          if d.get('SpT')>=spt[0] and d.get('SpT')<=spt[1]:
+            result.append([d.get(k) for k in keys])
+        else: 
+          result.append([d.get(k) for k in keys])
+      else:
+        rejected.append(n)
+    
     # Sort the columns
-    if keysort in keys: result = sorted(result, key=lambda x: x[keys.index(keysort)])
+    if keysort in keys: 
+      result = np.asarray(sorted(result, key=lambda x: x[keys.index(keysort)]))
+    
+    if fmt=='table' and not to_txt:
+      result = at.Table(np.asarray(result), names=keys)
+      if keysort: result.sort(keysort)
+    if fmt=='dict' and not to_txt:
+      result = {n:{k:v for k,v in d.items() if k in keys} for n,d in L.items() \
+                if all([any([True if (not d.get(j.replace('~','')) and j.startswith('~')) \
+                else d.get(j) for j in i.split('|')]) for i in requirements])}
+    
+    print('{}/{} records found satisfying {}.'.format(len(result),len(L),requirements))
+    if verbose: print(rejected)
       
     # Print to file or return data
-    if to_txt: np.savetxt(to_txt, unitless(result), header=delim.join(keys), delimiter=delim, fmt=fmt)
+    if to_txt: np.savetxt(to_txt, unitless(result), header=delim.join(keys), delimiter=delim, fmt='%s')
     else: return result
+    
+  def subsample(self, sources):
+    """
+    Select a subsample from the GetData() instace given a sequence of source keys
+    
+    Parameters
+    ----------
+    source_list: sequence
+      The list of keys to include in the GetData() instance
+      
+    """
+    subset = {}
+    for source in sources:
+      if source in self.data:
+        subset[source] = self.data[source]
+      else:
+        print('{} not in {}'.format(source,self.path))
+    
+    if len(subset)!=len(sources):
+      if raw_input('Not all specified sources were included. Proceed anyway? [y/n] ')=='y':
+        self.data = subset
+      else:
+        print('Subsample not created.')
+    else:
+      self.data = subset
 
-  def spec_plot(self, sources=[], um=(0.5,14.5), spt=(5,33), teff=(0,9999), SNR=1, groups=['fld','ymg','low-g'], norm_to='', app=False, \
-                binaries=False, pop=[], highlight=[], cmap=plt.cm.jet_r, cbar=True, legend='None', save='', ylabel='', xlabel=''):
+  def spec_plot(self, sources=[], um=(0.5,14.5), spt=(5,33), teff=(0,9999), SNR=0.5, groups=['fld','ymg','low-g'], \
+                plot_phot=True, norm_to='', app=False, add_nans=[1.4,1.85,2.6,4.3,5.05], binaries=False, pop=[], \
+                highlight=[], cmap=plt.cm.jet_r, cbar=True, figsize=(12,8), fontsize=18, overplot=False, \
+                legend='None', save='', ylabel='', xlabel='', low_SNR=True, plot_integrals=False, zorder=1):
     """
     Plot flux calibrated or normalized SEDs for visual comparison.
     
@@ -837,11 +954,16 @@ class GetData(object):
     SNR: int, float
       The signal-to-noise ratio above which the spectra should be masked
     groups: sequence
-      The gravity groups to include, including 'fld' for field gravity, 'low-g' for low gravity designations, and 'ymg' for members of nearby young moving groups
+      The gravity groups to include, including 'fld' for field gravity, 'low-g' for low gravity 
+      designations, and 'ymg' for members of nearby young moving groups
     norm_to: sequence (optional)
       The wavelength range in microns to which all spectra should be normalized
     app: bool
       Plot apparent fluxes instead of absolute
+    plot_phot: bool
+      Plot the photometry
+    add_nans: sequence
+      A sequence of wavelength positions in microns to insert NaN values for nicer plotting
     binaries: bool
       Include known binaries
     cmap: colormap object
@@ -849,11 +971,18 @@ class GetData(object):
     pop: sequence (optional)
       The sources to exclude from the plot
     highlight: sequence (optional)
-      The wavelength ranges to highlight to point out interesting spectral features, e.g. [(6.38,6.55),(11.7,12.8),(10.3,11.3)] for MIR spectra
+      The wavelength ranges to highlight to point out interesting spectral features, 
+      e.g. [(6.38,6.55),(11.7,12.8),(10.3,11.3)] for MIR spectra
     cbar: bool
       Plot the color bar
     legend: int
       The 0-9 location to plot the legend. Does not plot legend if 'None'
+    figsize: sequence
+      The (x,y) dimensions for the plot
+    fontsize: int
+      The size of the font
+    overplot: matplotlib figure
+      The axes to plot the figure on
     xlabel: str (optional)
       The x-axis label
     ylabel: str (optional)
@@ -862,10 +991,14 @@ class GetData(object):
       The path to save the plot
       
     """
-    fig, ax = plt.subplots(figsize=(12,8))
-    cbar = ax.contourf([[0,0],[0,0]], range(teff[0],teff[1],int((teff[1]-teff[0])/20.)), cmap=cmap)
+    if overplot:
+      ax = overplot if hasattr(overplot,'figure') else plt.gca()
+    else: 
+      fig, ax = plt.subplots(figsize=figsize)
+      if cbar:
+        cbar = ax.contourf([[0,0],[0,0]], range(teff[0],teff[1],int((teff[1]-teff[0])/20.)), cmap=cmap)
+        ax.cla()
     L = copy.deepcopy(self.data)
-    ax.cla()
   
     # If you want to specify the sources to include
     if sources:
@@ -873,60 +1006,121 @@ class GetData(object):
         if k not in sources: L.pop(k)
 
     # Iterate through the list and plot the sources that satisfy *kwarg criteria
-    count, to_print, plots = 0, [], []
+    plots, ylims = [], []
     for k,v in L.items():
       try:
-        spec = [i.value if hasattr(i,'unit') else i for i in v.get('SED_spec_'+('app' if app else 'abs'))]
+        # Get the spectrum
+        spec = np.asarray([i.value if hasattr(i,'unit') else i for i in v.get('SED_spec_'+('app' if app else 'abs'))])
+
+        # Add NaN to gaps
+        for w in add_nans:
+          spec = np.concatenate([spec.T, [[w,np.nan,np.nan]]])
+          spec = np.asarray(spec[np.argsort(spec.T)[0]])
+          idx = np.where(spec==[w,np.nan,np.nan])[0][0]
+          try: spec[idx] = [spec[idx+1][0]*0.999,np.nan,np.nan]
+          except: pass
+          spec = spec.T          
+        
+        # Make the spectrum mask
         mask = np.logical_and(spec[0]>um[0],spec[0]<um[1])
         norm_mask = np.logical_and(spec[0]>norm_to[0],spec[0]<norm_to[1]) if norm_to else mask
         norm = 1./np.trapz(spec[1][norm_mask], x=spec[0][norm_mask]) if norm_to else 1.
+        
+        # Get temperature
+        try: Teff = v.get('teff', 0*q.K).value
+        except AttributeError: Teff = 0
+        
+        # Plot the spectra which satisfy the criteria
         if any(mask) \
-        and (app or (not app and v.get('teff').value>teff[0] and v.get('teff').value<teff[1])) \
+        and (((app or (not app and Teff>teff[0] and Teff<teff[1])) \
         and (binaries or (not binaries and not v.get('binary'))) \
         and v.get('SpT')>=spt[0] and v.get('SpT')<=spt[1] \
-        and any(['low-g' in groups and v.get('gravity'),'ymg' in groups and v.get('NYMG'),'fld' in groups and not v.get('gravity') and not v.get('NYMG')]) \
-        and k not in pop: 
+        and any(['low-g' in groups and v.get('gravity'), \
+                 'ymg' in groups and v.get('NYMG'), \
+                 'fld' in groups and not v.get('gravity') and not v.get('NYMG')]) \
+        and k not in pop)
+        or (k in sources)):
           try:
-            color = cmap((1.*v.get('teff').value-teff[0])/(teff[1]-teff[0]),1.) if v.get('teff') else '0.5'
-            ax.step(spec[0][mask], np.ma.masked_where((spec[1][mask]/spec[2][mask])<SNR,spec[1][mask]*norm), where='mid', lw=3 if v.get('gravity') or v.get('NYMG') else 1, color=color)
-            ax.step(spec[0][mask], np.ma.masked_where((spec[1][mask]/spec[2][mask])>SNR,spec[1][mask]*norm), where='mid', lw=3 if v.get('gravity') or v.get('NYMG') else 1, color=color, alpha=0.2)
-            count += 1
-            to_print.append([count, k, v.get('spectral_type'), v.get('teff') or '-'])
-            plots.append(['{} {}'.format(v.get('spectral_type'),k), color, 3 if v.get('gravity') or v.get('NYMG') else 1])
-          except: pass
-      except: pass
+            # Pick the color
+            color = cmap((1.*Teff-teff[0])/(teff[1]-teff[0]),1.) if Teff else '0.5'
+
+            # Plot the integral surface
+            if plot_integrals:
+              intgrl = np.asarray([i.value if hasattr(i,'unit') else i for i in v.get('SED_'+('app' if app else 'abs'))])
+              ax.plot(intgrl[0], intgrl[1], ls='--', color=color, zorder=zorder)
+
+            # Plot the high SNR spectra
+            hiSNRflux = np.ma.masked_where(np.logical_and((spec[1][mask]/spec[2][mask])<SNR, spec[1][mask]!=np.nan), spec[1][mask]*norm)
+            ax.step(spec[0][mask], hiSNRflux, lw=1, color=color, zorder=zorder)
+            
+            # Plot the low SNR spectra
+            if low_SNR: 
+              lwSNRflux = np.ma.masked_where(np.logical_and((spec[1][mask]/spec[2][mask])>SNR, spec[1][mask]!=np.nan), spec[1][mask]*norm)
+              ax.step(spec[0][mask], lwSNRflux, lw=1, color=color, alpha=0.2, zorder=zorder)
+            
+            # Plot photometry as well
+            if plot_phot:
+              phot = np.asarray([i.value if hasattr(i,'unit') else i \
+                                 for i in v.get('SED_phot_'+('app' if app else 'abs'))])
+              ax.errorbar(phot[0], phot[1]*norm, yerr=phot[2]*norm, marker='o', markersize=7,  markeredgewidth=1, \
+                          markeredgecolor='k', ls='none', color=color, zorder=zorder)
+            
+            # Print the results and store the count and max and min y-axis values
+            ylims += list(hiSNRflux)
+            plots.append(['{} ({}) {}'.format(k,v.get('spectral_type'),'{} K'.format(Teff) if Teff else '-'), color, 1, \
+                          [k, v.get('spectral_type'), v.get('teff') or '-']])
+          
+          except IOError: pass
+      except IOError: pass
 
     # Show bounds on wavelength range used to normalize
     # if norm_to: ax.axvline(x=norm_to[0], color='0.8'), ax.axvline(x=norm_to[1], color='0.8')
 
     if any(plots):
+      
+      # Sort the list by spectral type then Teff
+      plots = sorted(plots, key=lambda x:x[-1][-1], reverse=True)
+      to_print = [i.pop() for i in plots]
+      
       # Labels
-      plt.rc('text', usetex=True, fontsize=20)
-      ax.set_ylabel(ylabel or r'$f_\lambda$'+(r'$/F_\lambda ({}-{} \mu m)$'.format(*norm_to) if norm_to else r'$(\lambda)$'))
-      ax.set_xlabel(r'$\lambda (\mu m)$')
+      if not overplot:
+        plt.rc('text', usetex=True, fontsize=fontsize)
+        ax.set_ylabel(ylabel or r'$f_\lambda$'+(r'$/F_\lambda ({}-{} \mu m)$'.format(*norm_to) if norm_to else r'$(\lambda) [erg s^{-1} cm^{-2} A^{-1}]$'))
+        ax.set_xlabel(r'$\lambda [\mu m]$')
   
+      # Format y-axis
       ax.set_yscale('log'), ax.set_xscale('log')  
-      Y = ax.get_ylim()
-      for x in highlight: plt.fill_between(x, [Y[0]]*2, [Y[1]]*2, color='k', alpha=0.1)
+      Y = (min(ylims)*0.6,max(ylims)*1.4)
+        
+      for x in highlight: 
+        ax.fill_between(x, [Y[0]]*2, [Y[1]]*2, color='k', alpha=0.1, zorder=zorder)
+      
       ax.set_ylim(Y), ax.set_xlim(um)
-      if cbar: 
+      
+      # Plot the colorbar
+      if cbar and not overplot: 
         C = fig.colorbar(cbar)
         C.ax.set_ylabel(r'$T_{eff}(K)$')
     
+      # Draw the legend
       if legend!='None':
-        labels, colors, sizes = zip(*sorted(plots))
-        u.manual_legend(labels, colors, sizes=sizes, markers=['-']*len(labels), styles=['l']*len(labels), loc=legend)
+        labels, colors, sizes = zip(*plots)
+        u.manual_legend(labels, colors, fontsize=fontsize-6, sizes=sizes, overplot=ax, markers=['-']*len(labels), styles=['l']*len(labels), loc=legend)
   
-      u.printer(['#','Name','SpT','Teff'], to_print, title='\r')
+      # Print the results, save the figure, and return the axes
+      u.printer(['#','Name','SpT','Teff'], [[n+1]+r for n,r in enumerate(to_print)], title='\r')
       if save: plt.savefig(save)
+      return ax, to_print
+    
     else: 
       print 'No spectra fulfilled that criteria.'
-      plt.close()
+      return
 
 class MakeSED(object):
-  def __init__(self, source_id, database, spec_ids=[], dist='', pi='', age='', membership='', radius='', binary=False, pop=[], 
-               SNR_trim='', SNR='', trim='', SED_trim=[], weighting=True, smoothing=[], est_mags=False, any_mag_mag=False, 
-               evo_model='hybrid_solar_age', fit=False, plot=False, data_pickle=''):
+  def __init__(self, source_id, db, spec_ids=[], dist='', pi='', age='', membership='', radius='', binary=False, pop=[], 
+               SNR_trim='', SNR='', split=[], trim='', SED_trim=[], smoothing=[], est_mags=True, any_mag_mag=False, 
+               evo_model='hybrid_solar_age', fit=False, save=False, write=False, weighting=True, data_pickle='', \
+               diagnostics=False):
     """
     Pulls all available data from the BDNYC Data Archive, constructs an SED, and stores all calculations at *pickle_path*
   
@@ -934,8 +1128,8 @@ class MakeSED(object):
     ----------
     source_id: int, str
       The *source_id*, *unum*, *shortname* or *designation* for any source in the database.
-    database: str, database instance
-      The path to the SQL database file or the database instance to retreive data from
+    db: database instance
+      The database instance to retreive data from
     spec_ids: list, tuple (optional)
       A sequence of the ids from the SPECTRA table to plot. Uses any available spectra if no list is given. Uses no spectra if 'None' is given.
     dist: list, tuple (optional)
@@ -958,6 +1152,8 @@ class MakeSED(object):
       A sequence of (spec_id,snr) pairs of the signal-to-noise values to use for a given spectrum
     trim: sequence (optional)
       A sequence of (spec_id,x1,x2) tuples of the lower and upper wavelength values to trim from a given spectrum
+    split: sequence (optiona)
+      A sequence of wavelength positions in microns at which to split the SED spectra
     SED_trim: sequence (optional)
       The (x1,x2) values to trim the full SED by, e.g. [(0,1),(1.4,100)] for just J-band
     weighting: bool 
@@ -974,11 +1170,10 @@ class MakeSED(object):
       The GetData() object to write new data to
       
     """
-    db = astrodb.get_db(database) if isinstance(database,str) else database
     self.data, self.model_fits = {}, []
     
     try:
-      
+
       # =====================================================================================================================================
       # ======================================= METADATA ====================================================================================
       # =====================================================================================================================================
@@ -999,7 +1194,7 @@ class MakeSED(object):
       IR_SpT = dict(db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime like 'IR' and adopted=1".format(source['id']), fetch='one', fmt='dict') or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime like 'IR' AND gravity<>''".format(source['id']), fetch='one', fmt='dict') or db.query("SELECT * FROM spectral_types WHERE source_id={} AND regime like 'IR'".format(source['id']), fetch='one', fmt='dict') or {'spectral_type':'', 'spectral_type_unc':'', 'gravity':'', 'suffix':''})
       opt_spec_type = "{}{}{}".format(u.specType(OPT_SpT.get('spectral_type')),OPT_SpT.get('suffix') or '',OPT_SpT.get('gravity').replace('d',r'$\delta$').replace('g',r'$\gamma$').replace('b',r'$\beta$') if OPT_SpT.get('gravity') else '') if OPT_SpT.get('spectral_type') else '-'
       ir_spec_type = "{}{}{}".format(u.specType(IR_SpT.get('spectral_type')),IR_SpT.get('suffix') or '',IR_SpT.get('gravity') or '') if IR_SpT.get('spectral_type') else '-'
-      SpT = OPT_SpT if any([i in opt_spec_type for i in ['M','L','0355']]) else IR_SpT if ir_spec_type else OPT_SpT
+      SpT = OPT_SpT if any([i in opt_spec_type for i in ['M','L']]) else IR_SpT if ir_spec_type else OPT_SpT
       spec_type = "{}{}{}".format(u.specType(SpT.get('spectral_type')),SpT.get('suffix') or '',SpT.get('gravity').replace('d',r'$\delta$').replace('g',r'$\gamma$').replace('b',r'$\beta$') if SpT.get('gravity') else '') if SpT.get('spectral_type') else '-'
       self.data['spectral_type'], self.data['SpT'], self.data['SpT_unc'], self.data['SpT_ref'], self.data['gravity'], self.data['suffix'] = spec_type, SpT.get('spectral_type'), SpT.get('spectral_type_unc') or 0.5, SpT.get('publication_id'), SpT.get('gravity'), SpT.get('suffix')
 
@@ -1014,6 +1209,10 @@ class MakeSED(object):
           else (10,150) if (SpT['gravity'] and not membership) \
           else (500,10000)
       self.data['NYMG'] = membership
+      self.data['youth_indicator'] = 'NYMG' if membership \
+                                     else 'low-g' if (SpT['gravity'] and not membership) \
+                                     else 'host age' if self.data['age_min']<500 \
+                                     else ''
       
       # Use radius if given
       self.data['radius'], self.data['radius_unc'] = radius or ['',''] 
@@ -1038,7 +1237,9 @@ class MakeSED(object):
       # =====================================================================================================================================
 
       # Retreive all apparent photometry
-      all_photometry = db.query("SELECT band,magnitude,magnitude_unc,publication_id FROM photometry WHERE source_id=? AND magnitude_unc IS NOT NULL", (source['id'],))
+      all_photometry = db.query("SELECT * FROM photometry WHERE source_id=? AND magnitude_unc IS NOT NULL AND band NOT IN ('{}')".format("','".join([i.replace("'","''") for i in map(str,pop)])), (source['id'],))
+      self.data['phot_ids'] = list(all_photometry['id'])
+      all_photometry = all_photometry[['band','magnitude','magnitude_unc','publication_id']]
             
       # Sort and homogenize it
       phot_data = []
@@ -1087,15 +1288,17 @@ class MakeSED(object):
           relations = {k:RSR.keys() for k in RSR.keys()} if any_mag_mag \
                       else {'SDSS_u':['2MASS_Ks','MKO_K'], 'SDSS_g':['2MASS_J','MKO_J'], 'SDSS_r':['2MASS_H','MKO_H'], \
                             'SDSS_i':['2MASS_H','MKO_H'], 'SDSS_z':['2MASS_J','MKO_J'], 'IRAC_ch1':['WISE_W1','2MASS_Ks'], \
+                            'MKO_J':['2MASS_J'], 'MKO_H':['2MASS_H'], 'MKO_K':['2MASS_Ks'], "MKO_L'":['IRAC_ch1','WISE_W1'], \
                             'IRAC_ch2':['WISE_W2','2MASS_Ks'], 'IRAC_ch3':['WISE_W1'], 'IRAC_ch4':['WISE_W1'], \
                             '2MASS_J':['MKO_J'], '2MASS_H':['MKO_H'], '2MASS_Ks':['MKO_K'], 'WISE_W1':['IRAC_ch2',"MKO_L'",'2MASS_Ks'], \
-                            'WISE_W2':['IRAC_ch2',"MKO_L'",'2MASS_Ks'], 'WISE_W3':['IRAC_ch4','WISE_W2'], "MKO_L'":['IRAC_ch1','WISE_W1']}    
+                            'WISE_W2':['IRAC_ch2',"MKO_L'",'2MASS_Ks'], 'WISE_W3':['IRAC_ch4','WISE_W2']}    
 
           # Get absolute magnitudes for missing bands only if there is an uncertainty
           est_fluxes = [m for m in [[k,RSR[k]['eff']]+mag_mag_relations("M_{}".format(k), abs_mag_dict, \
                                     [i for i in relations.get(k) if abs_mag_dict.get("M_{}_unc".format(i))], \
-                                    mag_and_flux=True, try_all=any_mag_mag) for k in list(set(relations.keys())-set(self.photometry.index.values))] \
-                                    if m[2] and m[3]]
+                                    mag_and_flux=True, try_all=any_mag_mag) \
+                                    for k in list(set(relations.keys())-set(self.photometry.index.values))] \
+                                    if m[2] and m[3] and m[0] not in pop]
           
           if any(est_fluxes):
             abs_phot = pd.DataFrame(est_fluxes, columns=('band','eff','m','m_unc','m_flux','m_flux_unc','M','M_unc','M_flux','M_flux_unc','ref'))
@@ -1112,7 +1315,8 @@ class MakeSED(object):
         app_fluxes = dict({i:j for i,j in zip(app_fluxes[0],app_fluxes[1])}.items()+{"{}_unc".format(i):j for i,j in zip(app_fluxes[0],app_fluxes[2])}.items())
         self.app_fluxes = app_fluxes
         
-        self.data.update(dict(self.photometry['m_flux'].T.to_dict().items()+{"{}_unc".format(k):v for k,v in self.photometry['m_flux_unc'].T.to_dict().items()}.items()))      
+        self.data.update(dict(self.photometry['m_flux'].T.to_dict().items()+{"{}_unc".format(k):v for k,v in self.photometry['m_flux_unc'].T.to_dict().items()}.items())) 
+        self.data.update({"{}_ref".format(k):v for k,v in self.photometry['ref'].to_dict().items()})      
       
       else: print 'No photometry available for SED.'
           
@@ -1128,8 +1332,11 @@ class MakeSED(object):
         spectra = filter(None,[db.query("SELECT * FROM spectra WHERE source_id=? AND regime='OPT'", (source['id'],), fetch='one', fmt='dict'),\
                                db.query("SELECT * FROM spectra WHERE source_id=? AND regime='NIR' AND wavelength_order=''", (source['id'],), fetch='one', fmt='dict'), \
                                db.query("SELECT * FROM spectra WHERE source_id=? AND regime='MIR'", (source['id'],), fetch='one', fmt='dict')])
+        if not spectra:
+          spectra = db.query("SELECT * FROM spectra WHERE source_id=? LIMIT 5", (source['id'],), fmt='dict')
       
-      if spec_ids and len(spec_ids)!=len(spectra): print 'Check those spec_ids! One or more does not belong to source {}.'.format(source_id)
+      if spec_ids and len(spec_ids)!=len(spectra): 
+        print 'Check those spec_ids! One or more does not belong to source {}.'.format(source_id)
       
       # Make data frame columns
       spec_cols = db.query("pragma table_info('spectra')", unpack=True)[1]
@@ -1138,7 +1345,9 @@ class MakeSED(object):
       # Put spectrum into arrays
       for n,sp in enumerate(spectra):
         spectrum = spectra[n].pop('spectrum')
-        spectra[n]['wavelength'], spectra[n]['flux'], spectra[n]['unc'] = spectrum.data
+        spectra[n]['wavelength'], spectra[n]['flux'] = spectrum.data[:2]
+        try: spectra[n]['unc'] = spectrum.data[2]
+        except: spectra[n]['unc'] = None
       
       # Make the data frame
       self.spectra = pd.DataFrame(spectra, columns=spec_cols).set_index('id') if spectra else pd.DataFrame(columns=spec_cols)
@@ -1146,10 +1355,15 @@ class MakeSED(object):
       units, spec_coverage = [q.um,q.erg/q.s/q.cm**2/q.AA,q.erg/q.s/q.cm**2/q.AA], []
 
       # Add spectra metadata to SED object
-      # for r in ['OPT','NIR','MIR']:
-      #   try: self.data[r+'_spec'] = db.query("SELECT id FROM spectra WHERE id in ({}) and regime='{}'".format(','.join(map(str,self.data['spec_ids'])),r), fetch='one')[-1]
-      #   except TypeError: self.data[r+'_spec'] = None
-      #   self.data[r+'_scope'], self.data[r+'_inst'], self.data[r+'_mode'], self.data[r+'_ref'] = db.query("SELECT telescope_id, instrument_id, mode_id, publication_id FROM spectra WHERE regime='{}' AND id in ({})".format(r,','.join(map(str,self.data['spec_ids']))), fetch='one') or ['','','',''] 
+      for r in ['OPT','NIR','MIR']:
+        for key,item in zip(['id','telescope_id','instrument_id','mode_id','publication_id'],\
+                            ['_spec','_scope','_inst','_mode','_ref']):
+          try: 
+            self.data[r+item] = map(int,[j for k in [i.split(',') for i in \
+            map(str,db.query("SELECT * FROM spectra WHERE id in ({}) and regime='{}'".format(','.join(map(str,self.data['spec_ids'])),r), \
+            use_converters=False)[key])] for j in k])
+          except (TypeError,ValueError): 
+            self.data[r+item] = None
   
       # Create Rayleigh-Jeans tail for MIR estimates
       RJ = [np.arange(5,500,0.1)*q.um, u.blackbody(np.arange(5,500,0.1)*q.um, 1500), (u.blackbody(np.arange(5,500,0.1)*q.um, 1800)-u.blackbody(np.arange(5,500,0.1)*q.um, 1200))]
@@ -1160,14 +1374,22 @@ class MakeSED(object):
         # Pull out spectrum
         w, f, e = spec['wavelength'], spec['flux'], spec['unc']
         
+        # Convert log(F) units to linear
+        try:
+          if spec.get('flux_units').startswith('log '):
+            f, e = 10**f, 10**e
+            spec['flux_units'] = spec['flux_units'].replace('log ','')
+        except:
+          print('No flux units.')
+        
         # Force uncertainty array if none
         if e is None: 
           e = f/10.
           print 'No uncertainty array for spectrum {}. Using SNR=10.'.format(spec_id)
   
         # Check that the wavelength_units are correct
-        if w[0]>100 and spec['wavelength_units']=='um': 
-          print 'Incorrect wavelength units for spectrum {}.'.format(spec_id)
+        if (w[0]>100 and spec['wavelength_units']=='um') or (w[0]<100 and spec['wavelength_units']=='A'): 
+          print 'Incorrect wavelength units for spectrum {}.'.format(spec_id)      
   
         # Convert wavelength array into microns if necessary
         w, w_units = (u.str2Q(spec['wavelength_units'], target='um')*w).value, 'um'
@@ -1198,7 +1420,7 @@ class MakeSED(object):
         elif smoothing and any([i[0]==spec_id for i in smoothing]): f = u.smooth(f, i[1])
         
         clean_spectra.append([w,f,e])
-        
+                    
       # Update the spectra in the SED object
       wav, flx, err = zip(*clean_spectra)
       self.spectra['wavelength'] = wav
@@ -1219,6 +1441,15 @@ class MakeSED(object):
           peacewise.append(composite)
       elif len(self.spectra)==1: peacewise = map(list,self.spectra[['wavelength','flux_app','unc_app']].values)
       else: peacewise = []
+      
+      # Splitting
+      keepers = []
+      if split:
+        for pw in peacewise:
+          wavs = filter(None,[np.where(pw[0]<i)[0][-1] if pw[0][0]<i and pw[0][-1]>i else None for i in split])
+          keepers += map(list,zip(*[np.split(i,wavs) for i in pw]))
+      else: keepers = peacewise
+      peacewise = keepers
       
       # Add composite spectra to SED object
       self.composites = pd.DataFrame([[i.value if hasattr(i,'unit') else i for i in p] for p in peacewise], columns=['wavelength','flux_app','unc_app']) if peacewise else pd.DataFrame(columns=['wavelength','flux_app','unc_app']) 
@@ -1284,7 +1515,7 @@ class MakeSED(object):
       # =====================================================================================================================================
 
       # Calculate all fundamental paramters without models
-      self.data = fundamental_params(self.data, p='')
+      self.data = fundamental_params(self.data, p='', plot=diagnostics)
 
       # =====================================================================================================================================
       # ======================================= PRINTING ====================================================================================
@@ -1320,13 +1551,28 @@ class MakeSED(object):
         except: plt.close(); print "Couldn't perform MCMC fit to this SED."
       
       # Auto-plot and save them
-      if plot and (not self.spectra.empty or not self.photometry.empty): 
-        try: self.plot(integrals=True, save='./SEDkit/Plots/')
-        except: plt.close(); print "Couldn't plot this SED."
+      if save and (not self.spectra.empty or not self.photometry.empty): 
+        try: 
+            figpath = save+self.name.replace(' ','_')+'.png'
+            self.plot(integrals=True, save=figpath)
+            print('SED saved as '+figpath)
+        except: 
+            plt.close()
+            print("Couldn't plot this SED.")
+        
+      # Write to file
+      if write and not self.spectra.empty:
+        try: 
+            datapath = self.name.replace(' ','_').replace('+','%2B')+'.txt'
+            self.write(write+datapath)
+            print('Data saved to '+datapath)
+        except: 
+            print 'Could not write this SED to file.'
 
-    except: print "Could not build SED for source {}.".format(source['id'])
+    except IOError: print "Could not build SED for source {}.".format(source['id'])
+    print('\n')
   
-  def fit_SED(self, model_db_path, model_fits=[('bt_settl_2013',50,100)], mask=[(1.12,1.16),(1.35,1.42)], param_lims=[], fit_spec=True, fit_phot=False, data_pickle='', save=''):
+  def fit_SED(self, model_db_path, model_fits=[('bt_settl_2013',2,2)], mask=[(1.12,1.16),(1.35,1.42)], param_lims=[], fit_spec=True, fit_phot=False, data_pickle='', save=''):
     '''
     Perform MCMC fit of model atmosphere spectra and photometry to SED data
     
@@ -1571,8 +1817,10 @@ class MakeSED(object):
     # Format the axes
     ax.set_xlim(xaxis or (0.3,30)), ax.set_xscale(scale[0]), ax.set_yscale(scale[1], nonposy='clip')
     if yaxis: ax.set_ylim(yaxis) 
-    ax.set_xlabel(r"$\displaystyle\lambda\mbox{ (}\mu\mbox{m)}$", labelpad=10), ax.set_ylabel(r"$\displaystyle"+('\lambda' if Flam else '')+" F_\lambda\mbox{ (erg s}^{-1}\mbox{ cm}^{-2}"+('' if Flam else '\mbox{ A}^{-1}')+")$", labelpad=20)
+    ax.set_xlabel(r"$\displaystyle\lambda\mbox{ (}\mu\mbox{m)}$", labelpad=10)
+    ax.set_ylabel(r"$\displaystyle"+('\lambda' if Flam else '')+" F_\lambda\mbox{ (erg s}^{-1}\mbox{ cm}^{-2}"+('' if Flam else '\mbox{ A}^{-1}')+")$", labelpad=20)
     if legend: ax.legend(loc=8, frameon=False, fontsize=16, title='({}) {}'.format(self.data['spectral_type'],self.name))
+    plt.ion()
     
     # Save the image, then close it
     if save: plt.savefig(save if save.endswith('.png') else '{}{} - {}.png'.format(save,self.data['spectral_type'],self.name)), plt.close()  
@@ -1596,20 +1844,20 @@ class MakeSED(object):
     if spec:
       try:
         sed = self.data['SED_spec_'+('app' if app else 'abs')]
-        filename = dirpath+'{} ({}) SED.txt'.format(self.data['shortname'],self.data['spectral_type'])
+        if not dirpath.endswith('.txt'): dirpath += '{} ({}) SED.txt'.format(self.data['shortname'],self.data['spectral_type'])
         header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,'apparent' if app else 'flux calibrated')
-        np.savetxt(filename, np.asarray(sed).T, header=header)
+        np.savetxt(dirpath, np.asarray(sed).T, header=header)
       except: print "Couldn't print spectra."
     
     if phot:
       try:
         phot = np.asarray([np.asarray([i.value if hasattr(i,'unit') else i for i in j]) for j in self.photometry.reset_index()[['band','eff','m_flux' if app else 'M_flux','m_flux_unc' if app else 'M_flux_unc']].values])
-        filename = dirpath+'{} ({}) phot.txt'.format(self.data['shortname'],self.data['spectral_type'])
+        if not dirpath.endswith('.txt'): dirpath += '{} ({}) phot.txt'.format(self.data['shortname'],self.data['spectral_type'])
         header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,'apparent' if app else 'flux calibrated')
-        np.savetxt(filename, phot, header=header)
-      except IOError: print "Couldn't print photometry."
+        np.savetxt(dirpath, phot, header=header)
+      except: print "Couldn't print photometry."
     
-def fundamental_params(D, p=''):  
+def fundamental_params(D, p='', plot=False):  
   '''
   Calculates all possible fundamental parameters given a dictionary of data
   
@@ -1619,6 +1867,8 @@ def fundamental_params(D, p=''):
     A dictionary containing the object's SED and (optionally) distance and radius
   p: str
     A prefix for the new dictionary keys
+  plot: bool
+    Plot the model isochrones with the ranges estimated for this object
     
   Returns
   -------
@@ -1645,12 +1895,12 @@ def fundamental_params(D, p=''):
 
       else:   
         # Get radius from *radius* argument or radius interpolation of evolutionary model isochrones, then calculate Teff
-        D[p+'radius'], D[p+'radius_unc'] = (D['radius'],D['radius_unc']) if D['radius']!='' else isochrone_interp(D[p+'Lbol'], D[p+'Lbol_unc'], D['age_min'], D['age_max'])
+        D[p+'radius'], D[p+'radius_unc'] = (D['radius'],D['radius_unc']) if D['radius']!='' else isochrone_interp(D[p+'Lbol'], D[p+'Lbol_unc'], D['age_min'], D['age_max'], plot=plot)
         D[p+'teff'], D[p+'teff_unc'] = get_teff(D[p+'Lbol_W'], D[p+'Lbol_W_unc'], D[p+'radius'], D[p+'radius_unc'])
 
         # Also calculate model mass and logg
-        D[p+'logg'], D[p+'logg_unc'] = isochrone_interp(D[p+'Lbol'], D[p+'Lbol_unc'], D['age_min'], D['age_max'], yparam='logg')
-        D[p+'mass'], D[p+'mass_unc'] = isochrone_interp(D[p+'Lbol'], D[p+'Lbol_unc'], D['age_min'], D['age_max'], yparam='mass')
+        D[p+'logg'], D[p+'logg_unc'] = isochrone_interp(D[p+'Lbol'], D[p+'Lbol_unc'], D['age_min'], D['age_max'], yparam='logg', plot=plot)
+        D[p+'mass'], D[p+'mass_unc'] = isochrone_interp(D[p+'Lbol'], D[p+'Lbol_unc'], D['age_min'], D['age_max'], yparam='mass', plot=plot)
 
     else: pass
     
@@ -1677,7 +1927,7 @@ def df_extract(df, keys):
   new_format = [np.array([i.value if hasattr(i,'unit') else i for i in df[keys].sort(keys[0])[l].values]) for l in keys]
   return new_format
 
-def norm_to_mags(spec, to_mags, weighting=True, reverse=False):
+def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
   '''
   Normalize the given spectrum to the given dictionary of magnitudes
   
@@ -1694,49 +1944,106 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False):
     The normalized [W,F,E]
   '''
   spec = u.unc(spec)
-  spec = [spec[0]*(q.um if not hasattr(spec[0],'unit') else 1.), spec[1]*(q.erg/q.s/q.cm**2/q.AA if not hasattr(spec[1],'unit') else 1.), spec[2]*(q.erg/q.s/q.cm**2/q.AA if not hasattr(spec[2],'unit') else 1.)]
+  spec = [spec[0]*(q.um if not hasattr(spec[0],'unit') else 1.), \
+          spec[1]*(q.erg/q.s/q.cm**2/q.AA if not hasattr(spec[1],'unit') else 1.), \
+          spec[2]*(q.erg/q.s/q.cm**2/q.AA if not hasattr(spec[2],'unit') else 1.)]
+
+  # Force JHK coverage if close enough
+  blue, red = spec[0][0], spec[0][-1]
   
-  # Force J band coverage if close enough
-  W0, J = spec[0][0], False
-  if spec[0][0]>1.08*q.um and spec[0][0]<1.12*q.um: 
-    J = True
-    spec[0][0] *= 1.08/W0.value
-  
-  # Force Ks band coverage if close enough
-  W9, K = spec[0][-1], False
-  if spec[0][-1]>2.3*q.um and spec[0][-1]<2.356*q.um: 
-    K = True
-    spec[0][-1] *= 2.356/W9.value
+  # Blue side of spectrum
+  if blue>1.08*q.um and blue<1.12*q.um:
+    spec[0][0] *= 1.08/blue.value
+  elif blue>1.47*q.um and blue<1.55*q.um:
+    spec[0][0] *= 1.47/blue.value
+  elif blue>1.95*q.um and blue<2.00*q.um:
+    spec[0][0] *= 1.95/blue.value
+  else:
+    pass
+
+  # Red side of spectrum
+  if red>1.3*q.um and red<1.41*q.um:
+    spec[0][-1] *= 1.41/red.value
+  elif red>1.76*q.um and red<1.825*q.um:
+    spec[0][-1] *= 1.825/red.value
+  elif red>2.3*q.um and red<2.356*q.um:
+    spec[0][-1] *= 2.356/red.value
+  else:
+    pass
   
   # Calculate all synthetic magnitudes for flux calibration then fix end points if necessary
-  mags = s.all_mags(spec, bands=[b for b in to_mags if to_mags.get(b) and to_mags.get(b) and 'unc' not in b], Flam=False, to_flux=True, photon=False)
-  if J: spec[0][0] *= W0.value/1.08
-  if K: spec[0][-1] *= W9.value/2.356
+  mags = s.all_mags(spec, bands=[b for b in to_mags if to_mags.get(b) and to_mags.get(b+'_unc') and b in RSR.keys()], \
+                    Flam=False, to_flux=True, photon=False)
   
+  # Return red and blue wavelength positions to original values
+  spec[0][0], spec[0][-1] = blue, red
+
   try:
     # Get list of all bands in common and pull out flux values
     bands, data = [b for b in list(set(mags).intersection(set(to_mags))) if '_unc' not in b], []
     for b in bands:
       if all([mags.get(b),mags.get(b+'_unc'),to_mags.get(b),to_mags.get(b+'_unc')]):
-        data.append([RSR[b]['eff'].value, mags[b].value if hasattr(mags[b],'unit') else mags[b], mags[b+'_unc'].value if hasattr(mags[b+'_unc'],'unit') else mags[b+'_unc'], to_mags[b].value if hasattr(to_mags[b],'unit') else to_mags[b], to_mags[b+'_unc'].value if hasattr(to_mags[b+'_unc'],'unit') else to_mags[b+'_unc'], (RSR[b]['max']-RSR[b]['min']).value if weighting else 1.])
+        data.append([RSR[b]['eff'].value, mags[b].value if hasattr(mags[b],'unit') else mags[b], \
+                     mags[b+'_unc'].value if hasattr(mags[b+'_unc'],'unit') else mags[b+'_unc'], \
+                     to_mags[b].value if hasattr(to_mags[b],'unit') else to_mags[b], \
+                     to_mags[b+'_unc'].value if hasattr(to_mags[b+'_unc'],'unit') else to_mags[b+'_unc'], \
+                     (RSR[b]['max']-RSR[b]['min']).value if weighting else 1.])
     
     # Make arrays of values and calculate normalization factor that minimizes the function
     w, f2, e2, f1, e1, weight = [np.array(i, np.float) for i in np.array(data).T]
     norm = sum(weight*f1*f2/(e1**2 + e2**2))/sum(weight*f2**2/(e1**2 + e2**2))
     
     # Plotting test
-    # if plot:
-    #   plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
-    #   plt.loglog(spec[0].value, spec[1].value*norm, label='new', color='b')
-    #   plt.scatter(w, f1, c='g')
-    #   plt.scatter(w, f2, c='b')
-    #   plt.legend()    
+    if plot:
+      plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
+      plt.loglog(spec[0].value, spec[1].value*norm, label='new', color='b')
+      plt.scatter(w, f1, c='g')
+      plt.scatter(w, f2, c='b')
+      plt.legend()    
     
     return [spec[0], spec[1]/norm, spec[2]/norm] if reverse else [spec[0], spec[1]*norm, spec[2]*norm]
   
-  except IOError:
+  except:
     print 'No overlapping photometry for normalization!'
     return spec
+
+
+def polynomial_relation(xparam, yparam, polynomial={}, pickle_path=package+'/Data/Pickles/polynomial_relations.p'):
+  """
+  Store or retrieve a polynomial relation for this GetData() instance.
+  
+  Parameters
+  ----------
+  xparam: str
+    The x parameter of the relation, e.g. 'MKO_J-MKO_K', 'SpT'
+  yparam: str
+    The y parameter of the relation, e.g. 'M_MKO_J', 'Lbol'
+  relation: dict
+    A dictionary of a polynomial to write to the pickle.
+    Must contain the keys 'rms', 'min', 'max', and 'c0'. 
+    Additional orders should be called 'c1', 'c2', etc.
+  pickle: str
+    The path to the pickle
+
+  """
+  D = cPickle.load(open(pickle_path,'rb'))
+  
+  if polynomial:
+    if all([k in polynomial for k in ['rms','min','max','c0']]):
+      if not D.get(yparam): 
+        D[yparam] = {}
+      D[yparam][xparam] = polynomial
+      cPickle.dump(D, open(pickle_path, 'wb'))
+      print('Polynomial of {} as a function of {} saved to {}.\n'.format(yparam,xparam,pickle_path))
+    else:
+      print("Polynomial relation must have keys 'rms','min','max', and 'c0'.")
+      
+  else:
+    try:
+      return D[yparam][xparam]
+    except:
+      print('No polynomial of {} as a function of {}.'.format(yparam,xparam))
+
 
 def finalize_spec(spec):
   '''

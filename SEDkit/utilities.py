@@ -4,7 +4,9 @@ import warnings, glob, os, re, xlrd, cPickle, itertools, astropy.units as q, ast
 from random import random
 from heapq import nsmallest, nlargest
 from scipy.interpolate import Rbf
+import SEDkit.interact as SI
 warnings.simplefilter('ignore')
+package = os.path.dirname(SI.__file__)
 
 def blackbody(lam, T, Flam=False, radius=1, dist=10, emitted=False):
   """
@@ -142,7 +144,7 @@ def flux2mag(band, f, sig_f='', photon=False, filter_dict=''):
   sig_m = (2.5/np.log(10))*(sig_f/f).value if sig_f else ''  
   return [m,sig_m]
 
-def get_filters(filter_directories=['./SEDkit/Data/Filters/{}/'.format(i) for i in ['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Johnson','Cousins','MKO','GALEX','DENIS','Gaia','DES']], systems=['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Johnson','Cousins','MKO','GALEX','DENIS','Gaia','DES']):
+def get_filters(filter_directories=[package+'/Data/Filters/{}/'.format(i) for i in ['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Johnson','Cousins','MKO','GALEX','DENIS','Gaia','DES']], systems=['2MASS','SDSS','WISE','IRAC','MIPS','FourStar','HST','Johnson','Cousins','MKO','GALEX','DENIS','Gaia','DES']):
   """
   Grabs all the .txt spectral response curves and returns a dictionary of wavelength array [um], filter response [unitless], effective, min and max wavelengths [um], and zeropoint [erg s-1 cm-2 A-1]. 
   """
@@ -295,8 +297,10 @@ def manual_legend(labels, colors, markers='', edges='', sizes='', errors='', sty
   if figlegend:
     plt.figlegend(handles, labels, figlegend, frameon=False, numpoints=1, handletextpad=1 if 'l' in styles else 0, fontsize=fontsize, handleheight=2, handlelength=1.5, ncol=ncol)
   else:
-    add_legend = ax.legend(handles, labels, loc=loc, frameon=False, numpoints=1, handletextpad=1 if 'l' in styles else 0, handleheight=2, handlelength=1.5, fontsize=fontsize, ncol=ncol, bbox_to_anchor=bbox_to_anchor, mode="expand", borderaxespad=0.) if bbox_to_anchor else ax.legend(handles, labels, loc=loc, frameon=False, numpoints=1, handletextpad=1 if 'l' in styles else 0, handleheight=2, handlelength=1.5, fontsize=fontsize, ncol=ncol)
-    ax.add_artist(add_legend)
+    try:
+      add_legend = ax.legend(handles, labels, loc=loc, frameon=False, numpoints=1, handletextpad=1 if 'l' in styles else 0, handleheight=2, handlelength=1.5, fontsize=fontsize, ncol=ncol, bbox_to_anchor=bbox_to_anchor, mode="expand", borderaxespad=0.) if bbox_to_anchor else ax.legend(handles, labels, loc=loc, frameon=False, numpoints=1, handletextpad=1 if 'l' in styles else 0, handleheight=2, handlelength=1.5, fontsize=fontsize, ncol=ncol)
+      ax.add_artist(add_legend)
+    except: print labels
     
   if text_colors:
     ltext = plt.gca().get_legend().get_texts()
@@ -308,19 +312,29 @@ def multiplot(rows, columns, ylabel='', xlabel='', xlabelpad='', ylabelpad='', h
   """
   fig, axes = plt.subplots(rows, columns, sharey=sharey, sharex=sharex, figsize=figsize)
   plt.rc('text', usetex=True, fontsize=fontsize)
+  
   if ylabel:
-    if isinstance(ylabel,str): fig.text(0.04, 0.5, ylabel, ha='center', va='center', rotation='vertical', fontsize=fontsize)
+    if isinstance(ylabel,str): 
+      fig.text(0.04, 0.5, ylabel, ha='center', va='center', rotation='vertical', fontsize=fontsize)
     else:
-      if columns>1: axes[0].set_ylabel(ylabel, fontsize=fontsize, labelpad=ylabelpad or fontsize)
+      if columns>1: 
+        axes[0].set_ylabel(ylabel, fontsize=fontsize, labelpad=ylabelpad or fontsize)
       else:
-        for a,l in zip(axes,ylabel): a.set_xlabel(l, fontsize=fontsize, labelpad=xlabelpad or fontsize)
+        for a,l in zip(axes,ylabel): 
+          a.set_xlabel(l, fontsize=fontsize, labelpad=xlabelpad or fontsize)
+  
   if xlabel:
-    if isinstance(xlabel,str): fig.text(0.5, 0.04, xlabel, ha='center', va='center', fontsize=fontsize)
+    if isinstance(xlabel,str): 
+      fig.text(0.5, 0.04, xlabel, ha='center', va='center', fontsize=fontsize)
     else:
-      if rows>1: axes[0].set_ylabel(ylabel, fontsize=fontsize, labelpad=ylabelpad or fontsize)
+      if rows>1: 
+        axes[0].set_ylabel(ylabel, fontsize=fontsize, labelpad=ylabelpad or fontsize)
       else:
-        for a,l in zip(axes,xlabel): a.set_xlabel(l, fontsize=fontsize, labelpad=xlabelpad or fontsize)
-  plt.subplots_adjust(right=0.96, top=0.96, bottom=0.15, left=0.12, hspace=hspace, wspace=wspace), fig.canvas.draw()
+        for a,l in zip(axes,xlabel): 
+          a.set_xlabel(l, fontsize=fontsize, labelpad=xlabelpad or fontsize)
+  
+  plt.subplots_adjust(right=0.96, top=0.96, bottom=0.15, left=0.12, hspace=hspace, wspace=wspace)
+  fig.canvas.draw()
   return [fig]+list(axes)
   
 def norm_spec(spectrum, template, exclude=[]):
@@ -448,17 +462,21 @@ def normalize(spectra, template, composite=True, plot=False, SNR=50, exclude=[],
     return normalized[0][:len(template)] if composite else normalized
   else: return [W,F,E]
 
-def output_polynomial(n, m, sig='', x='x', y='y', title='', degree=1, c='k', ls='--', lw=2, legend=True, ax='', output_data=False, plot_rms='0.9'):
+def output_polynomial(n, m, sig='', x='x', y='y', title='', degree=1, c='k', ls='--', lw=2, legend=True, ax='', output_data=False, dictionary=True, plot_rms=''):
   p, residuals, rank, singular_values, rcond = np.polyfit(np.array(map(float,n)), np.array(map(float,m)), degree, w=1/np.array([i if i else 1 for i in sig]) if sig!='' else None, full=True)
   f = np.poly1d(p)
   w = np.linspace(min(n), max(n), 50)
   ax.plot(w, f(w), color=c, ls=ls, lw=lw, label='${}$'.format(poly_print(p, x=x, y=y)) if legend else '', zorder=10)
   rms = np.sqrt(sum((m-f(n))**2)/len(n))
-  if plot_rms: ax.fill_between(w, f(w)-rms, f(w)+rms, color=plot_rms, zorder=-1)
+  if plot_rms: ax.fill_between(w, f(w)-rms, f(w)+rms, color=c, alpha=0.1, zorder=-1)
   data = [[y, (min(n),max(n)), rms]+list(reversed(p))]
+  
+  D = {'yparam':y, 'xparam':x, 'rms':round(rms,3), 'min':round(min(n),1), 'max':round(max(n),1)}
+  D.update({'c{}'.format(str(o)):v for o,v in enumerate(list(reversed(p)))})
+  
   print_data = [[y, r'{:.1f}\textless {}\textless {:.1f}'.format(min(n),x,max(n)), '{:.3f}'.format(rms)]+['{:.3e}'.format(v) for v in list(reversed(p))]]
   printer(['P(x)','x','rms']+[r'$c_{}$'.format(str(i)) for i in range(len(p))], print_data, title=title, to_txt='./Files/{} v {}.txt'.format(x,y) if output_data else False)
-  return data 
+  return D if dictionary else data
 
 def pi2pc(parallax, parallax_unc=0, pc2pi=False):
   if parallax: 
@@ -611,8 +629,8 @@ def str2Q(x,target=''):
   if x:       
     def Q(IN):
       OUT = 1
-      text = ['Jy', 'erg', '/s', 's-1', 's', '/um', 'um-1', 'um', '/cm2', 'cm-2', 'cm2', '/cm', 'cm-1', 'cm', '/A', 'A-1', 'A', 'W', '/m2', 'm-2', 'm2', '/m', 'm-1', 'm', '/Hz', 'Hz-1']
-      vals = [q.Jy, q.erg, q.s**-1, q.s**-1, q.s, q.um**-1, q.um**-1, q.um, q.cm**-2, q.cm**-2, q.cm**2, q.cm**-1, q.cm**-1, q.cm, q.AA**-1, q.AA**-1, q.AA, q.W, q.m**-2, q.m**-2, q.m**2, q.m**-1, q.m**-1, q.m, q.Hz**-1, q.Hz**-1]
+      text = ['Jy', 'erg', '/s', 's-1', 's', '/um', 'um-1', 'um', '/nm', 'nm-1', 'nm', '/cm2', 'cm-2', 'cm2', '/cm', 'cm-1', 'cm', '/A', 'A-1', 'A', 'W', '/m2', 'm-2', 'm2', '/m', 'm-1', 'm', '/Hz', 'Hz-1']
+      vals = [q.Jy, q.erg, q.s**-1, q.s**-1, q.s, q.um**-1, q.um**-1, q.um, q.nm**-1, q.nm**-1, q.nm, q.cm**-2, q.cm**-2, q.cm**2, q.cm**-1, q.cm**-1, q.cm, q.AA**-1, q.AA**-1, q.AA, q.W, q.m**-2, q.m**-2, q.m**2, q.m**-1, q.m**-1, q.m, q.Hz**-1, q.Hz**-1]
       for t,v in zip(text,vals):
         if t in IN:
           OUT = OUT*v
@@ -630,7 +648,7 @@ def str2Q(x,target=''):
     return unit 
   else:
     return q.Unit('')
-      
+     
 def squaredError(a, b, c):
   """
   Computes the squared error of two arrays. Pass to scipy.optimize.fmin() to find least square or use scipy.optimize.leastsq()
@@ -639,6 +657,19 @@ def squaredError(a, b, c):
   a *= a 
   c = np.array([1 if np.isnan(e) else e for e in c])
   return sum(a/c)
+
+def radec(rd, id=False, update=False):
+  """
+  Converts SXG coordinates to decimal degrees and updates the database if a source_id and database instance are passed
+  """
+  sign = '+' if '+' in rd[1:] else '-'
+  ra, dec = rd.replace(':','').replace(' ','').split(sign)
+  RA = cd.Angle(ra[:2]+' '+ra[2:4]+' '+ra[4:6]+('.' if '.' not in ra else '')+ra[6:], unit='degree')
+  DEC = cd.Angle(sign+dec[:2]+' '+dec[2:4]+' '+dec[4:6]+('.' if '.' not in dec else '')+dec[6:], unit='degree')
+  radeg = '{:.5f}'.format(RA.value)
+  decdeg = '{:.5f}'.format(DEC.value)
+  if update and id: update.modify("update sources set ra={}, dec={} where id={}".format(radeg,decdeg,id))
+  else: print radeg,decdeg
 
 def trim_spectrum(spectrum, regions, smooth_edges=False):
   trimmed_spec = [i[idx_exclude(spectrum[0], regions)] for i in spectrum]
