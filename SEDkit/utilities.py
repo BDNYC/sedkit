@@ -462,7 +462,7 @@ def normalize(spectra, template, composite=True, plot=False, SNR=50, exclude=[],
     return normalized[0][:len(template)] if composite else normalized
   else: return [W,F,E]
 
-def output_polynomial(n, m, sig='', x='x', y='y', title='', degree=1, c='k', ls='--', lw=2, legend=True, ax='', output_data=False, dictionary=True, plot_rms=''):
+def output_polynomial(n, m, sig='', x='x', y='y', title='', degree=1, c='k', ls='--', lw=2, legend=True, ax='', output_data=False, dictionary=True, plot_rms=True):
   p, residuals, rank, singular_values, rcond = np.polyfit(np.array(map(float,n)), np.array(map(float,m)), degree, w=1/np.array([i if i else 1 for i in sig]) if sig!='' else None, full=True)
   f = np.poly1d(p)
   w = np.linspace(min(n), max(n), 50)
@@ -682,6 +682,16 @@ def trim_spectrum(spectrum, regions, smooth_edges=False):
         if any(spectrum[0][spectrum[0]<r[0]]): trimmed_spec = inject_average(trimmed_spec, r[0], 'left', n=smooth_edges)
       except: pass 
   return trimmed_spec
+  
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
+  """
+  Take a slice of a colormap
+  """
+  import matplotlib.colors as clrs
+  new_cmap = clrs.LinearSegmentedColormap.from_list(
+    'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
+    cmap(np.linspace(minval, maxval, n)))
+  return new_cmap
 
 def unc(spectrum, SNR=20):
   """

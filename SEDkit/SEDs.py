@@ -491,14 +491,20 @@ class GetData(object):
             except: pass
 
     cPickle.dump(Q, open(mag_mag_pickle,'wb'))
-  
-  def mag_plot(self, xparam, yparam, zparam='', add_data={}, pct_lim=1000, db_phot=False, identify=[],  label_objects={}, pop=[], sources=[], binaries=False, allow_null_unc=False, \
-           fit=[], weighting=True, spt=['M','L','T','Y'], groups=['fld','low-g','ymg'], evo_model='hybrid_solar_age', biny=False, id_NYMGs=False, legend=True, add_text=False,  \
-           xlabel='', xlims='', xticks=[], invertx='', xmaglimits='', border=['#FFA821','#FFA821','k','r','r','k','#2B89D6','#2B89D6','k','#7F00FF','#7F00FF','k'], \
-           ylabel='', ylims='', yticks=[], inverty='', ymaglimits='', markers=['o','o','o','o','o','o','o','o','o','o','o','o'], colors=['#FFA821','r','#2B89D6','#7F00FF'], \
-           zlabel='', zlims='', zticks=[], invertz='', zmaglimits='', fill=['#FFA821','w','#FFA821','r','w','r','#2B89D6','w','#2B89D6','#7F00FF','w','#7F00FF'], \
-           overplot=False, grid=False, fontsize=20, figsize=(10,8), est_mags=True, unity=False, save='', alpha=1, \
-           verbose=False, output_data=False, plot_field=True, return_data='polynomials', save_polynomial=''):
+    
+  def mag_plot(self, xparam, yparam, zparam='', add_data={}, pct_lim=1000, est_mags=True, plot_field=True, \
+               identify=[],  label_objects={}, pop=[], sources=[], binaries=False, allow_null_unc=False, \
+               fit=[], weighting=True, spt=['M','L','T','Y'], groups=['fld','low-g','ymg'], \
+               evo_model='hybrid_solar_age', biny=False, id_NYMGs=False, legend=True, add_text=False,  \
+               xlabel='', xlims='', xticks=[], invertx='', xmaglimits='', \
+               ylabel='', ylims='', yticks=[], inverty='', ymaglimits='', \
+               zlabel='', zlims='', zticks=[], invertz='', zmaglimits='', \
+               border=['#FFA821','#FFA821','k','r','r','k','#2B89D6','#2B89D6','k','#7F00FF','#7F00FF','k'], \
+               markers=['o','o','o','o','o','o','o','o','o','o','o','o'], \
+               colors=['#FFA821','r','#2B89D6','#7F00FF'], \
+               fill=['#FFA821','w','#FFA821','r','w','r','#2B89D6','w','#2B89D6','#7F00FF','w','#7F00FF'], \
+               overplot=False, grid=False, fontsize=20, figsize=(10,8), unity=False, save='', alpha=1, \
+               verbose=False, output_data=False, return_data='polynomials', save_polynomial=''):
     '''
     Plots the given parameters for all available objects in the given data_table
 
@@ -604,11 +610,6 @@ class GetData(object):
                       if all([num(v.get(n,0)) and num(v.get(n+'_unc',0)) for n in p]) \
                       else 0 for m in p]))) if len(p)==2 \
                       else [num(v.get(p[0],0))])[0] for p in [x,y,z]]
-          
-          # Specify uncertainty cutoff
-          # i, j, k = [(np.diff(list(reversed([num(v.get(m,0)) if all([num(v.get(n,0)) and num(v.get(n+'_unc',0)) \
-          #             and (num(v.get(n+'_unc',0))*100./num(v.get(n,0)))<pct_lim for n in p]) else 0 for m in p]))) \
-          #             if len(p)==2 else [num(v.get(p[0],0))])[0] for p in [x,y,z]]
     
           # Pull out uncertainties and caluclate the sum of the squares if the parameter is a color
           i_unc, j_unc, k_unc = [np.sqrt(sum([num(v.get(e+'_unc', 0))**2 for e in p])) for p in [x,y,z]]
@@ -639,6 +640,7 @@ class GetData(object):
                                           ['M','L','T','Y']):
               
               if data[-3]>=low and data[-3]<high and S in spt: 
+                
                 # Get total count
                 if all([data[-1],'ymg' in groups]) \
                 or all([data[7],'low-g' in groups]) \
@@ -657,7 +659,9 @@ class GetData(object):
                 else None
       
             # Is it in the list of objects to identify or label?
-            if data[0] in identify: circle.append(data)
+            if data[0] in identify: 
+              circle.append(data)
+            
             if data[0] in label_objects.keys() and any([data in i for i in [M_all,L_all,T_all,Y_all]]):
               labels.append([label_objects[data[0]].get('label',data[0]),data[1],data[3],\
                              label_objects[data[0]]['dx'],label_objects[data[0]]['dy']])
@@ -727,7 +731,7 @@ class GetData(object):
                              ['M Field','M '+r'$\beta /\gamma$','M NYMG','L Field','L '+r'$\beta /\gamma$','L NYMG',\
                               'T Field','T '+r'$\beta /\gamma$','T NYMG','Y Field','Y '+r'$\beta /\gamma$','Y NYMG',\
                               'Beta','Gamma','Binary','Interesting'],\
-                              markers+['d','d','s','*'],fill+['w','w','none','k'],border+['b','g','g','none']]):
+                              markers+['d','d','s','*'],fill+['w','w','none','k'],border+['b','g','g','k']]):
         
         if z:
           if 'NYMG' in l and id_NYMGs:
@@ -737,7 +741,7 @@ class GetData(object):
               if zparam: ax.scatter(X, Y, Z)
               else: 
                 ax.errorbar(X, Y, ls='none', marker='d', markerfacecolor=NYMG_dict[k], markeredgecolor='k', ecolor='k', \
-                            markeredgewidth=1, markersize=9 if l=='Binary' else 12 if l=='Interesting' else 7, label=l, \
+                            markeredgewidth=1, markersize=10 if l=='Binary' else 20 if l=='Interesting' else 7, label=l, \
                             capsize=0, zorder=0 if 'Field' in l else 3 if l in ['Binary','Interesting'] else 2, alpha=alpha)
           
           else: 
@@ -749,7 +753,7 @@ class GetData(object):
                 label=l, zorder=0 if 'Field' in l else 3 if l in ['Binary','Interesting'] else 2, alpha=alpha)
               else:
                 ax.errorbar(X, Y, xerr=None if l=='Binary' else [Xsig,Xsig], yerr=None if l in ['Binary','Interesting'] else [Ysig,Ysig], \
-                            ls='none', marker=m, markerfacecolor=c, markeredgecolor=e, ecolor=e, markeredgewidth=0 if 'Field' in l else 2, \
+                            ls='none', marker=m, markerfacecolor=c, markeredgecolor=e, ecolor=e, markeredgewidth=0 if 'Field' in l else 1, \
                             markersize=10 if l=='Binary' else 20 if l=='Interesting' else 8, label=l, capsize=0, \
                             zorder=0 if 'Field' in l else 3 if l in ['Binary','Interesting'] else 2, alpha=alpha)
                 plt.connect('button_press_event', interact.AnnoteFinder(X, Y, N)) 
@@ -936,7 +940,7 @@ class GetData(object):
 
   def spec_plot(self, sources=[], um=(0.5,14.5), spt=(5,33), teff=(0,9999), SNR=0.5, groups=['fld','ymg','low-g'], \
                 plot_phot=True, norm_to='', app=False, add_nans=[1.4,1.85,2.6,4.3,5.05], binaries=False, pop=[], \
-                highlight=[], cmap=plt.cm.jet_r, cbar=True, figsize=(12,8), fontsize=18, overplot=False, \
+                highlight=[], cmap=u.truncate_colormap(plt.cm.brg_r, 0.5, 1.), cbar=True, figsize=(12,8), fontsize=18, overplot=False, \
                 legend='None', save='', ylabel='', xlabel='', low_SNR=True, plot_integrals=False, zorder=1):
     """
     Plot flux calibrated or normalized SEDs for visual comparison.
@@ -1385,11 +1389,11 @@ class MakeSED(object):
         # Force uncertainty array if none
         if e is None: 
           e = f/10.
-          print 'No uncertainty array for spectrum {}. Using SNR=10.'.format(spec_id)
+          print('No uncertainty array for spectrum {}. Using SNR=10.'.format(spec_id))
   
         # Check that the wavelength_units are correct
         if (w[0]>100 and spec['wavelength_units']=='um') or (w[0]<100 and spec['wavelength_units']=='A'): 
-          print 'Incorrect wavelength units for spectrum {}.'.format(spec_id)      
+          print('Incorrect wavelength units for spectrum {}.'.format(spec_id))   
   
         # Convert wavelength array into microns if necessary
         w, w_units = (u.str2Q(spec['wavelength_units'], target='um')*w).value, 'um'
@@ -1401,23 +1405,33 @@ class MakeSED(object):
         # Convert any spectra in F_nu into F_lambda
         if spec['flux_units']=='Jy':
           W_nu, F_nu, E_nu = w*q.um, u.str2Q(spec['flux_units'])*f, u.str2Q(spec['flux_units'])*e
-          f, e, spec['flux_units'] = (ac.c*F_nu/W_nu**2).to(q.erg/q.s/q.cm**2/q.AA).value, (ac.c*E_nu/W_nu**2).to(q.erg/q.s/q.cm**2/q.AA).value, 'erg/s/cm2/A'
+          f, e = (ac.c*F_nu/W_nu**2).to(q.erg/q.s/q.cm**2/q.AA).value, (ac.c*E_nu/W_nu**2).to(q.erg/q.s/q.cm**2/q.AA).value
+          spec['flux_units'] = 'erg/s/cm2/A'
     
         # Remove NaNs, negatives and zeroes from flux array
         w, f, e = u.unc([w,f,e])
       
         # Trim spectra frist up to first point with SNR>SNR_trim then manually
         spec_coverage.append(w)
-        if isinstance(SNR_trim, (float,int)): snr_trim = SNR_trim
-        elif SNR_trim and any([i[0]==spec_id for i in SNR_trim]): snr_trim = [i[1] for i in SNR_trim if i[0]==spec_id][0]
-        else: snr_trim = 10
-        if not SNR or not any([i[0]==spec_id for i in SNR]): w, f, e = [i[np.where(f/e>=snr_trim)[0][0]:np.where(f/e>=snr_trim)[0][-1]+1] for i in [w,f,e]]
-        if trim and any([i[0]==spec_id for i in trim]): w, f, e = u.trim_spectrum([w,f,e], [i[1:] for i in trim if i[0]==spec_id])
-        if not any(w): spectra.pop(n)
+        if isinstance(SNR_trim, (float,int)): 
+          snr_trim = SNR_trim
+        elif SNR_trim and any([i[0]==spec_id for i in SNR_trim]): 
+          snr_trim = [i[1] for i in SNR_trim if i[0]==spec_id][0]
+        else: 
+          snr_trim = 10
+        
+        if not SNR or not any([i[0]==spec_id for i in SNR]): 
+          w, f, e = [i[np.where(f/e>=snr_trim)[0][0]:np.where(f/e>=snr_trim)[0][-1]+1] for i in [w,f,e]]
+        if trim and any([i[0]==spec_id for i in trim]): 
+          w, f, e = u.trim_spectrum([w,f,e], [i[1:] for i in trim if i[0]==spec_id])
+        if not any(w): 
+          spectra.pop(n)
             
         # Smoothing
-        if isinstance(smoothing, (float,int)): f = u.smooth(f, smoothing)
-        elif smoothing and any([i[0]==spec_id for i in smoothing]): f = u.smooth(f, i[1])
+        if isinstance(smoothing, (float,int)): 
+          f = u.smooth(f, smoothing)
+        elif smoothing and any([i[0]==spec_id for i in smoothing]): 
+          f = u.smooth(f, i[1])
         
         clean_spectra.append([w,f,e])
                     
@@ -1427,7 +1441,7 @@ class MakeSED(object):
       self.spectra['flux'] = self.spectra['flux_app'] = flx
       self.spectra['unc'] = self.spectra['unc_app'] = err
       
-      if self.spectra.empty: print 'No spectra available for SED.'
+      if self.spectra.empty: print('No spectra available for SED.')
 
       # =====================================================================================================================================
       # ======================================= CONSTRUCT SED ===============================================================================
@@ -1452,25 +1466,35 @@ class MakeSED(object):
       peacewise = keepers
       
       # Add composite spectra to SED object
-      self.composites = pd.DataFrame([[i.value if hasattr(i,'unit') else i for i in p] for p in peacewise], columns=['wavelength','flux_app','unc_app']) if peacewise else pd.DataFrame(columns=['wavelength','flux_app','unc_app']) 
+      self.composites = pd.DataFrame([[i.value if hasattr(i,'unit') else i for i in p] for p in peacewise], \
+                                     columns=['wavelength','flux_app','unc_app']) if peacewise else \
+                                     pd.DataFrame(columns=['wavelength','flux_app','unc_app']) 
 
       # Flux calibrate composite to available apparent magnitudes
       for (n,spec) in self.composites.iterrows():
         self.composites.loc[n][['wavelength','flux_app','unc_app']] = [i.value for i in norm_to_mags(spec.values, self.data)]
     
       # Concatenate pieces and finalize composite spectrum with units
-      self.data['SED_spec_app'] = (W, F, E) = finalize_spec([np.asarray(i)*Q for i,Q in zip(u.trim_spectrum([np.concatenate(j) for j in zip(*self.composites[['wavelength','flux_app','unc_app']].values)], SED_trim),units)]) if not self.composites.empty else [np.array([])]*3
+      self.data['SED_spec_app'] = (W, F, E) = finalize_spec([np.asarray(i)*Q for i,Q in zip(u.trim_spectrum([np.concatenate(j) \
+                                  for j in zip(*self.composites[['wavelength','flux_app','unc_app']].values)], SED_trim),units)]) \
+                                  if not self.composites.empty else [np.array([])]*3
 
       # Calculate all spectral indeces
       # if not self.spectra.empty:
-      #   for sp_idx in ['IRS-CH4','IRS-NH3']: self.data[sp_idx.replace('IRS-','')], self.data[sp_idx.replace('IRS-','')+'_unc'] = spectral_index([W,F,E], sp_idx)
+      #   for sp_idx in ['IRS-CH4','IRS-NH3']: 
+      #     self.data[sp_idx.replace('IRS-','')], self.data[sp_idx.replace('IRS-','')+'_unc'] = spectral_index([W,F,E], sp_idx)
  
       # Create purely photometric SED to fill in spectral SED gaps
-      self.data['SED_phot_app'] = (WP0, FP0, EP0) = [Q*np.array([i.value if hasattr(i,'unit') else i for i in self.photometry[['eff','m_flux','m_flux_unc']].sort('eff')[self.photometry['m_flux_unc']!=''][l].values]) for l,Q in zip(['eff','m_flux','m_flux_unc'],units)] if not self.photometry.empty else [np.array([])]*3
+      self.data['SED_phot_app'] = (WP0, FP0, EP0) = [Q*np.array([i.value if hasattr(i,'unit') else i \
+                                  for i in self.photometry[['eff','m_flux','m_flux_unc']].sort('eff')[self.photometry['m_flux_unc']!=''][l].values]) \
+                                  for l,Q in zip(['eff','m_flux','m_flux_unc'],units)] if not self.photometry.empty else [np.array([])]*3
 
       # Normalize Rayleigh-Jeans tail to the IRS spectrum past 9.5um OR to the longest wavelength photometric point
-      if not self.spectra.empty and any(W[W>9*q.um]): self.data['RJ'] = RJ = u.norm_spec(RJ, [W,F,E], exclude=[(0,9.5),(14.5,999999)])
-      else: self.data['RJ'] = RJ = [RJ[0], RJ[1]*FP0[-1]/np.interp(WP0[-1].value, RJ[0].value, RJ[1].value), RJ[2]*EP0[-1]/np.interp(WP0[-1].value, RJ[0].value, RJ[2].value)] if not self.photometry.empty else ''
+      if not self.spectra.empty and any(W[W>9*q.um]): 
+        self.data['RJ'] = RJ = u.norm_spec(RJ, [W,F,E], exclude=[(0,9.5),(14.5,999999)])
+      else: 
+        self.data['RJ'] = RJ = [RJ[0], RJ[1]*FP0[-1]/np.interp(WP0[-1].value, RJ[0].value, RJ[1].value), \
+                          RJ[2]*EP0[-1]/np.interp(WP0[-1].value, RJ[0].value, RJ[2].value)] if not self.photometry.empty else ''
       
       # Exclude photometric points with spectrum coverage
       if not self.composites.empty: 
@@ -1844,18 +1868,18 @@ class MakeSED(object):
     if spec:
       try:
         sed = self.data['SED_spec_'+('app' if app else 'abs')]
-        if not dirpath.endswith('.txt'): dirpath += '{} ({}) SED.txt'.format(self.data['shortname'],self.data['spectral_type'])
+        if not dirpath.endswith('.txt'): specpath = dirpath + '{} ({}) SED.txt'.format(self.data['shortname'],self.data['spectral_type'])
         header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,'apparent' if app else 'flux calibrated')
-        np.savetxt(dirpath, np.asarray(sed).T, header=header)
+        np.savetxt(specpath, np.asarray(sed).T, header=header)
       except: print "Couldn't print spectra."
     
     if phot:
       try:
         phot = np.asarray([np.asarray([i.value if hasattr(i,'unit') else i for i in j]) for j in self.photometry.reset_index()[['band','eff','m_flux' if app else 'M_flux','m_flux_unc' if app else 'M_flux_unc']].values])
-        if not dirpath.endswith('.txt'): dirpath += '{} ({}) phot.txt'.format(self.data['shortname'],self.data['spectral_type'])
+        if not dirpath.endswith('.txt'): photpath = dirpath + '{} ({}) phot.txt'.format(self.data['shortname'],self.data['spectral_type'])
         header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,'apparent' if app else 'flux calibrated')
-        np.savetxt(dirpath, phot, header=header)
-      except: print "Couldn't print photometry."
+        np.savetxt(photpath, phot, header=header, fmt='%s')
+      except IOError: print "Couldn't print photometry."
     
 def fundamental_params(D, p='', plot=False):  
   '''
