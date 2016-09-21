@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Author: Joe Filippazzo, jcfilippazzo@gmail.com
+#!python2
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 from itertools import chain, groupby
 from matplotlib.ticker import AutoMinorLocator, MaxNLocator
@@ -1401,7 +1403,7 @@ class MakeSED(object):
                                                                                                       'designation'] or \
                                                                                                   source['unum'] or '-'
             for k in ['ra', 'dec', 'publication_id', 'shortname']: self.data[k] = source[k]
-            print(self.name, "=" * (150 - len(self.name)))
+            print(self.name, "=" * (116 - len(self.name)))
             self.data['source_id'], self.data['binary'] = source['id'], binary
 
             # =====================================================================================================================================
@@ -1871,24 +1873,27 @@ class MakeSED(object):
             # =====================================================================================================================================
 
             # db.inventory(source['id'])
-            u.printer(['OPT_SpT', 'IR_SpT'], [[opt_spec_type, ir_spec_type]])
-            if not self.photometry.empty: u.printer(['Band', 'm', 'm_unc', 'M', 'M_unc', 'Ref'], np.asarray(
-                df_extract(self.photometry.reset_index(), ['band', 'm', 'm_unc', 'M', 'M_unc', 'ref'])).T)
-            if not self.spectra.empty: u.printer(
-                ['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date'], np.asarray(
-                    df_extract(self.spectra.reset_index(),
-                               ['regime', 'instrument_id', 'mode_id', 'telescope_id', 'publication_id', 'filename',
-                                'obs_date'])).T, empties=True)
+            print(' ')
+            print(at.Table([[opt_spec_type], [ir_spec_type]], names=['OPT_SpT', 'IR_SpT']))
+            print(' ')
+            if not self.photometry.empty: 
+                p = np.asarray(df_extract(self.photometry.reset_index(), ['band', 'm', 'm_unc', 'M', 'M_unc', 'ref'])).T
+                print(at.Table(p, names=['Band', 'm', 'm_unc', 'M', 'M_unc', 'Ref']))
+            print(' ')
+            if not self.spectra.empty: 
+                p = np.asarray(df_extract(self.spectra.reset_index(), ['regime', 'instrument_id', 'mode_id', 'telescope_id', 'publication_id', 'filename','obs_date'])).T
+                print(at.Table(p, names=['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date']))
+            print(' ')
             if self.data['d']:
-                u.printer(['Lbol', 'Teff', 'R_Jup', 'M_Jup', 'logg', 'Age', 'Dist', 'Binary'], [
-                    ['{}({})'.format(self.data['Lbol'], self.data['Lbol_unc']),
+                p = np.array(['{}({})'.format(self.data['Lbol'], self.data['Lbol_unc']),
                      '-' if binary else '{}({})'.format(self.data['teff'].value, self.data['teff_unc'].value),
                      '-' if binary else '{}({})'.format(self.data['radius'], self.data['radius_unc']),
                      '-' if binary else '{}({})'.format(self.data['mass'], self.data['mass_unc']),
                      '-' if binary else '{}({})'.format(self.data['logg'], self.data['logg_unc']),
                      '{}-{}'.format(self.data['age_min'], self.data['age_max']),
-                     '{}({})'.format(self.data['d'].value, self.data['d_unc'].value), 'Yes' if binary else '-']],
-                          empties=True, title='Using Linear Interpolation')
+                     '{}({})'.format(self.data['d'].value, self.data['d_unc'].value)]).T
+                print(at.Table(p, names=['Lbol', 'Teff', 'R_Jup', 'M_Jup', 'logg', 'Age', 'Dist']))
+            print(' ')
 
             # =====================================================================================================================================
             # ======================================= OUTPUT ======================================================================================
