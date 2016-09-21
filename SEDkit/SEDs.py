@@ -1045,7 +1045,7 @@ class GetData(object):
       A sequence of the dictionary keys to be returned
     requirements: list, tuple
       A sequence of the dictionary keys to be evaluated as True or False.
-      | (or) and ~ (not) operators recognized, e.g ['WISE_W1|IRAC_ch1'] and ['~publication_id']
+      | (or) and ~ (not) operators recognized, e.g ['WISE_W1|IRAC_ch1'] and ['~publication_shortname']
     sources: sequence (optional)
       A list of the sources to include exclusively
     fmt: str
@@ -1402,7 +1402,7 @@ class MakeSED(object):
                                                                                                   source[
                                                                                                       'designation'] or \
                                                                                                   source['unum'] or '-'
-            for k in ['ra', 'dec', 'publication_id', 'shortname']: self.data[k] = source[k]
+            for k in ['ra', 'dec', 'publication_shortname', 'shortname']: self.data[k] = source[k]
             print(self.name, "=" * (116 - len(self.name)))
             self.data['source_id'], self.data['binary'] = source['id'], binary
 
@@ -1439,7 +1439,7 @@ class MakeSED(object):
                 'spectral_type') else '-'
             self.data['spectral_type'], self.data['SpT'], self.data['SpT_unc'], self.data['SpT_ref'], self.data[
                 'gravity'], self.data['suffix'] = spec_type, SpT.get('spectral_type'), SpT.get(
-                'spectral_type_unc') or 0.5, SpT.get('publication_id'), SpT.get('gravity'), SpT.get('suffix')
+                'spectral_type_unc') or 0.5, SpT.get('publication_shortname'), SpT.get('gravity'), SpT.get('suffix')
 
             # =====================================================================================================================================
             # ======================================= AGE and RADIUS ==============================================================================
@@ -1469,12 +1469,12 @@ class MakeSED(object):
                                 fetch='one', fmt='dict') \
                        or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one',
                                    fmt='dict') \
-                       or {'parallax': '', 'parallax_unc': '', 'publication_id': '', 'comments': ''}
+                       or {'parallax': '', 'parallax_unc': '', 'publication_shortname': '', 'comments': ''}
             self.parallax = dict(parallax)
             if pi or dist: self.parallax['parallax'], self.parallax['parallax_unc'] = u.pi2pc(dist[0], dist[1],
                                                                                               pc2pi=True) if dist else pi
             self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = parallax['parallax'], parallax['parallax_unc'], \
-                                                                        parallax['publication_id']
+                                                                        parallax['publication_shortname']
             self.data['d'], self.data['d_unc'] = dist or (
                 u.pi2pc(self.data['pi'], self.data['pi_unc']) if self.data['pi_unc'] else ['', ''])
             self.data['kinematic'] = True if self.parallax['comments'] and 'kinematic' in self.parallax[
@@ -1490,7 +1490,7 @@ class MakeSED(object):
                 "SELECT * FROM photometry WHERE source_id=? AND magnitude_unc IS NOT NULL AND band NOT IN ('{}')".format(
                     "','".join([i.replace("'", "''") for i in map(str, pop)])), (source['id'],))
             self.data['phot_ids'] = list(all_photometry['id'])
-            all_photometry = all_photometry[['band', 'magnitude', 'magnitude_unc', 'publication_id']]
+            all_photometry = all_photometry[['band', 'magnitude', 'magnitude_unc', 'publication_shortname']]
 
             # Sort and homogenize it
             phot_data = []
@@ -1649,7 +1649,7 @@ class MakeSED(object):
 
             # Add spectra metadata to SED object
             for r in ['OPT', 'NIR', 'MIR']:
-                for key, item in zip(['id', 'telescope_id', 'instrument_id', 'mode_id', 'publication_id'], \
+                for key, item in zip(['id', 'telescope_id', 'instrument_id', 'mode_id', 'publication_shortname'], \
                                      ['_spec', '_scope', '_inst', '_mode', '_ref']):
                     try:
                         self.data[r + item] = map(int, [j for k in [i.split(',') for i in \
@@ -1881,7 +1881,7 @@ class MakeSED(object):
                 print(at.Table(p, names=['Band', 'm', 'm_unc', 'M', 'M_unc', 'Ref']))
             print(' ')
             if not self.spectra.empty: 
-                p = np.asarray(df_extract(self.spectra.reset_index(), ['regime', 'instrument_id', 'mode_id', 'telescope_id', 'publication_id', 'filename','obs_date'])).T
+                p = np.asarray(df_extract(self.spectra.reset_index(), ['regime', 'instrument_id', 'mode_id', 'telescope_id', 'publication_shortname', 'filename','obs_date'])).T
                 print(at.Table(p, names=['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date']))
             print(' ')
             if self.data['d']:
