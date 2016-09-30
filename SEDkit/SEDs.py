@@ -2310,7 +2310,7 @@ class MakeSED(object):
                                                                                                     'spectral_type'])
                 header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,
                                                                                                 'apparent' if app else 'flux calibrated')
-                np.savetxt(photpath, phot, header=header, fmt='%s')
+                np.savetxt(photpath, phot, header=header, fmt=str('%s'))
             except IOError:
                 print("Couldn't print photometry.")
 
