@@ -1464,7 +1464,7 @@ class MakeSED(object):
             # ======================================= DISTANCE ====================================================================================
             # =====================================================================================================================================
 
-            # Retreive distance manually from *dist* argument or convert parallax into distance
+            # Retrieve distance manually from *dist* argument or convert parallax into distance
             parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']),
                                 fetch='one', fmt='dict') \
                        or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one',
@@ -1473,7 +1473,8 @@ class MakeSED(object):
             self.parallax = dict(parallax)
             if pi or dist: self.parallax['parallax'], self.parallax['parallax_unc'] = u.pi2pc(dist[0], dist[1],
                                                                                               pc2pi=True) if dist else pi
-            self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = parallax['parallax'], parallax['parallax_unc'], \
+            self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = self.parallax['parallax'], \
+                                                                        self.parallax['parallax_unc'], \
                                                                         parallax['publication_shortname']
             self.data['d'], self.data['d_unc'] = dist or (
                 u.pi2pc(self.data['pi'], self.data['pi_unc']) if self.data['pi_unc'] else ['', ''])
@@ -1485,7 +1486,7 @@ class MakeSED(object):
             # ======================================= PHOTOMETRY ==================================================================================
             # =====================================================================================================================================
 
-            # Retreive all apparent photometry
+            # Retrieve all apparent photometry
             all_photometry = db.query(
                 "SELECT * FROM photometry WHERE source_id=? AND magnitude_unc IS NOT NULL AND band NOT IN ('{}')".format(
                     "','".join([i.replace("'", "''") for i in map(str, pop)])), (source['id'],))
@@ -1609,7 +1610,7 @@ class MakeSED(object):
             # ======================================= PROCESS SPECTRA =============================================================================
             # =====================================================================================================================================
 
-            # Retreive spectra
+            # Retrieve spectra
             if spec_ids:
                 spectra = db.query(
                     "SELECT * FROM spectra WHERE id IN ({}) AND source_id=?".format(','.join(['?'] * len(spec_ids))), \

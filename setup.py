@@ -27,6 +27,6 @@ setup(
     ],
     keywords='astrophysics',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
-    install_requires=['numpy','astropy','itertools','matplotlib','astrodbkit','emcee'],
+    install_requires=['numpy','astropy','matplotlib','astrodbkit','emcee'],
 
 )
