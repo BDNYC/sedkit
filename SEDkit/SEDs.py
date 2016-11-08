@@ -2292,11 +2292,13 @@ class MakeSED(object):
         if spec:
             try:
                 sed = self.data['SED_spec_' + ('app' if app else 'abs')]
-                if not dirpath.endswith('.txt'): specpath = dirpath + '{} ({}) SED.txt'.format(self.data['shortname'],
-                                                                                               self.data[
-                                                                                                   'spectral_type'])
-                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,
-                                                                                                'apparent' if app else 'flux calibrated')
+                if not dirpath.endswith('.txt'):
+                    specpath = dirpath + '{} ({}) SED.txt'.format(self.data['shortname'], self.data['spectral_type'])
+                else:
+                    specpath = dirpath
+
+                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.\
+                    format(self.name, 'apparent' if app else 'flux calibrated')
                 np.savetxt(specpath, np.asarray(sed).T, header=header)
             except:
                 print("Couldn't print spectra.")
@@ -2306,11 +2308,13 @@ class MakeSED(object):
                 phot = np.asarray([np.asarray([i.value if hasattr(i, 'unit') else i for i in j]) for j in
                                    self.photometry.reset_index()[['band', 'eff', 'm_flux' if app else 'M_flux',
                                                                   'm_flux_unc' if app else 'M_flux_unc']].values])
-                if not dirpath.endswith('.txt'): photpath = dirpath + '{} ({}) phot.txt'.format(self.data['shortname'],
-                                                                                                self.data[
-                                                                                                    'spectral_type'])
-                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,
-                                                                                                'apparent' if app else 'flux calibrated')
+                if not dirpath.endswith('.txt'):
+                    photpath = dirpath + '{} ({}) phot.txt'.format(self.data['shortname'], self.data['spectral_type'])
+                else:
+                    photpath = dirpath
+
+                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.\
+                    format(self.name, 'apparent' if app else 'flux calibrated')
                 np.savetxt(photpath, phot, header=header, fmt=str('%s'))
             except IOError:
                 print("Couldn't print photometry.")
