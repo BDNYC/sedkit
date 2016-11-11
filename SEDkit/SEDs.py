@@ -1775,7 +1775,7 @@ class MakeSED(object):
             # Flux calibrate composite to available apparent magnitudes
             for (n, spec) in self.composites.iterrows():
                 self.composites.loc[n][['wavelength', 'flux_app', 'unc_app']] = [i.value for i in
-                                                                                 norm_to_mags(spec.values, self.data)]
+                                                                                 norm_to_mags(spec.values, self.data, plot=diagnostics)]
 
             # Concatenate pieces and finalize composite spectrum with units
             self.data['SED_spec_app'] = (W, F, E) = finalize_spec(
