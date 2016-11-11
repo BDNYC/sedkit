@@ -1464,7 +1464,7 @@ class MakeSED(object):
             # ======================================= DISTANCE ====================================================================================
             # =====================================================================================================================================
 
-            # Retreive distance manually from *dist* argument or convert parallax into distance
+            # Retrieve distance manually from *dist* argument or convert parallax into distance
             parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']),
                                 fetch='one', fmt='dict') \
                        or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one',
@@ -1473,7 +1473,8 @@ class MakeSED(object):
             self.parallax = dict(parallax)
             if pi or dist: self.parallax['parallax'], self.parallax['parallax_unc'] = u.pi2pc(dist[0], dist[1],
                                                                                               pc2pi=True) if dist else pi
-            self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = parallax['parallax'], parallax['parallax_unc'], \
+            self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = self.parallax['parallax'], \
+                                                                        self.parallax['parallax_unc'], \
                                                                         parallax['publication_shortname']
             self.data['d'], self.data['d_unc'] = dist or (
                 u.pi2pc(self.data['pi'], self.data['pi_unc']) if self.data['pi_unc'] else ['', ''])
@@ -1485,7 +1486,7 @@ class MakeSED(object):
             # ======================================= PHOTOMETRY ==================================================================================
             # =====================================================================================================================================
 
-            # Retreive all apparent photometry
+            # Retrieve all apparent photometry
             all_photometry = db.query(
                 "SELECT * FROM photometry WHERE source_id=? AND magnitude_unc IS NOT NULL AND band NOT IN ('{}')".format(
                     "','".join([i.replace("'", "''") for i in map(str, pop)])), (source['id'],))
@@ -1609,7 +1610,7 @@ class MakeSED(object):
             # ======================================= PROCESS SPECTRA =============================================================================
             # =====================================================================================================================================
 
-            # Retreive spectra
+            # Retrieve spectra
             if spec_ids:
                 spectra = db.query(
                     "SELECT * FROM spectra WHERE id IN ({}) AND source_id=?".format(','.join(['?'] * len(spec_ids))), \
@@ -1774,7 +1775,7 @@ class MakeSED(object):
             # Flux calibrate composite to available apparent magnitudes
             for (n, spec) in self.composites.iterrows():
                 self.composites.loc[n][['wavelength', 'flux_app', 'unc_app']] = [i.value for i in
-                                                                                 norm_to_mags(spec.values, self.data)]
+                                                                                 norm_to_mags(spec.values, self.data, plot=diagnostics)]
 
             # Concatenate pieces and finalize composite spectrum with units
             self.data['SED_spec_app'] = (W, F, E) = finalize_spec(
@@ -2291,11 +2292,13 @@ class MakeSED(object):
         if spec:
             try:
                 sed = self.data['SED_spec_' + ('app' if app else 'abs')]
-                if not dirpath.endswith('.txt'): specpath = dirpath + '{} ({}) SED.txt'.format(self.data['shortname'],
-                                                                                               self.data[
-                                                                                                   'spectral_type'])
-                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,
-                                                                                                'apparent' if app else 'flux calibrated')
+                if not dirpath.endswith('.txt'):
+                    specpath = dirpath + '{} ({}) SED.txt'.format(self.data['shortname'], self.data['spectral_type'])
+                else:
+                    specpath = dirpath
+
+                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.\
+                    format(self.name, 'apparent' if app else 'flux calibrated')
                 np.savetxt(specpath, np.asarray(sed).T, header=header)
             except:
                 print("Couldn't print spectra.")
@@ -2305,11 +2308,13 @@ class MakeSED(object):
                 phot = np.asarray([np.asarray([i.value if hasattr(i, 'unit') else i for i in j]) for j in
                                    self.photometry.reset_index()[['band', 'eff', 'm_flux' if app else 'M_flux',
                                                                   'm_flux_unc' if app else 'M_flux_unc']].values])
-                if not dirpath.endswith('.txt'): photpath = dirpath + '{} ({}) phot.txt'.format(self.data['shortname'],
-                                                                                                self.data[
-                                                                                                    'spectral_type'])
-                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,
-                                                                                                'apparent' if app else 'flux calibrated')
+                if not dirpath.endswith('.txt'):
+                    photpath = dirpath + '{} ({}) phot.txt'.format(self.data['shortname'], self.data['spectral_type'])
+                else:
+                    photpath = dirpath
+
+                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.\
+                    format(self.name, 'apparent' if app else 'flux calibrated')
                 np.savetxt(photpath, phot, header=header, fmt=str('%s'))
             except IOError:
                 print("Couldn't print photometry.")
