@@ -1334,112 +1334,156 @@ class GetData(object):
 
 
 class MakeSED(object):
-    def __init__(self, source_id, db, spec_ids=[], dist='', pi='', age='', membership='', radius='', binary=False,
-                 pop=[],
-                 SNR_trim='', SNR='', split=[], trim='', SED_trim=[], smoothing=[], est_mags=True, any_mag_mag=False,
-                 evo_model='hybrid_solar_age', fit=False, save=False, write=False, weighting=True, data_pickle='', \
-                 diagnostics=False):
-        """
-    Pulls all available data from the BDNYC Data Archive, constructs an SED, and stores all calculations at *pickle_path*
-
-    Parameters
-    ----------
-    source_id: int, str
-      The *source_id*, *unum*, *shortname* or *designation* for any source in the database.
-    db: database instance
-      The database instance to retreive data from
-    spec_ids: list, tuple (optional)
-      A sequence of the ids from the SPECTRA table to plot. Uses any available spectra if no list is given. Uses no spectra if 'None' is given.
-    dist: list, tuple (optional)
-      A distance to the object with astropy.units
-    pi: list, tuple (optional)
-      A sequence of the parallax and uncertainty for the object in *mas*, e.g. (110.1,2.5). This overrides the parallax pulled from the database.
-    age: list, tuple (optional)
-      A sequence of the lower and upper limits of the object age range in Myr, e.g. (20,300). This overrides the assumed young or field age.
-    membership: str (optional)
-      The name of the nearby young moving group of which the source is a member, e.g. 'AB Dor' or 'Tuc-Hor'
-    radius: list, tuple (optional)
-      A sequence of the lower and upper limits of the object radius range in R_Jup, e.g. (1.25,2.35). This overrides the radius inferred from model isochrones.
-    binary: bool (optional)
-      Assumes the source is a binary if True and a single if False
-    pop: sequence (optional)
-      Photometric bands to exclude from the SED
-    SNR_trim: sequence or float (optional)
-      A float representing the signal-to-noise ratio used to trim spectra edges or a sequence of (spec_id,snr) pairs of the SNR value used to trim a particular spectrum, e.g. 15 or [(1580,15),(4012,25)] for spec_ids 1580 and 4012
-    SNR:  sequence (optional)
-      A sequence of (spec_id,snr) pairs of the signal-to-noise values to use for a given spectrum
-    trim: sequence (optional)
-      A sequence of (spec_id,x1,x2) tuples of the lower and upper wavelength values to trim from a given spectrum
-    split: sequence (optiona)
-      A sequence of wavelength positions in microns at which to split the SED spectra
-    SED_trim: sequence (optional)
-      The (x1,x2) values to trim the full SED by, e.g. [(0,1),(1.4,100)] for just J-band
-    weighting: bool
-      Weight the photometry by the width of the filter profile
-    smoothing: sequence (optional)
-      A sequence of the (spec_id,smooth) pairs to smooth a particular spectrum by, e.g. [(1580,2)] smooths most of the peaks and troughs from spectrum 1580
-    est_mags: sequence (optional)
-      The photometric bands to estimate from mag-mag relations if observational magnitude is unavailable
-    any_mag_mag: bool (optional)
-      Use any mag-mag relation to estimate missing mags, not just the relations with the tightest correllation
-    evo_model: str
-      The name of the evolutionary model isochrones to use for radius, logg, and mass estimations
-    data_pickle: object (optional)
-      The GetData() object to write new data to
-
     """
-        self.data, self.model_fits = {}, []
+    Attributes
+    ----------
+    data: dict
+        The input and caluclated values
+    model_fits: list
+        The model fits for the SED
+    
+    """
+    def __init__(self, source_id, db, spec_ids=[], dist='', pi='', age='', 
+                 membership='', radius='', binary=False, pop=[], SNR_trim='',
+                 SNR='', split=[], trim='', SED_trim=[], smoothing=[], 
+                 est_mags=True, any_mag_mag=False, evo_model='hybrid_solar_age',
+                 fit=False, save=False, write=False, weighting=True, 
+                 data_pickle='', diagnostics=False):           
+                 
+        """                                                                    
+        Pulls all available data from the BDNYC Data Archive, constructs an SED, 
+        and stores all calculations at *pickle_path*        
+                 
+        Parameters                                                             
+        ----------                                                             
+        source_id: int, str                                                    
+            The *source_id*, *unum*, *shortname* or *designation*              
+            for any source in the database.                                    
+        db: astrodbkit.astrodb.Database                                        
+            The database instance to retreive data from                        
+        spec_ids: list, tuple (optional)                                       
+            A sequence of the ids from the SPECTRA table to plot. Uses any     
+            available spectra if no list is given. Uses no spectra if 'None' is
+            given.
+        dist: list, tuple (optional)                                           
+            A distance to the object with astropy.units                        
+        pi: list, tuple (optional)                                             
+            A sequence of the parallax and uncertainty for the object in *mas*,
+            e.g. (110.1,2.5). This overrides the parallax pulled from the 
+            database.              
+        age: list, tuple (optional)                                            
+            A sequence of the lower and upper limits of the object age range in
+            Myr, e.g. (20,300). This overrides the assumed young or field age. 
+        membership: str (optional)                                             
+            The name of the nearby young moving group of which the source is a 
+            member, e.g. 'AB Dor' or 'Tuc-Hor'                                 
+        radius: list, tuple (optional)                                         
+            A sequence of the lower and upper limits of the object radius range
+            in R_Jup, e.g. (1.25,2.35). This overrides the radius inferred from 
+            model isochrones.
+        binary: bool (optional)                                                
+            Assumes the source is a binary if True and a single if False       
+        pop: sequence (optional)                                               
+            Photometric bands to exclude from the SED                          
+        SNR_trim: sequence or float (optional)                                 
+            A float representing the signal-to-noise ratio used to trim spectra
+            edges or a sequence of (spec_id,snr) pairs of the SNR value used to 
+            trim a particular spectrum, e.g. 15 or [(1580,15),(4012,25)] for 
+            spec_ids 1580 and 4012        
+        SNR:  sequence (optional)                                              
+            A sequence of (spec_id,snr) pairs of the signal-to-noise values to 
+            use for a given spectrum
+        trim: sequence (optional)                                              
+            A sequence of (spec_id,x1,x2) tuples of the lower and upper 
+            wavelength values to trim from a given spectrum                    
+        split: sequence (optiona)                                              
+            A sequence of wavelength positions in microns at which to split the
+            SED spectra
+        SED_trim: sequence (optional)                                          
+            The (x1,x2) values to trim the full SED by, e.g. [(0,1),(1.4,100)] 
+            for just J-band
+        weighting: bool                                                        
+            Weight the photometry by the width of the filter profile           
+        smoothing: sequence (optional)                                         
+            A sequence of the (spec_id,smooth) pairs to smooth a particular 
+            spectrum by, e.g. [(1580,2)] smooths most of the peaks and troughs 
+            from spectrum 1580
+        est_mags: sequence (optional)                                          
+            The photometric bands to estimate from mag-mag relations if 
+            observational magnitude is unavailable
+        any_mag_mag: bool (optional)                                           
+            Use any mag-mag relation to estimate missing mags, not just the 
+            relations with the tightest correllation
+        evo_model: str                                                         
+            The name of the evolutionary model isochrones to use for radius, 
+            logg, and mass estimations
+        data_pickle: object (optional)                                         
+            The GetData() object to write new data to                          
+        """                                                                    
+        # Attributes                                                           
+        self.data = []                                                         
+        self.model_fits = {}                                                   
 
-        try:
+        try:                                                                   
+            
+            # Get the full inventory
+            inv = db.inventory(source_id, fetch=True)
+                                                                               
+            # =================================================================
+            # ======================================= METADATA ================
+            # =================================================================
 
-            # =====================================================================================================================================
-            # ======================================= METADATA ====================================================================================
-            # =====================================================================================================================================
-
+            source = inv['sources']
+            
             # Retreive source metadata
-            source = db.query("SELECT * FROM sources WHERE id=?", (source_id,), fetch='one', fmt='dict')
-            self.name = self.data['name'] = source['names'].split(',')[0] if source['names'] else source['shortname'] or \
-                                                                                                  source[
-                                                                                                      'designation'] or \
-                                                                                                  source['unum'] or '-'
-            for k in ['ra', 'dec', 'publication_id', 'shortname']: self.data[k] = source[k]
-            print(self.name, "=" * (116 - len(self.name)))
-            self.data['source_id'], self.data['binary'] = source['id'], binary
-
-            # =====================================================================================================================================
-            # ======================================= SPECTRAL TYPE ===============================================================================
-            # =====================================================================================================================================
-
-            # Retreive OPT and IR spectral type data but choose OPT for M+L and IR for T+Y
-            OPT_SpT = dict(db.query(
-                "SELECT * FROM spectral_types WHERE source_id={} AND regime like 'OPT' and adopted=1".format(
-                    source['id']), fetch='one', fmt='dict') or db.query(
-                "SELECT * FROM spectral_types WHERE source_id={} AND regime like 'OPT' AND gravity<>''".format(
-                    source['id']), fetch='one', fmt='dict') or db.query(
-                "SELECT * FROM spectral_types WHERE source_id={} AND regime like 'OPT'".format(source['id']),
-                fetch='one', fmt='dict') or {'spectral_type': '', 'spectral_type_unc': '', 'gravity': '', 'suffix': ''})
-            IR_SpT = dict(db.query(
-                "SELECT * FROM spectral_types WHERE source_id={} AND regime like 'IR' and adopted=1".format(
-                    source['id']), fetch='one', fmt='dict') or db.query(
-                "SELECT * FROM spectral_types WHERE source_id={} AND regime like 'IR' AND gravity<>''".format(
-                    source['id']), fetch='one', fmt='dict') or db.query(
-                "SELECT * FROM spectral_types WHERE source_id={} AND regime like 'IR'".format(source['id']),
-                fetch='one', fmt='dict') or {'spectral_type': '', 'spectral_type_unc': '', 'gravity': '', 'suffix': ''})
-            opt_spec_type = "{}{}{}".format(u.specType(OPT_SpT.get('spectral_type')), OPT_SpT.get('suffix') or '',
-                                            OPT_SpT.get('gravity').replace('d', r'$\delta$').replace('g',
-                                                                                                     r'$\gamma$').replace(
-                                                'b', r'$\beta$') if OPT_SpT.get('gravity') else '') if OPT_SpT.get(
-                'spectral_type') else '-'
-            ir_spec_type = "{}{}{}".format(u.specType(IR_SpT.get('spectral_type')), IR_SpT.get('suffix') or '',
-                                           IR_SpT.get('gravity') or '') if IR_SpT.get('spectral_type') else '-'
-            SpT = OPT_SpT if any([i in opt_spec_type for i in ['M', 'L']]) else IR_SpT if ir_spec_type else OPT_SpT
-            spec_type = "{}{}{}".format(u.specType(SpT.get('spectral_type')), SpT.get('suffix') or '',
-                                        SpT.get('gravity').replace('d', r'$\delta$').replace('g', r'$\gamma$').replace(
-                                            'b', r'$\beta$') if SpT.get('gravity') else '') if SpT.get(
-                'spectral_type') else '-'
-            self.data['spectral_type'], self.data['SpT'], self.data['SpT_unc'], self.data['SpT_ref'], self.data[
-                'gravity'], self.data['suffix'] = spec_type, SpT.get('spectral_type'), SpT.get(
-                'spectral_type_unc') or 0.5, SpT.get('publication_id'), SpT.get('gravity'), SpT.get('suffix')
+            self.name = source['names'].split(',')[0] if source['names']  \
+                        else source['shortname'] or source['designation'] \
+                        or source['unum'] or '-'
+            self.data['source_id'] = source_id
+            self.data['binary'] = source['components']
+            for k in ['ra', 'dec', 'publication_shortname', 'shortname']: 
+                self.data[k] = source[k]
+            
+            print(self.name, "=" * (80 - len(self.name)))
+            
+            # =================================================================
+            # ======================================= SPECTRAL TYPE ===========
+            # =================================================================
+            
+            spectral_types = inv['spectral_types']
+            
+            # OPT spectral type
+            OPT_SpT = spectral_types[spectral_types['regime']=='OPT']          
+            spt = u.specType(OPT_SpT['spectral_type'])
+            suf = OPT_SpT['suffix'] or ''
+            grv = OPT_SpT['gravity'].replace('d', r'$\delta$')\
+                  .replace('g', r'$\gamma$').replace('b', r'$\beta$')
+            opt_spec_type = "{}{}{}".format(spt, suf, grv)
+            
+            # IR spectral type
+            IR_SpT = spectral_types[spectral_types['regime']=='IR']            
+            spt = u.specType(IR_SpT['spectral_type'])
+            suf = IR_SpT['suffix'] or ''
+            grv = IR_SpT['gravity'].replace('d', r'$\delta$')\
+                  .replace('g', r'$\gamma$').replace('b', r'$\beta$')
+            ir_spec_type = "{}{}{}".format(spt, suf, grv)
+            
+            # Get principal spectral type. Use OPT for M+L and IR for T+Y
+            SpT = OPT_SpT if any([i in opt_spec_type for i in ['M', 'L']]) \
+                  else IR_SpT if ir_spec_type else OPT_SpT
+            spt = u.specType(SpT['spectral_type'])
+            suf = SpT['suffix'] or ''
+            grv = SpT['gravity'].replace('d', r'$\delta$')\
+                  .replace('g', r'$\gamma$').replace('b', r'$\beta$')
+            spec_type = "{}{}{}".format(spt, suf, grv)
+            
+            # Store as attributes
+            self.data['spectral_type'] = spec_type
+            self.data['SpT'] = SpT.get('spectral_type')
+            self.data['SpT_unc'] = SpT.get('spectral_type_unc') or 0.5
+            self.data['SpT_ref'] = SpT.get('publication_id')
+            self.data['gravity'] = SpT.get('gravity')
+            self.data['suffix'] = SpT.get('suffix')
 
             # =====================================================================================================================================
             # ======================================= AGE and RADIUS ==============================================================================
