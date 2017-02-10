@@ -1433,7 +1433,7 @@ class MakeSED(object):
             # ======================================= METADATA ================
             # =================================================================
 
-            source = inv['sources']
+            source = inv.get('sources')
             
             # Retreive source metadata
             self.name = source['names'].split(',')[0] if source['names']  \
@@ -1450,32 +1450,48 @@ class MakeSED(object):
             # ======================================= SPECTRAL TYPE ===========
             # =================================================================
             
-            spectral_types = inv['spectral_types']
+            spectral_types = inv.get('spectral_types')
             
-            # OPT spectral type
-            OPT_SpT = spectral_types[spectral_types['regime']=='OPT']          
-            spt = u.specType(OPT_SpT['spectral_type'])
-            suf = OPT_SpT['suffix'] or ''
-            grv = OPT_SpT['gravity'].replace('d', r'$\delta$')\
-                  .replace('g', r'$\gamma$').replace('b', r'$\beta$')
-            opt_spec_type = "{}{}{}".format(spt, suf, grv)
+            try:
+                # OPT spectral type
+                OPT_SpT = spectral_types[spectral_types['regime']=='OPT']
+                
+                # Use adopted or first one
+                OPT_SpT = OPT_SpT[OPT_SpT['adopted']==1] or OPT_SpT[0]
+                spt = u.specType(OPT_SpT['spectral_type'])
+                suf = OPT_SpT['suffix'] or ''
+                grv = OPT_SpT['gravity'].replace('d', r'$\delta$')\
+                      .replace('g', r'$\gamma$').replace('b', r'$\beta$')
+                opt_spec_type = "{}{}{}".format(spt, suf, grv)
+            except:
+                opt_spec_type = ''
             
-            # IR spectral type
-            IR_SpT = spectral_types[spectral_types['regime']=='IR']            
-            spt = u.specType(IR_SpT['spectral_type'])
-            suf = IR_SpT['suffix'] or ''
-            grv = IR_SpT['gravity'].replace('d', r'$\delta$')\
-                  .replace('g', r'$\gamma$').replace('b', r'$\beta$')
-            ir_spec_type = "{}{}{}".format(spt, suf, grv)
+            try:
+                # OPT spectral type
+                IR_SpT = spectral_types[spectral_types['regime']=='IR']
+                
+                # Use adopted or first one
+                IR_SpT = IR_SpT[IR_SpT['adopted']==1] or IR_SpT[0]       
+                spt = u.specType(IR_SpT['spectral_type'])
+                suf = IR_SpT['suffix'] or ''
+                grv = IR_SpT['gravity'].replace('d', r'$\delta$')\
+                      .replace('g', r'$\gamma$').replace('b', r'$\beta$')
+                ir_spec_type = "{}{}{}".format(spt, suf, grv)
+            except:
+                ir_spec_type = ''
             
-            # Get principal spectral type. Use OPT for M+L and IR for T+Y
-            SpT = OPT_SpT if any([i in opt_spec_type for i in ['M', 'L']]) \
-                  else IR_SpT if ir_spec_type else OPT_SpT
-            spt = u.specType(SpT['spectral_type'])
-            suf = SpT['suffix'] or ''
-            grv = SpT['gravity'].replace('d', r'$\delta$')\
-                  .replace('g', r'$\gamma$').replace('b', r'$\beta$')
-            spec_type = "{}{}{}".format(spt, suf, grv)
+            try:
+                # Get principal spectral type. Use OPT for M+L and IR for T+Y
+                SpT = OPT_SpT if any([i in opt_spec_type for i in ['M', 'L']])\ 
+                      else IR_SpT if ir_spec_type else OPT_SpT
+                spt = u.specType(SpT['spectral_type'])
+                suf = SpT['suffix'] or ''
+                grv = SpT['gravity'].replace('d', r'$\delta$')\
+                      .replace('g', r'$\gamma$').replace('b', r'$\beta$')
+                spec_type = "{}{}{}".format(spt, suf, grv)
+            except:
+                spec_type = ''
+                SpT = {}
             
             # Store as attributes
             self.data['spectral_type'] = spec_type
@@ -1485,14 +1501,17 @@ class MakeSED(object):
             self.data['gravity'] = SpT.get('gravity')
             self.data['suffix'] = SpT.get('suffix')
 
-            # =====================================================================================================================================
-            # ======================================= AGE and RADIUS ==============================================================================
-            # =====================================================================================================================================
-
-            # Retreive age data from input NYMG membership, input age range, or age estimate
+            # =================================================================
+            # ======================================= AGE and RADIUS ==========
+            # =================================================================
+            
+            # Retreive age data from input NYMG membership, input age range, 
+            # or age estimate
             NYMG = NYMGs()
-            self.data['age_min'], self.data['age_max'] = age if isinstance(age, tuple) \
-                else (float(NYMG[membership]['age_min']), float(NYMG[membership]['age_max'])) if membership in NYMG \
+            self.data['age_min'], self.data['age_max'] = age \
+                if isinstance(age, (list,tuple)) \
+                else (float(NYMG[membership]['age_min']), \
+                float(NYMG[membership]['age_max'])) if membership in NYMG \
                 else (10, 150) if (SpT['gravity'] and not membership) \
                 else (500, 10000)
             self.data['NYMG'] = membership
@@ -1504,26 +1523,40 @@ class MakeSED(object):
             # Use radius if given
             self.data['radius'], self.data['radius_unc'] = radius or ['', '']
 
-            # =====================================================================================================================================
-            # ======================================= DISTANCE ====================================================================================
-            # =====================================================================================================================================
+            # =================================================================
+            # ======================================= DISTANCE ================
+            # =================================================================
+            
+            parallaxes = inv.get('parallaxes')
+            
+            # Use adopted or first
+            NYMG = NYMGs()
+            parallax = parallaxes[parallaxes['adopted']==1] or parallaxes[0]
 
-            # Retreive distance manually from *dist* argument or convert parallax into distance
-            parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']),
-                                fetch='one', fmt='dict') \
-                       or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one',
-                                   fmt='dict') \
-                       or {'parallax': '', 'parallax_unc': '', 'publication_id': '', 'comments': ''}
-            self.parallax = dict(parallax)
-            if pi or dist: self.parallax['parallax'], self.parallax['parallax_unc'] = u.pi2pc(dist[0], dist[1],
-                                                                                              pc2pi=True) if dist else pi
-            self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = parallax['parallax'], parallax['parallax_unc'], \
-                                                                        parallax['publication_id']
-            self.data['d'], self.data['d_unc'] = dist or (
-                u.pi2pc(self.data['pi'], self.data['pi_unc']) if self.data['pi_unc'] else ['', ''])
-            self.data['kinematic'] = True if self.parallax['comments'] and 'kinematic' in self.parallax[
-                'comments'].lower() else False
-            if not self.data['d']: print('No distance for flux calibration!')
+            # Retreive distance manually from *dist* argument or convert 
+            # parallax into distance
+            if dist: 
+                pi = u.pi2pc(dist[0], dist[1], pc2pi=True)
+                parallax['parallax'], parallax['parallax_unc'] = pi
+                
+                self.data['d'], self.data['d_unc'] = dist
+            else:
+                dist = u.pi2pc(*pi) if pi else ('','')
+                
+                self.data['d'], self.data['d_unc'] = dist
+            
+            # Turn the table columns into attributes
+            for col in parallax.columns:
+                self.data[col.name] = col[0]
+            
+            # Add the distance
+            self.data['kinematic'] = True if parallax['comments'] \
+                and 'kinematic' in parallax['comments'].lower() \
+                else False
+            
+            # Warn if no distance
+            if not self.data['d']: 
+                print('No distance for flux calibration!')
 
             # =====================================================================================================================================
             # ======================================= PHOTOMETRY ==================================================================================
