@@ -1482,7 +1482,7 @@ class MakeSED(object):
             
             try:
                 # Get principal spectral type. Use OPT for M+L and IR for T+Y
-                SpT = OPT_SpT if any([i in opt_spec_type for i in ['M', 'L']])\ 
+                SpT = OPT_SpT if any([i in opt_spec_type for i in ['M', 'L']]) \
                       else IR_SpT if ir_spec_type else OPT_SpT
                 spt = u.specType(SpT['spectral_type'])
                 suf = SpT['suffix'] or ''
