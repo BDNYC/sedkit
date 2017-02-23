@@ -13,11 +13,10 @@ def vega(bbody=False):
     Returns the wavelength [um] and energy flux in [erg/s/cm2/A] calibrated to 10pc for Vega (
     http://www.stsci.edu/hst/observatory/cdbs/calspec.html)
     '''
-    (w, f), pi = [np.array(map(float, i)) for i in
-                  zip(*u.txt2dict('/Models/Vega/STSci_Vega.txt', to_list=True, skip=['#']))], 130.23
+    pi = 130.23
+    w, f = np.genfromtxt(os.path.dirname(u.__file__)+'/Models/Vega/STSci_Vega.txt')
     w, f = (w * q.AA).to(q.um), f * q.erg / q.s / q.cm ** 2 / q.AA
     return [w, f, u.blackbody(w, 9610, Flam=False, radius=27.3)] if bbody else [w, f]
-
 
 def get_eff(band, wave, flux, photon=True, calculate=False):
     '''

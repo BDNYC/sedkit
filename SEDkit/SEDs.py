@@ -13,7 +13,7 @@ import sys, os, copy, pickle, re, pandas as pd, matplotlib.pyplot as plt, numpy 
     scipy.interpolate as si, matplotlib.ticker
 import SEDkit.utilities as u
 import SEDkit.syn_phot as s
-import SEDkit.interact
+import SEDkit.interact as interact
 
 RSR = u.get_filters()
 package = os.path.dirname(u.__file__)
@@ -904,15 +904,14 @@ class GetData(object):
                                 plt.connect('button_press_event', interact.AnnoteFinder(X, Y, N))
 
                     if verbose:
-                        u.printer(
-                            ['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam, zparam + '_unc',
-                             'Gravity', 'Binary', 'Age'] if zparam \
-                                else ['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', 'Gravity',
-                                      'Binary', 'Age'], \
-                            zip(*[N, S, X, Xsig, Y, Ysig, Z, Zsig, G, B, NYMG]) if zparam else zip(
-                                *[N, S, X, Xsig, Y, Ysig, G, B, NYMG]), empties=True)
+                        at.Table(zip(*[N, S, X, Xsig, Y, Ysig, Z, Zsig, G, B, NYMG]) if zparam else zip(
+                                *[N, S, X, Xsig, Y, Ysig, G, B, NYMG]), names=['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam, zparam + '_unc',
+                             'Gravity', 'Binary', 'Age'] if zparam else ['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', 'Gravity',
+                                      'Binary', 'Age']).pprint()
 
-                if return_data == 'params': data_out.append(z)
+                if return_data == 'params': 
+                    data_out.append(z)
+                
                 if output_data and output_data != 'polynomials':
                     u.printer(['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam, zparam + '_unc',
                                'Gravity', 'Binary', 'Age'], \
@@ -1001,20 +1000,29 @@ class GetData(object):
                                     ncol=1 if groups == ['fld'] else 2, loc=0)
 
             # Saving, returning, and printing
-            if save: plt.savefig(save if '.png' in save else (save + '{} vs {}.png'.format(yparam, xparam)))
+            if save: 
+                plt.savefig(save if '.png' in save else (save + '{} vs {}.png'.format(yparam, xparam)))
 
-            u.printer(['SpT', 'Field', 'NYMG', 'low_g', 'Total'],
-                      [['M', len(M_fld), len(M_ymg), len(M_lowg), len(M_fld + M_ymg + M_lowg)],
-                       ['L', len(L_fld), len(L_ymg), len(L_lowg), len(L_fld + L_ymg + L_lowg)],
-                       ['T', len(T_fld), len(T_ymg), len(T_lowg), len(T_fld + T_ymg + T_lowg)],
-                       ['Y', len(Y_fld), len(Y_ymg), len(Y_lowg), len(Y_fld + Y_ymg + Y_lowg)],
-                       ['Total', len(M_fld + L_fld + T_fld + Y_fld), len(M_ymg + L_ymg + T_ymg + Y_ymg),
-                        len(M_lowg + L_lowg + T_lowg + Y_lowg), len(
-                           M_fld + M_ymg + M_lowg + L_fld + L_ymg + L_lowg + T_fld + T_ymg + T_lowg + Y_fld + Y_ymg + Y_lowg)]])
-            if rejected and verbose: u.printer(['name', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam or 'z',
+            view = [['Field', 'NYMG', 'low_g', 'Total'],
+                    [len(M_fld), len(M_ymg), len(M_lowg), len(M_fld + M_ymg + M_lowg)],
+                    [len(L_fld), len(L_ymg), len(L_lowg), len(L_fld + L_ymg + L_lowg)],
+                    [len(T_fld), len(T_ymg), len(T_lowg), len(T_fld + T_ymg + T_lowg)],
+                    [len(Y_fld), len(Y_ymg), len(Y_lowg), len(Y_fld + Y_ymg + Y_lowg)],
+                    [len(M_fld + L_fld + T_fld + Y_fld), len(M_ymg + L_ymg + T_ymg + Y_ymg),
+                     len(M_lowg + L_lowg + T_lowg + Y_lowg), 
+                     len(M_fld + M_ymg + M_lowg + L_fld + L_ymg + L_lowg + T_fld + T_ymg + T_lowg + Y_fld + Y_ymg + Y_lowg)]]
+            presults = at.Table(view, names=['-','M', 'L', 'T', 'Y', 'Total'])
+            presults.pprint()
+            
+            
+            if rejected and verbose: 
+                rej = at.Table(rejected, names=['name', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam or 'z',
                                                 zparam + '_unc' if zparam else 'z_unc', 'gravity', 'binary', 'SpT',
-                                                'SpT_unc', 'NYMG'], rejected, title='REJECTED', empties=True)
-            if return_data and data_out: return data_out
+                                                'SpT_unc', 'NYMG'])
+                rej.pprint()
+                
+            if return_data and data_out: 
+                return data_out
 
         else:
             print("No objects with {} and {} values.".format(xparam, yparam))
@@ -1958,6 +1966,21 @@ class MakeSED(object):
         except IOError:
             print("Could not build SED for source {}.".format(source['id']))
         print('\n')
+        
+    def synthetic_mags(self, bands=RSR.keys(), data_pickle=''):
+        # Get the SED
+        spec = self.data['SED_app']
+        
+        # Calculate all the synthetic mags
+        mags = s.all_mags(spec, bands=bands, photon=False, Flam=False)
+        
+        # Add it to the dictionary
+        data = self.data
+        data.update(mags)
+        self.data = data
+        
+        if data_pickle:
+            data_pickle.add_source(self.data, self.name, update=True)
 
     def fit_SED(self, model_db_path, model_fits=[('bt_settl_2013', 2, 2)], mask=[(1.12, 1.16), (1.35, 1.42)],
                 param_lims=[], fit_spec=True, fit_phot=False, data_pickle='', save=''):
