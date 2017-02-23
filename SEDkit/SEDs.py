@@ -8,14 +8,26 @@ from itertools import chain, groupby
 from matplotlib.ticker import AutoMinorLocator, MaxNLocator
 from matplotlib import cm
 from astropy.coordinates.angles import Angle
-import astropy.units as q, astropy.constants as ac, astropy.io.ascii as ascii, astropy.table as at
-import sys, os, copy, pickle, re, pandas as pd, matplotlib.pyplot as plt, numpy as np, scipy.stats as st, \
-    scipy.interpolate as si, matplotlib.ticker
+import astropy.units as q
+import astropy.constants as ac
+import astropy.io.ascii as ascii
+import astropy.table as at
+import sys
+import os
+import copy
+import pickle
+import re
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import scipy.stats as st
+import scipy.interpolate as si
+import matplotlib.ticker
 import SEDkit.utilities as u
 import SEDkit.syn_phot as s
 import SEDkit.interact
 
-RSR = u.get_filters()
+# RSR = u.get_filters()
 package = os.path.dirname(u.__file__)
 
 
@@ -434,7 +446,7 @@ class GetData(object):
     """
         try:
             self.pickle = open(pickle_path, 'rb')
-            self.data = pickle.load(self.pickle)
+            self.data = pickle.load(self.pickle, encoding='latin1')
             self.path = pickle_path
             self.close = self.pickle.close()
             print('Data from {} loaded!'.format(pickle_path))
