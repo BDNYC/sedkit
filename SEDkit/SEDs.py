@@ -1968,15 +1968,20 @@ class MakeSED(object):
         print('\n')
         
     def synthetic_mags(self, bands=RSR.keys(), data_pickle=''):
-        # Get the SED
+        data = self.data
+
+        # Get the apparent SED and calculate all the synthetic mags
         spec = self.data['SED_app']
-        
-        # Calculate all the synthetic mags
         mags = s.all_mags(spec, bands=bands, photon=False, Flam=False)
+        data.update(mags)
+        
+        # Get the apparent SED and calculate all the synthetic mags
+        spec = self.data['SED_abs']
+        mags = s.all_mags(spec, bands=bands, photon=False, Flam=False)
+        Mags = {'M_'+k:v for k,v in mags.items()}
+        data.update(Mags)
         
         # Add it to the dictionary
-        data = self.data
-        data.update(mags)
         self.data = data
         
         if data_pickle:
