@@ -1053,7 +1053,7 @@ class GetData(object):
       A sequence of the dictionary keys to be returned
     requirements: list, tuple
       A sequence of the dictionary keys to be evaluated as True or False.
-      | (or) and ~ (not) operators recognized, e.g ['WISE_W1|IRAC_ch1'] and ['~publication_id']
+      | (or) and ~ (not) operators recognized, e.g ['WISE_W1|IRAC_ch1'] and ['~publication_shortname']
     sources: sequence (optional)
       A list of the sources to include exclusively
     fmt: str
@@ -1410,7 +1410,7 @@ class MakeSED(object):
                                                                                                   source[
                                                                                                       'designation'] or \
                                                                                                   source['unum'] or '-'
-            for k in ['ra', 'dec', 'publication_id', 'shortname']: self.data[k] = source[k]
+            for k in ['ra', 'dec', 'publication_shortname', 'shortname']: self.data[k] = source[k]
             print(self.name, "=" * (116 - len(self.name)))
             self.data['source_id'], self.data['binary'] = source['id'], binary
 
@@ -1447,7 +1447,7 @@ class MakeSED(object):
                 'spectral_type') else '-'
             self.data['spectral_type'], self.data['SpT'], self.data['SpT_unc'], self.data['SpT_ref'], self.data[
                 'gravity'], self.data['suffix'] = spec_type, SpT.get('spectral_type'), SpT.get(
-                'spectral_type_unc') or 0.5, SpT.get('publication_id'), SpT.get('gravity'), SpT.get('suffix')
+                'spectral_type_unc') or 0.5, SpT.get('publication_shortname'), SpT.get('gravity'), SpT.get('suffix')
 
             # =====================================================================================================================================
             # ======================================= AGE and RADIUS ==============================================================================
@@ -1472,17 +1472,18 @@ class MakeSED(object):
             # ======================================= DISTANCE ====================================================================================
             # =====================================================================================================================================
 
-            # Retreive distance manually from *dist* argument or convert parallax into distance
+            # Retrieve distance manually from *dist* argument or convert parallax into distance
             parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']),
                                 fetch='one', fmt='dict') \
                        or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one',
                                    fmt='dict') \
-                       or {'parallax': '', 'parallax_unc': '', 'publication_id': '', 'comments': ''}
+                       or {'parallax': '', 'parallax_unc': '', 'publication_shortname': '', 'comments': ''}
             self.parallax = dict(parallax)
             if pi or dist: self.parallax['parallax'], self.parallax['parallax_unc'] = u.pi2pc(dist[0], dist[1],
                                                                                               pc2pi=True) if dist else pi
-            self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = parallax['parallax'], parallax['parallax_unc'], \
-                                                                        parallax['publication_id']
+            self.data['pi'], self.data['pi_unc'], self.data['pi_ref'] = self.parallax['parallax'], \
+                                                                        self.parallax['parallax_unc'], \
+                                                                        parallax['publication_shortname']
             self.data['d'], self.data['d_unc'] = dist or (
                 u.pi2pc(self.data['pi'], self.data['pi_unc']) if self.data['pi_unc'] else ['', ''])
             self.data['kinematic'] = True if self.parallax['comments'] and 'kinematic' in self.parallax[
@@ -1493,12 +1494,12 @@ class MakeSED(object):
             # ======================================= PHOTOMETRY ==================================================================================
             # =====================================================================================================================================
 
-            # Retreive all apparent photometry
+            # Retrieve all apparent photometry
             all_photometry = db.query(
                 "SELECT * FROM photometry WHERE source_id=? AND magnitude_unc IS NOT NULL AND band NOT IN ('{}')".format(
                     "','".join([i.replace("'", "''") for i in map(str, pop)])), (source['id'],))
             self.data['phot_ids'] = list(all_photometry['id'])
-            all_photometry = all_photometry[['band', 'magnitude', 'magnitude_unc', 'publication_id']]
+            all_photometry = all_photometry[['band', 'magnitude', 'magnitude_unc', 'publication_shortname']]
 
             # Sort and homogenize it
             phot_data = []
@@ -1617,7 +1618,7 @@ class MakeSED(object):
             # ======================================= PROCESS SPECTRA =============================================================================
             # =====================================================================================================================================
 
-            # Retreive spectra
+            # Retrieve spectra
             if spec_ids:
                 spectra = db.query(
                     "SELECT * FROM spectra WHERE id IN ({}) AND source_id=?".format(','.join(['?'] * len(spec_ids))), \
@@ -1657,7 +1658,7 @@ class MakeSED(object):
 
             # Add spectra metadata to SED object
             for r in ['OPT', 'NIR', 'MIR']:
-                for key, item in zip(['id', 'telescope_id', 'instrument_id', 'mode_id', 'publication_id'], \
+                for key, item in zip(['id', 'telescope_id', 'instrument_id', 'mode_id', 'publication_shortname'], \
                                      ['_spec', '_scope', '_inst', '_mode', '_ref']):
                     try:
                         self.data[r + item] = map(int, [j for k in [i.split(',') for i in \
@@ -1782,7 +1783,7 @@ class MakeSED(object):
             # Flux calibrate composite to available apparent magnitudes
             for (n, spec) in self.composites.iterrows():
                 self.composites.loc[n][['wavelength', 'flux_app', 'unc_app']] = [i.value for i in
-                                                                                 norm_to_mags(spec.values, self.data)]
+                                                                                 norm_to_mags(spec.values, self.data, plot=diagnostics)]
 
             # Concatenate pieces and finalize composite spectrum with units
             self.data['SED_spec_app'] = (W, F, E) = finalize_spec(
@@ -1889,7 +1890,7 @@ class MakeSED(object):
                 print(at.Table(p, names=['Band', 'm', 'm_unc', 'M', 'M_unc', 'Ref']))
             print(' ')
             if not self.spectra.empty: 
-                p = np.asarray(df_extract(self.spectra.reset_index(), ['regime', 'instrument_id', 'mode_id', 'telescope_id', 'publication_id', 'filename','obs_date'])).T
+                p = np.asarray(df_extract(self.spectra.reset_index(), ['regime', 'instrument_id', 'mode_id', 'telescope_id', 'publication_shortname', 'filename','obs_date'])).T
                 print(at.Table(p, names=['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date']))
             print(' ')
             if self.data['d']:
@@ -2319,11 +2320,13 @@ class MakeSED(object):
         if spec:
             try:
                 sed = self.data['SED_spec_' + ('app' if app else 'abs')]
-                if not dirpath.endswith('.txt'): specpath = dirpath + '{} ({}) SED.txt'.format(self.data['shortname'],
-                                                                                               self.data[
-                                                                                                   'spectral_type'])
-                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,
-                                                                                                'apparent' if app else 'flux calibrated')
+                if not dirpath.endswith('.txt'):
+                    specpath = dirpath + '{} ({}) SED.txt'.format(self.data['shortname'], self.data['spectral_type'])
+                else:
+                    specpath = dirpath
+
+                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.\
+                    format(self.name, 'apparent' if app else 'flux calibrated')
                 np.savetxt(specpath, np.asarray(sed).T, header=header)
             except:
                 print("Couldn't print spectra.")
@@ -2333,12 +2336,14 @@ class MakeSED(object):
                 phot = np.asarray([np.asarray([i.value if hasattr(i, 'unit') else i for i in j]) for j in
                                    self.photometry.reset_index()[['band', 'eff', 'm_flux' if app else 'M_flux',
                                                                   'm_flux_unc' if app else 'M_flux_unc']].values])
-                if not dirpath.endswith('.txt'): photpath = dirpath + '{} ({}) phot.txt'.format(self.data['shortname'],
-                                                                                                self.data[
-                                                                                                    'spectral_type'])
-                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name,
-                                                                                                'apparent' if app else 'flux calibrated')
-                np.savetxt(photpath, phot, header=header, fmt='%s')
+                if not dirpath.endswith('.txt'):
+                    photpath = dirpath + '{} ({}) phot.txt'.format(self.data['shortname'], self.data['spectral_type'])
+                else:
+                    photpath = dirpath
+
+                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.\
+                    format(self.name, 'apparent' if app else 'flux calibrated')
+                np.savetxt(photpath, phot, header=header, fmt=str('%s'))
             except IOError:
                 print("Couldn't print photometry.")
 
