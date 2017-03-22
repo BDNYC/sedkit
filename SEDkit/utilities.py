@@ -145,7 +145,9 @@ def filter_info(band):
         "ESO1077"    : {'eff'   : 0.790063, 'min': 0.698018, 'max': 0.912668, 'zp': 1.164e-9, 'zp_photon': 5.278550e+02,
                         'toVega': 0, 'ext': 0, 'system': 'Johnson'},
                         
-
+        "PS_y"       : {'eff'   : 0.960306, 'min': 0.910050, 'max': 1.083850, 'zp': 7.171e-10, 'zp_photon': 5.278550e+02,
+                        'toVega': 0, 'ext': 0, 'system': 'Pan-STARRS'},
+                        
         "HST_F090M"  : {'eff'      : 0.897360, 'min': 0.784317, 'max': 1.013298, 'zp': 8.395228e-10,
                         'zp_photon': 3.792477e+02, 'toVega': 0, 'ext': 0.51, 'system': 'HST'},
         "HST_F110W"  : {'eff'      : 1.059175, 'min': 0.782629, 'max': 1.432821, 'zp': 4.726040e-10,
@@ -247,9 +249,9 @@ def flux2mag(band, f, sig_f='', photon=False, filter_dict=''):
 
 def get_filters(filter_directories=[package + '/Data/Filters/{}/'.format(i) for i in
                                     ['2MASS', 'SDSS', 'WISE', 'IRAC', 'MIPS', 'FourStar', 'HST', 'Johnson', 'Cousins',
-                                     'MKO', 'GALEX', 'DENIS', 'Gaia', 'DES']],
+                                     'MKO', 'GALEX', 'DENIS', 'Gaia', 'DES', 'Pan-STARRS']],
                 systems=['2MASS', 'SDSS', 'WISE', 'IRAC', 'MIPS', 'FourStar', 'HST', 'Johnson', 'Cousins', 'MKO',
-                         'GALEX', 'DENIS', 'Gaia', 'DES']):
+                         'GALEX', 'DENIS', 'Gaia', 'DES', 'Pan-STARRS']):
     """
     Grabs all the .txt spectral response curves and returns a dictionary of wavelength array [um], filter response [
     unitless], effective, min and max wavelengths [um], and zeropoint [erg s-1 cm-2 A-1].
@@ -678,28 +680,31 @@ def normalize(spectra, template, composite=True, plot=False, SNR=50, exclude=[],
 
 
 def output_polynomial(n, m, sig='', x='x', y='y', title='', degree=1, c='k', ls='--', lw=2, legend=True, ax='',
-                      output_data=False, dictionary=True, plot_rms=True):
-    p, residuals, rank, singular_values, rcond = np.polyfit(np.array(map(float, n)), np.array(map(float, m)), degree,
-                                                            w=1 / np.array([i if i else 1 for i in
-                                                                            sig]) if sig != '' else None, full=True)
+                      output_data=False, dictionary=True, plot_rms=True, plot=True, verbose=False):
+    p, residuals, rank, singular_values, rcond = np.polyfit(np.asarray(n), np.asarray(m), degree,
+                                                 w=1./np.array([i if i else 1 for i in sig]) if sig != '' else None, full=True)
     f = np.poly1d(p)
     w = np.linspace(min(n), max(n), 50)
-    ax.plot(w, f(w), color=c, ls=ls, lw=lw, label='${}$'.format(poly_print(p, x=x, y=y)) if legend else '', zorder=10)
     rms = np.sqrt(sum((m - f(n)) ** 2) / len(n))
-    if plot_rms:
-        ax.fill_between(w, f(w) - rms, f(w) + rms, color=c, alpha=0.1, zorder=-1)
     data = [[y, (min(n), max(n)), rms] + list(reversed(p))]
 
+    # Plotting
+    if plot:
+        ax.plot(w, f(w), color=c, ls=ls, lw=lw, label='${}$'.format(poly_print(p, x=x, y=y)) if legend else '', zorder=10)
+        if plot_rms:
+            ax.fill_between(w, f(w) - rms, f(w) + rms, color=c, alpha=0.1, zorder=-1)
+    
+    # Make a dictionary
     D = {'yparam': y, 'xparam': x, 'rms': round(rms, 3), 'min': round(min(n), 1), 'max': round(max(n), 1)}
     D.update({'c{}'.format(str(o)): v for o, v in enumerate(list(reversed(p)))})
 
-    print_data = np.asarray([[y, r'{:.1f}\textless {}\textless {:.1f}'.format(min(n), x, max(n)), '{:.3f}'.format(rms)] 
+    if verbose:
+        print_data = np.asarray([[y, r'{:.1f} < {} < {:.1f}'.format(min(n), x, max(n)), '{:.3f}'.format(rms)] 
                    + ['{:.3e}'.format(v) for v in list(reversed(p))]])
 
-    at.Table(print_data, names=['P(x)', 'x', 'rms'] + [r'$c_{}$'.format(str(i)) for i in range(len(p))]).pprint()
-    print('\n')
-    # printer(['P(x)', 'x', 'rms'] + [r'$c_{}$'.format(str(i)) for i in range(len(p))], print_data, title=title,
-    #         to_txt='./Files/{} v {}.txt'.format(x, y) if output_data else False)
+        at.Table(print_data, names=['P(x)', 'x', 'rms'] + [r'$c_{}$'.format(str(i)) for i in range(len(p))]).pprint()
+        print('\n')
+
     return D if dictionary else data
 
 
@@ -760,7 +765,8 @@ def polynomial(values, coeffs, plot=False, color='g', ls='-', lw=2):
             plt.plot(values, out, color=color, lw=lw, ls=ls)
 
     else:
-        out = None; print("Input values must be an integer, float, or sequence of integers or floats!")
+        out = None
+        print("Input values must be an integer, float, or sequence of integers or floats!")
 
     return out
 
@@ -965,6 +971,28 @@ def radec(rd, id=False, update=False):
     else:
         print(radeg, decdeg)
 
+def transpose_table(tab_before, id_col_name=''):
+    '''Returns a copy of tab_before (an astropy.Table) with rows and columns interchanged
+        id_col_name: name for optional ID column corresponding to
+        the column names of tab_before'''
+    # contents of the first column of the old table provide column names for the new table
+    # TBD: check for duplicates in new_colnames & resolve
+    new_colnames = tuple(tab_before[tab_before.colnames[0]])
+    
+    # remaining columns of old table are row IDs for new table 
+    new_rownames = tab_before.colnames[1:]
+    
+    # make a new, empty table
+    tab_after = at.Table(names=new_colnames)
+    
+    # add the columns of the old table as rows of the new table
+    for r in new_rownames:
+        tab_after.add_row(tab_before[r])
+    if id_col_name != '':
+        # add the column headers of the old table as the id column of new table
+        tab_after.add_column(at.Column(new_rownames, name=id_col_name),index=0)
+    
+    return(tab_after)
 
 def trim_spectrum(spectrum, regions, smooth_edges=False):
     trimmed_spec = [i[idx_exclude(spectrum[0], regions)] for i in spectrum]

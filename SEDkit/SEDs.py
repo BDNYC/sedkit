@@ -424,14 +424,14 @@ def NYMGs():
 class GetData(object):
     def __init__(self, pickle_path):
         """
-    Loads the data pickle constructed from SED calculations
+        Loads the data pickle constructed from SED calculations
 
-    Parameters
-    ----------
-    pickle_path: str
-      The path to the data pickle
+        Parameters
+        ----------
+        pickle_path: str
+          The path to the data pickle
 
-    """
+        """
         try:
             self.pickle = open(pickle_path, 'rb')
             self.data = pickle.load(self.pickle)
@@ -444,18 +444,18 @@ class GetData(object):
 
     def add_source(self, data_dict, name, update=False):
         """
-    Adds data to the pickle
+        Adds data to the pickle
 
-    Parameters
-    ----------
-    data_dict: dict
-      A nested dictionary of new data to add to self.data
-    name: str
-      The dictionary key to use for the new data
-    update: bool
-      Performs an update of the nested dictionary instead of replacing it
+        Parameters
+        ----------
+        data_dict: dict
+          A nested dictionary of new data to add to self.data
+        name: str
+          The dictionary key to use for the new data
+        update: bool
+          Performs an update of the nested dictionary instead of replacing it
 
-    """
+        """
         if isinstance(data_dict, dict):
             # Add the data to the active dictionary so we don't have to reload
             if update:
@@ -475,14 +475,14 @@ class GetData(object):
 
     def delete_source(self, name):
         """
-    Removes the nested dictionary associated with the given source
+        Removes the nested dictionary associated with the given source
 
-    Parameters
-    ----------
-    name: str
-      The dictionary key to delete from the data pickle
+        Parameters
+        ----------
+        name: str
+          The dictionary key to delete from the data pickle
 
-    """
+        """
         if name in self.data:
             # Remove this source from the active dictionary so we don't have to reload
             self.data.pop(name)
@@ -497,41 +497,63 @@ class GetData(object):
         else:
             print('Source {} not found in {} pickle.'.format(name, self.data))
 
-    def export_SED(self, name, filepath, key='SED_abs'):
+    def export_SED(self, name, filepath, key='SED_abs', header=True, 
+                   wavelength_units='', flux_units=''):
         """
-    Export an SEDs to an ascii file.
+        Export an SEDs to an ascii file.
 
-    Parameters
-    ----------
-    name: str
-      The name of the object in the dictionary
-    filepath: str
-      The path to the directory for the file
-    """
+        Parameters
+        ----------
+        name: str
+            The name of the object in the dictionary
+        filepath: str
+            The path to the directory for the file
+        key: str
+            The keyword to export
+        header: bool
+             Include the header
+        flux_units: astropy.units.core.CompositeUnit
+            The astropy units to convert to
+        wavelength_units: astropy.units.core.CompositeUnit
+            The astropy units to convert to
+        """
         # Pull the object from the dictionary
         data = self.data[name]
-
+        
         # Get the desired SED
         sed = data.get(key)
-
+        
+        # Convert to desired units
+        sed[0] = sed[0].to(q.um)
+        
+        if flux_units==q.Jy:
+            sed[1] = (sed[1]*sed[0]**2/ac.c).to(q.Jy)
+            if len(sed)==3:
+                sed[2] = (sed[2]*sed[0]**2/ac.c).to(q.Jy)
+        else:
+            sed[1] = sed[1].to(flux_units)
+            if len(sed)==3:
+                sed[2] = sed[2].to(flux_units)
+        
         if sed:
             # Pull out all other values which are not arrays and place in the header
-            header = sorted([['# {}'.format(k), str(v)] for k, v in data.items() if 'SED' not in k and 'RJ' not in k],
-                            key=lambda x: x[0])
+            head = sorted([['# {}'.format(k), str(v)] for k, v in data.items() 
+                              if 'SED' not in k and 'RJ' not in k], key=lambda x: x[0])
 
             # Open the file
             fn = filepath + name.replace(' ', '_').replace('+', '%2B') + '.txt'
 
             # Write the header
-            if header:
+            if head and header:
                 try:
-                    ascii.write([np.asarray(i) for i in np.asarray(header).T], fn, delimiter='=', format='no_header')
+                    ascii.write([np.asarray(i) for i in np.asarray(head).T], fn, delimiter='=', format='no_header')
                 except IOError:
                     pass
 
             # Write the data
-            names = ['# wavelength [um]', 'flux [erg s-1 cm-2 A-1]']
-            if len(sed) == 3: names += ['unc [erg s-1 cm-2 A-1]']
+            names = ['# wavelength [{}]'.format(str(wavelength_units)), 'flux [{}]'.format(str(flux_units))]
+            if len(sed) == 3: 
+                names += ['unc [{}]'.format(str(flux_units))]
             names[-1] = names[-1] + ' / {}'.format(key)
 
             with open(fn, mode='a') as f:
@@ -544,16 +566,16 @@ class GetData(object):
                                    pop=['TWA 27B', 'CD-35 2722b', 'HR8799b', '2MASS J11271382-3735076',
                                         'WISEA J182831.08+265037.6', '51 Eridani b']):
         """
-    Generate estimated optical and MIR magnitudes for objects with NIR photometry based on magnitude-magnitude relations of the flux calibrated sample
+        Generate estimated optical and MIR magnitudes for objects with NIR photometry based on magnitude-magnitude relations of the flux calibrated sample
 
-    Parameters
-    ----------
-    mag_mag_pickle: str
-      The path to the pickle which will store the magnitude-magnitude relations
-    pop: sequence (ooptional)
-      A list of sources to exclude when calculating mag-mag relations
+        Parameters
+        ----------
+        mag_mag_pickle: str
+          The path to the pickle which will store the magnitude-magnitude relations
+        pop: sequence (ooptional)
+          A list of sources to exclude when calculating mag-mag relations
 
-    """
+        """
         bands, est_mags, rms_vals = ['M_' + i for i in RSR.keys()], [], []
         # pickle.dump({}, open(mag_mag_pickle,'wb'))
         Q = {}.fromkeys([b + '_fld' for b in bands] + [b + '_yng' for b in bands] + [b + '_all' for b in bands])
@@ -598,35 +620,34 @@ class GetData(object):
                  xlabel='', xlims='', xticks=[], invertx='', xmaglimits='', \
                  ylabel='', ylims='', yticks=[], inverty='', ymaglimits='', \
                  zlabel='', zlims='', zticks=[], invertz='', zmaglimits='', \
-                 border=['#FFA821', '#FFA821', 'k', 'r', 'r', 'k', '#2B89D6', '#2B89D6', 'k', '#7F00FF', '#7F00FF',
-                         'k'], \
+                 border=['#FFA821', '#FFA821', 'k', 'r', 'r', 'k', '#2B89D6', '#2B89D6', 'k', '#7F00FF', '#7F00FF', 'k'], \
                  markers=['o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o'], \
                  colors=['#FFA821', 'r', '#2B89D6', '#7F00FF'], \
                  fill=['#FFA821', 'w', '#FFA821', 'r', 'w', 'r', '#2B89D6', 'w', '#2B89D6', '#7F00FF', 'w', '#7F00FF'], \
                  overplot=False, grid=False, fontsize=20, figsize=(10, 8), unity=False, save='', alpha=1, \
                  verbose=False, output_data=False, return_data='polynomials', save_polynomial=''):
         '''
-    Plots the given parameters for all available objects in the given data_table
+        Plots the given parameters for all available objects in the given data_table
 
-    Parameters
-    ----------
-    xparam: str
-      The key for the given parameter in the data_table dictionary to serve as the x value.
-      This can be a single key like 'J' or 'teff' or the difference of two keys, e.g. 'J-Ks')
-    yparam: str
-      The key for the given parameter in the data_table dictionary to serve as the y value.
-      This can be a single key like 'J' or 'teff' or the difference of two keys, e.g. 'J-Ks')
-    zparam: str (optional)
-      The key for the given parameter in the data_table dictionary to serve as the z value.
-      This can be a single key like 'J' or 'teff' or the difference of two keys, e.g. 'J-Ks')
-    data_table: dict
-      The nested dictionary of objects to potentially plot
-    add_data: dict (optional)
-      A nested dictionary of additional objects to plot that are not present in the data_table
-    identify: list, tuple (optional)
-      A sequence of the object names to identify with a star on the plot
+        Parameters
+        ----------
+        xparam: str
+          The key for the given parameter in the data_table dictionary to serve as the x value.
+          This can be a single key like 'J' or 'teff' or the difference of two keys, e.g. 'J-Ks')
+        yparam: str
+          The key for the given parameter in the data_table dictionary to serve as the y value.
+          This can be a single key like 'J' or 'teff' or the difference of two keys, e.g. 'J-Ks')
+        zparam: str (optional)
+          The key for the given parameter in the data_table dictionary to serve as the z value.
+          This can be a single key like 'J' or 'teff' or the difference of two keys, e.g. 'J-Ks')
+        data_table: dict
+          The nested dictionary of objects to potentially plot
+        add_data: dict (optional)
+          A nested dictionary of additional objects to plot that are not present in the data_table
+        identify: list, tuple (optional)
+          A sequence of the object names to identify with a star on the plot
 
-    '''
+        '''
         D = copy.deepcopy(self.data)
         x, y, z, data_out = xparam.split('-'), yparam.split('-'), zparam.split('-'), []
         NYMG_dict = {'TW Hya': 'k', 'beta Pic': 'c', 'Tuc-Hor': 'g', 'Columba': 'm', 'Carina': 'k', 'Argus': 'y',
@@ -763,7 +784,7 @@ class GetData(object):
                                         or all(['fld' in groups, not data[-1], not data[7]]):
                                     A.append(data)
 
-                                    # Is the object field age, low gravity, or a NYMG member?
+                                # Is the object field age, low gravity, or a NYMG member?
                                 Y.append(data) if data[-1] and 'ymg' in groups \
                                     else L.append(data) if data[7] and 'low-g' in groups \
                                     else F.append(data) if not data[-1] and not data[7] and 'fld' in groups \
@@ -848,7 +869,7 @@ class GetData(object):
                             pr = u.output_polynomial(map(float, X), map(float, Y),
                                                      sig=map(float, Ysig) if weighting else '', \
                                                      title='{} | {}'.format(spt, grps), degree=degree, x=xparam,
-                                                     y=yparam + suffix, \
+                                                     y=yparam + suffix, verbose=verbose, \
                                                      c=c, ls=ls, legend=False, ax=ax)
                             if save_polynomial:
                                 polynomial_relation(pr['xparam'], pr['yparam'], polynomial=pr,
@@ -904,10 +925,11 @@ class GetData(object):
                                 plt.connect('button_press_event', interact.AnnoteFinder(X, Y, N))
 
                     if verbose:
-                        at.Table(zip(*[N, S, X, Xsig, Y, Ysig, Z, Zsig, G, B, NYMG]) if zparam else zip(
-                                *[N, S, X, Xsig, Y, Ysig, G, B, NYMG]), names=['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam, zparam + '_unc',
-                             'Gravity', 'Binary', 'Age'] if zparam else ['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', 'Gravity',
-                                      'Binary', 'Age']).pprint()
+                        print('\n',l,':')
+                        pdata = [N, S, X, Xsig, Y, Ysig, Z, Zsig, G, B, NYMG] if zparam else [N, S, X, Xsig, Y, Ysig, G, B, NYMG]
+                        colnames = ['Name', 'spt', xparam, xparam+'_unc', yparam, yparam+'_unc', zparam, zparam+'_unc', 'Gravity', 'Binary', 'Age'] \
+                                   if zparam else ['Name', 'spt', xparam, xparam+'_unc', yparam, yparam+'_unc', 'Gravity', 'Binary', 'Age']
+                        at.Table(pdata, names=colnames).pprint(max_width=120, max_lines=300)
 
                 if return_data == 'params': 
                     data_out.append(z)
@@ -1012,14 +1034,16 @@ class GetData(object):
                      len(M_lowg + L_lowg + T_lowg + Y_lowg), 
                      len(M_fld + M_ymg + M_lowg + L_fld + L_ymg + L_lowg + T_fld + T_ymg + T_lowg + Y_fld + Y_ymg + Y_lowg)]]
             presults = at.Table(view, names=['-','M', 'L', 'T', 'Y', 'Total'])
+            print('\n')
             presults.pprint()
             
             
-            if rejected and verbose: 
-                rej = at.Table(rejected, names=['name', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam or 'z',
-                                                zparam + '_unc' if zparam else 'z_unc', 'gravity', 'binary', 'SpT',
-                                                'SpT_unc', 'NYMG'])
-                rej.pprint()
+            if rejected and verbose:
+                print('\nRejected:')
+                rej = at.Table(list(zip(*rejected)), dtype=[str,float,float,float,float,float,float,str,bool,float,float,str],
+                        names=['name', xparam, xparam+'_unc', yparam, yparam+'_unc', zparam or 'z',
+                        zparam+'_unc' if zparam else 'z_unc', 'gravity', 'binary', 'spt', 'spt_unc', 'NYMG'])
+                rej.pprint(max_width=120, max_lines=300)
                 
             if return_data and data_out: 
                 return data_out
@@ -1029,8 +1053,8 @@ class GetData(object):
 
     def RESET(self):
         """
-    Empties the data_pickle after a prompt
-    """
+        Empties the data_pickle after a prompt
+        """
         sure = raw_input("Are you sure you want to delete all data from {} pickle? [No,Yes]".format(self.path))
         if sure.lower() == 'yes':
             try:
@@ -1045,34 +1069,34 @@ class GetData(object):
     def search(self, keys, requirements, sources=[], spt='', fmt='array', to_txt=False, delim='|', keysort='', \
                verbose=False):
         '''
-    Returns list of all values for *keys* of objects that satisfy all *requirements*
+        Returns list of all values for *keys* of objects that satisfy all *requirements*
 
-    Parameters
-    ----------
-    keys: list, tuple
-      A sequence of the dictionary keys to be returned
-    requirements: list, tuple
-      A sequence of the dictionary keys to be evaluated as True or False.
-      | (or) and ~ (not) operators recognized, e.g ['WISE_W1|IRAC_ch1'] and ['~publication_id']
-    sources: sequence (optional)
-      A list of the sources to include exclusively
-    fmt: str
-      Returns an array, dictionary, or Astropy table of the results given 'array', 'dict', and 'table' respectively
-    to_txt: bool
-      Writes an ascii file with delimiter **delim to the path supplied by **to_txt
-    delim: str
-      The delimiter to use when writing data to a text file
-    keysort: str (option)
-      Sorts the columns by the given key
-    verbose: bool
-      Print the details
+        Parameters
+        ----------
+        keys: list, tuple
+          A sequence of the dictionary keys to be returned
+        requirements: list, tuple
+          A sequence of the dictionary keys to be evaluated as True or False.
+          | (or) and ~ (not) operators recognized, e.g ['WISE_W1|IRAC_ch1'] and ['~publication_id']
+        sources: sequence (optional)
+          A list of the sources to include exclusively
+        fmt: str
+          Returns an array, dictionary, or Astropy table of the results given 'array', 'dict', and 'table' respectively
+        to_txt: bool
+          Writes an ascii file with delimiter **delim to the path supplied by **to_txt
+        delim: str
+          The delimiter to use when writing data to a text file
+        keysort: str (option)
+          Sorts the columns by the given key
+        verbose: bool
+          Print the details
 
-    Returns
-    -------
-    result: list, dict, table
-      A container of the values for all objects that satisfy the given requirements
+        Returns
+        -------
+        result: list, dict, table
+          A container of the values for all objects that satisfy the given requirements
 
-    '''
+        '''
         L = copy.deepcopy(self.data)
         result, rejected = [], []
 
@@ -1116,14 +1140,14 @@ class GetData(object):
 
     def subsample(self, sources):
         """
-    Select a subsample from the GetData() instace given a sequence of source keys
+        Select a subsample from the GetData() instace given a sequence of source keys
 
-    Parameters
-    ----------
-    source_list: sequence
-      The list of keys to include in the GetData() instance
+        Parameters
+        ----------
+        source_list: sequence
+          The list of keys to include in the GetData() instance
 
-    """
+        """
         subset = {}
         for source in sources:
             if source in self.data:
@@ -1146,58 +1170,58 @@ class GetData(object):
                   fontsize=18, overplot=False, \
                   legend='None', save='', ylabel='', xlabel='', low_SNR=True, plot_integrals=False, zorder=1):
         """
-    Plot flux calibrated or normalized SEDs for visual comparison.
+        Plot flux calibrated or normalized SEDs for visual comparison.
 
-    Parameters
-    ----------
-    sources: sequence (optional)
-      A list of sources names to include exclusively
-    um: sequence
-      The wavelength range in microns to include in the plot
-    spt: sequence
-      The numeric spectral type range to include
-    teff: sequence
-      The effective temperture range to include
-    SNR: int, float
-      The signal-to-noise ratio above which the spectra should be masked
-    groups: sequence
-      The gravity groups to include, including 'fld' for field gravity, 'low-g' for low gravity
-      designations, and 'ymg' for members of nearby young moving groups
-    norm_to: sequence (optional)
-      The wavelength range in microns to which all spectra should be normalized
-    app: bool
-      Plot apparent fluxes instead of absolute
-    plot_phot: bool
-      Plot the photometry
-    add_nans: sequence
-      A sequence of wavelength positions in microns to insert NaN values for nicer plotting
-    binaries: bool
-      Include known binaries
-    cmap: colormap object
-      The matplotlib colormap to use
-    pop: sequence (optional)
-      The sources to exclude from the plot
-    highlight: sequence (optional)
-      The wavelength ranges to highlight to point out interesting spectral features,
-      e.g. [(6.38,6.55),(11.7,12.8),(10.3,11.3)] for MIR spectra
-    cbar: bool
-      Plot the color bar
-    legend: int
-      The 0-9 location to plot the legend. Does not plot legend if 'None'
-    figsize: sequence
-      The (x,y) dimensions for the plot
-    fontsize: int
-      The size of the font
-    overplot: matplotlib figure
-      The axes to plot the figure on
-    xlabel: str (optional)
-      The x-axis label
-    ylabel: str (optional)
-      The y-axis label
-    save: str (optional)
-      The path to save the plot
+        Parameters
+        ----------
+        sources: sequence (optional)
+          A list of sources names to include exclusively
+        um: sequence
+          The wavelength range in microns to include in the plot
+        spt: sequence
+          The numeric spectral type range to include
+        teff: sequence
+          The effective temperture range to include
+        SNR: int, float
+          The signal-to-noise ratio above which the spectra should be masked
+        groups: sequence
+          The gravity groups to include, including 'fld' for field gravity, 'low-g' for low gravity
+          designations, and 'ymg' for members of nearby young moving groups
+        norm_to: sequence (optional)
+          The wavelength range in microns to which all spectra should be normalized
+        app: bool
+          Plot apparent fluxes instead of absolute
+        plot_phot: bool
+          Plot the photometry
+        add_nans: sequence
+          A sequence of wavelength positions in microns to insert NaN values for nicer plotting
+        binaries: bool
+          Include known binaries
+        cmap: colormap object
+          The matplotlib colormap to use
+        pop: sequence (optional)
+          The sources to exclude from the plot
+        highlight: sequence (optional)
+          The wavelength ranges to highlight to point out interesting spectral features,
+          e.g. [(6.38,6.55),(11.7,12.8),(10.3,11.3)] for MIR spectra
+        cbar: bool
+          Plot the color bar
+        legend: int
+          The 0-9 location to plot the legend. Does not plot legend if 'None'
+        figsize: sequence
+          The (x,y) dimensions for the plot
+        fontsize: int
+          The size of the font
+        overplot: matplotlib figure
+          The axes to plot the figure on
+        xlabel: str (optional)
+          The x-axis label
+        ylabel: str (optional)
+          The y-axis label
+        save: str (optional)
+          The path to save the plot
 
-    """
+        """
         if overplot:
             ax = overplot if hasattr(overplot, 'figure') else plt.gca()
         else:
@@ -1332,9 +1356,12 @@ class GetData(object):
                                 markers=['-'] * len(labels), styles=['l'] * len(labels), loc=legend)
 
             # Print the results, save the figure, and return the axes
-            u.printer(['#', 'Name', 'SpT', 'Teff'], [[n + 1] + r for n, r in enumerate(to_print)], title='\r')
+            result = [[n + 1] + r for n, r in enumerate(to_print)]
+            result = at.Table(result)
+            result.pprint()
+
             if save: plt.savefig(save)
-            return ax, to_print
+            return ax, result
 
         else:
             print('No spectra fulfilled that criteria.')
@@ -1985,33 +2012,34 @@ class MakeSED(object):
         self.data = data
         
         if data_pickle:
+            print("Mags added to SED:",mags.keys())
             data_pickle.add_source(self.data, self.name, update=True)
 
     def fit_SED(self, model_db_path, model_fits=[('bt_settl_2013', 2, 2)], mask=[(1.12, 1.16), (1.35, 1.42)],
                 param_lims=[], fit_spec=True, fit_phot=False, data_pickle='', save=''):
         '''
-    Perform MCMC fit of model atmosphere spectra and photometry to SED data
+        Perform MCMC fit of model atmosphere spectra and photometry to SED data
 
-    Parameters
-    ----------
-    model_db_path: str
-      The path to model_atmospheres.db
-    model_fits: sequence (optional)
-      A list of the MCMC fits to perform on the SED in the format (model_grid,walkers,steps), e.g. [('bt_settl_2013',100,1000)]
-    mask: sequence (optional)
-      Wavelength regions to exclude in the model fits
-    param_lims: sequence (optional)
-      A sequence of tuples to constrain the model grid by, e.g. [('teff',400,1000,50),('logg',4,5,0.5)] sets the lower limits,
-      upper limits, and increments on the 'teff' and 'logg' parameters
-    spec_fit: bool
-      Fit model grid to spectra
-    phot_fit: bool
-      Fit model grid to photometry
-    data_pickle: object (optional)
-      The GetData() object to write new data to
-    save: str (optional)
-      The directory path to save the plots in
-    '''
+        Parameters
+        ----------
+        model_db_path: str
+          The path to model_atmospheres.db
+        model_fits: sequence (optional)
+          A list of the MCMC fits to perform on the SED in the format (model_grid,walkers,steps), e.g. [('bt_settl_2013',100,1000)]
+        mask: sequence (optional)
+          Wavelength regions to exclude in the model fits
+        param_lims: sequence (optional)
+          A sequence of tuples to constrain the model grid by, e.g. [('teff',400,1000,50),('logg',4,5,0.5)] sets the lower limits,
+          upper limits, and increments on the 'teff' and 'logg' parameters
+        spec_fit: bool
+          Fit model grid to spectra
+        phot_fit: bool
+          Fit model grid to photometry
+        data_pickle: object (optional)
+          The GetData() object to write new data to
+        save: str (optional)
+          The directory path to save the plots in
+        '''
         if model_fits:
             import mcmc_fit, datetime
             for model, walkers, steps in model_fits:
@@ -2088,14 +2116,14 @@ class MakeSED(object):
 
     def complete_with_model_fits(self, data_pickle=''):
         """
-    Create an SED filling in the gaps with an averaged model spectrum and recalculate all fundamental parameters
+        Create an SED filling in the gaps with an averaged model spectrum and recalculate all fundamental parameters
 
-    Parameters
-    ----------
-    data_pickle: object (optional)
-      The GetData() object to write new data to
+        Parameters
+        ----------
+        data_pickle: object (optional)
+          The GetData() object to write new data to
 
-    """
+        """
         (W, F, E), RJ, units = self.data['SED_spec_app'], self.data['RJ'], [q.um, q.erg / q.s / q.cm ** 2 / q.AA,
                                                                             q.erg / q.s / q.cm ** 2 / q.AA]
 
@@ -2167,51 +2195,51 @@ class MakeSED(object):
              figsize=(12, 8), xaxis='', yaxis='', scale=['log', 'log'], legend=True, overplot=False, \
              zorder=0, colors=['k', 'k', 'k'], save=''):
         '''
-    Plot the SED
+        Plot the SED
 
-    Parameters
-    ----------
-    Flam: bool
-      Plots the SED in units of erg/s/cm2 instead of erg/s/cm2/A
-    app: bool
-      Plot the apparent SED even if it can be flux calibrated
-    photometry: bool
-      Plot the photometry
-    spectra: bool
-      Plot the spectra
-    models: bool
-      Plot the atmospheric model fits
-    integrals: bool
-      Plot the integral surface used to calculate Lbol
-    syn_photometry: bool
-      Plot the synthetic photometry calculated from the spectra
-    model_syn_photometry: bool or 'all'
-      Plot the synthetic magnitudes from the model spectra that corespond to real photometry. Plot all synthetic mags if 'all'.
-    model_integrals: bool
-      Plot the SED completed with the averaged best fit models instead of linear interpolation
-    save: str (optional)
-      The path to save the image to
-    figsize: sequence (optional)
-      The (x,y) dimensions of the image
-    xaxis: sequence (optional)
-      The (x_min,x_max) range to plot
-    yaxis: sequence (optional)
-      The (y_min,y_max) range to plot
-    scale: sequence (optional)
-      The (x,y) axis scales to plot, e.g. ['log','linear']
-    legend: bool
-      Plot the legend
-    overplot: bool or plt.axis object
-      Plot the SED on an existing plot or specified axis instead of creating a new figure
-    zorder: int
-      The zorder of the plot
-    colors: sequence
-      The colors to use in the plot
+        Parameters
+        ----------
+        Flam: bool
+          Plots the SED in units of erg/s/cm2 instead of erg/s/cm2/A
+        app: bool
+          Plot the apparent SED even if it can be flux calibrated
+        photometry: bool
+          Plot the photometry
+        spectra: bool
+          Plot the spectra
+        models: bool
+          Plot the atmospheric model fits
+        integrals: bool
+          Plot the integral surface used to calculate Lbol
+        syn_photometry: bool
+          Plot the synthetic photometry calculated from the spectra
+        model_syn_photometry: bool or 'all'
+          Plot the synthetic magnitudes from the model spectra that corespond to real photometry. Plot all synthetic mags if 'all'.
+        model_integrals: bool
+          Plot the SED completed with the averaged best fit models instead of linear interpolation
+        save: str (optional)
+          The path to save the image to
+        figsize: sequence (optional)
+          The (x,y) dimensions of the image
+        xaxis: sequence (optional)
+          The (x_min,x_max) range to plot
+        yaxis: sequence (optional)
+          The (y_min,y_max) range to plot
+        scale: sequence (optional)
+          The (x,y) axis scales to plot, e.g. ['log','linear']
+        legend: bool
+          Plot the legend
+        overplot: bool or plt.axis object
+          Plot the SED on an existing plot or specified axis instead of creating a new figure
+        zorder: int
+          The zorder of the plot
+        colors: sequence
+          The colors to use in the plot
 
-    Returns
-    -------
-    None
-    '''
+        Returns
+        -------
+        None
+        '''
         # Draw the figure and load the axes
         plt.rc('text', usetex=True), plt.rc('text', fontsize=22)
         if not overplot: fig = plt.figure(figsize=figsize)
@@ -2302,20 +2330,20 @@ class MakeSED(object):
 
     def write(self, dirpath, app=False, spec=True, phot=False):
         """
-    Exports a file of photometry and a file of the composite spectra with minimal data headers
+        Exports a file of photometry and a file of the composite spectra with minimal data headers
 
-    Parameters
-    ----------
-    dirpath: str
-      The directory path to place the file
-    app: bool
-      Write apparent SED data
-    spec: bool
-      Write a file for the spectra with wavelength, flux and uncertainty columns
-    phot: bool
-      Write a file for the photometry with
+        Parameters
+        ----------
+        dirpath: str
+          The directory path to place the file
+        app: bool
+          Write apparent SED data
+        spec: bool
+          Write a file for the spectra with wavelength, flux and uncertainty columns
+        phot: bool
+          Write a file for the photometry with
 
-    """
+        """
         if spec:
             try:
                 sed = self.data['SED_spec_' + ('app' if app else 'abs')]
@@ -2345,23 +2373,23 @@ class MakeSED(object):
 
 def fundamental_params(D, p='', plot=False):
     '''
-  Calculates all possible fundamental parameters given a dictionary of data
+    Calculates all possible fundamental parameters given a dictionary of data
 
-  Parameters
-  ----------
-  D: dict
+    Parameters
+    ----------
+    D: dict
     A dictionary containing the object's SED and (optionally) distance and radius
-  p: str
+    p: str
     A prefix for the new dictionary keys
-  plot: bool
+    plot: bool
     Plot the model isochrones with the ranges estimated for this object
 
-  Returns
-  -------
-  D: dict
+    Returns
+    -------
+    D: dict
     The input dictionary updated with fundamental parameter key/value pairs
 
-  '''
+    '''
     try:
 
         # Calculate fbol, mbol
@@ -2408,20 +2436,20 @@ def fundamental_params(D, p='', plot=False):
 
 def df_extract(df, keys):
     '''
-  Turns a pandas DataFrame into a list of arrays
+    Turns a pandas DataFrame into a list of arrays
 
-  Parameters
-  ----------
-  df: DataFrame
+    Parameters
+    ----------
+    df: DataFrame
     The DataFrame to be converted
-  keys: list
+    keys: list
     The list of keys to extract from the DataFrame, sorted by the first element
 
-  Returns
-  -------
-  new_format: list or dict
+    Returns
+    -------
+    new_format: list or dict
     A list of arrays
-  '''
+    '''
     new_format = [np.array([i.value if hasattr(i, 'unit') else i for i in df[keys].sort(keys[0])[l].values]) for l in
                   keys]
     return new_format
@@ -2429,20 +2457,20 @@ def df_extract(df, keys):
 
 def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
     '''
-  Normalize the given spectrum to the given dictionary of magnitudes
+    Normalize the given spectrum to the given dictionary of magnitudes
 
-  Parameters
-  ----------
-  spec: sequence
+    Parameters
+    ----------
+    spec: sequence
     The [W,F,E] to be normalized
-  to_mags: dict
+    to_mags: dict
     The dictionary of magnitudes to normalize to, e.g {'W2':12.3, 'W2_unc':0.2, ...}
 
-  Returns
-  -------
-  spec: sequence
+    Returns
+    -------
+    spec: sequence
     The normalized [W,F,E]
-  '''
+    '''
     spec = u.unc(spec)
     spec = [spec[0] * (q.um if not hasattr(spec[0], 'unit') else 1.), \
             spec[1] * (q.erg / q.s / q.cm ** 2 / q.AA if not hasattr(spec[1], 'unit') else 1.), \
@@ -2511,22 +2539,22 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
 
 def polynomial_relation(xparam, yparam, polynomial={}, pickle_path=package + '/Data/Pickles/polynomial_relations.p'):
     """
-  Store or retrieve a polynomial relation for this GetData() instance.
+    Store or retrieve a polynomial relation for this GetData() instance.
 
-  Parameters
-  ----------
-  xparam: str
+    Parameters
+    ----------
+    xparam: str
     The x parameter of the relation, e.g. 'MKO_J-MKO_K', 'SpT'
-  yparam: str
+    yparam: str
     The y parameter of the relation, e.g. 'M_MKO_J', 'Lbol'
-  relation: dict
+    relation: dict
     A dictionary of a polynomial to write to the pickle.
     Must contain the keys 'rms', 'min', 'max', and 'c0'.
     Additional orders should be called 'c1', 'c2', etc.
-  pickle: str
+    pickle: str
     The path to the pickle
 
-  """
+    """
     D = pickle.load(open(pickle_path, 'rb'))
 
     if polynomial:
