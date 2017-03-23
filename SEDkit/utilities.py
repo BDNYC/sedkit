@@ -325,7 +325,7 @@ def group_spectra(spectra):
     Puts a list of *spectra* into groups with overlapping wavelength arrays
     """
     groups, idx, i = [], [], 'wavelength' if isinstance(spectra[0], dict) else 0
-    for N, S in enumerate(spectra):
+    for N, S in enumerate(spectra):  # N= number, S= spectrum value
         if N not in idx:
             group, idx = [S], idx + [N]
             for n, s in enumerate(spectra):
