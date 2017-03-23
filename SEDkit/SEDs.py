@@ -1356,8 +1356,8 @@ class GetData(object):
                                 markers=['-'] * len(labels), styles=['l'] * len(labels), loc=legend)
 
             # Print the results, save the figure, and return the axes
-            result = [[n + 1] + r for n, r in enumerate(to_print)]
-            result = at.Table(result)
+            result = np.asarray([[n + 1] + r for n, r in enumerate(to_print)])
+            result = at.Table(result, names=['#','Name','SpT','Teff'])
             result.pprint()
 
             if save: plt.savefig(save)
