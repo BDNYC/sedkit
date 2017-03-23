@@ -268,9 +268,10 @@ def isochrone_interp(z, z_unc, min_age, max_age, xparam='Lbol', yparam='radius',
 
     if plot:
         ax = plt.gca()
-        ax.set_ylabel(r'${}$'.format(ylabel or yparam), fontsize=22, labelpad=5), ax.set_xlabel(
-            r'${}$'.format(xlabel or xparam), fontsize=22, labelpad=15), plt.grid(True, which='both'), plt.title(
-            evo_model.replace('_', '-') if title else '')
+        ax.set_ylabel(r'${}$'.format(ylabel or yparam))#, fontsize=22, labelpad=5)
+        ax.set_xlabel(r'${}$'.format(xlabel or xparam))#, fontsize=22, labelpad=15)
+        plt.grid(True, which='both')
+        plt.title(evo_model.replace('_', '-') if title else '')
         # ax.axvline(x=z-z_unc, ls='-', color='0.7', zorder=-3), ax.axvline(x=z+z_unc, ls='-', color='0.7', zorder=-3)
         ax.add_patch(plt.Rectangle((z - z_unc, 0), 2 * z_unc, 10, color='0.7', zorder=-3))
         xlims, ylims = ax.get_xlim(), ax.get_ylim()
@@ -1901,7 +1902,9 @@ class MakeSED(object):
                      '-' if binary else '{}({})'.format(self.data['logg'], self.data['logg_unc']),
                      '{}-{}'.format(self.data['age_min'], self.data['age_max']),
                      '{}({})'.format(self.data['d'].value, self.data['d_unc'].value)]).T
-                print(at.Table(p, names=['Lbol', 'Teff', 'R_Jup', 'M_Jup', 'logg', 'Age', 'Dist']))
+                # print(at.Table(p, names=['Lbol', 'Teff', 'R_Jup', 'M_Jup', 'logg', 'Age', 'Dist']))
+                temp_results = at.Table(p, names=['Lbol', 'Teff', 'R_Jup', 'M_Jup', 'logg', 'Age', 'Dist'])
+                temp_results.pprint(max_lines=-1, max_width=-1)  # Ensure all columns/rows are displayed
             print(' ')
 
             # =====================================================================================================================================
@@ -2214,7 +2217,8 @@ class MakeSED(object):
     None
     '''
         # Draw the figure and load the axes
-        plt.rc('text', usetex=True), plt.rc('text', fontsize=22)
+        plt.rc('text', usetex=True)
+        # plt.rc('text', fontsize=22) # this overwrites the default text size, which I don't like
         if not overplot: fig = plt.figure(figsize=figsize)
         ax = overplot if hasattr(overplot, 'figure') else plt.gca()
 
@@ -2231,6 +2235,7 @@ class MakeSED(object):
         if spectra:
             for (spec_id, spec) in self.spectra.iterrows():
                 plt.step(spec['wavelength'], lam(spec['flux_' + suf]), where='mid', color=colors[0], alpha=0.9)
+                # TODO: Check this, not sure that lam() is working as intended for spectra. Only returns l[1]
 
         # Plot the composite spectra
         if composites:
@@ -2501,10 +2506,12 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
 
         # Plotting test
         if plot:
-            plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
-            plt.loglog(spec[0].value, spec[1].value * norm, label='new', color='b')
-            plt.scatter(w, f1, c='g')
-            plt.scatter(w, f2, c='b')
+            # plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
+            # plt.loglog(spec[0].value, spec[1].value * norm, label='new', color='b')
+            plt.semilogy(spec[0].value, spec[1].value, label='old', color='g')
+            plt.semilogy(spec[0].value, spec[1].value * norm, label='new', color='b')
+            plt.scatter(w, f1, c='g', s=50)
+            plt.scatter(w, f2, c='b', s=50)
             plt.legend()
 
         return [spec[0], spec[1] / norm, spec[2] / norm] if reverse else [spec[0], spec[1] * norm, spec[2] * norm]
