@@ -1893,7 +1893,9 @@ class MakeSED(object):
             print(' ')
             if not self.spectra.empty: 
                 p = np.asarray(df_extract(self.spectra.reset_index(), ['regime', 'instrument_id', 'mode_id', 'telescope_id', 'publication_shortname', 'filename','obs_date'])).T
-                print(at.Table(p, names=['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date']))
+                #print(at.Table(p, names=['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date']))
+                temp_results =at.Table(p, names=['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date'])
+                temp_results.pprint(max_lines=-1, max_width=-1)  # Ensure all columns/rows are displayed
             print(' ')
             if self.data['d']:
                 p = np.array(['{}({})'.format(self.data['Lbol'], self.data['Lbol_unc']),
