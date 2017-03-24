@@ -2172,7 +2172,7 @@ class MakeSED(object):
     def plot(self, Flam=False, app=False, photometry=True, spectra=False, composites=True, \
              models=True, integrals=False, model_syn_photometry=True, model_integrals=False, \
              figsize=(8, 6), xaxis='', yaxis='', scale=['log', 'log'], legend=True, overplot=False, \
-             zorder=0, colors=['k', 'k', 'k'], save=''):
+             zorder=0, colors=['k', 'k', 'k'], save='', latex=True):
         '''
     Plot the SED
 
@@ -2220,7 +2220,7 @@ class MakeSED(object):
     None
     '''
         # Draw the figure and load the axes
-        plt.rc('text', usetex=True)
+        plt.rc('text', usetex=latex)
         # plt.rc('text', fontsize=22) # this overwrites the default text size, which I don't like
         if not overplot: fig = plt.figure(figsize=figsize)
         ax = overplot if hasattr(overplot, 'figure') else plt.gca()
@@ -2297,10 +2297,15 @@ class MakeSED(object):
         # Format the axes
         ax.set_xlim(xaxis or (0.3, 30)), ax.set_xscale(scale[0]), ax.set_yscale(scale[1], nonposy='clip')
         if yaxis: ax.set_ylim(yaxis)
-        ax.set_xlabel(r"$\displaystyle\lambda\mbox{ (}\mu\mbox{m)}$", labelpad=10)
-        ax.set_ylabel(
-            r"$\displaystyle" + ('\lambda' if Flam else '') + " F_\lambda\mbox{ (erg s}^{-1}\mbox{ cm}^{-2}" + (
-                '' if Flam else '\mbox{ A}^{-1}') + ")$", labelpad=20)
+        if latex:
+            ax.set_xlabel(r"$\displaystyle\lambda\mbox{ (}\mu\mbox{m)}$", labelpad=10)
+            ax.set_ylabel(
+                r"$\displaystyle" + ('\lambda' if Flam else '') + " F_\lambda\mbox{ (erg s}^{-1}\mbox{ cm}^{-2}" + (
+                    '' if Flam else '\mbox{ A}^{-1}') + ")$", labelpad=20)
+        else:
+            ax.set_xlabel("Lambda", labelpad=10)
+            ax.set_ylabel("" + ('\lambda' if Flam else '') + " F_\lambda\mbox{ (erg s}^{-1}\mbox{ cm}^{-2}" + (
+                    '' if Flam else '\mbox{ A}^{-1}') + ")", labelpad=20)
         if legend: ax.legend(loc=8, frameon=False, fontsize=16,
                              title='({}) {}'.format(self.data['spectral_type'], self.name))
         plt.ion()
