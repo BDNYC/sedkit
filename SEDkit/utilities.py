@@ -308,10 +308,10 @@ def goodness(spec1, spec2, array=False, exclude=[], filt_dict=None, weighting=Tr
     C = sum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2)) / sum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
     G = weight * (f1 - f2 * C) ** 2 / (e1 ** 2 + e2 ** 2)
     if verbose:
-        plt.figure(), plt.loglog(w1, f1, 'k', label='spec1', alpha=0.6), plt.loglog(w1, f2 * C, 'b',
-                                                                                    label='spec2 binned',
-                                                                                    alpha=0.6), plt.grid(
-            True), plt.legend(loc=0)
+        plt.figure()
+        plt.loglog(w1, f1, 'k', label='spec1', alpha=0.6) 
+        plt.loglog(w1, f2 * C, 'b', label='spec2 binned', alpha=0.6)
+        plt.grid(True), plt.legend(loc=0)
     return [G if array else sum(G), C]
 
 
@@ -542,8 +542,9 @@ def norm_spec(spectrum, template, exclude=[]):
     spectrum: sequence
       The normalized [w,f] or [w,f,e] astropy quantities spectrum
     """
-    template, spectrum, spectrum_units = np.array([np.asarray(i.value) for i in template]), np.array(
-            [np.asarray(i.value) for i in spectrum]), [i.unit for i in spectrum]
+    spectrum_units = [i.unit for i in spectrum]
+    template = np.array(scrub([np.asarray(i.value) for i in template]))
+    spectrum = np.array(scrub([np.asarray(i.value) for i in spectrum]))
     normed_spectrum = spectrum.copy()
 
     # Smooth both spectrum and template
@@ -552,16 +553,18 @@ def norm_spec(spectrum, template, exclude=[]):
     # Find wavelength range of overlap for array masking
     spec_mask = np.logical_and(spectrum[0] > template[0][0], spectrum[0] < template[0][-1])
     temp_mask = np.logical_and(template[0] > spectrum[0][0], template[0] < spectrum[0][-1])
-    spectrum, template = [i[spec_mask] for i in spectrum], [i[temp_mask] for i in template]
+    spectrum = [i[spec_mask] for i in spectrum]
+    template = [i[temp_mask] for i in template]
 
     # Also mask arrays in wavelength ranges specified in *exclude*
     for r in exclude:
         spec_mask = np.logical_and(spectrum[0] > r[0], spectrum[0] < r[-1])
         temp_mask = np.logical_and(template[0] > r[0], template[0] < r[-1])
-        spectrum, template = [i[~spec_mask] for i in spectrum], [i[~temp_mask] for i in template]
+        spectrum = [i[~spec_mask] for i in spectrum]
+        template = [i[~temp_mask] for i in template]
 
     # Normalize the spectrum to the template based on equal integrated flux inincluded wavelength ranges
-    norm = np.trapz(template[1], x=template[0]) / np.trapz(spectrum[1], x=spectrum[0])
+    norm = np.trapz(template[1], x=template[0])/np.trapz(spectrum[1], x=spectrum[0])
     normed_spectrum[1:] = [i * norm for i in normed_spectrum[1:]]
 
     return [i * Q for i, Q in zip(normed_spectrum, spectrum_units)]

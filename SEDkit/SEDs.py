@@ -14,6 +14,8 @@ import sys, os, copy, pickle, re, pandas as pd, matplotlib.pyplot as plt, numpy 
 import SEDkit.utilities as u
 import SEDkit.syn_phot as s
 import SEDkit.interact as interact
+from SEDkit import mcmc_fit
+import datetime
 
 RSR = u.get_filters()
 package = os.path.dirname(u.__file__)
@@ -338,7 +340,9 @@ def features(spectrum, fs=20, color='k'):
             plt.loglog([start, end], [height, height], c=color), plt.text((end + start) / 2, height * 1.1, f,
                                                                           ha='center', fontsize=fs, color=color)
         elif t == 'bandhead':
-            pass
+            plt.annotate('CH_4', xy=((start+end)/2., height*1.1), xycoords='data', ha='center')
+            plt.annotate('', xy=(start, height), xycoords='data', xytext=(end, height), textcoords='data', ha='center',
+                  arrowprops=dict(arrowstyle="-", connectionstyle="bar", ec="k", shrinkA=20, shrinkB=5))
         elif t == 'singlet':
             plt.annotate(f, xy=(start, height), xytext=(start, height * 1.1),
                          arrowprops=dict(fc=color, ec=color, arrowstyle='-'), ha='center', fontsize=fs, color=color)
@@ -1164,11 +1168,11 @@ class GetData(object):
             self.data = subset
 
     def spec_plot(self, sources=[], um=(0.5, 14.5), spt=(5, 33), teff=(0, 9999), SNR=0.5,
-                  groups=['fld', 'ymg', 'low-g'], \
-                  plot_phot=True, norm_to='', app=False, add_nans=[1.4, 1.85, 2.6, 4.3, 5.05], binaries=False, pop=[], \
-                  highlight=[], cmap=u.truncate_colormap(plt.cm.brg_r, 0.5, 1.), cbar=True, figsize=(12, 8),
-                  fontsize=18, overplot=False, \
-                  legend='None', save='', ylabel='', xlabel='', low_SNR=True, plot_integrals=False, zorder=1):
+                  groups=['fld', 'ymg', 'low-g'], plot_phot=True, norm_to='', app=False, 
+                  add_nans=[1.4, 1.85, 2.6, 4.3, 5.05], binaries=False, pop=[], highlight=[], 
+                  cmap=u.truncate_colormap(plt.cm.brg_r, 0.5, 1.), cbar=True, figsize=(12, 8),
+                  fontsize=18, overplot=False, legend='None', save='', low_SNR=True, 
+                  ylabel='', xlabel='', lw=1, plot_integrals=False, zorder=1, **kwargs):
         """
         Plot flux calibrated or normalized SEDs for visual comparison.
 
@@ -1197,8 +1201,8 @@ class GetData(object):
           A sequence of wavelength positions in microns to insert NaN values for nicer plotting
         binaries: bool
           Include known binaries
-        cmap: colormap object
-          The matplotlib colormap to use
+        cmap: colormap object, list
+          The matplotlib colormap to use or a list of manual colors
         pop: sequence (optional)
           The sources to exclude from the plot
         highlight: sequence (optional)
@@ -1225,7 +1229,7 @@ class GetData(object):
         if overplot:
             ax = overplot if hasattr(overplot, 'figure') else plt.gca()
         else:
-            fig, ax = plt.subplots(figsize=figsize)
+            fig, ax = plt.subplots(figsize=figsize, **kwargs)
             if cbar:
                 cbar = ax.contourf([[0, 0], [0, 0]], range(teff[0], teff[1], int((teff[1] - teff[0]) / 20.)), cmap=cmap)
                 ax.cla()
@@ -1237,7 +1241,7 @@ class GetData(object):
                 if k not in sources: L.pop(k)
 
         # Iterate through the list and plot the sources that satisfy *kwarg criteria
-        plots, ylims = [], []
+        plots, ylims, cidx = [], [], 0
         for k, v in L.items():
             try:
                 # Get the spectrum
@@ -1278,7 +1282,10 @@ class GetData(object):
                              or (k in sources)):
                     try:
                         # Pick the color
-                        color = cmap((1. * Teff - teff[0]) / (teff[1] - teff[0]), 1.) if Teff else '0.5'
+                        if isinstance(cmap, (list,tuple)):
+                            color = cmap[cidx]
+                        else:
+                            color = cmap((1. * Teff - teff[0]) / (teff[1] - teff[0]), 1.) if Teff else '0.5'
 
                         # Plot the integral surface
                         if plot_integrals:
@@ -1290,14 +1297,14 @@ class GetData(object):
                         hiSNRflux = np.ma.masked_where(
                             np.logical_and((spec[1][mask] / spec[2][mask]) < SNR, spec[1][mask] != np.nan),
                             spec[1][mask] * norm)
-                        ax.step(spec[0][mask], hiSNRflux, lw=1, color=color, zorder=zorder)
-
+                        ax.step(spec[0][mask], hiSNRflux, lw=2 if color=='r' else 1, color=color, zorder=zorder+(2 if color=='r' else 1))
+                        
                         # Plot the low SNR spectra
                         if low_SNR:
                             lwSNRflux = np.ma.masked_where(
                                 np.logical_and((spec[1][mask] / spec[2][mask]) > SNR, spec[1][mask] != np.nan),
                                 spec[1][mask] * norm)
-                            ax.step(spec[0][mask], lwSNRflux, lw=1, color=color, alpha=0.2, zorder=zorder)
+                            ax.step(spec[0][mask], lwSNRflux, lw=lw, color=color, alpha=0.2, zorder=zorder)
 
                         # Plot photometry as well
                         if plot_phot:
@@ -1313,6 +1320,9 @@ class GetData(object):
                             ['{} ({}) {}'.format(k, v.get('spectral_type'), '{} K'.format(Teff) if Teff else '-'),
                              color, 1, \
                              [k, v.get('spectral_type'), v.get('teff') or '-']])
+
+                        # Advance the index for manual colors
+                        cidx += 1
 
                     except IOError:
                         pass
@@ -2041,7 +2051,6 @@ class MakeSED(object):
           The directory path to save the plots in
         '''
         if model_fits:
-            import mcmc_fit, datetime
             for model, walkers, steps in model_fits:
                 try:
 
