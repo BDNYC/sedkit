@@ -1440,17 +1440,22 @@ class MakeSED(object):
             # =====================================================================================================================================
             # ======================================= METADATA ====================================================================================
             # =====================================================================================================================================
-
+            
             # Retreive source metadata
             source = db.query("SELECT * FROM sources WHERE id=?", (source_id,), fetch='one', fmt='dict')
-            self.name = self.data['name'] = source['names'].split(',')[0] if source['names'] else source['shortname'] or \
-                                                                                                  source[
-                                                                                                      'designation'] or \
-                                                                                                  source['unum'] or '-'
-            for k in ['ra', 'dec', 'publication_id', 'shortname']: self.data[k] = source[k]
-            print(self.name, "=" * (116 - len(self.name)))
+            
+            if source.get('names'):
+                self.name = self.data['name'] = source.get('names').split(',')[0]
+            else:
+                 self.name = self.data['name'] = source.get('shortname') or source.get('designation') or source.get('unum') or '-'
+                                            
+            # Add attributes
+            for k in ['ra', 'dec', 'publication_id', 'shortname']:
+                self.data[k] = source[k]
             self.data['source_id'], self.data['binary'] = source['id'], binary
-
+            
+            print(self.name, "=" * (116 - len(self.name)))
+            
             # =====================================================================================================================================
             # ======================================= SPECTRAL TYPE ===============================================================================
             # =====================================================================================================================================
@@ -1508,13 +1513,17 @@ class MakeSED(object):
             # =====================================================================================================================================
             # ======================================= DISTANCE ====================================================================================
             # =====================================================================================================================================
-
-            # Retreive distance manually from *dist* argument or convert parallax into distance
-            parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']),
-                                fetch='one', fmt='dict') \
-                       or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one',
-                                   fmt='dict') \
-                       or {'parallax': '', 'parallax_unc': '', 'publication_id': '', 'comments': ''}
+            
+            try:
+                # Retreive distance manually from *dist* argument or convert parallax into distance
+                parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']),
+                                    fetch='one', fmt='dict') \
+                           or db.query("SELECT * FROM parallaxes WHERE source_id={}".format(source['id']), fetch='one',
+                                       fmt='dict') \
+                           or {'parallax': '', 'parallax_unc': '', 'publication_id': '', 'comments': ''}
+            except:
+                parallax = {'parallax': '', 'parallax_unc': '', 'publication_id': '', 'comments': ''}
+                
             self.parallax = dict(parallax)
             if pi or dist: self.parallax['parallax'], self.parallax['parallax_unc'] = u.pi2pc(dist[0], dist[1],
                                                                                               pc2pi=True) if dist else pi
@@ -1660,13 +1669,13 @@ class MakeSED(object):
                     "SELECT * FROM spectra WHERE id IN ({}) AND source_id=?".format(','.join(['?'] * len(spec_ids))), \
                     list(spec_ids) + [source['id']], fmt='dict')
             else:
-                spectra = filter(None, [
+                spectra = list(filter(None, [
                     db.query("SELECT * FROM spectra WHERE source_id=? AND regime='OPT'", (source['id'],), fetch='one',
                              fmt='dict'), \
                     db.query("SELECT * FROM spectra WHERE source_id=? AND regime='NIR' AND wavelength_order=''",
                              (source['id'],), fetch='one', fmt='dict'), \
                     db.query("SELECT * FROM spectra WHERE source_id=? AND regime='MIR'", (source['id'],), fetch='one',
-                             fmt='dict')])
+                             fmt='dict')]))
                 if not spectra:
                     spectra = db.query("SELECT * FROM spectra WHERE source_id=? LIMIT 5", (source['id'],), fmt='dict')
 
@@ -1674,7 +1683,9 @@ class MakeSED(object):
                 print('Check those spec_ids! One or more does not belong to source {}.'.format(source_id))
 
             # Make data frame columns
-            spec_cols = db.query("pragma table_info('spectra')", unpack=True)[1]
+            # print(db.query("pragma table_info('spectra')", unpack=True))
+            spec_cols = np.array(db.query("pragma table_info('spectra')", fmt='table')['name'])
+            print(spec_cols)
             spec_cols = list(spec_cols[spec_cols != 'spectrum']) + ['wavelength', 'flux', 'unc']
 
             # Put spectrum into arrays
@@ -1687,10 +1698,9 @@ class MakeSED(object):
                     spectra[n]['unc'] = None
 
             # Make the data frame
-            self.spectra = pd.DataFrame(spectra, columns=spec_cols).set_index('id') if spectra else pd.DataFrame(
-                columns=spec_cols)
+            self.spectra = pd.DataFrame(spectra, columns=spec_cols).set_index('id') if spectra else pd.DataFrame(columns=spec_cols)
             self.data['spec_ids'] = list(self.spectra.index)
-            units, spec_coverage = [q.um, q.erg / q.s / q.cm ** 2 / q.AA, q.erg / q.s / q.cm ** 2 / q.AA], []
+            units, spec_coverage = [q.um, q.erg/q.s/q.cm**2/q.AA, q.erg/q.s/q.cm**2/q.AA], []
 
             # Add spectra metadata to SED object
             for r in ['OPT', 'NIR', 'MIR']:
@@ -2597,9 +2607,8 @@ def finalize_spec(spec):
   spec: sequence
     The cleaned and ordered [W,F,E]
   '''
-    spec = zip(
-        *sorted(zip(*map(list, [[i.value if hasattr(i, 'unit') else i for i in j] for j in spec])), key=lambda x: x[0]))
-    return u.scrub([spec[0] * q.um, spec[1] * q.erg / q.s / q.cm ** 2 / q.AA, spec[2] * q.erg / q.s / q.cm ** 2 / q.AA])
+    spec = list(zip(*sorted(zip(*map(list, [[i.value if hasattr(i, 'unit') else i for i in j] for j in spec])), key=lambda x: x[0])))
+    return u.scrub([spec[0]*q.um, spec[1]*q.erg/q.s/q.cm**2/q.AA, spec[2]*q.erg/q.s/q.cm**2/q.AA])
 
 
 def SpT_relations(L, yparam, pop=[], identify=[], colors=False, ylabel='', inverty=False):

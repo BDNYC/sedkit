@@ -1,9 +1,9 @@
-import syn_phot
+from . import syn_phot
 import logging
-import cPickle
+import pickle
 import synth_fit
 import itertools
-import utilities as u
+from . import utilities as u
 import astropy.units as q
 import numpy as np
 import matplotlib.pyplot as plt
@@ -153,7 +153,7 @@ def make_model_db(model_grid_name, model_atmosphere_db, grid_data='spec', param_
   
     # Interpolate the grid to fill in the holes
     for h in grid_holes:
-      print 'Filling grid hole at {}'.format(h)
+      print('Filling grid hole at {}'.format(h))
       new_spectrum = pd_interp_models(params, h, models, smoothing=False)
       new_row = {k:v for k,v in zip(params,h)}
       new_row.update({'wavelength':new_spectrum[0], 'flux':new_spectrum[1], 'comments':'interpolated'})
