@@ -16,6 +16,36 @@ FILTERS = svo.filters()
 FILTERS['Band'] = [i.replace('.','_').replace('_I','_ch') for i in FILTERS['Band']]
 FILTERS.add_index('Band')
 
+def from_ids(db, **kwargs):
+    """
+    Create dictionary of data tables from record id lists
+    
+    Example
+    -------
+    data = from_ids(db, {'sources':[2], 'photometry':[23,24,25,456,457,458],...})
+    
+    Parameters
+    ----------
+    db: astrodbkit.astrodb.Database
+        The database to draw the records from
+    """
+    # Make an empty dict
+    data = {}.fromkeys(kwargs.keys())
+    
+    # Generate each table
+    for k,v in kwargs.items():
+        try:
+            
+            # Build the query with the provided ids
+            id_str = ','.join(list(map(str,v)))
+            qry = "SELECT * FROM {} WHERE id IN ({})".format(k,id_str)
+            data[k] = db.query(qry, fmt='table')
+            
+        except IOError:
+            print('Could not generate',k,'table.')
+            
+    return data
+
 class MakeSED(object):
     def __init__(self, source_id, db, spec_ids=[], pi='', dist='', pop=[], \
         flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, ):
@@ -28,8 +58,9 @@ class MakeSED(object):
         source_id: int, str
             The *source_id*, *unum*, *shortname* or *designation* for any 
             source in the database.
-        db: database instance
-            The database instance to retreive data from
+        db: astrodbkit.astrodb.Database, dict
+            The database instance to retreive data from or a dictionary
+            of astropy tables to mimick the db query
         spec_ids: list, tuple (optional)
             A sequence of the ids from the SPECTRA table to plot. 
             Uses any available spectra if no list is given. Uses no spectra 
@@ -45,10 +76,20 @@ class MakeSED(object):
         # Get the data for the source from the database
         all_data = db.inventory(source_id, fetch=True)
         
+        print(all_data)
+        
         # Store the tables as attributes
         for key,table in all_data.items():
             setattr(self, key, at.QTable(table))
             
+        # =====================================================================
+        # Metadata
+        # =====================================================================
+        
+        # Stuff for printing
+        # self.sources =
+        
+        
         # =====================================================================
         # Distance
         # =====================================================================
@@ -164,7 +205,8 @@ class MakeSED(object):
         # Combine all spectra into apparent SED
         
         #
-        
+                
+    
     def plot(self, phot=True, spec=True, app=False, scale=['log','log'], **kwargs):
         """
         Plot the SED
@@ -199,8 +241,7 @@ class MakeSED(object):
         plt.yscale(scale[0], nonposy='clip')
         plt.yscale(scale[1], nonposy='clip')
         
-        
-        
+
         
         
         
