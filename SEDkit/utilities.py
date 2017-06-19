@@ -11,8 +11,6 @@ import astropy.constants as ac
 from svo_filters import svo
 
 FILTERS = svo.filters()
-FILTERS['Band'] = [i.replace('.','_').replace('_I','_ch') for i in FILTERS['Band']]
-FILTERS.add_index('Band')
 
 from astropy.utils.data_info import ParentDtypeInfo
 

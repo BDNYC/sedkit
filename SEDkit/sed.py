@@ -13,7 +13,6 @@ from . import utilities as u
 from svo_filters import svo
 
 FILTERS = svo.filters()
-FILTERS['Band'] = [i.replace('.','_').replace('_I','_ch') for i in FILTERS['Band']]
 FILTERS.add_index('Band')
 
 def from_ids(db, **kwargs):
@@ -75,12 +74,20 @@ class MakeSED(object):
         
         # Get the data for the source from the database
         all_data = db.inventory(source_id, fetch=True)
-        
-        print(all_data)
-        
+                
         # Store the tables as attributes
-        for key,table in all_data.items():
-            setattr(self, key, at.QTable(table))
+        for table in ['sources','spectra','photometry','spectral_types','parallaxes']:
+            
+            # Get data from the dictionary
+            if table in all_data:
+                setattr(self, table, at.QTable(all_data[table]))
+                
+            # If no data, generate dummy
+            else:
+                qry = "SELECT * FROM {} LIMIT 1".format(table)
+                dummy = db.query(qry, fmt='table')
+                dummy.remove_row(0)
+                setattr(self, table, at.QTable(dummy))
             
         # =====================================================================
         # Metadata
@@ -103,17 +110,16 @@ class MakeSED(object):
         self.parallaxes.add_column(at.Column(fill, 'distance', unit=q.pc))
         self.parallaxes.add_column(at.Column(fill, 'distance_unc', unit=q.pc))
         
-        # Check for input parallax or distance
+        # Check for input parallax or distance and set adopted
+        self.parallaxes['adopted'] = fill
         if pi:
-            self.parallaxes['adopted'] = fill
             self.parallaxes.add_row({'parallax':pi[0], 'parallax_unc':pi[1], \
                 'adopted':1, 'publication_shortname':'Input'})
         elif dist:
-            self.parallaxes['adopted'] = fill
             self.parallaxes.add_row({'distance':dist[0], 'distance_unc':dist[1],\
                 'adopted':1, 'publication_shortname':'Input'})
         else:
-            pass
+            self.parallaxes[0]['adopted'] = 1
             
         # Calculate missing distance or parallax
         for row in self.parallaxes:
@@ -144,9 +150,9 @@ class MakeSED(object):
         self.photometry['app_magnitude'].unit = q.mag
         self.photometry['app_magnitude_unc'].unit = q.mag
         
-        # Pop unwanted mags
-        self.photometry = self.photometry[[self.photometry.loc[band].index \
-            for band in self.photometry['band'] if band not in pop]]
+        # # Pop unwanted mags
+        # self.photometry = self.photometry[[self.photometry.loc[band].index \
+        #     for band in self.photometry['band'] if band not in pop]]
             
         # Add effective wavelengths to the photometry table
         self.photometry.add_column(at.Column(fill, 'eff', unit=wave_units))
@@ -192,19 +198,17 @@ class MakeSED(object):
         # Spectra
         # =====================================================================
         
-        # Index and add units
-        fill = np.zeros(len(self.spectra))
-        self.spectra.add_index('id')
-        self.photometry.rename_column('spectrum','app_spectrum')
-        
-        # Pop unwanted spectra
-        if spec_ids:
-            self.spectra = self.spectra[[self.spectra.loc[spec_id].index \
-                for spec_id in self.spectra['id'] if spec_id in spec_ids]]
-            
-        # Combine all spectra into apparent SED
-        
+        # # Index and add units
+        # fill = np.zeros(len(self.spectra))
+        # self.spectra.add_index('id')
+        # self.spectra.rename_column('spectrum','app_spectrum')
         #
+        # # Pop unwanted spectra
+        # if spec_ids:
+        #     self.spectra = self.spectra[[self.spectra.loc[spec_id].index \
+        #         for spec_id in self.spectra['id'] if spec_id in spec_ids]]
+        #
+        # # Combine all spectra into apparent SED
                 
     
     def plot(self, phot=True, spec=True, app=False, scale=['log','log'], **kwargs):
@@ -238,7 +242,7 @@ class MakeSED(object):
         #         marker='o', ls='None', **kwargs)
         
         # Set the x and y scales
-        plt.yscale(scale[0], nonposy='clip')
+        plt.xscale(scale[0], nonposx='clip')
         plt.yscale(scale[1], nonposy='clip')
         
 
