@@ -49,7 +49,7 @@ def from_ids(db, **kwargs):
     return data
 
 class MakeSED(object):
-    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], \
+    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR='', \
         age='', radius='', membership='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um):
         """
         Pulls all available data from the BDNYC Data Archive, 
@@ -63,13 +63,6 @@ class MakeSED(object):
         db: astrodbkit.astrodb.Database, dict
             The database instance to retreive data from or a dictionary
             of astropy tables to mimick the db query
-        spec_ids: list, tuple (optional)
-            A sequence of the ids from the SPECTRA table to plot. 
-            Uses any available spectra if no list is given. Uses no spectra 
-            if 'None' is given
-        
-        pop: sequence (optional)
-            Photometric bands to exclude from the SED
         
         """
         # TODO: resolve source_id in database given id, (ra,dec), name, etc.
@@ -254,6 +247,16 @@ class MakeSED(object):
                 f = u.fnu2flam(f*q.Jy, w*self.wave_units, units=self.flux_units).value
                 e = u.fnu2flam(e*q.Jy, w*self.wave_units, units=self.flux_units).value
                 
+            # Force uncertainty array if none
+            if not any(e) or e is None:
+                e = f / 10.
+                print('No uncertainty array for spectrum {}. Using SNR=10.'.format(spec_id))
+                
+            # Insert uncertainty array of set SNR to force plotting
+            for snr in SNR:
+                if snr[0]==row['id']:
+                    e = f/(1.*snr[1])
+                    
             # Apply desired units
             w = w*self.wave_units
             f = f*self.flux_units
@@ -263,7 +266,7 @@ class MakeSED(object):
             wav_list.append(u.ArrayWrapper(w))
             flx_list.append(u.ArrayWrapper(f))
             unc_list.append(u.ArrayWrapper(e))
-        
+            
         # Add the lists to the table
         self.spectra['wavelength'] = wav_list
         self.spectra['app_flux'] = flx_list

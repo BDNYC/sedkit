@@ -13,7 +13,7 @@ from svo_filters import svo
 FILTERS = svo.filters()
 warnings.simplefilter('ignore')
 
-def all_mags(spectrum, bands='', **kwargs):
+def all_mags(spectrum, bands='', plot=False, **kwargs):
     """
     Calculate the magnitudes of the given spectrum in all the given bands
     
@@ -30,7 +30,8 @@ def all_mags(spectrum, bands='', **kwargs):
         A table of the caluclated synthetic photometry
     """
     # Get list of bands to try
-    bands = bands or FILTERS['Band']
+    if not any(bands):
+        bands = FILTERS['Band']
     w_unit = q.um
     f_unit = spectrum[1].unit
     
@@ -40,6 +41,7 @@ def all_mags(spectrum, bands='', **kwargs):
         b = bandpass
         m, sig_m, F, sig_F = get_mag(spectrum, bandpass, fetch='both', **kwargs)
         
+        # Only add it to the table if the magnitude is calculated
         if m:
             eff = FILTERS.loc[b]['WavelengthEff']
             w_unit = q.Unit(FILTERS.loc[b]['WavelengthUnit'])
@@ -48,12 +50,24 @@ def all_mags(spectrum, bands='', **kwargs):
             
     # Make the table of values
     data = list(map(list, zip(*mag_list))) if mag_list else None
-    table = at.QTable(data, names=['band','eff','magnitude','magnitude_unc','app_flux','app_flux_unc'])
+    table = at.QTable(data, names=['band','eff','app_magnitude','app_magnitude_unc','app_flux','app_flux_unc'])
+    
+    if plot and data:
+        plt.figure()
+        plt.step(spectrum[0], spectrum[1], color='k', label='Spectrum')
+        plt.errorbar(table['eff'], table['app_flux'], yerr=table['app_flux_unc'], marker='o', ls='none', label='Magnitudes')
+        try:
+            plt.fill_between(spectrum[0], spectrum[1]+spectrum[2], spectrum[1]+spectrum[2], color='k', alpha=0.1)
+        except:
+            pass
+        plt.xlabel(w_unit)
+        plt.ylabel(f_unit)
+        plt.legend(loc=0, frameon=False)
     
     # Add units to the columns
     table['eff'].unit = w_unit
-    table['magnitude'].unit = q.mag
-    table['magnitude_unc'].unit = q.mag
+    table['app_magnitude'].unit = q.mag
+    table['app_magnitude_unc'].unit = q.mag
     table['app_flux'].unit = f_unit
     table['app_flux_unc'].unit = f_unit
     
@@ -93,9 +107,8 @@ def get_mag(spectrum, bandpass, exclude=[], fetch='mag', photon=False, Flam=Fals
     if np.logical_and(mx < np.max(spectrum[0]), mn > np.min(spectrum[0])) \
     and all([np.logical_or(all([i<mn for i in rng]), all([i>mx for i in rng])) for rng in exclude]):
         
-        # Calculate synthetic magnitude
+        # Calculate synthetic flux
         w, f, sig_f = u.rebin_spec([i.value for i in spectrum], wav.value)*spectrum[1].unit
-        
         F = (np.trapz((f*rsr*((wav/(ac.h*ac.c)).to(c) if photon else 1)).to(b), x=wav)/(np.trapz(rsr, x=wav))).to(a)
         sig_F = np.sqrt(np.sum(((sig_f*rsr*np.gradient(wav).value*((wav/(ac.h*ac.c)).to(c) if photon else 1))**2).to(a**2))) if sig_f else ''
         
@@ -109,6 +122,7 @@ def get_mag(spectrum, bandpass, exclude=[], fetch='mag', photon=False, Flam=Fals
             plt.ylabel(a)
             plt.legend(loc=0, frameon=False)
             
+        # Get magnitude from flux
         m, sig_m = flux2mag(bandpass, F, sig_f=sig_F)
         
         return [m, sig_m, F, sig_F] if fetch=='both' else [F, sig_F] if fetch=='flux' else [m, sig_m]
@@ -134,22 +148,22 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
     ----------
     spec: sequence
         The [W,F,E] to be normalized
-    to_mags: dict
-        The dictionary of magnitudes to normalize to, e.g {'W2':12.3, 'W2_unc':0.2, ...}
-
+    to_mags: astropy.table
+        The table of magnitudes to normalize to
+    
     Returns
     -------
-    spec: sequence
-    The normalized [W,F,E]
+    list
+        The normalized [W,F,E]
     '''
     # spec = u.unc(spec)
     spec = [spec[0] * (q.um if not hasattr(spec[0], 'unit') else 1.), \
             spec[1] * (q.erg / q.s / q.cm ** 2 / q.AA if not hasattr(spec[1], 'unit') else 1.), \
             spec[2] * (q.erg / q.s / q.cm ** 2 / q.AA if not hasattr(spec[2], 'unit') else 1.)]
-
+            
     # Force JHK coverage if close enough
     blue, red = spec[0][0], spec[0][-1]
-
+    
     # Blue side of spectrum
     if blue > 1.08 * q.um and blue < 1.12 * q.um:
         spec[0][0] *= 1.08 / blue.value
@@ -159,7 +173,7 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
         spec[0][0] *= 1.95 / blue.value
     else:
         pass
-
+        
     # Red side of spectrum
     if red > 1.3 * q.um and red < 1.41 * q.um:
         spec[0][-1] *= 1.41 / red.value
@@ -169,42 +183,41 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
         spec[0][-1] *= 2.356 / red.value
     else:
         pass
-
+        
     # Calculate all synthetic magnitudes for flux calibration then fix end points if necessary
-    mags = s.all_mags(spec,
-                      bands=[b for b in to_mags['band'] if to_mags.get(b) and to_mags.get(b + '_unc') and b in FILTERS['Band']], \
-                      Flam=False, to_flux=True, photon=False)
-
+    mags = all_mags(spec, bands=to_mags['band'])
+    
     # Return red and blue wavelength positions to original values
     spec[0][0], spec[0][-1] = blue, red
-
+        
     try:
-        # Get list of all bands in common and pull out flux values
-        bands, data = [b for b in list(set(mags).intersection(set(to_mags))) if '_unc' not in b], []
-        for b in bands:
-            if all([mags.get(b), mags.get(b + '_unc'), to_mags.get(b), to_mags.get(b + '_unc')]):
-                data.append([RSR[b]['eff'].value, \
-                             mags[b].value if hasattr(mags[b], 'unit') else mags[b], \
-                             mags[b + '_unc'].value if hasattr(mags[b + '_unc'], 'unit') else mags[b + '_unc'], \
-                             to_mags[b].value if hasattr(to_mags[b], 'unit') else to_mags[b], \
-                             to_mags[b + '_unc'].value if hasattr(to_mags[b + '_unc'], 'unit') else to_mags[b + '_unc'], \
-                             (RSR[b]['max'] - RSR[b]['min']).value if weighting else 1.])
-                             
-        # Make arrays of values and calculate normalization factor that minimizes the function
-        w, f2, e2, f1, e1, weight = [np.array(i, np.float) for i in np.array(data).T]
-        norm = sum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2)) / sum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
-
+        # Get list of all bands in common
+        bands = [b for b in list(set(mags['band']).intersection(set(to_mags['band'])))]
+        data = []
+        
+        # Get eff, m, m_unc from each
+        eff = [FILTERS.loc[b]['WavelengthEff'] for b in bands]
+        synthetic_mags = [list(i.as_void()) for i in mags[['app_magnitude','app_magnitude_unc']]]
+        observed_mags = [list(i.as_void()) for i in at.vstack([to_mags.loc[b] for b in bands])[['app_magnitude','app_magnitude_unc']]]
+        
+        # Make arrays of the values and calculate weights
+        (f1, f2), (e1, e2) = np.array([synthetic_mags,observed_mags]).T
+        weight = [(FILTERS.loc[b]['WavelengthMax']-FILTERS.loc[b]['WavelengthMin']) if weighting else 1. for b in bands]
+        
+        # Calculate normalization factor that minimizes the function
+        norm = sum(weight*f1*f2/(e1**2+e2**2))/sum(weight*f2**2/(e1**2+e2**2))
+        
         # Plotting test
         if plot:
             plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
-            plt.loglog(spec[0].value, spec[1].value * norm, label='new', color='b')
-            plt.scatter(w, f1, c='g')
-            plt.scatter(w, f2, c='b')
+            plt.loglog(spec[0].value, spec[1].value*norm, label='new', color='b')
+            plt.scatter(eff, f1, c='g')
+            plt.scatter(eff, f2, c='b')
             plt.legend()
-
-        return [spec[0], spec[1] / norm, spec[2] / norm] if reverse else [spec[0], spec[1] * norm, spec[2] * norm]
-
-    except:
+            
+        return [spec[0], spec[1]/norm, spec[2]/norm] if reverse else [spec[0], spec[1]*norm, spec[2]*norm]
+        
+    except IOError:
         print('No overlapping photometry for normalization!')
         return spec
         
