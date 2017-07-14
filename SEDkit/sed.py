@@ -163,9 +163,6 @@ class MakeSED(object):
         self.photometry['app_magnitude'].unit = q.mag
         self.photometry['app_magnitude_unc'].unit = q.mag
         
-        # Pop unwanted mags
-        # self.photometry = self.photometry[[self.photometry.loc[band].index for band in self.photometry['band'] if band not in pop]]
-            
         # Add effective wavelengths to the photometry table
         self.photometry.add_column(at.Column(fill, 'eff', unit=wave_units))
         for row in self.photometry:
@@ -241,32 +238,30 @@ class MakeSED(object):
         self.spectra['app_flux'] = flx_list
         self.spectra['app_flux_unc'] = unc_list
         
-        # # Pop unwanted spectra
-        # if spec_ids:
-        #     self.spectra = self.spectra[[self.spectra.loc[spec_id].index \
-        #         for spec_id in self.spectra['id'] if spec_id in spec_ids]]
-        
         # Group overlapping spectra and make composites where possible to form peacewise spectrum for flux calibration
         all_spectra = [[i.data for i in j] for j in self.spectra[['wavelength','app_flux','app_flux_unc']]]
         if len(all_spectra) > 1:
             groups, piecewise = u.group_spectra(all_spectra), []
             for group in groups:
-                composite = u.make_composite([[spec[0]*self.wave_units, spec[1]*self.flux_units, spec[2]*self.flux_units] for spec in group])
+                composite = u.make_composite([[spec[0]*self.wave_units, 
+                                               spec[1]*self.flux_units, 
+                                               spec[2]*self.flux_units] for spec in group])
                 piecewise.append(composite)
+        
         # If only one spectrum, no need to make composite
         elif len(all_spectra) == 1:
             piecewise = all_spectra
+        
         # If no spectra, forget it
         else:
             piecewise = []
             print('No spectra available for SED.')
         
         # Add piecewise spectra to table
-        pw_table = [[spec[i] for spec in piecewise] for i in [0,1,2]]
-        self.piecewise = at.Table(pw_table, names=['wavelength','app_flux','app_flux_unc'])
+        self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], names=['wavelength','app_flux','app_flux_unc'])
         
         # Normalize the self.spectra and self.piecewise spectra to all covered photometric bands
-        
+        # self.abs_spec_SED = self.piecewise[0]
     
     def fundamental_params(self, age='', nymg='', radius='', evo_model='hybrid_solar_age'):
         """
@@ -332,15 +327,15 @@ class MakeSED(object):
         self.Teff = np.sqrt(np.sqrt((self.Lbol/(4*np.pi*ac.sigma_sb*radius**2)).to(q.K**4))).round(0)
         self.Teff_unc = (self.Teff*np.sqrt((self.Lbol_unc/self.Lbol).value**2 + (2*radius_unc/radius).value**2)/4.).round(0)
     
-    def plot(self, phot=True, spec=True, app=False, scale=['log','log'], **kwargs):
+    def plot(self, photometry=True, spectra=True, app=False, scale=['log','log'], **kwargs):
         """
         Plot the SED
         
         Parameters
         ----------
-        phot: bool
+        photometry: bool
             Plot the photometry
-        spec: bool
+        spectra: bool
             Plot the spectra
         app: bool
             Plot the apparent SED instead of absolute
@@ -360,15 +355,14 @@ class MakeSED(object):
         pre = 'app_' if app else 'abs_'
         
         # Plot photometry
-        if phot:
+        if photometry:
             phot_SED = self.app_phot_SED if app else self.abs_phot_SED
             plt.errorbar(phot_SED[0], phot_SED[1], yerr=phot_SED[2], marker='o', ls='None', **kwargs)
                 
-        # # Plot spectra
-        # if spec:
-        #     spec_SED = self.app_spec_SED if app else self.abs_spec_SED
-        #     plt.errorbar(spec_SED[0], spec_SED[1], yerr=spec_SED[2], \
-        #         marker='o', ls='None', **kwargs)
+        # Plot spectra
+        if spectra:
+            spec_SED = self.app_spec_SED if app else self.abs_spec_SED
+            plt.step(spec_SED[0], spec_SED[1], **kwargs)
         
         
 
