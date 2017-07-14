@@ -3,7 +3,7 @@
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
 #!python3
 """
-SEDkit rewritten with astropy, pysynphot, and astrodbkit
+SEDkit rewritten with astropy and astrodbkit
 """
 import numpy as np
 import astropy.table as at
