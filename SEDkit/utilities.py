@@ -127,6 +127,20 @@ def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):
     
     return f_lam
 
+def group_spectra(spectra):
+    """
+    Puts a list of *spectra* into groups with overlapping wavelength arrays
+    """
+    groups, idx, i = [], [], 'wavelength' if isinstance(spectra[0], dict) else 0
+    for N, S in enumerate(spectra):
+        if N not in idx:
+            group, idx = [S], idx + [N]
+            for n, s in enumerate(spectra):
+                if n not in idx and any(np.where(np.logical_and(S[i] < s[i][-1], S[i] > s[i][0]))[0]):
+                    group.append(s), idx.append(n)
+            groups.append(group)
+    return groups
+
 def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
     """
     Caluclate the flux for a given magnitude
@@ -165,7 +179,72 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
         
     except IOError:
         return [np.nan, np.nan]
+
+def make_composite(spectra):
+    """
+    Creates a composite spectrum from a list of overlapping spectra
+    """
+    units = [i.unit for i in spectra[0]]
+    spectrum = spectra.pop(0)
+    if spectra:
+        spectra = [norm_spec(spec, spectrum) for spec in spectra]
+        spectrum = [i.value for i in spectrum]
+        for n, spec in enumerate(spectra):
+            spec = [i.value for i in spec]
+            IDX, idx = np.where(np.logical_and(spectrum[0] < spec[0][-1], spectrum[0] > spec[0][0]))[0], \
+                       np.where(np.logical_and(spec[0] > spectrum[0][0], spec[0] < spectrum[0][-1]))[0]
+            low_res, high_res = [i[IDX] for i in spectrum], rebin_spec([i[idx] for i in spec], spectrum[0][IDX])
+            mean_spec = [spectrum[0][IDX], np.array(
+                    [np.average([hf, lf], weights=[1 / he, 1 / le]) for hf, he, lf, le in
+                     zip(high_res[1], high_res[2], low_res[1], low_res[2])]),
+                         np.sqrt(low_res[2] ** 2 + high_res[2] ** 2)]
+            spec1, spec2 = sorted([spectrum, spec], key=lambda x: x[0][0])
+            spec1, spec2 = [i[np.where(spec1[0] < spectrum[0][IDX][0])[0]] for i in spec1], [
+                i[np.where(spec2[0] > spectrum[0][IDX][-1])[0]] for i in spec2]
+            spectrum = [np.concatenate([i[:-1], j[1:-1], k[1:]]) for i, j, k in zip(spec1, mean_spec, spec2)]
+    return [i * Q for i, Q in zip([i.value if hasattr(i, 'unit') else i for i in spectrum], units)]
     
+def norm_spec(spectrum, template, exclude=[]):
+    """
+    Parameters
+    ----------
+    spectrum: sequence
+      The [w,f] or [w,f,e] astropy quantities spectrum to normalize
+    template: sequence
+      The [w,f] or [w,f,e] astropy quantities spectrum to be normalized to
+    exclude: sequence (optional)
+      A sequence of tuples defining the wavelength ranges to exclude in the normalization
+    include: sequence (optional)
+      A sequence of tuples defining the wavelength ranges to include in the normalization
+
+    Returns
+    -------
+    spectrum: sequence
+      The normalized [w,f] or [w,f,e] astropy quantities spectrum
+    """
+    template, spectrum, spectrum_units = np.array([np.asarray(i.value) for i in template]), np.array(
+            [np.asarray(i.value) for i in spectrum]), [i.unit for i in spectrum]
+    normed_spectrum = spectrum.copy()
+
+    # Smooth both spectrum and template
+    template[1], spectrum[1] = [smooth(x, 1) for x in [template[1], spectrum[1]]]
+
+    # Find wavelength range of overlap for array masking
+    spec_mask = np.logical_and(spectrum[0] > template[0][0], spectrum[0] < template[0][-1])
+    temp_mask = np.logical_and(template[0] > spectrum[0][0], template[0] < spectrum[0][-1])
+    spectrum, template = [i[spec_mask] for i in spectrum], [i[temp_mask] for i in template]
+
+    # Also mask arrays in wavelength ranges specified in *exclude*
+    for r in exclude:
+        spec_mask = np.logical_and(spectrum[0] > r[0], spectrum[0] < r[-1])
+        temp_mask = np.logical_and(template[0] > r[0], template[0] < r[-1])
+        spectrum, template = [i[~spec_mask] for i in spectrum], [i[~temp_mask] for i in template]
+
+    # Normalize the spectrum to the template based on equal integrated flux inincluded wavelength ranges
+    norm = np.trapz(template[1], x=template[0]) / np.trapz(spectrum[1], x=spectrum[0])
+    normed_spectrum[1:] = [i * norm for i in normed_spectrum[1:]]
+
+    return [i * Q for i, Q in zip(normed_spectrum, spectrum_units)]
     
 def pi2pc(dist, dist_unc='', pc2pi=False):
     """
@@ -192,3 +271,97 @@ def pi2pc(dist, dist_unc='', pc2pi=False):
         
     else:
         return [np.nan, np.nan]
+        
+def rebin_spec(spec, wavnew, oversamp=100, plot=False):
+    """
+    Rebin a spectrum to a new wavelength array while preserving 
+    the total flux
+    
+    Parameters
+    ----------
+    spec: array-like
+        The wavelength and flux to be binned
+    wavenew: array-like
+        The new wavelength array
+        
+    Returns
+    -------
+    np.ndarray
+        The rebinned flux
+    
+    """
+    wave, flux, err = spec
+    nlam = len(wave)
+    x0 = np.arange(nlam, dtype=float)
+    x0int = np.arange((nlam-1.)*oversamp + 1., dtype=float)/oversamp
+    w0int = np.interp(x0int, x0, wave)
+    spec0int = np.interp(w0int, wave, flux)/oversamp
+    err0int = np.interp(w0int, wave, err)/oversamp
+
+    # Set up the bin edges for down-binning
+    maxdiffw1 = np.diff(wavnew).max()
+    w1bins = np.concatenate(([wavnew[0]-maxdiffw1], .5*(wavnew[1::]+wavnew[0:-1]), [wavnew[-1]+maxdiffw1]))
+    
+    # Bin down the interpolated spectrum:
+    w1bins = np.sort(w1bins)
+    nbins = len(w1bins)-1
+    specnew = np.zeros(nbins)
+    errnew = np.zeros(nbins)
+    inds2 = [[w0int.searchsorted(w1bins[ii], side='left'), w0int.searchsorted(w1bins[ii+1], side='left')] for ii in range(nbins)]
+
+    for ii in range(nbins):
+        specnew[ii] = np.sum(spec0int[inds2[ii][0]:inds2[ii][1]])
+        errnew[ii] = np.sum(err0int[inds2[ii][0]:inds2[ii][1]])
+    
+    if plot:
+        plt.figure()
+        plt.loglog(wave, flux, c='b')    
+        plt.loglog(wavnew, specnew, c='r')
+        
+    return [wavnew,specnew,errnew]
+        
+def smooth(x, beta):
+    """
+    Smooths a spectrum *x* using a Kaiser-Bessel smoothing window of narrowness *beta* (~1 => very smooth, ~100 => not smooth)
+    """
+    window_len = 11
+    s = np.r_[x[window_len - 1:0:-1], x, x[-1:-window_len:-1]]
+    w = np.kaiser(window_len, beta)
+    y = np.convolve(w / w.sum(), s, mode='valid')
+    return y[5:len(y) - 5] * (x.unit if hasattr(x, 'unit') else 1)
+        
+def str2Q(x, target=''):
+    """
+    Given a string of units unconnected to a number, returns the units as a quantity to be multiplied with the number.
+    Inverse units must be represented by a forward-slash prefix or negative power suffix, e.g. inverse square seconds may be "/s2" or "s-2"
+
+    *x*
+      The units as a string, e.g. str2Q('W/m2/um') => np.array(1.0) * W/(m**2*um)
+    *target*
+      The target units as a string if rescaling is necessary, e.g. str2Q('Wm-2um-1',target='erg/s/cm2/cm') => np.array(10000000.0) * erg/(cm**3*s)
+    """
+    if x:
+        def Q(IN):
+            OUT = 1
+            text = ['Jy', 'erg', '/s', 's-1', 's', '/um', 'um-1', 'um', '/nm', 'nm-1', 'nm', '/cm2', 'cm-2', 'cm2',
+                    '/cm', 'cm-1', 'cm', '/A', 'A-1', 'A', 'W', '/m2', 'm-2', 'm2', '/m', 'm-1', 'm', '/Hz', 'Hz-1']
+            vals = [q.Jy, q.erg, q.s ** -1, q.s ** -1, q.s, q.um ** -1, q.um ** -1, q.um, q.nm ** -1, q.nm ** -1, q.nm,
+                    q.cm ** -2, q.cm ** -2, q.cm ** 2, q.cm ** -1, q.cm ** -1, q.cm, q.AA ** -1, q.AA ** -1, q.AA, q.W,
+                    q.m ** -2, q.m ** -2, q.m ** 2, q.m ** -1, q.m ** -1, q.m, q.Hz ** -1, q.Hz ** -1]
+            for t, v in zip(text, vals):
+                if t in IN:
+                    OUT = OUT * v
+                    IN = IN.replace(t, '')
+            return OUT
+
+        unit = Q(x)
+        if target:
+            z = str(Q(target)).split()[-1]
+            try:
+                unit = unit.to(z)
+            except ValueError:
+                print("{} could not be rescaled to {}".format(unit, z))
+
+        return unit
+    else:
+        return q.Unit('')

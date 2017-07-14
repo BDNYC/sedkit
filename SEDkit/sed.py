@@ -210,7 +210,36 @@ class MakeSED(object):
         # Index and add units
         fill = np.zeros(len(self.spectra))
         self.spectra.add_index('id')
-        self.spectra.rename_column('spectrum','app_spectrum')
+        
+        # Prepare apparent spectra
+        wav_list, flx_list, unc_list = [], [], []
+        for row in self.spectra:
+            
+            # Unpack the spectrum and apply units
+            w, f, e = row['spectrum'].data[:3]
+            w = w*u.str2Q(row['wavelength_units'])
+            f = f*u.str2Q(row['flux_units'])
+            e = e*u.str2Q(row['flux_units'])
+            
+            # Convert F_nu to F_lam if necessary
+            if f.unit==q.Jy:
+                f = u.fnu2flam(f, w, units=self.flux_units)
+                e = u.fnu2flam(e, w, units=self.flux_units)
+                
+            # Convert to desired units
+            w = w.to(self.wave_units)
+            f = f.to(self.flux_units)
+            e = e.to(self.flux_units)
+            
+            # Add the data to the lists
+            wav_list.append(u.ArrayWrapper(w))
+            flx_list.append(u.ArrayWrapper(f))
+            unc_list.append(u.ArrayWrapper(e))
+        
+        # Add the lists to the table
+        self.spectra['wavelength'] = wav_list
+        self.spectra['app_flux'] = flx_list
+        self.spectra['app_flux_unc'] = unc_list
         
         # # Pop unwanted spectra
         # if spec_ids:
@@ -218,22 +247,26 @@ class MakeSED(object):
         #         for spec_id in self.spectra['id'] if spec_id in spec_ids]]
         
         # Group overlapping spectra and make composites where possible to form peacewise spectrum for flux calibration
-        if len(self.spectra) > 1:
-            groups, peacewise = u.group_spectra(clean_spectra), []
+        all_spectra = [[i.data for i in j] for j in self.spectra[['wavelength','app_flux','app_flux_unc']]]
+        if len(all_spectra) > 1:
+            groups, piecewise = u.group_spectra(all_spectra), []
             for group in groups:
-                composite = u.make_composite([[spec[0] * q.um, spec[1] * q.erg / q.s / q.cm ** 2 / q.AA,
-                                               spec[2] * q.erg / q.s / q.cm ** 2 / q.AA] for spec in group])
-                peacewise.append(composite)
-        
+                composite = u.make_composite([[spec[0]*self.wave_units, spec[1]*self.flux_units, spec[2]*self.flux_units] for spec in group])
+                piecewise.append(composite)
         # If only one spectrum, no need to make composite
-        elif len(self.spectra) == 1:
-            peacewise = map(list, self.spectra[['wavelength', 'flux_app', 'unc_app']].values)
-        
+        elif len(all_spectra) == 1:
+            piecewise = all_spectra
         # If no spectra, forget it
         else:
-            peacewise = []
+            piecewise = []
             print('No spectra available for SED.')
-                
+        
+        # Add piecewise spectra to table
+        pw_table = [[spec[i] for spec in piecewise] for i in [0,1,2]]
+        self.piecewise = at.Table(pw_table, names=['wavelength','app_flux','app_flux_unc'])
+        
+        # Normalize the self.spectra and self.piecewise spectra to all covered photometric bands
+        
     
     def fundamental_params(self, age='', nymg='', radius='', evo_model='hybrid_solar_age'):
         """
