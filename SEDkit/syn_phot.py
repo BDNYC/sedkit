@@ -1,84 +1,318 @@
 #!/usr/bin/python
 # Synthetic Photomotery
-import warnings, glob, os, pickle, numpy as np, astropy.units as q, astropy.constants as ac, matplotlib.pyplot as plt
-from SEDkit import utilities as u
-from itertools import combinations, chain, groupby
+import warnings
+import os
+import numpy as np
+import astropy.units as q
+import astropy.constants as ac
+import astropy.table as at
+import matplotlib.pyplot as plt
+from . import utilities as u
+from svo_filters import svo
 
+FILTERS = svo.filters()
 warnings.simplefilter('ignore')
-RSR = u.get_filters()
 
-def all_mags(spectrum, bands=RSR.keys(), photon=True, to_flux=False, Flam=True, exclude=[], eff=False, to_list=False):
-    magDict, magList = {}, []
-    for band in bands:
-        M = get_mag(band, spectrum, photon=photon, to_flux=to_flux, Flam=Flam, exclude=exclude, eff=eff)
-        if M[0]:
-            magDict[band], magDict[band + '_unc'], magDict[band + '_eff'] = M
-            magList.append(M)
-    return sorted(magList, key=lambda x: x[-1]) if to_list else magDict
-
-def get_eff(band, wave, flux, photon=True, calculate=False):
-    '''
-    Calculates the filter effective wavelength for a given *band*, *wave* and *flux*. If *wave* is out of range (
-    uncalculable), returns the given value.
-    '''
-    filt = RSR[band]
-    if (wave[0] < filt['wav'][0]) and (wave[-1] > filt['wav'][-1]) and calculate:
-        I = np.interp(wave.value, filt['wav'].value, filt['rsr'].value, left=0, right=0)
-        return (np.trapz(wave * flux * I * (wave / (ac.h * ac.c) if photon else 1), x=wave) / np.trapz(
-            flux * I * (wave / (ac.h * ac.c) if photon else 1), x=wave)).to(q.um)
-    else:
-        return filt['eff']
-
-
-def get_zp(band, photon=True):
-    '''
-    Calculates the zero point flux density for a given *band* using a flux calibrated Vega SED [erg/s/cm2/A]
-    '''
-    # return (np.trapz((u.rebin_spec(vega(), RSR[band]['wav'])[1]*RSR[band]['rsr']*((RSR[band]['wav']/(
-    # ac.h*ac.c)).to(1/q.erg) if photon else 1)).to((1 if photon else q.erg)/q.s/q.cm**2/q.AA), x=RSR[band][
-    # 'wav'])*q.um*(1 if photon else q.erg)/q.s/q.cm**2/(np.trapz(RSR[band]['rsr'], x=RSR[band]['wav'])*q.um)).to((1
-    # if photon else q.erg)/q.s/q.cm**2)
-    return (np.trapz((u.rebin_spec(vega(), RSR[band]['wav'])[1] * RSR[band]['rsr'] * (
-    (RSR[band]['wav'] / (ac.h * ac.c)).to(1 / q.erg) if photon else 1)).to(
-        (1 if photon else q.erg) / q.s / q.cm ** 2 / q.AA), x=RSR[band]['wav']) / np.trapz(RSR[band]['rsr'],
-                                                                                           x=RSR[band]['wav'])).to(
-        (1 if photon else q.erg) / q.s / q.cm ** 2 / q.AA)
-
-def get_mag(band, spectrum, exclude=[], photon=True, plot=False, to_flux=False, Flam=False, eff=False):
-    '''
-    Returns the magnitude in *band* for given *wave* in [um] and *flux* in [erg/s/cm2/A] with *airmass* corrections
-    if provided. If uncertainty is provided, returns [mag, mag_uncertainty] instead.
-    '''
-    spectrum, filt = u.scrub(spectrum), RSR.get(band)
-    if len(spectrum) == 2:
-        spectrum += ['']
-    if filt and np.logical_and(filt['max'] < spectrum[0][-1], filt['min'] > spectrum[0][0]) and all(
-            [np.logical_or(all([i < filt['min'].value for i in rng]), all([i > filt['max'].value for i in rng])) for rng
-             in exclude]):
+def all_mags(spectrum, bands='', **kwargs):
+    """
+    Calculate the magnitudes of the given spectrum in all the given bands
+    
+    Parameters
+    ----------
+    spectrum: array-like
+        The [w,f,e] of the spectrum with astropy.units
+    bands: array-like (optional)
+        The photometric bands to try
+    
+    Returns
+    -------
+    astropy.table
+        A table of the caluclated synthetic photometry
+    """
+    # Get list of bands to try
+    bands = bands or FILTERS['Band']
+    w_unit = q.um
+    f_unit = spectrum[1].unit
+    
+    # Calculate the magnitude
+    mag_list = []
+    for bandpass in bands:
+        b = bandpass
+        m, sig_m, F, sig_F = get_mag(spectrum, bandpass, fetch='both', **kwargs)
+        
+        if m:
+            eff = FILTERS.loc[b]['WavelengthEff']
+            w_unit = q.Unit(FILTERS.loc[b]['WavelengthUnit'])
+            f_unit = F.unit
+            mag_list.append([b, eff, m, sig_m, F.value, sig_F.value])
+            
+    # Make the table of values
+    data = list(map(list, zip(*mag_list))) if mag_list else None
+    table = at.QTable(data, names=['band','eff','magnitude','magnitude_unc','app_flux','app_flux_unc'])
+    
+    # Add units to the columns
+    table['eff'].unit = w_unit
+    table['magnitude'].unit = q.mag
+    table['magnitude_unc'].unit = q.mag
+    table['app_flux'].unit = f_unit
+    table['app_flux_unc'].unit = f_unit
+    
+    return table
+    
+def get_mag(spectrum, bandpass, exclude=[], fetch='mag', photon=False, Flam=False, plot=False):
+    """
+    Returns the magnitude of the given spectrum in the given band
+    
+    Parameters
+    ---------
+    spectrum: array-like
+        The [w,f,e] of the spectrum with astropy.units
+    bandpass: str, svo_filters.svo.Filter
+        The bandpass to calculate
+    
+    Returns
+    -------
+    list
+        The magnitude and/or flux of the spectrum in the given band
+    """
+    if isinstance(bandpass, str):
+        bandpass = svo.Filter(bandpass)
+    
+    # Get filter data in order
+    unit = q.Unit(bandpass.WavelengthUnit)
+    mn = bandpass.WavelengthMin*unit
+    mx = bandpass.WavelengthMax*unit
+    wav, rsr = bandpass.raw
+    wav = wav*unit
+    
+    # Unit handling
+    a = (1 if photon else q.erg)/q.s/q.cm**2/(1 if Flam else q.AA)
+    b = (1 if photon else q.erg)/q.s/q.cm**2/q.AA
+    c = 1/q.erg
+    
+    if np.logical_and(mx < np.max(spectrum[0]), mn > np.min(spectrum[0])) \
+    and all([np.logical_or(all([i<mn for i in rng]), all([i>mx for i in rng])) for rng in exclude]):
+        
         # Calculate synthetic magnitude
-        f, sig_f = u.rebin_spec(spectrum, filt['wav'])[1:] if spectrum[2] is not '' else [
-            u.rebin_spec(spectrum, filt['wav'])[1], '']
-        F = (np.trapz((f * filt['rsr'] * ((filt['wav'] / (ac.h * ac.c)).to(1 / q.erg) if photon else 1)).to(
-            (1 if photon else q.erg) / q.s / q.cm ** 2 / q.AA), x=filt['wav']) / (
-             np.trapz(filt['rsr'], x=filt['wav']))).to(
-            (1 if photon else q.erg) / q.s / q.cm ** 2 / (1 if Flam else q.AA))
-        sig_F = np.sqrt(np.sum(((sig_f * filt['rsr'] * np.gradient(filt['wav']).value * (
-        (filt['wav'] / (ac.h * ac.c)).to(1 / q.erg) if photon else 1)) ** 2).to(
-            (1 if photon else q.erg) ** 2 / q.s ** 2 / q.cm ** 4 / (1 if Flam else q.AA ** 2)))) if sig_f else ''
-
-        # Calculate effective wavelength
-        w = get_eff(band, spectrum[0], spectrum[1], photon=photon, calculate=eff)
-
-        return (u.flux2mag(band, F, sig_f=sig_F, filter_dict=RSR) if not to_flux else [F, sig_F]) + [w]
+        w, f, sig_f = u.rebin_spec([i.value for i in spectrum], wav.value)*spectrum[1].unit
+        
+        F = (np.trapz((f*rsr*((wav/(ac.h*ac.c)).to(c) if photon else 1)).to(b), x=wav)/(np.trapz(rsr, x=wav))).to(a)
+        sig_F = np.sqrt(np.sum(((sig_f*rsr*np.gradient(wav).value*((wav/(ac.h*ac.c)).to(c) if photon else 1))**2).to(a**2))) if sig_f else ''
+        
+        if plot:
+            plt.figure()
+            plt.step(spectrum[0], spectrum[1], color='k', label='Spectrum')
+            plt.errorbar(bandpass.WavelengthEff, F.value, yerr=sig_F.value, marker='o', label='Magnitude')
+            plt.fill_between(spectrum[0], spectrum[1]+spectrum[2], spectrum[1]+spectrum[2], color='k', alpha=0.1)
+            plt.plot(bandpass.rsr[0], bandpass.rsr[1]*F, label='Bandpass')
+            plt.xlabel(unit)
+            plt.ylabel(a)
+            plt.legend(loc=0, frameon=False)
+            
+        m, sig_m = flux2mag(bandpass, F, sig_f=sig_F)
+        
+        return [m, sig_m, F, sig_F] if fetch=='both' else [F, sig_F] if fetch=='flux' else [m, sig_m]
 
     else:
-        return ['', '', '']
+        return ['']*4 if fetch=='both' else ['']*2
 
-def norm_to_mag(spectrum, magnitude, band):
+# Functions to scale flux
+def norm_to_mag(spectrum, magnitude, bandpass):
     """
     Returns the flux of a given *spectrum* [W,F] normalized to the given *magnitude* in the specified photometric *band*
     """
-    return [spectrum[0], spectrum[1] * magnitude / s.get_mag(band, spectrum, to_flux=True, Flam=False)[0], spectrum[2]]
+    if len(spectrum)==2:
+        spectrum = list(spectrum)+['']
+    
+    return [spectrum[0], spectrum[1] * magnitude / get_mag(bandpass, spectrum, to_flux=True, Flam=False)[0], spectrum[2]]
+
+def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
+    '''
+    Normalize the given spectrum to the given dictionary of magnitudes
+
+    Parameters
+    ----------
+    spec: sequence
+        The [W,F,E] to be normalized
+    to_mags: dict
+        The dictionary of magnitudes to normalize to, e.g {'W2':12.3, 'W2_unc':0.2, ...}
+
+    Returns
+    -------
+    spec: sequence
+    The normalized [W,F,E]
+    '''
+    # spec = u.unc(spec)
+    spec = [spec[0] * (q.um if not hasattr(spec[0], 'unit') else 1.), \
+            spec[1] * (q.erg / q.s / q.cm ** 2 / q.AA if not hasattr(spec[1], 'unit') else 1.), \
+            spec[2] * (q.erg / q.s / q.cm ** 2 / q.AA if not hasattr(spec[2], 'unit') else 1.)]
+
+    # Force JHK coverage if close enough
+    blue, red = spec[0][0], spec[0][-1]
+
+    # Blue side of spectrum
+    if blue > 1.08 * q.um and blue < 1.12 * q.um:
+        spec[0][0] *= 1.08 / blue.value
+    elif blue > 1.47 * q.um and blue < 1.55 * q.um:
+        spec[0][0] *= 1.47 / blue.value
+    elif blue > 1.95 * q.um and blue < 2.00 * q.um:
+        spec[0][0] *= 1.95 / blue.value
+    else:
+        pass
+
+    # Red side of spectrum
+    if red > 1.3 * q.um and red < 1.41 * q.um:
+        spec[0][-1] *= 1.41 / red.value
+    elif red > 1.76 * q.um and red < 1.825 * q.um:
+        spec[0][-1] *= 1.825 / red.value
+    elif red > 2.3 * q.um and red < 2.356 * q.um:
+        spec[0][-1] *= 2.356 / red.value
+    else:
+        pass
+
+    # Calculate all synthetic magnitudes for flux calibration then fix end points if necessary
+    mags = s.all_mags(spec,
+                      bands=[b for b in to_mags['band'] if to_mags.get(b) and to_mags.get(b + '_unc') and b in FILTERS['Band']], \
+                      Flam=False, to_flux=True, photon=False)
+
+    # Return red and blue wavelength positions to original values
+    spec[0][0], spec[0][-1] = blue, red
+
+    try:
+        # Get list of all bands in common and pull out flux values
+        bands, data = [b for b in list(set(mags).intersection(set(to_mags))) if '_unc' not in b], []
+        for b in bands:
+            if all([mags.get(b), mags.get(b + '_unc'), to_mags.get(b), to_mags.get(b + '_unc')]):
+                data.append([RSR[b]['eff'].value, \
+                             mags[b].value if hasattr(mags[b], 'unit') else mags[b], \
+                             mags[b + '_unc'].value if hasattr(mags[b + '_unc'], 'unit') else mags[b + '_unc'], \
+                             to_mags[b].value if hasattr(to_mags[b], 'unit') else to_mags[b], \
+                             to_mags[b + '_unc'].value if hasattr(to_mags[b + '_unc'], 'unit') else to_mags[b + '_unc'], \
+                             (RSR[b]['max'] - RSR[b]['min']).value if weighting else 1.])
+                             
+        # Make arrays of values and calculate normalization factor that minimizes the function
+        w, f2, e2, f1, e1, weight = [np.array(i, np.float) for i in np.array(data).T]
+        norm = sum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2)) / sum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
+
+        # Plotting test
+        if plot:
+            plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
+            plt.loglog(spec[0].value, spec[1].value * norm, label='new', color='b')
+            plt.scatter(w, f1, c='g')
+            plt.scatter(w, f2, c='b')
+            plt.legend()
+
+        return [spec[0], spec[1] / norm, spec[2] / norm] if reverse else [spec[0], spec[1] * norm, spec[2] * norm]
+
+    except:
+        print('No overlapping photometry for normalization!')
+        return spec
+        
+# def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
+#     '''
+#     Normalize the given spectrum to the given dictionary of magnitudes
+#
+#     Parameters
+#     ----------
+#     spec: sequence
+#         The [W,F,E] to be normalized
+#     to_mags: dict
+#         The dictionary of magnitudes to normalize to, e.g {'W2':12.3, 'W2_unc':0.2, ...}
+#
+#     Returns
+#     -------
+#     spec: sequence
+#     The normalized [W,F,E]
+#     '''
+#     # spec = u.unc(spec)
+#     spec = [spec[0] * (q.um if not hasattr(spec[0], 'unit') else 1.), \
+#             spec[1] * (q.erg / q.s / q.cm ** 2 / q.AA if not hasattr(spec[1], 'unit') else 1.), \
+#             spec[2] * (q.erg / q.s / q.cm ** 2 / q.AA if not hasattr(spec[2], 'unit') else 1.)]
+#
+#     # Force JHK coverage if close enough
+#     blue, red = spec[0][0], spec[0][-1]
+#
+#     # Blue side of spectrum
+#     if blue > 1.08 * q.um and blue < 1.12 * q.um:
+#         spec[0][0] *= 1.08 / blue.value
+#     elif blue > 1.47 * q.um and blue < 1.55 * q.um:
+#         spec[0][0] *= 1.47 / blue.value
+#     elif blue > 1.95 * q.um and blue < 2.00 * q.um:
+#         spec[0][0] *= 1.95 / blue.value
+#     else:
+#         pass
+#
+#     # Red side of spectrum
+#     if red > 1.3 * q.um and red < 1.41 * q.um:
+#         spec[0][-1] *= 1.41 / red.value
+#     elif red > 1.76 * q.um and red < 1.825 * q.um:
+#         spec[0][-1] *= 1.825 / red.value
+#     elif red > 2.3 * q.um and red < 2.356 * q.um:
+#         spec[0][-1] *= 2.356 / red.value
+#     else:
+#         pass
+#
+#     # Calculate all synthetic magnitudes for flux calibration then fix end points if necessary
+#     mags = s.all_mags(spec,
+#                       bands=[b for b in to_mags if to_mags.get(b) and to_mags.get(b + '_unc') and b in FILTERS['Band']], \
+#                       Flam=False, to_flux=True, photon=False)
+#
+#     # Return red and blue wavelength positions to original values
+#     spec[0][0], spec[0][-1] = blue, red
+#
+#     try:
+#         # Get list of all bands in common and pull out flux values
+#         bands, data = [b for b in list(set(mags).intersection(set(to_mags))) if '_unc' not in b], []
+#         for b in bands:
+#             if all([mags.get(b), mags.get(b + '_unc'), to_mags.get(b), to_mags.get(b + '_unc')]):
+#                 data.append([RSR[b]['eff'].value, \
+#                              mags[b].value if hasattr(mags[b], 'unit') else mags[b], \
+#                              mags[b + '_unc'].value if hasattr(mags[b + '_unc'], 'unit') else mags[b + '_unc'], \
+#                              to_mags[b].value if hasattr(to_mags[b], 'unit') else to_mags[b], \
+#                              to_mags[b + '_unc'].value if hasattr(to_mags[b + '_unc'], 'unit') else to_mags[b + '_unc'], \
+#                              (RSR[b]['max'] - RSR[b]['min']).value if weighting else 1.])
+#
+#         # Make arrays of values and calculate normalization factor that minimizes the function
+#         w, f2, e2, f1, e1, weight = [np.array(i, np.float) for i in np.array(data).T]
+#         norm = sum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2)) / sum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
+#
+#         # Plotting test
+#         if plot:
+#             plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
+#             plt.loglog(spec[0].value, spec[1].value * norm, label='new', color='b')
+#             plt.scatter(w, f1, c='g')
+#             plt.scatter(w, f2, c='b')
+#             plt.legend()
+#
+#         return [spec[0], spec[1] / norm, spec[2] / norm] if reverse else [spec[0], spec[1] * norm, spec[2] * norm]
+#
+#     except:
+#         print('No overlapping photometry for normalization!')
+#         return spec
+
+def flux2mag(bandpass, f, sig_f='', photon=False):
+    """
+    For given band and flux returns the magnitude value (and uncertainty if *sig_f*)
+    """
+    eff = bandpass.WavelengthEff
+    zp = bandpass.ZeroPoint
+    unit = q.erg/q.s/q.cm**2/q.AA
+    
+    # Convert to f_lambda if necessary
+    if f.unit == 'Jy':
+        f,  = (ac.c*f/eff**2).to(unit)
+        sig_f = (ac.c*sig_f/eff**2).to(unit)
+    
+    # Convert energy units to photon counts
+    if photon:
+        f = (f*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg), 
+        sig_f = (sig_f*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
+    
+    # Calculate magnitude
+    m = -2.5*np.log10((f/zp).value)
+    sig_m = (2.5/np.log(10))*(sig_f/f).value if sig_f else ''
+    
+    return [round(m, 3), round(sig_m, 3)]
 
 def vega(bbody=False):
     '''

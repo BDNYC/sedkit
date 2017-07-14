@@ -22,6 +22,7 @@ class ArrayWrapper(object):
 
     def __init__(self, data):
         self.data = np.array(data)
+        self.unit = data.unit if hasattr(data, 'unit') else 1
         if 'info' in getattr(data, '__dict__', ()):
             self.info = data.info
 
@@ -32,7 +33,7 @@ class ArrayWrapper(object):
             out = self.__class__(self.data[item])
             if 'info' in self.__dict__:
                 out.info = self.info
-        return out
+        return out*self.unit
 
     def __setitem__(self, item, value):
         self.data[item] = value

@@ -253,10 +253,7 @@ class MakeSED(object):
             if row['flux_units']=='Jy':
                 f = u.fnu2flam(f*q.Jy, w*self.wave_units, units=self.flux_units).value
                 e = u.fnu2flam(e*q.Jy, w*self.wave_units, units=self.flux_units).value
-            
-            # Normalize the spectra to the available photometry
-            w, f, e = s.norm_to_mags([w,f,e], self.photometry)
-            
+                
             # Apply desired units
             w = w*self.wave_units
             f = f*self.flux_units
@@ -280,6 +277,7 @@ class MakeSED(object):
                 composite = u.make_composite([[spec[0]*self.wave_units, 
                                                spec[1]*self.flux_units, 
                                                spec[2]*self.flux_units] for spec in group])
+                                               
                 piecewise.append(composite)
                 
         # If only one spectrum, no need to make composite
@@ -290,6 +288,10 @@ class MakeSED(object):
         else:
             piecewise = []
             print('No spectra available for SED.')
+            
+        # # Normalize the composite spectra to the available photometry
+        # for n,spec in enumerate(piecewise):
+        #     piecewise[n] = s.norm_to_mags(spec, self.photometry)
             
         # Add piecewise spectra to table
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
