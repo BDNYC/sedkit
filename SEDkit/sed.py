@@ -17,11 +17,11 @@ FILTERS.add_index('Band')
 
 def from_ids(db, **kwargs):
     """
-    Create dictionary of data tables from record id lists
+    Create dictionary of data tables from record id values or lists
     
     Example
     -------
-    data = from_ids(db, {'sources':[2], 'photometry':[23,24,25,456,457,458],...})
+    data = sed.from_ids(db, sources=2, photometry=[1096,1097,12511,12512], spectra=[3176,3773], parallaxes=575)
     
     Parameters
     ----------
@@ -34,6 +34,9 @@ def from_ids(db, **kwargs):
     # Generate each table
     for k,v in kwargs.items():
         try:
+            # Make sure it's a list
+            if isinstance(v, int):
+                v = [v]
             
             # Build the query with the provided ids
             id_str = ','.join(list(map(str,v)))
@@ -46,7 +49,7 @@ def from_ids(db, **kwargs):
     return data
 
 class MakeSED(object):
-    def __init__(self, source_id, db, spec_ids=[], pi='', dist='', pop=[], \
+    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], \
         flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, ):
         """
         Pulls all available data from the BDNYC Data Archive, 
@@ -72,8 +75,13 @@ class MakeSED(object):
         # TODO: resolve source_id in database given id, (ra,dec), name, etc.
         # source_id = db._resolve_source_id()
         
-        # Get the data for the source from the database
-        all_data = db.inventory(source_id, fetch=True)
+        # Get the data for the source from the dictionary of ids
+        if isinstance(from_dict, dict):
+            all_data = from_ids(db, **from_dict)
+            
+        # Or get the inventory from the database
+        else:
+            all_data = db.inventory(source_id, fetch=True)
                 
         # Store the tables as attributes
         for table in ['sources','spectra','photometry','spectral_types','parallaxes']:
@@ -144,15 +152,15 @@ class MakeSED(object):
         
         # Index and add units
         fill = np.zeros(len(self.photometry))
+        self.photometry['band'] = at.Column([b.replace('_','.') for b in list(self.photometry['band'])])
         self.photometry.add_index('band')
         self.photometry.rename_column('magnitude','app_magnitude')
         self.photometry.rename_column('magnitude_unc','app_magnitude_unc')
         self.photometry['app_magnitude'].unit = q.mag
         self.photometry['app_magnitude_unc'].unit = q.mag
         
-        # # Pop unwanted mags
-        # self.photometry = self.photometry[[self.photometry.loc[band].index \
-        #     for band in self.photometry['band'] if band not in pop]]
+        # Pop unwanted mags
+        # self.photometry = self.photometry[[self.photometry.loc[band].index for band in self.photometry['band'] if band not in pop]]
             
         # Add effective wavelengths to the photometry table
         self.photometry.add_column(at.Column(fill, 'eff', unit=wave_units))
@@ -188,27 +196,25 @@ class MakeSED(object):
                 row[i+'flux_unc'] = ph_flux[1]
                 
         # Make relative and absolute photometric SEDs
-        # self.photometry.sort('eff')
-        self.app_phot_SED = np.array([self.photometry['eff'], \
-            self.photometry['app_flux'], self.photometry['app_flux_unc']])
-        self.abs_phot_SED = np.array([self.photometry['eff'], \
-            self.photometry['abs_flux'], self.photometry['abs_flux_unc']])
+        self.app_phot_SED = np.array([self.photometry['eff'], self.photometry['app_flux'], self.photometry['app_flux_unc']])
+        self.abs_phot_SED = np.array([self.photometry['eff'], self.photometry['abs_flux'], self.photometry['abs_flux_unc']])
                 
         # =====================================================================
         # Spectra
         # =====================================================================
         
-        # # Index and add units
-        # fill = np.zeros(len(self.spectra))
-        # self.spectra.add_index('id')
-        # self.spectra.rename_column('spectrum','app_spectrum')
-        #
+        # Index and add units
+        fill = np.zeros(len(self.spectra))
+        self.spectra.add_index('id')
+        self.spectra.rename_column('spectrum','app_spectrum')
+        
         # # Pop unwanted spectra
         # if spec_ids:
         #     self.spectra = self.spectra[[self.spectra.loc[spec_id].index \
         #         for spec_id in self.spectra['id'] if spec_id in spec_ids]]
-        #
-        # # Combine all spectra into apparent SED
+        
+        # Combine all spectra into apparent SED
+        
                 
     
     def plot(self, phot=True, spec=True, app=False, scale=['log','log'], **kwargs):
@@ -226,14 +232,22 @@ class MakeSED(object):
         scale: array-like
             The (x,y) scales to plot, 'linear' or 'log'
         """
+        # Make the figure
+        plt.figure(**kwargs)
+        plt.xlabel('Wavelength')
+        plt.ylabel('Flux')
+        
+        # Set the x and y scales
+        plt.xscale(scale[0], nonposx='clip')
+        plt.yscale(scale[1], nonposy='clip')
+        
         # Distinguish between apparent and absolute magnitude
         pre = 'app_' if app else 'abs_'
         
         # Plot photometry
         if phot:
             phot_SED = self.app_phot_SED if app else self.abs_phot_SED
-            plt.errorbar(phot_SED[0], phot_SED[1], yerr=phot_SED[2], \
-                marker='o', ls='None', **kwargs)
+            plt.errorbar(phot_SED[0], phot_SED[1], yerr=phot_SED[2], marker='o', ls='None', **kwargs)
                 
         # # Plot spectra
         # if spec:
@@ -241,9 +255,6 @@ class MakeSED(object):
         #     plt.errorbar(spec_SED[0], spec_SED[1], yerr=spec_SED[2], \
         #         marker='o', ls='None', **kwargs)
         
-        # Set the x and y scales
-        plt.xscale(scale[0], nonposx='clip')
-        plt.yscale(scale[1], nonposy='clip')
         
 
         
