@@ -97,6 +97,10 @@ class MakeSED(object):
                 dummy.remove_row(0)
                 setattr(self, table, at.QTable(dummy))
             
+        # Set some attributes
+        self.flux_units = flux_units
+        self.wave_units = wave_units
+        
         # =====================================================================
         # Metadata
         # =====================================================================
@@ -185,7 +189,7 @@ class MakeSED(object):
             
         # Add flux density columns to the photometry table
         for colname in ['app_flux','app_flux_unc','abs_flux','abs_flux_unc']:
-            self.photometry.add_column(at.Column(fill, colname, unit=flux_units))
+            self.photometry.add_column(at.Column(fill, colname, unit=self.flux_units))
             
         # Calculate fluxes and add to the photometry table
         for i in ['app_','abs_']:
@@ -213,9 +217,87 @@ class MakeSED(object):
         #     self.spectra = self.spectra[[self.spectra.loc[spec_id].index \
         #         for spec_id in self.spectra['id'] if spec_id in spec_ids]]
         
-        # Combine all spectra into apparent SED
+        # Group overlapping spectra and make composites where possible to form peacewise spectrum for flux calibration
+        if len(self.spectra) > 1:
+            groups, peacewise = u.group_spectra(clean_spectra), []
+            for group in groups:
+                composite = u.make_composite([[spec[0] * q.um, spec[1] * q.erg / q.s / q.cm ** 2 / q.AA,
+                                               spec[2] * q.erg / q.s / q.cm ** 2 / q.AA] for spec in group])
+                peacewise.append(composite)
         
+        # If only one spectrum, no need to make composite
+        elif len(self.spectra) == 1:
+            peacewise = map(list, self.spectra[['wavelength', 'flux_app', 'unc_app']].values)
+        
+        # If no spectra, forget it
+        else:
+            peacewise = []
+            print('No spectra available for SED.')
                 
+    
+    def fundamental_params(self, age='', nymg='', radius='', evo_model='hybrid_solar_age'):
+        """
+        Calculate the fundamental parameters of the current SED
+        
+        Parameters
+        ----------
+        age: tuple, list (optional)
+            The lower and upper age limits of the source in astropy.units
+        nymg: str (optional)
+            The nearby young moving group name
+        radius: tuple, list (optional)
+            The lower and upper age limits of the source in astropy.units
+        evo_model: str
+            The evolutionary model to use
+        """
+        self.get_Lbol()
+        self.get_Mbol()
+        self.get_Teff()
+    
+    def get_mbol(self, L_sun=3.86E26*q.W, Mbol_sun=4.74):
+        """
+        Calculate the apparent bolometric magnitude of the SED
+        """
+        self.mbol = round(-2.5*np.log10(self.fbol.value)-11.482, 3)
+        self.mbol_unc = round((2.5/np.log(10))*(self.fbol_unc/self.fbol).value, 3)
+        
+    def get_Mbol(self):
+        """
+        Calculate the absolute bolometric magnitude of the SED
+        """
+        self.Mbol = round(self.mbol-5*np.log10((self.distance/10*q.pc).value), 3)
+        self.Mbol_unc = round(np.sqrt(self.mbol_unc**2+((2.5/np.log(10))*(self.distance_unc/self.distance).value)**2), 3)
+        
+    def get_fbol(self):
+        """
+        Calculate the bolometric flux of the SED
+        """
+        self.fbol = (np.trapz(self.app_SED.flux, x=self.app_SED.wavelength)).to(self.flux_units*self.wave_units)
+        self.fbol_unc = np.sqrt(np.sum((self.app_SED.unc*np.gradient(self.app_SED.wavelength)).to(self.flux_units*self.wave_units).value**2))
+        
+    def get_Lbol(self):
+        """
+        Calculate the bolometric luminosity of the SED
+        """
+        self.Lbol = (4*np.pi*self.fbol*self.distance**2).to(q.erg/q.s)
+        self.Lbol_unc = self.Lbol*np.sqrt((self.fbol_unc/self.fbol).value**2+(2*self.distance_unc/self.distance).value**2)
+
+        self.Lbol_sun = round(np.log10((self.Lbol/ac.L_sun).decompose().value), 3)
+        self.Lbol_sun_unc = round(abs(self.Lbol_unc/(self.Lbol*np.log(10))).value, 3)
+        
+    def get_Teff(self, radius, radius_unc):
+        """
+        Calculate the effective temperature of the SED
+
+        Parameters
+        ----------
+        r: astropy.quantity
+            The radius of the source in units of R_Jup
+        sig_r: astropy.quantity
+            The uncertainty in the radius
+        """
+        self.Teff = np.sqrt(np.sqrt((self.Lbol/(4*np.pi*ac.sigma_sb*radius**2)).to(q.K**4))).round(0)
+        self.Teff_unc = (self.Teff*np.sqrt((self.Lbol_unc/self.Lbol).value**2 + (2*radius_unc/radius).value**2)/4.).round(0)
     
     def plot(self, phot=True, spec=True, app=False, scale=['log','log'], **kwargs):
         """
