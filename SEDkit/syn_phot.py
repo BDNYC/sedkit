@@ -7,16 +7,14 @@ from itertools import combinations, chain, groupby
 warnings.simplefilter('ignore')
 RSR = u.get_filters()
 
-
-def vega(bbody=False):
-    '''
-    Returns the wavelength [um] and energy flux in [erg/s/cm2/A] calibrated to 10pc for Vega (
-    http://www.stsci.edu/hst/observatory/cdbs/calspec.html)
-    '''
-    pi = 130.23
-    w, f = np.genfromtxt(os.path.dirname(u.__file__)+'/Models/Vega/STSci_Vega.txt')
-    w, f = (w * q.AA).to(q.um), f * q.erg / q.s / q.cm ** 2 / q.AA
-    return [w, f, u.blackbody(w, 9610, Flam=False, radius=27.3)] if bbody else [w, f]
+def all_mags(spectrum, bands=RSR.keys(), photon=True, to_flux=False, Flam=True, exclude=[], eff=False, to_list=False):
+    magDict, magList = {}, []
+    for band in bands:
+        M = get_mag(band, spectrum, photon=photon, to_flux=to_flux, Flam=Flam, exclude=exclude, eff=eff)
+        if M[0]:
+            magDict[band], magDict[band + '_unc'], magDict[band + '_eff'] = M
+            magList.append(M)
+    return sorted(magList, key=lambda x: x[-1]) if to_list else magDict
 
 def get_eff(band, wave, flux, photon=True, calculate=False):
     '''
@@ -45,7 +43,6 @@ def get_zp(band, photon=True):
         (1 if photon else q.erg) / q.s / q.cm ** 2 / q.AA), x=RSR[band]['wav']) / np.trapz(RSR[band]['rsr'],
                                                                                            x=RSR[band]['wav'])).to(
         (1 if photon else q.erg) / q.s / q.cm ** 2 / q.AA)
-
 
 def get_mag(band, spectrum, exclude=[], photon=True, plot=False, to_flux=False, Flam=False, eff=False):
     '''
@@ -77,12 +74,18 @@ def get_mag(band, spectrum, exclude=[], photon=True, plot=False, to_flux=False, 
     else:
         return ['', '', '']
 
+def norm_to_mag(spectrum, magnitude, band):
+    """
+    Returns the flux of a given *spectrum* [W,F] normalized to the given *magnitude* in the specified photometric *band*
+    """
+    return [spectrum[0], spectrum[1] * magnitude / s.get_mag(band, spectrum, to_flux=True, Flam=False)[0], spectrum[2]]
 
-def all_mags(spectrum, bands=RSR.keys(), photon=True, to_flux=False, Flam=True, exclude=[], eff=False, to_list=False):
-    magDict, magList = {}, []
-    for band in bands:
-        M = get_mag(band, spectrum, photon=photon, to_flux=to_flux, Flam=Flam, exclude=exclude, eff=eff)
-        if M[0]:
-            magDict[band], magDict[band + '_unc'], magDict[band + '_eff'] = M
-            magList.append(M)
-    return sorted(magList, key=lambda x: x[-1]) if to_list else magDict
+def vega(bbody=False):
+    '''
+    Returns the wavelength [um] and energy flux in [erg/s/cm2/A] calibrated to 10pc for Vega (
+    http://www.stsci.edu/hst/observatory/cdbs/calspec.html)
+    '''
+    pi = 130.23
+    w, f = np.genfromtxt(os.path.dirname(u.__file__)+'/Models/Vega/STSci_Vega.txt')
+    w, f = (w * q.AA).to(q.um), f * q.erg / q.s / q.cm ** 2 / q.AA
+    return [w, f, u.blackbody(w, 9610, Flam=False, radius=27.3)] if bbody else [w, f]

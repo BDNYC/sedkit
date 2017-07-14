@@ -245,7 +245,7 @@ def norm_spec(spectrum, template, exclude=[]):
     normed_spectrum[1:] = [i * norm for i in normed_spectrum[1:]]
 
     return [i * Q for i, Q in zip(normed_spectrum, spectrum_units)]
-    
+
 def pi2pc(dist, dist_unc='', pc2pi=False):
     """
     Calculate the parallax from a distance or vice versa

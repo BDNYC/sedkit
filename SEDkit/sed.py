@@ -235,21 +235,32 @@ class MakeSED(object):
         wav_list, flx_list, unc_list = [], [], []
         for row in self.spectra:
             
-            # Unpack the spectrum and apply units
+            # Unpack the spectrum
             w, f, e = row['spectrum'].data[:3]
-            w = w*u.str2Q(row['wavelength_units'])
-            f = f*u.str2Q(row['flux_units'])
-            e = e*u.str2Q(row['flux_units'])
+            
+            # Convert log units to linear
+            if row['flux_units'].startswith('log '):
+                f, e = 10**f, 10**e
+                row['flux_units'] = row['flux_units'].replace('log ', '')
+            if row['wavelength_units'].startswith('log '):
+                w = 10**w
+                row['wavelength_units'] = row['wavelength_units'].replace('log ', '')
+            
+            # Make sure the wavelength units are right
+            w = w*u.str2Q(row['wavelength_units']).to(self.wave_units).value
             
             # Convert F_nu to F_lam if necessary
-            if f.unit==q.Jy:
-                f = u.fnu2flam(f, w, units=self.flux_units)
-                e = u.fnu2flam(e, w, units=self.flux_units)
-                
-            # Convert to desired units
-            w = w.to(self.wave_units)
-            f = f.to(self.flux_units)
-            e = e.to(self.flux_units)
+            if row['flux_units']=='Jy':
+                f = u.fnu2flam(f*q.Jy, w*self.wave_units, units=self.flux_units).value
+                e = u.fnu2flam(e*q.Jy, w*self.wave_units, units=self.flux_units).value
+            
+            # Normalize the spectra to the available photometry
+            w, f, e = s.norm_to_mags([w,f,e], self.photometry)
+            
+            # Apply desired units
+            w = w*self.wave_units
+            f = f*self.flux_units
+            e = e*self.flux_units
             
             # Add the data to the lists
             wav_list.append(u.ArrayWrapper(w))
