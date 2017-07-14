@@ -50,7 +50,7 @@ def from_ids(db, **kwargs):
 
 class MakeSED(object):
     def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], \
-        flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, ):
+        age='', radius='', membership='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um):
         """
         Pulls all available data from the BDNYC Data Archive, 
         constructs an SED, and stores all calculations at *pickle_path*
@@ -96,18 +96,14 @@ class MakeSED(object):
                 dummy = db.query(qry, fmt='table')
                 dummy.remove_row(0)
                 setattr(self, table, at.QTable(dummy))
-            
-        # Set some attributes
-        self.flux_units = flux_units
-        self.wave_units = wave_units
-        
+                
         # =====================================================================
         # Metadata
         # =====================================================================
         
-        # Stuff for printing
-        # self.sources =
-        
+        # Set some attributes
+        self.flux_units = flux_units
+        self.wave_units = wave_units
         
         # =====================================================================
         # Distance
@@ -149,6 +145,33 @@ class MakeSED(object):
                 pass
                 
         self.parallaxes.add_index('adopted')
+        
+        # =====================================================================
+        # Spectral Type
+        # =====================================================================
+        # TODO
+        self.gravity_suffix = ''
+        
+        # =====================================================================
+        # Age
+        # =====================================================================
+        
+        # Retreive age data from input NYMG membership, input age range, or age estimate
+        if isinstance(age, tuple):
+            self.age_min, self.age_max = age
+        elif membership in NYMG:
+            self.age_min, self.age_max = (NYMG[membership]['age_min'], NYMG[membership]['age_min'])*q.Myr
+        elif self.gravity_suffix:
+            self.age_min, self.age_max = (0.01, 0.15)*q.Gyr
+        else:
+            self.age_min, self.age_max = (0.5, 10)*q.Gyr
+            
+        # =====================================================================
+        # Radius
+        # =====================================================================
+        
+        # Use radius if given
+        self.radius, self.radius_unc = radius or ['', '']
         
         # =====================================================================
         # Photometry
@@ -247,21 +270,44 @@ class MakeSED(object):
                                                spec[1]*self.flux_units, 
                                                spec[2]*self.flux_units] for spec in group])
                 piecewise.append(composite)
-        
+                
         # If only one spectrum, no need to make composite
         elif len(all_spectra) == 1:
             piecewise = all_spectra
-        
+            
         # If no spectra, forget it
         else:
             piecewise = []
             print('No spectra available for SED.')
-        
+            
         # Add piecewise spectra to table
-        self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], names=['wavelength','app_flux','app_flux_unc'])
-        
+        self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
+                                  names=['wavelength','app_flux','app_flux_unc'])
+                                  
         # Normalize the self.spectra and self.piecewise spectra to all covered photometric bands
-        # self.abs_spec_SED = self.piecewise[0]
+        # TODO
+        
+        # =====================================================================
+        # Construct SED
+        # =====================================================================
+        # TODO
+        
+        # =====================================================================
+        # Calculate Fundamental Params
+        # =====================================================================
+        # TODO
+        # self.fundamental_params(**kwargs)
+        
+        # =====================================================================
+        # Print some stuff
+        # =====================================================================
+        # TODO
+        
+        # =====================================================================
+        # Save the data to file for cmd.py to read
+        # =====================================================================
+        # TODO
+        
     
     def fundamental_params(self, age='', nymg='', radius='', evo_model='hybrid_solar_age'):
         """
@@ -364,24 +410,11 @@ class MakeSED(object):
             spec_SED = self.app_spec_SED if app else self.abs_spec_SED
             plt.step(spec_SED[0], spec_SED[1], **kwargs)
         
-        
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+NYMG = {'TW Hya': {'age_min': 8, 'age_max': 20, 'age_ref': 0},
+         'beta Pic': {'age_min': 12, 'age_max': 22, 'age_ref': 0},
+         'Tuc-Hor': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
+         'Columba': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
+         'Carina': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
+         'Argus': {'age_min': 30, 'age_max': 50, 'age_ref': 0},
+         'AB Dor': {'age_min': 50, 'age_max': 120, 'age_ref': 0},
+         'Pleiades': {'age_min': 110, 'age_max': 130, 'age_ref': 0}}
