@@ -10,6 +10,7 @@ import astropy.table as at
 import astropy.units as q
 import matplotlib.pyplot as plt
 from . import utilities as u
+from . import syn_phot as s
 from svo_filters import svo
 
 FILTERS = svo.filters()
@@ -292,9 +293,9 @@ class MakeSED(object):
             piecewise = []
             print('No spectra available for SED.')
             
-        # # Normalize the composite spectra to the available photometry
-        # for n,spec in enumerate(piecewise):
-        #     piecewise[n] = s.norm_to_mags(spec, self.photometry)
+        # Normalize the composite spectra to the available photometry
+        for n,spec in enumerate(piecewise):
+            piecewise[n] = s.norm_to_mags(spec, self.photometry)
             
         # Add piecewise spectra to table
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
@@ -423,8 +424,11 @@ class MakeSED(object):
                 
         # Plot spectra
         if spectra:
-            spec_SED = self.app_spec_SED if app else self.abs_spec_SED
-            plt.step(spec_SED[0], spec_SED[1], **kwargs)
+            for row in self.piecewise:
+                plt.step(row['wavelength'].data, row['app_flux'].data)
+                
+            # spec_SED = self.app_spec_SED if app else self.abs_spec_SED
+            # plt.step(spec_SED[0], spec_SED[1], **kwargs)
         
 NYMG = {'TW Hya': {'age_min': 8, 'age_max': 20, 'age_ref': 0},
          'beta Pic': {'age_min': 12, 'age_max': 22, 'age_ref': 0},

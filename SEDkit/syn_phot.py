@@ -38,15 +38,14 @@ def all_mags(spectrum, bands='', plot=False, **kwargs):
     # Calculate the magnitude
     mag_list = []
     for bandpass in bands:
-        b = bandpass
         m, sig_m, F, sig_F = get_mag(spectrum, bandpass, fetch='both', **kwargs)
         
         # Only add it to the table if the magnitude is calculated
         if m:
-            eff = FILTERS.loc[b]['WavelengthEff']
-            w_unit = q.Unit(FILTERS.loc[b]['WavelengthUnit'])
+            eff = FILTERS.loc[bandpass]['WavelengthEff']
+            w_unit = q.Unit(FILTERS.loc[bandpass]['WavelengthUnit'])
             f_unit = F.unit
-            mag_list.append([b, eff, m, sig_m, F.value, sig_F.value])
+            mag_list.append([bandpass, eff, m, sig_m, F.value, sig_F.value])
             
     # Make the table of values
     data = list(map(list, zip(*mag_list))) if mag_list else None
@@ -116,7 +115,10 @@ def get_mag(spectrum, bandpass, exclude=[], fetch='mag', photon=False, Flam=Fals
             plt.figure()
             plt.step(spectrum[0], spectrum[1], color='k', label='Spectrum')
             plt.errorbar(bandpass.WavelengthEff, F.value, yerr=sig_F.value, marker='o', label='Magnitude')
-            plt.fill_between(spectrum[0], spectrum[1]+spectrum[2], spectrum[1]+spectrum[2], color='k', alpha=0.1)
+            try:
+                plt.fill_between(spectrum[0], spectrum[1]+spectrum[2], spectrum[1]+spectrum[2], color='k', alpha=0.1)
+            except:
+                pass
             plt.plot(bandpass.rsr[0], bandpass.rsr[1]*F, label='Bandpass')
             plt.xlabel(unit)
             plt.ylabel(a)
@@ -141,7 +143,7 @@ def norm_to_mag(spectrum, magnitude, bandpass):
     return [spectrum[0], spectrum[1] * magnitude / get_mag(bandpass, spectrum, to_flux=True, Flam=False)[0], spectrum[2]]
 
 def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
-    '''
+    """
     Normalize the given spectrum to the given dictionary of magnitudes
 
     Parameters
@@ -155,7 +157,7 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
     -------
     list
         The normalized [W,F,E]
-    '''
+    """
     # spec = u.unc(spec)
     spec = [spec[0] * (q.um if not hasattr(spec[0], 'unit') else 1.), \
             spec[1] * (q.erg / q.s / q.cm ** 2 / q.AA if not hasattr(spec[1], 'unit') else 1.), \
@@ -197,8 +199,9 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
         
         # Get eff, m, m_unc from each
         eff = [FILTERS.loc[b]['WavelengthEff'] for b in bands]
-        synthetic_mags = [list(i.as_void()) for i in mags[['app_magnitude','app_magnitude_unc']]]
-        observed_mags = [list(i.as_void()) for i in at.vstack([to_mags.loc[b] for b in bands])[['app_magnitude','app_magnitude_unc']]]
+        obs_mags = at.vstack([to_mags.loc[b] for b in bands])
+        synthetic_mags = [list(i.as_void()) for i in mags[['app_flux','app_flux_unc']]]
+        observed_mags = [list(i.as_void()) for i in obs_mags[['app_flux','app_flux_unc']]]
         
         # Make arrays of the values and calculate weights
         (f1, f2), (e1, e2) = np.array([synthetic_mags,observed_mags]).T
@@ -217,7 +220,7 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
             
         return [spec[0], spec[1]/norm, spec[2]/norm] if reverse else [spec[0], spec[1]*norm, spec[2]*norm]
         
-    except IOError:
+    except:
         print('No overlapping photometry for normalization!')
         return spec
         
