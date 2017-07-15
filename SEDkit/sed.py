@@ -50,7 +50,7 @@ def from_ids(db, **kwargs):
     return data
 
 class MakeSED(object):
-    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR='', \
+    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR='', split='', \
         age='', radius='', membership='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um):
         """
         Pulls all available data from the BDNYC Data Archive, 
@@ -289,7 +289,8 @@ class MakeSED(object):
         self.spectra['app_flux'] = flx_list
         self.spectra['app_flux_unc'] = unc_list
         
-        # Group overlapping spectra and make composites where possible to form peacewise spectrum for flux calibration
+        # Group overlapping spectra and make composites where possible 
+        # to form peacewise spectrum for flux calibration
         all_spectra = [[i.data for i in j] for j in self.spectra[['wavelength','app_flux','app_flux_unc']]]
         if len(all_spectra) > 1:
             groups, piecewise = u.group_spectra(all_spectra), []
@@ -312,6 +313,15 @@ class MakeSED(object):
         # Normalize the composite spectra to the available photometry
         for n,spec in enumerate(piecewise):
             piecewise[n] = s.norm_to_mags(spec, self.photometry)
+            
+        # Splitting
+        keepers = []
+        if split:
+            for pw in piecewise:
+                wavs = filter(None, [np.where(pw[0]<i)[0][-1] if pw[0][0]<i and pw[0][-1]>i else None for i in split])
+                keepers += map(list, zip(*[np.split(i, list(wavs)) for i in pw]))
+                
+            piecewise = keepers
             
         # Add piecewise spectra to table
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
