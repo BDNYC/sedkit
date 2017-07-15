@@ -95,6 +95,10 @@ class MakeSED(object):
         # Metadata
         # =====================================================================
         
+        # Print source data
+        print('='*80)
+        self.sources[['names','ra','dec']].pprint()
+        
         # Set some attributes
         self.flux_units = flux_units
         self.wave_units = wave_units
@@ -143,7 +147,11 @@ class MakeSED(object):
         # =====================================================================
         # Spectral Type
         # =====================================================================
-        # TODO
+        
+        # Print
+        print('\nSpectral Types')
+        self.spectral_types[['spectral_type','spectral_type_unc','regime','suffix','gravity']].pprint()
+                
         self.gravity_suffix = ''
         
         # =====================================================================
@@ -216,7 +224,11 @@ class MakeSED(object):
         # Make relative and absolute photometric SEDs
         self.app_phot_SED = np.array([self.photometry['eff'], self.photometry['app_flux'], self.photometry['app_flux_unc']])
         self.abs_phot_SED = np.array([self.photometry['eff'], self.photometry['abs_flux'], self.photometry['abs_flux_unc']])
-                
+        
+        # Print photometry
+        print('\nPhotometry')
+        self.photometry[['band','app_magnitude','app_magnitude_unc']].pprint()
+        
         # =====================================================================
         # Spectra
         # =====================================================================
@@ -301,9 +313,6 @@ class MakeSED(object):
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
                                   names=['wavelength','app_flux','app_flux_unc'])
                                   
-        # Normalize the self.spectra and self.piecewise spectra to all covered photometric bands
-        # TODO
-        
         # =====================================================================
         # Construct SED
         # =====================================================================
@@ -316,14 +325,11 @@ class MakeSED(object):
         # self.fundamental_params(**kwargs)
         
         # =====================================================================
-        # Print some stuff
-        # =====================================================================
-        # TODO
-        
-        # =====================================================================
         # Save the data to file for cmd.py to read
         # =====================================================================
         # TODO
+        
+        print('='*80)
         
     
     def fundamental_params(self, age='', nymg='', radius='', evo_model='hybrid_solar_age'):
