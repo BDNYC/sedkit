@@ -96,8 +96,8 @@ class MakeSED(object):
         # =====================================================================
         
         # Print source data
-        print('='*80)
-        self.sources[['names','ra','dec']].pprint()
+        print('\n','='*80,'\n')
+        self.sources[['names','ra','dec','publication_shortname']].pprint()
         
         # Set some attributes
         self.flux_units = flux_units
@@ -144,15 +144,19 @@ class MakeSED(object):
                 
         self.parallaxes.add_index('adopted')
         
+        # Print
+        print('\nPARALLAXES')
+        self.parallaxes[['id','distance','distance_unc','publication_shortname']].pprint()
+        
         # =====================================================================
         # Spectral Type
         # =====================================================================
         
-        # Print
-        print('\nSpectral Types')
-        self.spectral_types[['spectral_type','spectral_type_unc','regime','suffix','gravity']].pprint()
-                
         self.gravity_suffix = ''
+        
+        # Print
+        print('\nSPECTRAL TYPES')
+        self.spectral_types[['id','spectral_type','spectral_type_unc','regime','suffix','gravity','publication_shortname']].pprint()
         
         # =====================================================================
         # Age
@@ -225,9 +229,9 @@ class MakeSED(object):
         self.app_phot_SED = np.array([self.photometry['eff'], self.photometry['app_flux'], self.photometry['app_flux_unc']])
         self.abs_phot_SED = np.array([self.photometry['eff'], self.photometry['abs_flux'], self.photometry['abs_flux_unc']])
         
-        # Print photometry
-        print('\nPhotometry')
-        self.photometry[['band','app_magnitude','app_magnitude_unc']].pprint()
+        # Print
+        print('\nPHOTOMETRY')
+        self.photometry[['id','band','app_magnitude','app_magnitude_unc','publication_shortname']].pprint()
         
         # =====================================================================
         # Spectra
@@ -312,6 +316,10 @@ class MakeSED(object):
         # Add piecewise spectra to table
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
                                   names=['wavelength','app_flux','app_flux_unc'])
+                                  
+        # Print
+        print('\nSPECTRA')
+        self.spectra[['id','instrument_id','telescope_id','mode_id','publication_shortname']].pprint()
                                   
         # =====================================================================
         # Construct SED
