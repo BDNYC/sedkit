@@ -220,7 +220,7 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
             
         return [spec[0], spec[1]/norm, spec[2]/norm] if reverse else [spec[0], spec[1]*norm, spec[2]*norm]
         
-    except:
+    except IOError:
         print('No overlapping photometry for normalization!')
         return spec
         

@@ -5,6 +5,7 @@
 """
 Some utilities to accompany SEDkit
 """
+import re
 import numpy as np
 import astropy.units as q
 import astropy.constants as ac
@@ -141,6 +142,26 @@ def group_spectra(spectra):
                     group.append(s), idx.append(n)
             groups.append(group)
     return groups
+    
+def idx_include(x, include):
+    try:
+        return np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in include])))))[0]
+    except TypeError:
+        try:
+            return \
+            np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in [include]])))))[0]
+        except TypeError:
+            return range(len(x))
+            
+def idx_exclude(x, exclude):
+    try:
+        return np.where(~np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))[0]
+    except TypeError:
+        try:
+            return \
+            np.where(~np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))[0]
+        except TypeError:
+            return range(len(x))
 
 def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
     """
@@ -330,6 +351,129 @@ def smooth(x, beta):
     w = np.kaiser(window_len, beta)
     y = np.convolve(w / w.sum(), s, mode='valid')
     return y[5:len(y) - 5] * (x.unit if hasattr(x, 'unit') else 1)
+    
+def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
+    """
+    Converts between float and letter/number spectral types (e.g. 14.5 => 'B4.5' and 'A3' => 23).
+    
+    Parameters
+    ----------
+    SpT: float, str
+        Float spectral type or letter/number spectral type between O0.0 and Y9.9
+    types: list
+        The MK spectral type letters to include, e.g. ['M','L','T','Y']
+      
+    Returns
+    -------
+    list, str
+        The [spectral type, uncertainty, prefix, gravity, luminosity class] of the spectral type
+    """
+    try:
+        # String input
+        if isinstance(SpT, (str,bytes)):
+            
+            # Convert bytes to string
+            if isinstance(SpT, bytes):
+                SpT = SpT.decode("utf-8")
+                
+            # Get the MK spectral class
+            MK = types[np.where([i in SpT for i in types])[0][0]]
+            
+            if MK:
+                
+                # Get the stuff before and after the MK class
+                pre, suf = SpT.split(MK)
+                
+                # Get the numerical value
+                val = float(re.findall(r'[0-9]\.?[0-9]?', suf)[0])
+                
+                # Add the class value
+                val += types.index(MK)*10
+                
+                # See if low SNR
+                if '::' in suf:
+                    unc = 2
+                    suf = suf.replace('::','')
+                elif ':' in suf:
+                    unc = 1
+                    suf = suf.replace(':','')
+                else:
+                    unc = 0.5
+                    
+                # Get the gravity class
+                if 'b' in suf or 'beta' in suf:
+                    grv = 'b'
+                elif 'g' in suf or 'gamma' in suf:
+                    grv = 'g'
+                else:
+                    grv = ''
+                    
+                # Clean up the suffix
+                suf = suf.replace(str(val), '').replace('n','').replace('e','')\
+                         .replace('w','').replace('m','').replace('a','')\
+                         .replace('Fe','').replace('-1','').replace('?','')\
+                         .replace('-V','').replace('p','')
+                        
+                # Check for luminosity class
+                LC = []
+                for cl in ['III','V','IV']:
+                    if cl in suf:
+                        LC.append(cl)
+                        suf.replace(cl, '')
+                LC = '/'.join(LC) or 'V'
+                            
+                return [val, unc, pre, grv, LC]
+            
+            else:
+                print('Not in list of MK spectral classes',types)
+                return [np.nan, np.nan, '', '', '']
+                
+        # Numerical or list input
+        elif isinstance(SpT, (float,int,list,tuple)):
+            if isinstance(SpT, (int,float)):
+                SpT = [SpT]
+                
+            # Get the MK class
+            MK = ''.join(types)[int(SpT[0]//10)]
+            num = int(SpT[0]%10) if SpT[0]%10==int(SpT[0]%10) else SpT[0]%10
+            
+            # Get the uncertainty
+            if len(SpT)>1:
+                if SpT[1]==':' or SpT[1]==1:
+                    unc = ':'
+                if SpT[1]=='::' or SpT[1]==2:
+                    unc = '::'
+            else:
+                unc = ''
+                
+            # Get the prefix
+            if len(SpT)>2:
+                pre = str(SpT[2])
+            else:
+                pre = ''
+                
+            # Get the gravity
+            if len(SpT)>3:
+                grv = str(SpT[3])
+            else:
+                grv = ''
+                
+            # Get the gravity
+            if len(SpT)>4:
+                LC = str(SpT[4])
+            else:
+                LC = ''
+                
+            return ''.join([pre,MK,str(num),grv,LC,unc])
+            
+        # Bogus input
+        else:
+            if verbose:
+                print('Spectral type',SpT,'must be a float between 0 and',len(types)*10,'or a string of class',types)
+            return
+        
+    except IOError:
+        return
         
 def str2Q(x, target=''):
     """
@@ -366,3 +510,19 @@ def str2Q(x, target=''):
         return unit
     else:
         return q.Unit('')
+        
+def trim_spectrum(spectrum, regions, smooth_edges=False):
+    trimmed_spec = [i[idx_exclude(spectrum[0], regions)] for i in spectrum]
+    if smooth_edges:
+        for r in regions:
+            try:
+                if any(spectrum[0][spectrum[0] > r[1]]):
+                    trimmed_spec = inject_average(trimmed_spec, r[1], 'right', n=smooth_edges)
+            except:
+                pass
+            try:
+                if any(spectrum[0][spectrum[0] < r[0]]):
+                    trimmed_spec = inject_average(trimmed_spec, r[0], 'left', n=smooth_edges)
+            except:
+                pass
+    return trimmed_spec
