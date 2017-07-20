@@ -189,7 +189,7 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
             sig_m = sig_m.value
         
         # Calculate the flux density
-        zp = filt['ZeroPoint']*q.Unit(filt['ZeroPointUnit'])
+        zp = q.Quantity(filt['ZeroPoint'], filt['ZeroPointUnit'])
         f = zp*10**(mag/-2.5)
         
         if isinstance(sig_m,str):
@@ -312,14 +312,16 @@ def rebin_spec(spec, wavnew, oversamp=100, plot=False):
         The rebinned flux
     
     """
-    wave, flux, err = spec
-    nlam = len(wave)
+    nlam = len(spec[0])
     x0 = np.arange(nlam, dtype=float)
     x0int = np.arange((nlam-1.)*oversamp + 1., dtype=float)/oversamp
-    w0int = np.interp(x0int, x0, wave)
-    spec0int = np.interp(w0int, wave, flux)/oversamp
-    err0int = np.interp(w0int, wave, err)/oversamp
-
+    w0int = np.interp(x0int, x0, spec[0])
+    spec0int = np.interp(w0int, spec[0], spec[1])/oversamp
+    try:
+        err0int = np.interp(w0int, spec[0], spec[2])/oversamp
+    except:
+        err0int = ''
+        
     # Set up the bin edges for down-binning
     maxdiffw1 = np.diff(wavnew).max()
     w1bins = np.concatenate(([wavnew[0]-maxdiffw1], .5*(wavnew[1::]+wavnew[0:-1]), [wavnew[-1]+maxdiffw1]))
@@ -333,11 +335,14 @@ def rebin_spec(spec, wavnew, oversamp=100, plot=False):
 
     for ii in range(nbins):
         specnew[ii] = np.sum(spec0int[inds2[ii][0]:inds2[ii][1]])
-        errnew[ii] = np.sum(err0int[inds2[ii][0]:inds2[ii][1]])
-    
+        try:
+            errnew[ii] = np.sum(err0int[inds2[ii][0]:inds2[ii][1]])
+        except:
+            pass
+            
     if plot:
         plt.figure()
-        plt.loglog(wave, flux, c='b')    
+        plt.loglog(spec[0], spec[1], c='b')    
         plt.loglog(wavnew, specnew, c='r')
         
     return [wavnew,specnew,errnew]

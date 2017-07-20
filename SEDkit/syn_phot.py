@@ -137,10 +137,16 @@ def norm_to_mag(spectrum, magnitude, bandpass):
     """
     Returns the flux of a given *spectrum* [W,F] normalized to the given *magnitude* in the specified photometric *band*
     """
-    if len(spectrum)==2:
-        spectrum = list(spectrum)+['']
+    # Get the current magnitude and convert to flux
+    mag, mag_unc = get_mag(spectrum, bandpass, fetch='flux')
     
-    return [spectrum[0], spectrum[1] * magnitude / get_mag(bandpass, spectrum, to_flux=True, Flam=False)[0], spectrum[2]]
+    # Convert input magnitude to flux
+    flx, flx_unc = u.mag2flux(bandpass.filterID.split('/')[1], magnitude, sig_m='', units=spectrum[1].unit)
+    
+    # Normalize the spectrum
+    spectrum[1] *= flx/mag
+    
+    return spectrum
 
 def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
     """
