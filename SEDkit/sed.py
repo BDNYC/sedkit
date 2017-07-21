@@ -38,7 +38,7 @@ def from_ids(db, **kwargs):
             # Make sure it's a list
             if isinstance(v, int):
                 v = [v]
-            
+                
             # Build the query with the provided ids
             id_str = ','.join(list(map(str,v)))
             qry = "SELECT * FROM {} WHERE id IN ({})".format(k,id_str)
@@ -105,7 +105,10 @@ class MakeSED(object):
         # =====================================================================
         
         # Print source data
-        self.name = name or self.sources['names'][0].split(',')[0].strip() or 'Source {}'.format(source_id)
+        try:
+            self.name = name or self.sources['names'][0].split(',')[0].strip()
+        except:
+            self.name = 'Source {}'.format(source_id)
         print('='*100)
         print(self.name,'='*(99-len(self.name)))
         print('='*100,'\n')
@@ -231,7 +234,12 @@ class MakeSED(object):
         
         # Index and add units
         fill = np.zeros(len(self.photometry))
-        self.photometry['band'] = at.Column([b.replace('_','.') for b in list(self.photometry['band'])])
+        
+        # Fill in empty columns
+        for col in ['magnitude','magnitude_unc']:
+            self.photometry[col][self.photometry[col]==None] = np.nan
+        
+        # self.photometry['band'] = at.Column([b.replace('_','.') for b in list(self.photometry['band'])])
         self.photometry.add_index('band')
         self.photometry.rename_column('magnitude','app_magnitude')
         self.photometry.rename_column('magnitude_unc','app_magnitude_unc')
@@ -239,7 +247,8 @@ class MakeSED(object):
         self.photometry['app_magnitude_unc'].unit = q.mag
         
         # Add effective wavelengths to the photometry table
-        self.photometry.add_column(at.Column(fill, 'eff', unit=wave_units))
+        print(self.photometry)
+        self.photometry.add_column(at.Column(fill, 'eff', unit=self.wave_units))
         for row in self.photometry:
             try:
                 band = FILTERS.loc[row['band']]
@@ -298,7 +307,7 @@ class MakeSED(object):
             if row['wavelength_units'].startswith('log '):
                 w = 10**w
                 row['wavelength_units'] = row['wavelength_units'].replace('log ', '')
-            
+                
             # Make sure the wavelength units are right
             w = w*u.str2Q(row['wavelength_units']).to(self.wave_units).value
             
@@ -379,6 +388,18 @@ class MakeSED(object):
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
                                   names=['wavelength','app_flux','app_flux_unc'])
                                   
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        # Make spectral SED (PLACEHOLDER)
+        self.app_spec_SED = np.array(list(self.piecewise[['wavelength','app_flux','app_flux_unc']][0])) if piecewise else ''
+        
         # =====================================================================
         # Flux calibrate everything
         # =====================================================================
