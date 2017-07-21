@@ -132,7 +132,6 @@ def get_mag(spectrum, bandpass, exclude=[], fetch='mag', photon=False, Flam=Fals
     else:
         return ['']*4 if fetch=='both' else ['']*2
 
-# Functions to scale flux
 def norm_to_mag(spectrum, magnitude, bandpass):
     """
     Returns the flux of a given *spectrum* [W,F] normalized to the given *magnitude* in the specified photometric *band*
@@ -192,7 +191,7 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
     else:
         pass
         
-    # Calculate all synthetic magnitudes for flux calibration then fix end points if necessary
+    # Calculate all synthetic magnitudes
     mags = all_mags(spec, bands=to_mags['band'])
     
     # Return red and blue wavelength positions to original values
@@ -210,7 +209,7 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
         observed_mags = [list(i.as_void()) for i in obs_mags[['app_flux','app_flux_unc']]]
         
         # Make arrays of the values and calculate weights
-        (f1, f2), (e1, e2) = np.array([synthetic_mags,observed_mags]).T
+        (f1, e1), (f2, e2) = np.array([observed_mags,synthetic_mags]).swapaxes(1,2)
         weight = [(FILTERS.loc[b]['WavelengthMax']-FILTERS.loc[b]['WavelengthMin']) if weighting else 1. for b in bands]
         
         # Calculate normalization factor that minimizes the function

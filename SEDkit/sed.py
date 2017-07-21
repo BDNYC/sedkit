@@ -350,10 +350,6 @@ class MakeSED(object):
             piecewise = []
             print('No spectra available for SED.')
             
-        # Normalize the composite spectra to the available photometry
-        for n,spec in enumerate(piecewise):
-            piecewise[n] = s.norm_to_mags(spec, self.photometry)
-            
         # Splitting
         keepers = []
         if split:
@@ -362,6 +358,10 @@ class MakeSED(object):
                 keepers += map(list, zip(*[np.split(i, list(wavs)) for i in pw]))
                 
             piecewise = keepers
+            
+        # Normalize the composite spectra to the available photometry
+        for n,spec in enumerate(piecewise):
+            piecewise[n] = s.norm_to_mags(spec, self.photometry)
             
         # Add piecewise spectra to table
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
@@ -516,7 +516,7 @@ class MakeSED(object):
         except:
             self.Teff = self.Teff_unc = ''
     
-    def plot(self, photometry=True, spectra=True, app=False, scale=['log','log'], **kwargs):
+    def plot(self, photometry=True, spectra=True, app=True, scale=['log','log'], **kwargs):
         """
         Plot the SED
         
