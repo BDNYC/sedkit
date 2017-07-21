@@ -354,7 +354,7 @@ class MakeSED(object):
         keepers = []
         if split:
             for pw in piecewise:
-                wavs = filter(None, [np.where(pw[0]<i)[0][-1] if pw[0][0]<i and pw[0][-1]>i else None for i in split])
+                wavs = list(filter(None, [np.where(pw[0]<i)[0][-1] if pw[0][0]<i and pw[0][-1]>i else None for i in split]))
                 keepers += map(list, zip(*[np.split(i, list(wavs)) for i in pw]))
                 
             piecewise = keepers
