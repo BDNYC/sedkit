@@ -51,7 +51,7 @@ def from_ids(db, **kwargs):
 
 class MakeSED(object):
     def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=10, split=[], trim=[], \
-        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um):
+        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name=''):
         """
         Pulls all available data from the BDNYC Data Archive, 
         constructs an SED, and stores all calculations at *pickle_path*
@@ -64,6 +64,15 @@ class MakeSED(object):
         db: astrodbkit.astrodb.Database, dict
             The database instance to retreive data from or a dictionary
             of astropy tables to mimick the db query
+        
+        Example
+        -------
+        from astrodbkit import astrodb
+        from SEDkit import sed
+        db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
+        from_dict = {'spectra':3176, 'photometry':[12510,12511,12512], 'parallaxes':575, 'sources':2}
+        x = sed.MakeSED(2, db, from_dict=from_dict)
+        x.plot()
         
         """
         # TODO: resolve source_id in database given id, (ra,dec), name, etc.
@@ -96,8 +105,9 @@ class MakeSED(object):
         # =====================================================================
         
         # Print source data
-        print('\n'+'='*80,'\n')
+        print('\n',self.name,'='*(120-len(self.name)),'\n')
         self.sources[['names','ra','dec','publication_shortname']].pprint()
+        self.name = name or self.sources['names'][0].split(',')[0].strip() or 'Source {}'.format(source_id)
         
         # Set some attributes
         self.flux_units = flux_units
@@ -367,7 +377,6 @@ class MakeSED(object):
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
                                   names=['wavelength','app_flux','app_flux_unc'])
                                   
-        
         # =====================================================================
         # Flux calibrate everything
         # =====================================================================
@@ -533,8 +542,9 @@ class MakeSED(object):
         """
         # Make the figure
         plt.figure(**kwargs)
-        plt.xlabel('Wavelength')
-        plt.ylabel('Flux')
+        plt.title(self.name)
+        plt.xlabel('Wavelength [{}]'.format(str(self.wave_units)))
+        plt.ylabel('Flux [{}]'.format(str(self.flux_units)))
         
         # Distinguish between apparent and absolute magnitude
         pre = 'app_' if app else 'abs_'
