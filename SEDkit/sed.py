@@ -105,9 +105,11 @@ class MakeSED(object):
         # =====================================================================
         
         # Print source data
-        print('\n',self.name,'='*(120-len(self.name)),'\n')
-        self.sources[['names','ra','dec','publication_shortname']].pprint()
         self.name = name or self.sources['names'][0].split(',')[0].strip() or 'Source {}'.format(source_id)
+        print('='*100)
+        print(self.name,'='*(99-len(self.name)))
+        print('='*100,'\n')
+        self.sources[['names','ra','dec','publication_shortname']].pprint()
         
         # Set some attributes
         self.flux_units = flux_units
@@ -393,7 +395,7 @@ class MakeSED(object):
         # =====================================================================
         # TODO
         
-        print('\n'+'='*80)
+        print('\n'+'='*100)
         
     
     def fundamental_params(self, age='', nymg='', evo_model='hybrid_solar_age'):
