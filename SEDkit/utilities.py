@@ -456,8 +456,10 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
             if len(SpT)>1:
                 if SpT[1]==':' or SpT[1]==1:
                     unc = ':'
-                if SpT[1]=='::' or SpT[1]==2:
+                elif SpT[1]=='::' or SpT[1]==2:
                     unc = '::'
+                else:
+                    unc = ''
             else:
                 unc = ''
                 

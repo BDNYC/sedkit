@@ -200,8 +200,10 @@ class MakeSED(object):
             self.spectral_type_unc = self.spectral_types.loc[1]['spectral_type_unc']
             self.gravity = self.spectral_types.loc[1]['gravity']
             self.suffix = self.spectral_types.loc[1]['suffix']
+            
+            self.SpT = u.specType([self.spectral_type, self.spectral_type_unc, self.suffix, self.gravity, ''])
         except:
-            self.spectral_type = self.spectral_type_unc = self.gravity = self.suffix = ''
+            self.spectral_type = self.spectral_type_unc = self.gravity = self.suffix = self.SpT = ''
         
         # Print
         print('\nSPECTRAL TYPES')
@@ -238,6 +240,10 @@ class MakeSED(object):
         # Fill in empty columns
         for col in ['magnitude','magnitude_unc']:
             self.photometry[col][self.photometry[col]==None] = np.nan
+            
+        # Rename bands
+        # HERE BE DRAGONS! This is specific to the BDNYC Database. Generalize this!
+        self.photometry['band'] = [i.replace('_','.') for i in self.photometry['band']]
         
         # self.photometry['band'] = at.Column([b.replace('_','.') for b in list(self.photometry['band'])])
         self.photometry.add_index('band')
@@ -388,7 +394,9 @@ class MakeSED(object):
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
                                   names=['wavelength','app_flux','app_flux_unc'])
                                   
-        
+        # Create Rayleigh Jeans Tail
+        RJ = [np.arange(5, 500, 0.1) * q.um, u.blackbody(np.arange(5, 500, 0.1) * q.um, 1500),
+              (u.blackbody(np.arange(5, 500, 0.1) * q.um, 1800) - u.blackbody(np.arange(5, 500, 0.1) * q.um, 1200))]
         
         
         
@@ -410,6 +418,10 @@ class MakeSED(object):
         # =====================================================================
         # TODO
         # self.fundamental_params(**kwargs)
+        self.Teff = 1234
+        self.Teff_unc = 78
+        self.Lbol = -4.321
+        self.Lbol_unc = 0.123
         
         # =====================================================================
         # Save the data to file for cmd.py to read
