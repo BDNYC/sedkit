@@ -431,7 +431,8 @@ class MakeSED(object):
 
         # Create full SED from Wien tail, spectra, linear interpolation between photometry, and Rayleigh-Jeans tail
         try:
-            self.app_SED = u.finalize_spec([np.concatenate(i) for i in [[ww[wWein < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip([wWein, fWein, eWein], RJ, specPhot)]])
+            # self.app_SED = u.finalize_spec([np.concatenate(i) for i in [[ww[wWein < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip([wWein, fWein, eWein], RJ, specPhot)]])
+            self.app_SED = [np.concatenate(i) for i in [[ww[wWein < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip([wWein, fWein, eWein], RJ, specPhot)]]
         except IOError:
             self.app_SED = ''
             

@@ -425,6 +425,18 @@ def rebin_spec(spec, wavnew, oversamp=100, plot=False):
         plt.loglog(wavnew, specnew, c='r')
         
     return [wavnew,specnew,errnew]
+    
+def scrub(data):
+    """
+    For input data [w,f,e] or [w,f] returns the list with NaN, negative, and zero flux (and corresponsing wavelengths and errors) removed.
+    """
+    units = [i.unit if hasattr(i, 'unit') else 1 for i in data]
+    data = [np.asarray(i.value if hasattr(i, 'unit') else i, dtype=np.float32) for i in data if
+            isinstance(i, np.ndarray)]
+    data = [i[np.where(~np.isinf(data[1]))] for i in data]
+    data = [i[np.where(np.logical_and(data[1] > 0, ~np.isnan(data[1])))] for i in data]
+    data = [i[np.unique(data[0], return_index=True)[1]] for i in data]
+    return [i[np.lexsort([data[0]])] * Q for i, Q in zip(data, units)]
         
 def smooth(x, beta):
     """
