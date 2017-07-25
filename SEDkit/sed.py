@@ -50,7 +50,7 @@ def from_ids(db, **kwargs):
     return data
 
 class MakeSED(object):
-    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=10, split=[], trim=[], \
+    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=10, SED_trim=[], split=[], trim=[], \
         age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name=''):
         """
         Pulls all available data from the BDNYC Data Archive, 
@@ -117,6 +117,7 @@ class MakeSED(object):
         # Set some attributes
         self.flux_units = flux_units
         self.wave_units = wave_units
+        units = [self.wave_units,self.flux_units,self.flux_units]
         
         # =====================================================================
         # Distance
@@ -284,7 +285,7 @@ class MakeSED(object):
                 row[i+'flux_unc'] = ph_flux[1]
                 
         # Make relative and absolute photometric SEDs
-        self.app_phot_SED = np.array([self.photometry['eff'], self.photometry['app_flux'], self.photometry['app_flux_unc']])
+        self.app_phot_SED = (WP0, FP0, EP0) = np.array([self.photometry['eff'], self.photometry['app_flux'], self.photometry['app_flux_unc']])
         self.abs_phot_SED = np.array([self.photometry['eff'], self.photometry['abs_flux'], self.photometry['abs_flux_unc']])
         
         # Print
@@ -362,10 +363,7 @@ class MakeSED(object):
         if len(all_spectra) > 1:
             groups, piecewise = u.group_spectra(all_spectra), []
             for group in groups:
-                composite = u.make_composite([[spec[0]*self.wave_units, 
-                                               spec[1]*self.flux_units, 
-                                               spec[2]*self.flux_units] for spec in group])
-                                               
+                composite = u.make_composite([[spec[0]*self.wave_units, spec[1]*self.flux_units, spec[2]*self.flux_units] for spec in group])
                 piecewise.append(composite)
                 
         # If only one spectrum, no need to make composite
@@ -391,27 +389,57 @@ class MakeSED(object):
             piecewise[n] = s.norm_to_mags(spec, self.photometry)
             
         # Add piecewise spectra to table
-        self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], 
-                                  names=['wavelength','app_flux','app_flux_unc'])
-                                  
+        self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], names=['wavelength','app_flux','app_flux_unc'])
+        self.piecewise['wavelength'].unit = self.wave_units
+        self.piecewise['app_flux'].unit = self.flux_units
+        self.piecewise['app_flux_unc'].unit = self.flux_units
+        
+        # Concatenate pieces and finalize composite spectrum with units
+        if self.piecewise:
+            self.app_spec_SED = (W, F, E) = [np.asarray(i)*Q for i,Q in zip(u.trim_spectrum([np.concatenate(j) \
+                for j in [list(self.piecewise[col]) for col in ['wavelength', 'app_flux', 'app_flux_unc']]], SED_trim), units)]
+        else:
+            self.app_spec_SED = [np.array([])]*3
+        
         # Create Rayleigh Jeans Tail
-        RJ = [np.arange(5, 500, 0.1) * q.um, u.blackbody(np.arange(5, 500, 0.1) * q.um, 1500),
-              (u.blackbody(np.arange(5, 500, 0.1) * q.um, 1800) - u.blackbody(np.arange(5, 500, 0.1) * q.um, 1200))]
-        
-        
-        
-        
-        
-        
-        
-        
-        # Make spectral SED (PLACEHOLDER)
-        self.app_spec_SED = np.array(list(self.piecewise[['wavelength','app_flux','app_flux_unc']][0])) if piecewise else ''
-        
+        RJ_wav = np.arange(5, 500, 0.1)*q.um
+        RJ_flx, RJ_unc =  u.blackbody(RJ_wav, 1800*q.K, 300*q.K)
+
+        # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
+        RJ_flx *= self.app_phot_SED[1][-1]/np.interp(self.app_phot_SED[0][-1], RJ_wav.value, RJ_flx.value)
+        RJ = [RJ_wav, RJ_flx, RJ_unc]
+
+        # Exclude photometric points with spectrum coverage
+        if self.piecewise:
+            covered = []
+            for n, i in enumerate(WP0):
+                for N,spec in enumerate(self.piecewise):
+                    if i<spec['wavelength'][-1] and i>spec['wavelength'][0]:
+                        covered.append(n)
+            WP, FP, EP = [[i for n,i in enumerate(A) if n not in covered]*Q for A,Q in zip(self.app_phot_SED, units)]
+        else:
+            WP, FP, EP = WP0, FP0, EP0
+
+        # Use zero flux at zero wavelength from bluest data point for Wein tail approximation
+        wWein, fWein, eWein = np.array([0.00001])*self.wave_units, np.array([1E-30])*self.flux_units, np.array([1E-30])*self.flux_units
+
+        # Create spectra + photometry SED for model fitting
+        if self.spectra or self.photometry:
+            specPhot = u.finalize_spec([i*Q for i,Q in zip([j.value for j in [np.concatenate(i) for i in [[pp, ss] for pp, ss in zip([WP, FP, EP], [W, F, E])]]], units)])
+        else:
+            specPhot = ''
+
+        # Create full SED from Wien tail, spectra, linear interpolation between photometry, and Rayleigh-Jeans tail
+        try:
+            self.app_SED = u.finalize_spec([np.concatenate(i) for i in [[ww[wWein < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip([wWein, fWein, eWein], RJ, specPhot)]])
+        except IOError:
+            self.app_SED = ''
+            
         # =====================================================================
         # Flux calibrate everything
         # =====================================================================
         # TODO: Calibrate using self.distance, self.distance_unc
+        self.abs_SED = ''
         
         # =====================================================================
         # Calculate Fundamental Params
@@ -560,7 +588,7 @@ class MakeSED(object):
         except:
             self.Teff = self.Teff_unc = ''
     
-    def plot(self, photometry=True, spectra=True, app=True, scale=['log','log'], **kwargs):
+    def plot(self, photometry=True, spectra=True, integrals=True, app=True, scale=['log','log'], **kwargs):
         """
         Plot the SED
         
@@ -586,17 +614,20 @@ class MakeSED(object):
         
         # Plot spectra
         if spectra:
-            for row in self.piecewise:
-                plt.loglog(row['wavelength'].data, row['app_flux'].data)
-                
-            # spec_SED = self.app_spec_SED if app else self.abs_spec_SED
-            # plt.step(spec_SED[0], spec_SED[1], **kwargs)
-        
+            spec_SED = self.app_spec_SED if app else self.abs_spec_SED
+            plt.step(spec_SED[0], spec_SED[1], **kwargs)
+            
         # Plot photometry
         if photometry:
             phot_SED = self.app_phot_SED if app else self.abs_phot_SED
             plt.errorbar(phot_SED[0], phot_SED[1], yerr=phot_SED[2], marker='o', ls='None', **kwargs)
-        
+            
+        # Plot the SED with linear interpolation completion
+        if integrals:
+            full_SED = self.app_SED if app else self.abs_SED
+            plt.plot(full_SED[0].value, full_SED[1].value, color='k', alpha=0.5, ls='--')
+            plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
+            
         # Set the x andx  y scales
         plt.xscale(scale[0], nonposx='clip')
         plt.yscale(scale[1], nonposy='clip')

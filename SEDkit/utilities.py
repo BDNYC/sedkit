@@ -9,6 +9,7 @@ import re
 import numpy as np
 import astropy.units as q
 import astropy.constants as ac
+import matplotlib.pyplot as plt
 from svo_filters import svo
 
 FILTERS = svo.filters()
@@ -54,6 +55,57 @@ class ArrayWrapper(object):
         return ("<{0} name='{1}' data={2}>"
                 .format(self.__class__.__name__, self.info.name, self.data))
 
+def blackbody(lam, Teff, Teff_unc='', Flam=False, radius=1*ac.R_jup, dist=10*q.pc, plot=False):
+    """
+    Given a wavelength array and temperature, returns an array of Planck function values in [erg s-1 cm-2 A-1]
+    
+    Parameters
+    ----------
+    lam: array-like
+        The array of wavelength values to evaluate the Planck function
+    Teff: astropy.unit.quantity.Quantity
+        The effective temperature
+    Teff_unc: astropy.unit.quantity.Quantity
+        The effective temperature uncertainty
+    
+    Returns
+    -------
+    np.array
+        The array of intensities at the input wavelength values
+    """
+    # Check for radius and distance
+    if isinstance(radius, q.quantity.Quantity) and isinstance(dist, q.quantity.Quantity):
+        r_over_d =  (radius**2/dist**2).decompose()
+    else:
+        r_over_d = 1.
+        
+    # Get constant
+    const = np.pi*2*ac.h*ac.c**2*r_over_d/(lam**(4 if Flam else 5))
+    
+    # Calculate intensity
+    I = (const/(np.exp((ac.h*ac.c/(lam*ac.k_B*Teff)).decompose())-1)).to(q.erg/q.s/q.cm**2/(1 if Flam else q.AA))
+    
+    # Calculate the uncertainty
+    I_unc = ''
+    try:
+        ex = (1-np.exp(-1.*(ac.h*ac.c/(lam*ac.k_B*Teff)).decompose()))
+        I_unc = 10*(Teff_unc*I/ac.h/ac.c*lam*ac.k_B/ex).to(q.erg/q.s/q.cm**2/(1 if Flam else q.AA))
+    except IOError:
+        pass
+        
+    # Plot it
+    if plot:
+        plt.loglog(lam, I, label=Teff)
+        try:
+            plt.fill_between(lam.value, (I-I_unc).value, (I+I_unc).value, alpha=0.1)
+        except IOError:
+            pass
+            
+        plt.legend(loc=0, frameon=False)
+        plt.yscale('log', nonposy='clip')
+        
+    return I, I_unc
+
 def isnumber(s):
     """
     Tests to see if the given string is an int, float, or exponential
@@ -69,6 +121,23 @@ def isnumber(s):
         The boolean result
     """
     return s.replace('.','').replace('-','').replace('+','').isnumeric()
+
+def finalize_spec(spec):
+    """
+    Sort by wavelength and remove nans, negatives and zeroes
+
+    Parameters
+    ----------
+    spec: sequence
+        The [W,F,E] to be cleaned up
+        
+    Returns
+    -------
+    spec: sequence
+        The cleaned and ordered [W,F,E]
+    """
+    spec = list(zip(*sorted(zip(*map(list, [[i.value if hasattr(i, 'unit') else i for i in j] for j in spec])), key=lambda x: x[0])))
+    return scrub([spec[0]*q.um, spec[1]*q.erg/q.s/q.cm**2/q.AA, spec[2]*q.erg/q.s/q.cm**2/q.AA])
 
 def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
     """
