@@ -633,6 +633,51 @@ class MakeSED(object):
         plt.xscale(scale[0], nonposx='clip')
         plt.yscale(scale[1], nonposy='clip')
         
+    def write(self, dirpath, app=False, spec=True, phot=False):
+        """
+        Exports a file of photometry and a file of the composite spectra with minimal data headers
+
+        Parameters
+        ----------
+        dirpath: str
+          The directory path to place the file
+        app: bool
+          Write apparent SED data
+        spec: bool
+          Write a file for the spectra with wavelength, flux and uncertainty columns
+        phot: bool
+          Write a file for the photometry with
+
+        """
+        if spec:
+            try:
+                spec_data = self.app_spec_SED if app else self.abs_spec_SED
+                if dirpath.endswith('.txt'):
+                    specpath = dirpath
+                else:
+                    specpath = dirpath + '{} SED.txt'.format(self.name)
+                    
+                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name, 'apparent' if app else 'flux calibrated')
+                
+                np.savetxt(specpath, np.asarray(spec_data).T, header=header)
+                
+            except IOError:
+                print("Couldn't print spectra.")
+                
+        if phot:
+            try:
+                phot = self.photometry
+                
+                if dirpath.endswith('.txt'):
+                    photpath = dirpath
+                else:
+                    photpath = dirpath + '{} phot.txt'.format(self.name)
+                    
+                phot.write(photpath, format='ipac')
+                
+            except IOError:
+                print("Couldn't print photometry.")
+        
 NYMG = {'TW Hya': {'age_min': 8, 'age_max': 20, 'age_ref': 0},
          'beta Pic': {'age_min': 12, 'age_max': 22, 'age_ref': 0},
          'Tuc-Hor': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
