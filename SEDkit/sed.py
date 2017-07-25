@@ -254,7 +254,6 @@ class MakeSED(object):
         self.photometry['app_magnitude_unc'].unit = q.mag
         
         # Add effective wavelengths to the photometry table
-        print(self.photometry)
         self.photometry.add_column(at.Column(fill, 'eff', unit=self.wave_units))
         for row in self.photometry:
             try:
