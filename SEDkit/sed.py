@@ -51,7 +51,7 @@ def from_ids(db, **kwargs):
 
 class MakeSED(object):
     def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=10, SED_trim=[], split=[], trim=[], \
-        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name=''):
+        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name='', phot_aliases=''):
         """
         Pulls all available data from the BDNYC Data Archive, 
         constructs an SED, and stores all calculations at *pickle_path*
@@ -242,10 +242,10 @@ class MakeSED(object):
         for col in ['magnitude','magnitude_unc']:
             self.photometry[col][self.photometry[col]==None] = np.nan
             
-        # Rename bands
-        # HERE BE DRAGONS! This is specific to the BDNYC Database. Generalize this!
-        self.photometry['band'] = [i.replace('_','.') for i in self.photometry['band']]
-        
+        # Rename bands. What a pain in the ass.
+        if phot_aliases:
+            self.photometry['band'] = [phot_aliases.get(i) for i in self.photometry['band']]
+            
         # self.photometry['band'] = at.Column([b.replace('_','.') for b in list(self.photometry['band'])])
         self.photometry.add_index('band')
         self.photometry.rename_column('magnitude','app_magnitude')
