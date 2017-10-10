@@ -74,7 +74,7 @@ def all_mags(spectrum, bands='', plot=False, **kwargs):
     
 def get_mag(spectrum, bandpass, exclude=[], fetch='mag', photon=False, Flam=False, plot=False):
     """
-    Returns the magnitude of the given spectrum in the given band
+    Returns the integrated flux of the given spectrum in the given band
     
     Parameters
     ---------
@@ -82,15 +82,24 @@ def get_mag(spectrum, bandpass, exclude=[], fetch='mag', photon=False, Flam=Fals
         The [w,f,e] of the spectrum with astropy.units
     bandpass: str, svo_filters.svo.Filter
         The bandpass to calculate
+    exclude: sequecne
+        The wavelength ranges to exclude by linear interpolation between gap edges
+    photon: bool
+        Use units of photons rather than energy
+    Flam: bool
+        Use flux units rather than the default flux density units
+    plot: bool
+        Plot it
     
     Returns
     -------
     list
-        The magnitude and/or flux of the spectrum in the given band
+        The integrated flux of the spectrum in the given band
     """
+    # Get the Filter object if necessary
     if isinstance(bandpass, str):
         bandpass = svo.Filter(bandpass)
-    
+        
     # Get filter data in order
     unit = q.Unit(bandpass.WavelengthUnit)
     mn = bandpass.WavelengthMin*unit
@@ -103,14 +112,23 @@ def get_mag(spectrum, bandpass, exclude=[], fetch='mag', photon=False, Flam=Fals
     b = (1 if photon else q.erg)/q.s/q.cm**2/q.AA
     c = 1/q.erg
     
+    # Test if the bandpass has full spectral coverage
     if np.logical_and(mx < np.max(spectrum[0]), mn > np.min(spectrum[0])) \
     and all([np.logical_or(all([i<mn for i in rng]), all([i>mx for i in rng])) for rng in exclude]):
         
-        # Calculate synthetic flux
+        # Rebin spectrum to bandpass wavelengths
         w, f, sig_f = u.rebin_spec([i.value for i in spectrum], wav.value)*spectrum[1].unit
-        F = (np.trapz((f*rsr*((wav/(ac.h*ac.c)).to(c) if photon else 1)).to(b), x=wav)/(np.trapz(rsr, x=wav))).to(a)
-        sig_F = np.sqrt(np.sum(((sig_f*rsr*np.gradient(wav).value*((wav/(ac.h*ac.c)).to(c) if photon else 1))**2).to(a**2))) if sig_f else ''
         
+        # Calculate the integrated flux, subtracting the filter shape
+        F = (np.trapz((f*rsr*((wav/(ac.h*ac.c)).to(c) if photon else 1)).to(b), x=wav)/(np.trapz(rsr, x=wav))).to(a)
+        
+        # Caluclate the uncertainty
+        if sig_f:
+            sig_F = np.sqrt(np.sum(((sig_f*rsr*np.gradient(wav).value*((wav/(ac.h*ac.c)).to(c) if photon else 1))**2).to(a**2)))
+        else:
+            sig_F = ''
+            
+        # Make a plot
         if plot:
             plt.figure()
             plt.step(spectrum[0], spectrum[1], color='k', label='Spectrum')
@@ -128,7 +146,7 @@ def get_mag(spectrum, bandpass, exclude=[], fetch='mag', photon=False, Flam=Fals
         m, sig_m = flux2mag(bandpass, F, sig_f=sig_F)
         
         return [m, sig_m, F, sig_F] if fetch=='both' else [F, sig_F] if fetch=='flux' else [m, sig_m]
-
+        
     else:
         return ['']*4 if fetch=='both' else ['']*2
 
@@ -143,7 +161,7 @@ def norm_to_mag(spectrum, magnitude, bandpass):
     flx, flx_unc = u.mag2flux(bandpass.filterID.split('/')[1], magnitude, sig_m='', units=spectrum[1].unit)
     
     # Normalize the spectrum
-    spectrum[1] *= flx/mag
+    spectrum[1] *= np.trapz(bandpass.rsr[1], x=bandpass.rsr[0])*flx/mag
     
     return spectrum
 
@@ -315,9 +333,9 @@ def flux2mag(bandpass, f, sig_f='', photon=False):
     """
     For given band and flux returns the magnitude value (and uncertainty if *sig_f*)
     """
-    eff = bandpass.WavelengthEff
-    zp = bandpass.ZeroPoint
+    eff = bandpass.WavelengthEff*q.Unit(bandpass.WavelengthUnit)
     unit = q.erg/q.s/q.cm**2/q.AA
+    zp = bandpass.ZeroPoint*q.Unit(bandpass.ZeroPointUnit)
     
     # Convert to f_lambda if necessary
     if f.unit == 'Jy':
@@ -326,8 +344,9 @@ def flux2mag(bandpass, f, sig_f='', photon=False):
     
     # Convert energy units to photon counts
     if photon:
-        f = (f*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg), 
+        f = (f*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
         sig_f = (sig_f*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
+        zp = (zp*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
     
     # Calculate magnitude
     m = -2.5*np.log10((f/zp).value)
