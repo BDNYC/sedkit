@@ -123,92 +123,109 @@ class MakeSED(object):
         # Distance
         # =====================================================================
         
-        # Index and add units
-        fill = np.zeros(len(self.parallaxes))
-        self.parallaxes['parallax'].unit = q.mas
-        self.parallaxes['parallax_unc'].unit = q.mas
-        
-        # Add distance columns to the parallaxes table
-        self.parallaxes.add_column(at.Column(fill, 'distance', unit=q.pc))
-        self.parallaxes.add_column(at.Column(fill, 'distance_unc', unit=q.pc))
-        
-        # Check for input parallax or distance
-        if pi or dist:
-            self.parallaxes['adopted'] = fill
-            if pi:
-                self.parallaxes.add_row({'parallax':pi[0], 'parallax_unc':pi[1], \
-                    'adopted':1, 'publication_shortname':'Input'})
-            elif dist:
-                self.parallaxes.add_row({'distance':dist[0], 'distance_unc':dist[1],\
-                    'adopted':1, 'publication_shortname':'Input'})
-                    
-        # Calculate missing distance or parallax
-        for row in self.parallaxes:
-            if row['parallax'].value and not row['distance'].value:
-                distance = u.pi2pc(row['parallax'], row['parallax_unc'])
-                row['distance'] = distance[0]
-                row['distance_unc'] = distance[1]
-                
-            elif row['distance'].value and not row['parallax'].value:
-                parallax = u.pi2pc(row['distance'], row['distance_unc'], pc2pi=True)
-                row['parallax'] = parallax[0]
-                row['parallax_unc'] = parallax[1]
-                
-            else:
-                pass
-                
-        # Set adopted distance
-        if len(self.parallaxes)>0 and not any(self.parallaxes['adopted']==1):
-            self.parallaxes['adopted'][0] = 1
+        # Punt if no distance info
+        if len(self.parallaxes)==0 and pi=='' and dist=='':
+            print("\nNo distance for this source")
             
-        # Sort by adopted distance
-        self.parallaxes.add_index('adopted')
-        
-        # Get the adopted distance
-        try:
-            self.distance = self.parallaxes.loc[1]['distance']
-            self.distance_unc = self.parallaxes.loc[1]['distance_unc']
-        except KeyError:
             self.distance = self.distance_unc = ''
             
-        # Print
-        print('\nPARALLAXES')
-        self.parallaxes[['id','distance','distance_unc','publication_shortname']].pprint()
+        else:
+            
+            # Index and add units
+            fill = np.zeros(len(self.parallaxes))
+            self.parallaxes['parallax'].unit = q.mas
+            self.parallaxes['parallax_unc'].unit = q.mas
+            
+            # Add distance columns to the parallaxes table
+            self.parallaxes.add_column(at.Column(fill, 'distance', unit=q.pc))
+            self.parallaxes.add_column(at.Column(fill, 'distance_unc', unit=q.pc))
+            
+            # Check for input parallax or distance
+            if pi or dist:
+                self.parallaxes['adopted'] = fill
+                if pi:
+                    self.parallaxes.add_row({'parallax':pi[0], 'parallax_unc':pi[1], \
+                        'adopted':1, 'publication_shortname':'Input'})
+                elif dist:
+                    self.parallaxes.add_row({'distance':dist[0], 'distance_unc':dist[1],\
+                        'adopted':1, 'publication_shortname':'Input'})
+                        
+            # Calculate missing distance or parallax
+            for row in self.parallaxes:
+                if row['parallax'].value and not row['distance'].value:
+                    distance = u.pi2pc(row['parallax'], row['parallax_unc'])
+                    row['distance'] = distance[0]
+                    row['distance_unc'] = distance[1]
+                    
+                elif row['distance'].value and not row['parallax'].value:
+                    parallax = u.pi2pc(row['distance'], row['distance_unc'], pc2pi=True)
+                    row['parallax'] = parallax[0]
+                    row['parallax_unc'] = parallax[1]
+                    
+                else:
+                    pass
+                    
+            # Set adopted distance
+            if len(self.parallaxes)>0 and not any(self.parallaxes['adopted']==1):
+                self.parallaxes['adopted'][0] = 1
+                
+            # Sort by adopted distance
+            self.parallaxes.add_index('adopted')
+            
+            # Get the adopted distance
+            try:
+                self.distance = self.parallaxes.loc[1]['distance']
+                self.distance_unc = self.parallaxes.loc[1]['distance_unc']
+            except KeyError:
+                self.distance = self.distance_unc = ''
+                
+            # Print
+            print('\nPARALLAXES')
+            self.parallaxes[['id','distance','distance_unc','publication_shortname']].pprint()
         
         # =====================================================================
         # Spectral Type
         # =====================================================================
         
-        # Sort by adopted spectral types
-        fill = np.zeros(len(self.spectral_types))
-        
-        # Check for input parallax or distance
-        if spt:
-            self.spectral_types['adopted'] = fill
-            sp, sp_unc, sp_pre, sp_grv, sp_lc = u.specType(spt)
-            self.spectral_types.add_row({'spectral_type':sp, 'spectral_type_unc':sp_unc, 'gravity':sp_grv, 'suffix':sp_pre, 'adopted':1, 'publication_shortname':'Input'})
-                
-        # Set adopted spectral type
-        if len(self.spectral_types)>0 and not any(self.spectral_types['adopted']==1):
-            self.spectral_types['adopted'][0] = 1
-        
-        # Sort by adopted spectral type
-        self.spectral_types.add_index('adopted')
-        
-        # Get the adopted spectral type
-        try:
-            self.spectral_type = self.spectral_types.loc[1]['spectral_type']
-            self.spectral_type_unc = self.spectral_types.loc[1]['spectral_type_unc']
-            self.gravity = self.spectral_types.loc[1]['gravity']
-            self.suffix = self.spectral_types.loc[1]['suffix']
+        # Punt if no SpT info
+        if len(self.spectral_types)==0 and spt=='':
+            print("\nNo spectral type for this source")
             
-            self.SpT = u.specType([self.spectral_type, self.spectral_type_unc, self.suffix, self.gravity, ''])
-        except:
             self.spectral_type = self.spectral_type_unc = self.gravity = self.suffix = self.SpT = ''
-        
-        # Print
-        print('\nSPECTRAL TYPES')
-        self.spectral_types[['id','spectral_type','spectral_type_unc','regime','suffix','gravity','publication_shortname']].pprint()
+            
+        else:
+            
+            # Sort by adopted spectral types
+            fill = np.zeros(len(self.spectral_types))
+            print(self.spectral_types)
+            
+            # Check for input parallax or distance
+            if spt:
+                self.spectral_types['adopted'] = fill
+                sp, sp_unc, sp_pre, sp_grv, sp_lc = u.specType(spt)
+                self.spectral_types.add_row({'spectral_type':sp, 'spectral_type_unc':sp_unc, 'gravity':sp_grv, 'suffix':sp_pre, 'adopted':1, 'publication_shortname':'Input'})
+                
+            # Set adopted spectral type
+            if len(self.spectral_types)>0 and not any(self.spectral_types['adopted']==1):
+                self.spectral_types['adopted'][0] = 1
+                
+            # Sort by adopted spectral type
+            self.spectral_types.add_index('adopted')
+            
+            # Get the adopted spectral type
+            try:
+                self.spectral_type = self.spectral_types.loc[1]['spectral_type']
+                self.spectral_type_unc = self.spectral_types.loc[1]['spectral_type_unc']
+                self.gravity = self.spectral_types.loc[1]['gravity']
+                self.suffix = self.spectral_types.loc[1]['suffix']
+                self.SpT = u.specType([self.spectral_type, self.spectral_type_unc, self.suffix, self.gravity, ''])
+                
+            except:
+                self.spectral_type = self.spectral_type_unc = self.gravity = self.suffix = self.SpT = ''
+                
+            # Print
+            print('\nSPECTRAL TYPES')
+            self.spectral_types[['id','spectral_type','spectral_type_unc','regime','suffix','gravity','publication_shortname']].pprint()
         
         # =====================================================================
         # Age
@@ -267,10 +284,11 @@ class MakeSED(object):
         self.photometry.add_column(at.Column(fill, 'abs_magnitude_unc', unit=q.mag))
         
         # Calculate absolute mags and add to the photometry table
-        for row in self.photometry:
-            M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance, row['app_magnitude_unc'], self.distance_unc)
-            row['abs_magnitude'] = M
-            row['abs_magnitude_unc'] = M_unc
+        if self.distance:
+            for row in self.photometry:
+                M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance, row['app_magnitude_unc'], self.distance_unc)
+                row['abs_magnitude'] = M
+                row['abs_magnitude_unc'] = M_unc
             
         # Add flux density columns to the photometry table
         for colname in ['app_flux','app_flux_unc','abs_flux','abs_flux_unc']:
@@ -284,8 +302,9 @@ class MakeSED(object):
                 row[i+'flux_unc'] = ph_flux[1]
                 
         # Make relative and absolute photometric SEDs
-        self.app_phot_SED = (WP0, FP0, EP0) = np.array([self.photometry['eff'], self.photometry['app_flux'], self.photometry['app_flux_unc']])
+        self.app_phot_SED = np.array([self.photometry['eff'], self.photometry['app_flux'], self.photometry['app_flux_unc']])
         self.abs_phot_SED = np.array([self.photometry['eff'], self.photometry['abs_flux'], self.photometry['abs_flux_unc']])
+        WP0, FP0, EP0 = [Q*i for Q,i in zip(units,self.app_phot_SED)]
         
         # Print
         print('\nPHOTOMETRY')
@@ -399,15 +418,16 @@ class MakeSED(object):
                 for j in [list(self.piecewise[col]) for col in ['wavelength', 'app_flux', 'app_flux_unc']]], SED_trim), units)]
         else:
             self.app_spec_SED = [np.array([])]*3
-        
+            W, F, E = W0, F0, E0 = [Q*np.array([]) for Q in units]
+            
         # Create Rayleigh Jeans Tail
         RJ_wav = np.arange(5, 500, 0.1)*q.um
         RJ_flx, RJ_unc =  u.blackbody(RJ_wav, 1800*q.K, 300*q.K)
-
+        
         # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
         RJ_flx *= self.app_phot_SED[1][-1]/np.interp(self.app_phot_SED[0][-1], RJ_wav.value, RJ_flx.value)
         RJ = [RJ_wav, RJ_flx, RJ_unc]
-
+        
         # Exclude photometric points with spectrum coverage
         if self.piecewise:
             covered = []
@@ -418,20 +438,22 @@ class MakeSED(object):
             WP, FP, EP = [[i for n,i in enumerate(A) if n not in covered]*Q for A,Q in zip(self.app_phot_SED, units)]
         else:
             WP, FP, EP = WP0, FP0, EP0
-
+            
         # Use zero flux at zero wavelength from bluest data point for Wein tail approximation
-        wWein, fWein, eWein = np.array([0.00001])*self.wave_units, np.array([1E-30])*self.flux_units, np.array([1E-30])*self.flux_units
-
+        Wein = [np.array([0.00001])*self.wave_units, np.array([1E-30])*self.flux_units, np.array([1E-30])*self.flux_units]
+        
         # Create spectra + photometry SED for model fitting
         if self.spectra or self.photometry:
             specPhot = u.finalize_spec([i*Q for i,Q in zip([j.value for j in [np.concatenate(i) for i in [[pp, ss] for pp, ss in zip([WP, FP, EP], [W, F, E])]]], units)])
         else:
-            specPhot = ''
-
+            specPhot = [[999*q.um], None, None]
+            
         # Create full SED from Wien tail, spectra, linear interpolation between photometry, and Rayleigh-Jeans tail
         try:
             # self.app_SED = u.finalize_spec([np.concatenate(i) for i in [[ww[wWein < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip([wWein, fWein, eWein], RJ, specPhot)]])
-            self.app_SED = [np.concatenate(i) for i in [[ww[wWein < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip([wWein, fWein, eWein], RJ, specPhot)]]
+            # print(RJ[0], Wein[0], specPhot)
+            # print('foo:',[min(i) for i in [WP, specPhot[0]] if any(i)])
+            self.app_SED = [np.concatenate(i) for i in [[ww[Wein[0] < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip(Wein, RJ, specPhot)]]
         except IOError:
             self.app_SED = ''
             
