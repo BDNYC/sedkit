@@ -8,6 +8,7 @@ SEDkit rewritten with astropy and astrodbkit
 import numpy as np
 import astropy.table as at
 import astropy.units as q
+import astropy.constants as ac
 import matplotlib.pyplot as plt
 from . import utilities as u
 from . import syn_phot as s
@@ -85,7 +86,7 @@ class MakeSED(object):
         # Or get the inventory from the database
         else:
             all_data = db.inventory(source_id, fetch=True)
-                
+            
         # Store the tables as attributes
         for table in ['sources','spectra','photometry','spectral_types','parallaxes']:
             
@@ -133,12 +134,18 @@ class MakeSED(object):
             
             # Index and add units
             fill = np.zeros(len(self.parallaxes))
-            self.parallaxes['parallax'].unit = q.mas
-            self.parallaxes['parallax_unc'].unit = q.mas
             
             # Add distance columns to the parallaxes table
-            self.parallaxes.add_column(at.Column(fill, 'distance', unit=q.pc))
-            self.parallaxes.add_column(at.Column(fill, 'distance_unc', unit=q.pc))
+            self.parallaxes.add_column(at.Column(fill, 'distance'))
+            self.parallaxes.add_column(at.Column(fill, 'distance_unc'))
+            
+            # Add units
+            self.parallaxes.add_row(np.zeros(len(self.parallaxes.colnames)))
+            self.parallaxes['parallax'].unit = q.mas
+            self.parallaxes['parallax_unc'].unit = q.mas
+            self.parallaxes['distance'].unit = q.pc
+            self.parallaxes['distance_unc'].unit = q.pc
+            self.parallaxes = self.parallaxes[:-1]
             
             # Check for input parallax or distance
             if pi or dist:
@@ -197,7 +204,6 @@ class MakeSED(object):
             
             # Sort by adopted spectral types
             fill = np.zeros(len(self.spectral_types))
-            print(self.spectral_types)
             
             # Check for input parallax or distance
             if spt:
@@ -246,7 +252,7 @@ class MakeSED(object):
         # =====================================================================
         
         # Use radius if given
-        self.radius, self.radius_unc = radius or ['', '']
+        self.radius, self.radius_unc = radius or [ac.R_jup, ac.R_jup/100.]
         
         # =====================================================================
         # Photometry
@@ -301,9 +307,9 @@ class MakeSED(object):
                 row[i+'flux'] = ph_flux[0]
                 row[i+'flux_unc'] = ph_flux[1]
                 
-        # Make relative and absolute photometric SEDs
-        self.app_phot_SED = np.array([self.photometry['eff'], self.photometry['app_flux'], self.photometry['app_flux_unc']])
-        self.abs_phot_SED = np.array([self.photometry['eff'], self.photometry['abs_flux'], self.photometry['abs_flux_unc']])
+        # Make apparent photometric SED from photometry with uncertainties
+        with_unc = self.photometry[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
+        self.app_phot_SED = np.array([with_unc['eff'], with_unc['app_flux'], with_unc['app_flux_unc']])
         WP0, FP0, EP0 = [Q*i for Q,i in zip(units,self.app_phot_SED)]
         
         # Print
@@ -371,12 +377,12 @@ class MakeSED(object):
         # Print
         print('\nSPECTRA')
         self.spectra[['id','instrument_id','telescope_id','mode_id','publication_shortname']].pprint()
-                                  
+        
         # =====================================================================
         # Construct SED
         # =====================================================================
         
-        # Group overlapping spectra and make composites where possible 
+        # Group overlapping spectra and make composites where possible
         # to form peacewise spectrum for flux calibration
         if len(all_spectra) > 1:
             groups, piecewise = u.group_spectra(all_spectra), []
@@ -386,7 +392,7 @@ class MakeSED(object):
                 
         # If only one spectrum, no need to make composite
         elif len(all_spectra) == 1:
-            piecewise = all_spectra
+            piecewise = np.copy(all_spectra)
             
         # If no spectra, forget it
         else:
@@ -400,7 +406,7 @@ class MakeSED(object):
                 wavs = list(filter(None, [np.where(pw[0]<i)[0][-1] if pw[0][0]<i and pw[0][-1]>i else None for i in split]))
                 keepers += map(list, zip(*[np.split(i, list(wavs)) for i in pw]))
                 
-            piecewise = keepers
+            piecewise = np.copy(keepers)
             
         # Normalize the composite spectra to the available photometry
         for n,spec in enumerate(piecewise):
@@ -433,7 +439,7 @@ class MakeSED(object):
             covered = []
             for n, i in enumerate(WP0):
                 for N,spec in enumerate(self.piecewise):
-                    if i<spec['wavelength'][-1] and i>spec['wavelength'][0]:
+                    if i.value<spec['wavelength'][-1] and i.value>spec['wavelength'][0]:
                         covered.append(n)
             WP, FP, EP = [[i for n,i in enumerate(A) if n not in covered]*Q for A,Q in zip(self.app_phot_SED, units)]
         else:
@@ -450,9 +456,6 @@ class MakeSED(object):
             
         # Create full SED from Wien tail, spectra, linear interpolation between photometry, and Rayleigh-Jeans tail
         try:
-            # self.app_SED = u.finalize_spec([np.concatenate(i) for i in [[ww[wWein < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip([wWein, fWein, eWein], RJ, specPhot)]])
-            # print(RJ[0], Wein[0], specPhot)
-            # print('foo:',[min(i) for i in [WP, specPhot[0]] if any(i)])
             self.app_SED = [np.concatenate(i) for i in [[ww[Wein[0] < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip(Wein, RJ, specPhot)]]
         except IOError:
             self.app_SED = ''
@@ -460,18 +463,16 @@ class MakeSED(object):
         # =====================================================================
         # Flux calibrate everything
         # =====================================================================
-        # TODO: Calibrate using self.distance, self.distance_unc
-        self.abs_SED = ''
+        # Calibrate using self.distance, self.distance_unc
+        self.abs_SED = u.flux_calibrate(self.app_SED[1], self.distance, self.app_SED[2], self.distance_unc)
+        self.abs_phot_SED = u.flux_calibrate(self.app_phot_SED[1], self.distance, self.app_phot_SED[2], self.distance_unc)
+        self.abs_spec_SED = u.flux_calibrate(self.app_spec_SED[1], self.distance, self.app_spec_SED[2], self.distance_unc)
         
         # =====================================================================
         # Calculate Fundamental Params
         # =====================================================================
         # TODO
-        # self.fundamental_params(**kwargs)
-        self.Teff = 1234
-        self.Teff_unc = 78
-        self.Lbol = -4.321
-        self.Lbol_unc = 0.123
+        self.fundamental_params()
         
         # =====================================================================
         # Save the data to file for cmd.py to read
@@ -480,7 +481,7 @@ class MakeSED(object):
         
         print('\n'+'='*100)
         
-    
+        
     def fundamental_params(self, age='', nymg='', evo_model='hybrid_solar_age'):
         """
         Calculate the fundamental parameters of the current SED
@@ -518,7 +519,7 @@ class MakeSED(object):
                 
         # No dice
         except:
-            self.mbol, self.mbol_unc = ''
+            self.mbol = self.mbol_unc = ''
         
         
     def get_Mbol(self):
@@ -548,17 +549,18 @@ class MakeSED(object):
         Calculate the bolometric flux of the SED
         """
         # Calculate fbol
+        flx_units = q.erg/q.s/q.cm**2
         try:
-            self.fbol = (np.trapz(self.app_SED.flux, x=self.app_SED.wavelength)).to(self.flux_units*self.wave_units)
+            self.fbol = np.trapz(self.app_SED[1], x=self.app_SED[0])*flx_units
             
             # Calculate fbol_unc
             try:
-                self.fbol_unc = np.sqrt(np.sum((self.app_SED.unc*np.gradient(self.app_SED.wavelength)).to(self.flux_units*self.wave_units).value**2))
+                self.fbol_unc = np.sqrt(np.sum(self.app_SED[2]*np.gradient(self.app_SED[0]))**2)*flx_units
             except:
                 self.fbol_unc = ''
                 
         # No dice
-        except:
+        except IOError:
             self.fbol = self.fbol_unc = ''
         
     def get_Lbol(self):
@@ -668,7 +670,6 @@ class MakeSED(object):
           Write a file for the spectra with wavelength, flux and uncertainty columns
         phot: bool
           Write a file for the photometry with
-
         """
         if spec:
             try:

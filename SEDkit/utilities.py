@@ -168,7 +168,7 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
             Mag = mag*(dist/scale_to)**2
             Mag = Mag.round(3)
             
-            if isinstance(sig_d, q.quantity.Quantity) and sig_m:
+            if isinstance(sig_d, q.quantity.Quantity) and sig_m!='':
                 Mag_unc = np.sqrt((sig_m*dist/scale_to)**2 + (2*mag*(sig_d*dist/scale_to**2))**2)
                 Mag_unc = Mag_unc.round(3)
                 
@@ -182,7 +182,7 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
             print('Could not flux calibrate that input to distance {}.'.format(dist))
             return [np.nan, np.nan]
             
-    except:
+    except IOError:
         
         print('Could not flux calibrate that input to distance {}.'.format(dist))
         return [np.nan, np.nan]
