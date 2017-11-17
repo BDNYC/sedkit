@@ -411,14 +411,14 @@ def spectral_index(spectrum, spec_index, db, data_table='', plot=False):
 
 
 def NYMGs():
-    D = {'TW Hya': {'age_min': 8, 'age_max': 20, 'age_ref': 0},
-         'beta Pic': {'age_min': 12, 'age_max': 22, 'age_ref': 0},
-         'Tuc-Hor': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
-         'Columba': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
-         'Carina': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
-         'Argus': {'age_min': 30, 'age_max': 50, 'age_ref': 0},
-         'AB Dor': {'age_min': 50, 'age_max': 120, 'age_ref': 0},
-         'Pleiades': {'age_min': 110, 'age_max': 130, 'age_ref': 0}}
+    D = {'TW Hya': {'age_min': 7, 'age_max': 13, 'age_ref': 0},  # Bell et. al 2015 (arxiv.org/pdf/1508.05955.pdf)
+         'beta Pic': {'age_min': 21, 'age_max': 27, 'age_ref': 0},  # Bell et. al 2015
+         'Tuc-Hor': {'age_min': 41, 'age_max': 49, 'age_ref': 0},  # Bell et. al 2015
+         'Columba': {'age_min': 38, 'age_max': 48, 'age_ref': 0},  # Bell et. al 2015
+         'Carina': {'age_min': 38, 'age_max': 56, 'age_ref': 0},  # Bell et. al 2015
+         'Argus': {'age_min': 30, 'age_max': 50, 'age_ref': 0},   # Malo 2013
+         'AB Dor': {'age_min': 130, 'age_max': 200, 'age_ref': 0},  # Bell et. al 2015
+         'Pleiades': {'age_min': 110, 'age_max': 130, 'age_ref': 0}}  # Malo 2013
     return D
 
 
