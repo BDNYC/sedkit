@@ -13,7 +13,7 @@ import sys, os, copy, pickle, re, pandas as pd, matplotlib.pyplot as plt, numpy 
     scipy.interpolate as si, matplotlib.ticker
 import SEDkit.utilities as u
 import SEDkit.syn_phot as s
-import SEDkit.interact
+import SEDkit.interact as interact
 
 RSR = u.get_filters()
 package = os.path.dirname(u.__file__)
@@ -268,9 +268,10 @@ def isochrone_interp(z, z_unc, min_age, max_age, xparam='Lbol', yparam='radius',
 
     if plot:
         ax = plt.gca()
-        ax.set_ylabel(r'${}$'.format(ylabel or yparam), fontsize=22, labelpad=5), ax.set_xlabel(
-            r'${}$'.format(xlabel or xparam), fontsize=22, labelpad=15), plt.grid(True, which='both'), plt.title(
-            evo_model.replace('_', '-') if title else '')
+        ax.set_ylabel(r'${}$'.format(ylabel or yparam))#, fontsize=22, labelpad=5)
+        ax.set_xlabel(r'${}$'.format(xlabel or xparam))#, fontsize=22, labelpad=15)
+        plt.grid(True, which='both')
+        plt.title(evo_model.replace('_', '-') if title else '')
         # ax.axvline(x=z-z_unc, ls='-', color='0.7', zorder=-3), ax.axvline(x=z+z_unc, ls='-', color='0.7', zorder=-3)
         ax.add_patch(plt.Rectangle((z - z_unc, 0), 2 * z_unc, 10, color='0.7', zorder=-3))
         xlims, ylims = ax.get_xlim(), ax.get_ylim()
@@ -410,14 +411,14 @@ def spectral_index(spectrum, spec_index, db, data_table='', plot=False):
 
 
 def NYMGs():
-    D = {'TW Hya': {'age_min': 8, 'age_max': 20, 'age_ref': 0},
-         'beta Pic': {'age_min': 12, 'age_max': 22, 'age_ref': 0},
-         'Tuc-Hor': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
-         'Columba': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
-         'Carina': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
-         'Argus': {'age_min': 30, 'age_max': 50, 'age_ref': 0},
-         'AB Dor': {'age_min': 50, 'age_max': 120, 'age_ref': 0},
-         'Pleiades': {'age_min': 110, 'age_max': 130, 'age_ref': 0}}
+    D = {'TW Hya': {'age_min': 7, 'age_max': 13, 'age_ref': 0},  # Bell et. al 2015 (arxiv.org/pdf/1508.05955.pdf)
+         'beta Pic': {'age_min': 21, 'age_max': 27, 'age_ref': 0},  # Bell et. al 2015
+         'Tuc-Hor': {'age_min': 41, 'age_max': 49, 'age_ref': 0},  # Bell et. al 2015
+         'Columba': {'age_min': 38, 'age_max': 48, 'age_ref': 0},  # Bell et. al 2015
+         'Carina': {'age_min': 38, 'age_max': 56, 'age_ref': 0},  # Bell et. al 2015
+         'Argus': {'age_min': 30, 'age_max': 50, 'age_ref': 0},   # Malo 2013
+         'AB Dor': {'age_min': 130, 'age_max': 200, 'age_ref': 0},  # Bell et. al 2015
+         'Pleiades': {'age_min': 110, 'age_max': 130, 'age_ref': 0}}  # Malo 2013
     return D
 
 
@@ -904,15 +905,14 @@ class GetData(object):
                                 plt.connect('button_press_event', interact.AnnoteFinder(X, Y, N))
 
                     if verbose:
-                        u.printer(
-                            ['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam, zparam + '_unc',
-                             'Gravity', 'Binary', 'Age'] if zparam \
-                                else ['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', 'Gravity',
-                                      'Binary', 'Age'], \
-                            zip(*[N, S, X, Xsig, Y, Ysig, Z, Zsig, G, B, NYMG]) if zparam else zip(
-                                *[N, S, X, Xsig, Y, Ysig, G, B, NYMG]), empties=True)
+                        at.Table(zip(*[N, S, X, Xsig, Y, Ysig, Z, Zsig, G, B, NYMG]) if zparam else zip(
+                                *[N, S, X, Xsig, Y, Ysig, G, B, NYMG]), names=['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam, zparam + '_unc',
+                             'Gravity', 'Binary', 'Age'] if zparam else ['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', 'Gravity',
+                                      'Binary', 'Age']).pprint()
 
-                if return_data == 'params': data_out.append(z)
+                if return_data == 'params': 
+                    data_out.append(z)
+                
                 if output_data and output_data != 'polynomials':
                     u.printer(['Name', 'SpT', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam, zparam + '_unc',
                                'Gravity', 'Binary', 'Age'], \
@@ -1001,20 +1001,29 @@ class GetData(object):
                                     ncol=1 if groups == ['fld'] else 2, loc=0)
 
             # Saving, returning, and printing
-            if save: plt.savefig(save if '.png' in save else (save + '{} vs {}.png'.format(yparam, xparam)))
+            if save: 
+                plt.savefig(save if '.png' in save else (save + '{} vs {}.png'.format(yparam, xparam)))
 
-            u.printer(['SpT', 'Field', 'NYMG', 'low_g', 'Total'],
-                      [['M', len(M_fld), len(M_ymg), len(M_lowg), len(M_fld + M_ymg + M_lowg)],
-                       ['L', len(L_fld), len(L_ymg), len(L_lowg), len(L_fld + L_ymg + L_lowg)],
-                       ['T', len(T_fld), len(T_ymg), len(T_lowg), len(T_fld + T_ymg + T_lowg)],
-                       ['Y', len(Y_fld), len(Y_ymg), len(Y_lowg), len(Y_fld + Y_ymg + Y_lowg)],
-                       ['Total', len(M_fld + L_fld + T_fld + Y_fld), len(M_ymg + L_ymg + T_ymg + Y_ymg),
-                        len(M_lowg + L_lowg + T_lowg + Y_lowg), len(
-                           M_fld + M_ymg + M_lowg + L_fld + L_ymg + L_lowg + T_fld + T_ymg + T_lowg + Y_fld + Y_ymg + Y_lowg)]])
-            if rejected and verbose: u.printer(['name', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam or 'z',
+            view = [['Field', 'NYMG', 'low_g', 'Total'],
+                    [len(M_fld), len(M_ymg), len(M_lowg), len(M_fld + M_ymg + M_lowg)],
+                    [len(L_fld), len(L_ymg), len(L_lowg), len(L_fld + L_ymg + L_lowg)],
+                    [len(T_fld), len(T_ymg), len(T_lowg), len(T_fld + T_ymg + T_lowg)],
+                    [len(Y_fld), len(Y_ymg), len(Y_lowg), len(Y_fld + Y_ymg + Y_lowg)],
+                    [len(M_fld + L_fld + T_fld + Y_fld), len(M_ymg + L_ymg + T_ymg + Y_ymg),
+                     len(M_lowg + L_lowg + T_lowg + Y_lowg), 
+                     len(M_fld + M_ymg + M_lowg + L_fld + L_ymg + L_lowg + T_fld + T_ymg + T_lowg + Y_fld + Y_ymg + Y_lowg)]]
+            presults = at.Table(view, names=['-','M', 'L', 'T', 'Y', 'Total'])
+            presults.pprint()
+            
+            
+            if rejected and verbose: 
+                rej = at.Table(rejected, names=['name', xparam, xparam + '_unc', yparam, yparam + '_unc', zparam or 'z',
                                                 zparam + '_unc' if zparam else 'z_unc', 'gravity', 'binary', 'SpT',
-                                                'SpT_unc', 'NYMG'], rejected, title='REJECTED', empties=True)
-            if return_data and data_out: return data_out
+                                                'SpT_unc', 'NYMG'])
+                rej.pprint()
+                
+            if return_data and data_out: 
+                return data_out
 
         else:
             print("No objects with {} and {} values.".format(xparam, yparam))
@@ -1365,12 +1374,13 @@ class MakeSED(object):
     pop: sequence (optional)
       Photometric bands to exclude from the SED
     SNR_trim: sequence or float (optional)
-      A float representing the signal-to-noise ratio used to trim spectra edges or a sequence of (spec_id,snr) pairs of the SNR value used to trim a particular spectrum, e.g. 15 or [(1580,15),(4012,25)] for spec_ids 1580 and 4012
+      A float representing the signal-to-noise ratio used to trim spectra edges or a sequence of (spec_id,snr) pairs of
+      the SNR value used to trim a particular spectrum, e.g. 15 or [(1580,15),(4012,25)] for spec_ids 1580 and 4012
     SNR:  sequence (optional)
       A sequence of (spec_id,snr) pairs of the signal-to-noise values to use for a given spectrum
     trim: sequence (optional)
       A sequence of (spec_id,x1,x2) tuples of the lower and upper wavelength values to trim from a given spectrum
-    split: sequence (optiona)
+    split: sequence (optional)
       A sequence of wavelength positions in microns at which to split the SED spectra
     SED_trim: sequence (optional)
       The (x1,x2) values to trim the full SED by, e.g. [(0,1),(1.4,100)] for just J-band
@@ -1392,9 +1402,9 @@ class MakeSED(object):
 
         try:
 
-            # =====================================================================================================================================
-            # ======================================= METADATA ====================================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= METADATA =========================================================
+            # ==========================================================================================================
 
             # Retreive source metadata
             source = db.query("SELECT * FROM sources WHERE id=?", (source_id,), fetch='one', fmt='dict')
@@ -1406,9 +1416,9 @@ class MakeSED(object):
             print(self.name, "=" * (116 - len(self.name)))
             self.data['source_id'], self.data['binary'] = source['id'], binary
 
-            # =====================================================================================================================================
-            # ======================================= SPECTRAL TYPE ===============================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= SPECTRAL TYPE ====================================================
+            # ==========================================================================================================
 
             # Retreive OPT and IR spectral type data but choose OPT for M+L and IR for T+Y
             OPT_SpT = dict(db.query(
@@ -1441,9 +1451,9 @@ class MakeSED(object):
                 'gravity'], self.data['suffix'] = spec_type, SpT.get('spectral_type'), SpT.get(
                 'spectral_type_unc') or 0.5, SpT.get('publication_shortname'), SpT.get('gravity'), SpT.get('suffix')
 
-            # =====================================================================================================================================
-            # ======================================= AGE and RADIUS ==============================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= AGE and RADIUS ===================================================
+            # ==========================================================================================================
 
             # Retreive age data from input NYMG membership, input age range, or age estimate
             NYMG = NYMGs()
@@ -1460,9 +1470,9 @@ class MakeSED(object):
             # Use radius if given
             self.data['radius'], self.data['radius_unc'] = radius or ['', '']
 
-            # =====================================================================================================================================
-            # ======================================= DISTANCE ====================================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= DISTANCE =========================================================
+            # ==========================================================================================================
 
             # Retrieve distance manually from *dist* argument or convert parallax into distance
             parallax = db.query("SELECT * FROM parallaxes WHERE source_id={} AND adopted=1".format(source['id']),
@@ -1482,9 +1492,9 @@ class MakeSED(object):
                 'comments'].lower() else False
             if not self.data['d']: print('No distance for flux calibration!')
 
-            # =====================================================================================================================================
-            # ======================================= PHOTOMETRY ==================================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= PHOTOMETRY =======================================================
+            # ==========================================================================================================
 
             # Retrieve all apparent photometry
             all_photometry = db.query(
@@ -1606,9 +1616,9 @@ class MakeSED(object):
             else:
                 print('No photometry available for SED.')
 
-            # =====================================================================================================================================
-            # ======================================= PROCESS SPECTRA =============================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= PROCESS SPECTRA ==================================================
+            # ==========================================================================================================
 
             # Retrieve spectra
             if spec_ids:
@@ -1707,7 +1717,7 @@ class MakeSED(object):
                 # Remove NaNs, negatives and zeroes from flux array
                 w, f, e = u.unc([w, f, e])
 
-                # Trim spectra frist up to first point with SNR>SNR_trim then manually
+                # Trim spectra first up to first point with SNR>SNR_trim then manually
                 spec_coverage.append(w)
                 if isinstance(SNR_trim, (float, int)):
                     snr_trim = SNR_trim
@@ -1740,9 +1750,9 @@ class MakeSED(object):
 
             if self.spectra.empty: print('No spectra available for SED.')
 
-            # =====================================================================================================================================
-            # ======================================= CONSTRUCT SED ===============================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= CONSTRUCT SED ====================================================
+            # ==========================================================================================================
 
             # Group overlapping spectra and make composites where possible to form peacewise spectrum for flux calibration
             if len(self.spectra) > 1:
@@ -1840,9 +1850,9 @@ class MakeSED(object):
             except IOError:
                 self.data['SED_app'] = ''
 
-            # =====================================================================================================================================
-            # ======================================= FLUX CALIBRATE EVERYTHING ===================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= FLUX CALIBRATE EVERYTHING ========================================
+            # ==========================================================================================================
 
             # Flux calibrate if possible
             if self.data['d'] and not self.photometry.empty:
@@ -1862,16 +1872,16 @@ class MakeSED(object):
                 self.data['SED_abs'] = self.data['SED_spec_abs'] = self.data['SED_phot_abs'] = ''
                 self.data['norm'] = 1.
 
-            # =====================================================================================================================================
-            # ======================================= MEASURE FUNDAMENTAL PARAMETERS ==============================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= MEASURE FUNDAMENTAL PARAMETERS ===================================
+            # ==========================================================================================================
 
             # Calculate all fundamental paramters without models
             self.data = fundamental_params(self.data, p='', plot=diagnostics)
 
-            # =====================================================================================================================================
-            # ======================================= PRINTING ====================================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= PRINTING =========================================================
+            # ==========================================================================================================
 
             # db.inventory(source['id'])
             print(' ')
@@ -1883,7 +1893,9 @@ class MakeSED(object):
             print(' ')
             if not self.spectra.empty: 
                 p = np.asarray(df_extract(self.spectra.reset_index(), ['regime', 'instrument_id', 'mode_id', 'telescope_id', 'publication_shortname', 'filename','obs_date'])).T
-                print(at.Table(p, names=['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date']))
+                #print(at.Table(p, names=['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date']))
+                temp_results =at.Table(p, names=['Regime', 'Instrument', 'Mode', 'Telescope', 'Publication', 'Filename', 'Obs Date'])
+                temp_results.pprint(max_lines=-1, max_width=-1)  # Ensure all columns/rows are displayed
             print(' ')
             if self.data['d']:
                 p = np.array(['{}({})'.format(self.data['Lbol'], self.data['Lbol_unc']),
@@ -1893,12 +1905,14 @@ class MakeSED(object):
                      '-' if binary else '{}({})'.format(self.data['logg'], self.data['logg_unc']),
                      '{}-{}'.format(self.data['age_min'], self.data['age_max']),
                      '{}({})'.format(self.data['d'].value, self.data['d_unc'].value)]).T
-                print(at.Table(p, names=['Lbol', 'Teff', 'R_Jup', 'M_Jup', 'logg', 'Age', 'Dist']))
+                # print(at.Table(p, names=['Lbol', 'Teff', 'R_Jup', 'M_Jup', 'logg', 'Age', 'Dist']))
+                temp_results = at.Table(p, names=['Lbol', 'Teff', 'R_Jup', 'M_Jup', 'logg', 'Age', 'Dist'])
+                temp_results.pprint(max_lines=-1, max_width=-1)  # Ensure all columns/rows are displayed
             print(' ')
 
-            # =====================================================================================================================================
-            # ======================================= OUTPUT ======================================================================================
-            # =====================================================================================================================================
+            # ==========================================================================================================
+            # ======================================= OUTPUT ===========================================================
+            # ==========================================================================================================
 
             if not self.photometry.empty:
                 # Add the photometry to the SED object data
@@ -1959,6 +1973,26 @@ class MakeSED(object):
         except IOError:
             print("Could not build SED for source {}.".format(source['id']))
         print('\n')
+        
+    def synthetic_mags(self, bands=RSR.keys(), data_pickle=''):
+        data = self.data
+
+        # Get the apparent SED and calculate all the synthetic mags
+        spec = self.data['SED_app']
+        mags = s.all_mags(spec, bands=bands, photon=False, Flam=False)
+        data.update(mags)
+        
+        # Get the apparent SED and calculate all the synthetic mags
+        spec = self.data['SED_abs']
+        mags = s.all_mags(spec, bands=bands, photon=False, Flam=False)
+        Mags = {'M_'+k:v for k,v in mags.items()}
+        data.update(Mags)
+        
+        # Add it to the dictionary
+        self.data = data
+        
+        if data_pickle:
+            data_pickle.add_source(self.data, self.name, update=True)
 
     def fit_SED(self, model_db_path, model_fits=[('bt_settl_2013', 2, 2)], mask=[(1.12, 1.16), (1.35, 1.42)],
                 param_lims=[], fit_spec=True, fit_phot=False, data_pickle='', save=''):
@@ -2137,8 +2171,8 @@ class MakeSED(object):
 
     def plot(self, Flam=False, app=False, photometry=True, spectra=False, composites=True, \
              models=True, integrals=False, model_syn_photometry=True, model_integrals=False, \
-             figsize=(12, 8), xaxis='', yaxis='', scale=['log', 'log'], legend=True, overplot=False, \
-             zorder=0, colors=['k', 'k', 'k'], save=''):
+             figsize=(8, 6), xaxis='', yaxis='', scale=['log', 'log'], legend=True, overplot=False, \
+             zorder=0, colors=['k', 'k', 'k'], save='', latex=True):
         '''
     Plot the SED
 
@@ -2186,7 +2220,8 @@ class MakeSED(object):
     None
     '''
         # Draw the figure and load the axes
-        plt.rc('text', usetex=True), plt.rc('text', fontsize=22)
+        plt.rc('text', usetex=latex)
+        # plt.rc('text', fontsize=22) # this overwrites the default text size, which I don't like
         if not overplot: fig = plt.figure(figsize=figsize)
         ax = overplot if hasattr(overplot, 'figure') else plt.gca()
 
@@ -2203,6 +2238,7 @@ class MakeSED(object):
         if spectra:
             for (spec_id, spec) in self.spectra.iterrows():
                 plt.step(spec['wavelength'], lam(spec['flux_' + suf]), where='mid', color=colors[0], alpha=0.9)
+                # TODO: Check this, not sure that lam() is working as intended for spectra. Only returns l[1]
 
         # Plot the composite spectra
         if composites:
@@ -2261,10 +2297,15 @@ class MakeSED(object):
         # Format the axes
         ax.set_xlim(xaxis or (0.3, 30)), ax.set_xscale(scale[0]), ax.set_yscale(scale[1], nonposy='clip')
         if yaxis: ax.set_ylim(yaxis)
-        ax.set_xlabel(r"$\displaystyle\lambda\mbox{ (}\mu\mbox{m)}$", labelpad=10)
-        ax.set_ylabel(
-            r"$\displaystyle" + ('\lambda' if Flam else '') + " F_\lambda\mbox{ (erg s}^{-1}\mbox{ cm}^{-2}" + (
-                '' if Flam else '\mbox{ A}^{-1}') + ")$", labelpad=20)
+        if latex:
+            ax.set_xlabel(r"$\displaystyle\lambda\mbox{ (}\mu\mbox{m)}$", labelpad=10)
+            ax.set_ylabel(
+                r"$\displaystyle" + ('\lambda' if Flam else '') + " F_\lambda\mbox{ (erg s}^{-1}\mbox{ cm}^{-2}" + (
+                    '' if Flam else '\mbox{ A}^{-1}') + ")$", labelpad=20)
+        else:
+            ax.set_xlabel("Lambda", labelpad=10)
+            ax.set_ylabel("" + ('\lambda' if Flam else '') + " F_\lambda\mbox{ (erg s}^{-1}\mbox{ cm}^{-2}" + (
+                    '' if Flam else '\mbox{ A}^{-1}') + ")", labelpad=20)
         if legend: ax.legend(loc=8, frameon=False, fontsize=16,
                              title='({}) {}'.format(self.data['spectral_type'], self.name))
         plt.ion()
@@ -2468,15 +2509,18 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
                              (RSR[b]['max'] - RSR[b]['min']).value if weighting else 1.])
 
         # Make arrays of values and calculate normalization factor that minimizes the function
+        # w- "filter wavelength", f2, e2- synthetic flux and error , f1 and e1- real flux and error
         w, f2, e2, f1, e1, weight = [np.array(i, np.float) for i in np.array(data).T]
         norm = sum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2)) / sum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
 
         # Plotting test
         if plot:
-            plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
-            plt.loglog(spec[0].value, spec[1].value * norm, label='new', color='b')
-            plt.scatter(w, f1, c='g')
-            plt.scatter(w, f2, c='b')
+            # plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
+            # plt.loglog(spec[0].value, spec[1].value * norm, label='new', color='b')
+            plt.semilogy(spec[0].value, spec[1].value, label='old', color='g')
+            plt.semilogy(spec[0].value, spec[1].value * norm, label='new', color='b')
+            plt.scatter(w, f1, c='g', s=50)
+            plt.scatter(w, f2, c='b', s=50)
             plt.legend()
 
         return [spec[0], spec[1] / norm, spec[2] / norm] if reverse else [spec[0], spec[1] * norm, spec[2] * norm]

@@ -3,6 +3,7 @@
 import warnings, glob, os, re, xlrd, pickle, itertools, astropy.units as q, astropy.constants as ac, numpy as np, \
     matplotlib.pyplot as plt, astropy.coordinates as apc, scipy.stats as st, astropy.io.fits as pf, \
     scipy.optimize as opt
+import astropy.table as at
 from random import random
 from heapq import nsmallest, nlargest
 from scipy.interpolate import Rbf
@@ -140,6 +141,10 @@ def filter_info(band):
                         'toVega': 0, 'ext': 0, 'system': 'Gaia'},
         "Gaia_RP"    : {'eff'   : 0.75, 'min': 0.627, 'max': 1.103, 'zp': 1.294828e-09, 'zp_photon': 4.948727e+02,
                         'toVega': 0, 'ext': 0, 'system': 'Gaia'},
+        
+        "ESO1077"    : {'eff'   : 0.790063, 'min': 0.698018, 'max': 0.912668, 'zp': 1.164e-9, 'zp_photon': 5.278550e+02,
+                        'toVega': 0, 'ext': 0, 'system': 'Johnson'},
+                        
 
         "HST_F090M"  : {'eff'      : 0.897360, 'min': 0.784317, 'max': 1.013298, 'zp': 8.395228e-10,
                         'zp_photon': 3.792477e+02, 'toVega': 0, 'ext': 0.51, 'system': 'HST'},
@@ -171,8 +176,10 @@ def filter_info(band):
                         'zp_photon': 6.499706e+02, 'toVega': 0, 'ext': 0.78, 'system': 'HST'},
         "HST_F775W"  : {'eff'      : 0.765263, 'min': 0.680365, 'max': 0.863185, 'zp': 1.323662e-09,
                         'zp_photon': 5.055354e+02, 'toVega': 0, 'ext': 0.65, 'system': 'HST'},
+        "HST_F814W"  : {'eff'      : 0.790114, 'min': 0.697809, 'max': 0.968369, 'zp': 1.171e-9,
+                        'zp_photon': 5.055354e+02, 'toVega': 0, 'ext': 0.65, 'system': 'HST'},
         "HST_F850LP" : {'eff'      : 0.963736, 'min': 0.832000, 'max': 1.100000, 'zp': 8.069014e-10,
-                        'zp_photon': 3.706372e+02, 'toVega': 0, 'ext': 0.46, 'system': 'HST'}}
+                        'zp_photon': 4.820083e+02, 'toVega': 0, 'ext': 0.46, 'system': 'HST'}}
 
     if isinstance(band, list):
         for i in Filters.keys():
@@ -318,7 +325,7 @@ def group_spectra(spectra):
     Puts a list of *spectra* into groups with overlapping wavelength arrays
     """
     groups, idx, i = [], [], 'wavelength' if isinstance(spectra[0], dict) else 0
-    for N, S in enumerate(spectra):
+    for N, S in enumerate(spectra):  # N= number, S= spectrum value
         if N not in idx:
             group, idx = [S], idx + [N]
             for n, s in enumerate(spectra):
@@ -686,12 +693,13 @@ def output_polynomial(n, m, sig='', x='x', y='y', title='', degree=1, c='k', ls=
     D = {'yparam': y, 'xparam': x, 'rms': round(rms, 3), 'min': round(min(n), 1), 'max': round(max(n), 1)}
     D.update({'c{}'.format(str(o)): v for o, v in enumerate(list(reversed(p)))})
 
-    print_data = [
-        [y, r'{:.1f}\textless {}\textless {:.1f}'.format(min(n), x, max(n)), '{:.3f}'.format(rms)] + ['{:.3e}'.format(v)
-                                                                                                      for v in list(
-                reversed(p))]]
-    printer(['P(x)', 'x', 'rms'] + [r'$c_{}$'.format(str(i)) for i in range(len(p))], print_data, title=title,
-            to_txt='./Files/{} v {}.txt'.format(x, y) if output_data else False)
+    print_data = np.asarray([[y, r'{:.1f}\textless {}\textless {:.1f}'.format(min(n), x, max(n)), '{:.3f}'.format(rms)] 
+                   + ['{:.3e}'.format(v) for v in list(reversed(p))]])
+
+    at.Table(print_data, names=['P(x)', 'x', 'rms'] + [r'$c_{}$'.format(str(i)) for i in range(len(p))]).pprint()
+    print('\n')
+    # printer(['P(x)', 'x', 'rms'] + [r'$c_{}$'.format(str(i)) for i in range(len(p))], print_data, title=title,
+    #         to_txt='./Files/{} v {}.txt'.format(x, y) if output_data else False)
     return D if dictionary else data
 
 
