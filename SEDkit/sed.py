@@ -36,6 +36,10 @@ def from_ids(db, **kwargs):
     # Generate each table
     for k,v in kwargs.items():
         try:
+            # Option to get all records
+            if v=='*':
+                v = db.query("SELECT id from {} WHERE source_id={}".format(k,kwargs['sources']))['id']
+                
             # Make sure it's a list
             if isinstance(v, int):
                 v = [v]
@@ -52,7 +56,7 @@ def from_ids(db, **kwargs):
 
 class MakeSED(object):
     def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=10, SED_trim=[], split=[], trim=[], \
-        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name='', phot_aliases=''):
+        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name='', phot_aliases=True):
         """
         Pulls all available data from the BDNYC Data Archive, 
         constructs an SED, and stores all calculations at *pickle_path*
@@ -71,7 +75,7 @@ class MakeSED(object):
         from astrodbkit import astrodb
         from SEDkit import sed
         db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
-        from_dict = {'spectra':3176, 'photometry':[12510,12511,12512], 'parallaxes':575, 'sources':2}
+        from_dict = {'spectra':3176, 'photometry':'*', 'parallaxes':575, 'sources':2}
         x = sed.MakeSED(2, db, from_dict=from_dict)
         x.plot()
         
@@ -266,10 +270,11 @@ class MakeSED(object):
             self.photometry[col][self.photometry[col]==None] = np.nan
             
         # Rename bands. What a pain in the ass.
-        if phot_aliases:
+        if isinstance(phot_aliases,dict):
             self.photometry['band'] = [phot_aliases.get(i) for i in self.photometry['band']]
+        elif phot_aliases:
+            self.photometry['band'] = [i.replace('_','.') for i in self.photometry['band']]
             
-        # self.photometry['band'] = at.Column([b.replace('_','.') for b in list(self.photometry['band'])])
         self.photometry.add_index('band')
         self.photometry.rename_column('magnitude','app_magnitude')
         self.photometry.rename_column('magnitude_unc','app_magnitude_unc')
