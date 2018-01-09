@@ -32,7 +32,7 @@ def all_mags(spectrum, bands='', plot=False, **kwargs):
     # Get list of bands to try
     if not any(bands):
         bands = FILTERS['Band']
-    w_unit = q.um
+    w_unit = spectrum[0].unit
     f_unit = spectrum[1].unit
     
     # Calculate the magnitude
@@ -138,14 +138,14 @@ def norm_to_mags(spec, to_mags, weighting=False, reverse=False, plot=False):
         weight = [(FILTERS.loc[b]['WavelengthMax']-FILTERS.loc[b]['WavelengthMin']) if weighting else 1. for b in bands]
         
         # Calculate normalization factor that minimizes the function
-        norm = sum(weight*f1*f2/(e1**2+e2**2))/sum(weight*f2**2/(e1**2+e2**2))/30.
+        norm = np.nansum(weight*f1*f2/(e1**2+e2**2))/np.nansum(weight*f2**2/(e1**2+e2**2))
         
         # Plotting test
         if plot:
-            plt.loglog(spec[0].value, spec[1].value, label='old', color='g')
-            plt.loglog(spec[0].value, spec[1].value*norm, label='new', color='b')
-            plt.scatter(eff, f1, c='g')
-            plt.scatter(eff, f2, c='b')
+            plt.loglog(spec[0].value, spec[1].value, label='old', color='k')
+            plt.loglog(spec[0].value, spec[1].value*norm, label='new', color='r')
+            plt.scatter(eff, f1, c='r')
+            plt.scatter(eff, f2, c='k')
             plt.legend()
             
         return [spec[0], spec[1]/norm, spec[2]/norm] if reverse else [spec[0], spec[1]*norm, spec[2]*norm]
@@ -168,14 +168,14 @@ def norm_to_mag(spectrum, magnitude, bandpass):
     """
     Returns the flux of a given *spectrum* [W,F] normalized to the given *magnitude* in the specified photometric *band*
     """
-    # Get the current magnitude and convert to flux
-    mag, mag_unc = get_mag(spectrum, bandpass, fetch='flux')
+    # Get the unnormalized flux
+    flx, flx_unc = get_mag(spectrum, bandpass, fetch='flux')
     
     # Convert input magnitude to flux
-    flx, flx_unc = mag2flux(bandpass.filterID.split('/')[1], magnitude, sig_m='', units=spectrum[1].unit)
+    target, target_unc = mag2flux(bandpass.filterID.split('/')[1], magnitude, sig_m='', units=spectrum[1].unit)
     
     # Normalize the spectrum
-    spectrum[1] *= np.trapz(bandpass.rsr[1], x=bandpass.rsr[0])*np.sqrt(2)*flx/mag
+    spectrum[1] *= target/flx
     
     return spectrum
 

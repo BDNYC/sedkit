@@ -9,6 +9,8 @@ import numpy as np
 import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from . import utilities as u
 from . import syn_phot as s
@@ -56,7 +58,7 @@ def from_ids(db, **kwargs):
 
 class MakeSED(object):
     def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=10, SED_trim=[], split=[], trim=[], \
-        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name='', phot_aliases=True):
+        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name='', phot_aliases='guess'):
         """
         Pulls all available data from the BDNYC Data Archive, 
         constructs an SED, and stores all calculations at *pickle_path*
@@ -272,8 +274,10 @@ class MakeSED(object):
         # Rename bands. What a pain in the ass.
         if isinstance(phot_aliases,dict):
             self.photometry['band'] = [phot_aliases.get(i) for i in self.photometry['band']]
-        elif phot_aliases:
-            self.photometry['band'] = [i.replace('_','.') for i in self.photometry['band']]
+        elif phot_aliases=='guess':
+            self.photometry['band'] = [min(list(FILTERS['Band']), key=lambda v: len(set(b) ^ set(v))) for b in self.photometry['band']]
+        else:
+            pass
             
         self.photometry.add_index('band')
         self.photometry.rename_column('magnitude','app_magnitude')
@@ -287,7 +291,7 @@ class MakeSED(object):
             try:
                 band = FILTERS.loc[row['band']]
                 row['eff'] = band['WavelengthEff']*q.Unit(band['WavelengthUnit'])
-            except IOError:
+            except:
                 row['eff'] = np.nan
             
         # Add absolute magnitude columns to the photometry table
@@ -415,7 +419,7 @@ class MakeSED(object):
             
         # Normalize the composite spectra to the available photometry
         for n,spec in enumerate(piecewise):
-            piecewise[n] = s.norm_to_mags(spec, self.photometry)
+            piecewise[n] = s.norm_to_mags(spec, self.photometry, plot=True)
             
         # Add piecewise spectra to table
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], names=['wavelength','app_flux','app_flux_unc'])
@@ -425,15 +429,14 @@ class MakeSED(object):
         
         # Concatenate pieces and finalize composite spectrum with units
         if self.piecewise:
-            self.app_spec_SED = (W, F, E) = [np.asarray(i)*Q for i,Q in zip(u.trim_spectrum([np.concatenate(j) \
-                for j in [list(self.piecewise[col]) for col in ['wavelength', 'app_flux', 'app_flux_unc']]], SED_trim), units)]
+            self.app_spec_SED = (W, F, E) = [np.asarray(i)*Q for i,Q in zip(u.trim_spectrum([np.concatenate(j) for j in [list(self.piecewise[col]) for col in ['wavelength', 'app_flux', 'app_flux_unc']]], SED_trim), units)]
         else:
             self.app_spec_SED = [np.array([])]*3
             W, F, E = W0, F0, E0 = [Q*np.array([]) for Q in units]
             
         # Create Rayleigh Jeans Tail
         RJ_wav = np.arange(5, 500, 0.1)*q.um
-        RJ_flx, RJ_unc =  u.blackbody(RJ_wav, 1800*q.K, 300*q.K)
+        RJ_flx, RJ_unc =  u.blackbody(RJ_wav, 1800*q.K, 100*q.K)
         
         # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
         RJ_flx *= self.app_phot_SED[1][-1]/np.interp(self.app_phot_SED[0][-1], RJ_wav.value, RJ_flx.value)
@@ -549,18 +552,17 @@ class MakeSED(object):
         except:
             self.Mbol = self.Mbol_unc = ''
         
-    def get_fbol(self):
+    def get_fbol(self, units='erg/s/cm2'):
         """
         Calculate the bolometric flux of the SED
         """
         # Calculate fbol
-        flx_units = q.erg/q.s/q.cm**2
         try:
-            self.fbol = np.trapz(self.app_SED[1], x=self.app_SED[0])*flx_units
+            self.fbol = (np.trapz(self.app_SED[1], x=self.app_SED[0])*self.flux_units*self.wave_units).to(units)
             
             # Calculate fbol_unc
             try:
-                self.fbol_unc = np.sqrt(np.sum(self.app_SED[2]*np.gradient(self.app_SED[0]))**2)*flx_units
+                self.fbol_unc = (np.sqrt(np.sum(self.app_SED[2]*np.gradient(self.app_SED[0]))**2)*self.flux_units*self.wave_units).to(units)
             except:
                 self.fbol_unc = ''
                 
@@ -589,7 +591,7 @@ class MakeSED(object):
                 self.Lbol_unc = self.Lbol_sun_unc = ''
                 
         # No dice
-        except:
+        except IOError:
             self.Lbol = self.Lbol_sun = self.Lbol_unc = self.Lbol_sun_unc =''
                 
     def get_Teff(self):
