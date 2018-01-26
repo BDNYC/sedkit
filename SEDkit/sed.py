@@ -435,11 +435,11 @@ class MakeSED(object):
             W, F, E = W0, F0, E0 = [Q*np.array([]) for Q in units]
             
         # Create Rayleigh Jeans Tail
-        RJ_wav = np.arange(5, 500, 0.1)*q.um
-        RJ_flx, RJ_unc =  u.blackbody(RJ_wav, 1800*q.K, 100*q.K)
+        RJ_wav = np.arange(self.app_phot_SED[0][-1], 500, 0.1)*q.um
+        RJ_flx, RJ_unc =  u.blackbody(RJ_wav, 3000*q.K, 100*q.K)
         
         # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
-        RJ_flx *= self.app_phot_SED[1][-1]/np.interp(self.app_phot_SED[0][-1], RJ_wav.value, RJ_flx.value)
+        RJ_flx *= self.app_phot_SED[1][-1]/RJ_flx[0].value
         RJ = [RJ_wav, RJ_flx, RJ_unc]
         
         # Exclude photometric points with spectrum coverage
