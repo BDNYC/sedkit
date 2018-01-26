@@ -1921,7 +1921,7 @@ class MakeSED(object):
             # =====================================================================================================================================
 
             # Calculate all fundamental paramters without models
-            self.data = fundamental_params(self.data, p='', plot=diagnostics)
+            self.data = fundamental_params(self.data, p='', evo_model=evo_model, plot=diagnostics)
 
             # =====================================================================================================================================
             # ======================================= PRINTING ====================================================================================
@@ -2390,18 +2390,20 @@ class MakeSED(object):
                 print("Couldn't print photometry.")
 
 
-def fundamental_params(D, p='', plot=False):
+def fundamental_params(D, p='', evo_model='nc_solar_age', plot=False):
     '''
     Calculates all possible fundamental parameters given a dictionary of data
 
     Parameters
     ----------
     D: dict
-    A dictionary containing the object's SED and (optionally) distance and radius
+        A dictionary containing the object's SED and (optionally) distance and radius
     p: str
-    A prefix for the new dictionary keys
+        A prefix for the new dictionary keys
+    evo_model: str
+        The name of the evolutionary models to use
     plot: bool
-    Plot the model isochrones with the ranges estimated for this object
+        Plot the model isochrones with the ranges estimated for this object
 
     Returns
     -------
@@ -2412,17 +2414,16 @@ def fundamental_params(D, p='', plot=False):
     try:
 
         # Calculate fbol, mbol
-        D[p + 'fbol'], D[p + 'fbol_unc'] = (np.trapz(D[p + 'SED_app'][1], x=D[p + 'SED_app'][0])).to(
-            q.erg / q.s / q.cm ** 2), np.sqrt(
-            np.sum((D[p + 'SED_app'][2] * np.gradient(D[p + 'SED_app'][0])).to(q.erg / q.s / q.cm ** 2) ** 2))
-        D[p + 'mbol'], D[p + 'mbol_unc'] = -2.5 * np.log10(D[p + 'fbol'].value) - 11.482, (2.5 / np.log(10)) * (
-            D[p + 'fbol_unc'] / D[p + 'fbol']).value
+        D[p + 'fbol'] = (np.trapz(D[p + 'SED_app'][1], x=D[p + 'SED_app'][0])).to(q.erg / q.s / q.cm ** 2), 
+        D[p + 'fbol_unc'] = np.sqrt(np.sum((D[p + 'SED_app'][2] * np.gradient(D[p + 'SED_app'][0])).to(q.erg / q.s / q.cm ** 2) ** 2))
+        D[p + 'mbol'] = -2.5 * np.log10(D[p + 'fbol'].value) - 11.482
+        D[p + 'mbol_unc'] = (2.5 / np.log(10)) * (D[p + 'fbol_unc'] / D[p + 'fbol']).value
 
         # if D.get('d') and D.get(p+'mbol')>5:
         if D.get('d'):
             # Calculate Mbol, Lbol in solar units, and Lbol in Watts
-            D[p + 'Mbol'], D[p + 'Mbol_unc'] = D[p + 'mbol'] - 5 * np.log10((D['d'] / 10 * q.pc).value), np.sqrt(
-                D[p + 'mbol_unc'] ** 2 + ((2.5 / np.log(10)) * (D['d_unc'] / D['d']).value) ** 2)
+            D[p + 'Mbol'] = D[p + 'mbol'] - 5 * np.log10((D['d'] / 10 * q.pc).value)
+            D[p + 'Mbol_unc'] = np.sqrt(D[p + 'mbol_unc'] ** 2 + ((2.5 / np.log(10)) * (D['d_unc'] / D['d']).value) ** 2)
             D[p + 'Lbol'], D[p + 'Lbol_unc'] = get_Lbol(D[p + 'SED_app'], D['d'], sig_d=D['d_unc'], solar_units=True)
             D[p + 'Lbol_W'], D[p + 'Lbol_W_unc'] = get_Lbol(D[p + 'SED_app'], D['d'], sig_d=D['d_unc'])
 
@@ -2432,17 +2433,12 @@ def fundamental_params(D, p='', plot=False):
 
             else:
                 # Get radius from *radius* argument or radius interpolation of evolutionary model isochrones, then calculate Teff
-                D[p + 'radius'], D[p + 'radius_unc'] = (D['radius'], D['radius_unc']) if D[
-                                                                                             'radius'] != '' else isochrone_interp(
-                    D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'], D['age_max'], plot=plot)
-                D[p + 'teff'], D[p + 'teff_unc'] = get_teff(D[p + 'Lbol_W'], D[p + 'Lbol_W_unc'], D[p + 'radius'],
-                                                            D[p + 'radius_unc'])
+                D[p + 'radius'], D[p + 'radius_unc'] = (D['radius'], D['radius_unc']) if D['radius'] != '' else isochrone_interp(D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'], D['age_max'], evo_model=evo_model, plot=plot)
+                D[p + 'teff'], D[p + 'teff_unc'] = get_teff(D[p + 'Lbol_W'], D[p + 'Lbol_W_unc'], D[p + 'radius'], D[p + 'radius_unc'])
 
                 # Also calculate model mass and logg
-                D[p + 'logg'], D[p + 'logg_unc'] = isochrone_interp(D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'],
-                                                                    D['age_max'], yparam='logg', plot=plot)
-                D[p + 'mass'], D[p + 'mass_unc'] = isochrone_interp(D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'],
-                                                                    D['age_max'], yparam='mass', plot=plot)
+                D[p + 'logg'], D[p + 'logg_unc'] = isochrone_interp(D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'], D['age_max'], yparam='logg', evo_model=evo_model, plot=plot)
+                D[p + 'mass'], D[p + 'mass_unc'] = isochrone_interp(D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'], D['age_max'], yparam='mass', evo_model=evo_model, plot=plot)
 
         else:
             pass
