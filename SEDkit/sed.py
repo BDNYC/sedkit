@@ -9,12 +9,11 @@ import numpy as np
 import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
 from . import utilities as u
 from . import syn_phot as s
 from svo_filters import svo
+from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool
+from bokeh.plotting import figure, output_file, show, save
 
 FILTERS = svo.filters()
 FILTERS.add_index('Band')
@@ -57,7 +56,7 @@ def from_ids(db, **kwargs):
     return data
 
 class MakeSED(object):
-    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=10, SED_trim=[], split=[], trim=[], \
+    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=5, SED_trim=[], split=[], trim=[], \
         age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name='', phot_aliases='guess'):
         """
         Pulls all available data from the BDNYC Data Archive, 
@@ -72,8 +71,16 @@ class MakeSED(object):
             The database instance to retreive data from or a dictionary
             of astropy tables to mimick the db query
         
-        Example
-        -------
+        Example 1
+        ---------
+        from astrodbkit import astrodb
+        from SEDkit import sed
+        db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
+        x = sed.MakeSED(2051, db)
+        x.plot()
+        
+        Example 2
+        ---------
         from astrodbkit import astrodb
         from SEDkit import sed
         db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
@@ -87,6 +94,8 @@ class MakeSED(object):
         
         # Get the data for the source from the dictionary of ids
         if isinstance(from_dict, dict):
+            if not 'sources' in from_dict:
+                from_dict['sources'] = source_id
             all_data = from_ids(db, **from_dict)
             
         # Or get the inventory from the database
@@ -258,7 +267,7 @@ class MakeSED(object):
         # =====================================================================
         
         # Use radius if given
-        self.radius, self.radius_unc = radius or [ac.R_jup, ac.R_jup/100.]
+        self.radius, self.radius_unc = radius or [1.*ac.R_jup, ac.R_jup/100.]
         
         # =====================================================================
         # Photometry
@@ -338,11 +347,19 @@ class MakeSED(object):
         for n,row in enumerate(self.spectra):
             
             # Unpack the spectrum
-            w, f, e = row['spectrum'].data[:3]
+            w, f = row['spectrum'].data[:2]
+            try:
+                e = row['spectrum'].data[2]
+            except IndexError:
+                e = ''
             
             # Convert log units to linear
             if row['flux_units'].startswith('log '):
-                f, e = 10**f, 10**e
+                f = 10**f, 
+                try:
+                    e = 10**e
+                except:
+                    pass
                 row['flux_units'] = row['flux_units'].replace('log ', '')
             if row['wavelength_units'].startswith('log '):
                 w = 10**w
@@ -354,10 +371,13 @@ class MakeSED(object):
             # Convert F_nu to F_lam if necessary
             if row['flux_units']=='Jy':
                 f = u.fnu2flam(f*q.Jy, w*self.wave_units, units=self.flux_units).value
-                e = u.fnu2flam(e*q.Jy, w*self.wave_units, units=self.flux_units).value
-                
+                try:
+                    e = u.fnu2flam(e*q.Jy, w*self.wave_units, units=self.flux_units).value
+                except:
+                    pass
+                    
             # Force uncertainty array if none
-            if not any(e) or e is None:
+            if not any(e) or e=='':
                 e = f/10.
                 print('No uncertainty array for spectrum {}. Using SNR=10.'.format(row['id']))
                 
@@ -417,9 +437,23 @@ class MakeSED(object):
                 
             piecewise = np.copy(keepers)
             
+        # Create Rayleigh Jeans Tail
+        RJ_wav = np.arange(np.min([self.app_phot_SED[0][-1],12.]), 500, 0.1)*q.um
+        RJ_flx, RJ_unc = u.blackbody(RJ_wav, 3000*q.K, 100*q.K)
+        
+        # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
+        RJ_flx *= self.app_phot_SED[1][-1]/RJ_flx[0].value
+        RJ = [RJ_wav, RJ_flx, RJ_unc]
+        
         # Normalize the composite spectra to the available photometry
         for n,spec in enumerate(piecewise):
-            piecewise[n] = s.norm_to_mags(spec, self.photometry, plot=True)
+            pw = s.norm_to_mags(spec, self.photometry, extend=RJ)
+            
+            # Add NaN to gaps
+            pw[1][0] *= np.nan
+            pw[1][-1] *= np.nan
+                
+            piecewise[n] = pw
             
         # Add piecewise spectra to table
         self.piecewise = at.Table([[spec[i] for spec in piecewise] for i in [0,1,2]], names=['wavelength','app_flux','app_flux_unc'])
@@ -433,21 +467,13 @@ class MakeSED(object):
         else:
             self.app_spec_SED = [np.array([])]*3
             W, F, E = W0, F0, E0 = [Q*np.array([]) for Q in units]
-            
-        # Create Rayleigh Jeans Tail
-        RJ_wav = np.arange(self.app_phot_SED[0][-1], 500, 0.1)*q.um
-        RJ_flx, RJ_unc =  u.blackbody(RJ_wav, 3000*q.K, 100*q.K)
-        
-        # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
-        RJ_flx *= self.app_phot_SED[1][-1]/RJ_flx[0].value
-        RJ = [RJ_wav, RJ_flx, RJ_unc]
         
         # Exclude photometric points with spectrum coverage
         if self.piecewise:
             covered = []
             for n, i in enumerate(WP0):
                 for N,spec in enumerate(self.piecewise):
-                    if i.value<spec['wavelength'][-1] and i.value>spec['wavelength'][0]:
+                    if i<spec['wavelength'][-1] and i>spec['wavelength'][0]:
                         covered.append(n)
             WP, FP, EP = [[i for n,i in enumerate(A) if n not in covered]*Q for A,Q in zip(self.app_phot_SED, units)]
         else:
@@ -490,7 +516,7 @@ class MakeSED(object):
         print('\n'+'='*100)
         
         
-    def fundamental_params(self, age='', nymg='', evo_model='hybrid_solar_age'):
+    def fundamental_params(self, age='', nymg='', evo_model='hybrid_solar_age', verbose=True):
         """
         Calculate the fundamental parameters of the current SED
         
@@ -506,6 +532,13 @@ class MakeSED(object):
         self.get_Lbol()
         self.get_Mbol()
         self.get_Teff()
+        
+        if verbose:
+            
+            params = ['-','Lbol','Mbol','Teff']
+            ptable = at.QTable(np.array([['Value',self.Lbol_sun,self.Mbol,self.Teff.value],['Error',self.Lbol_sun_unc,self.Mbol_unc,self.Teff_unc.value]]), names=params)
+            print('\nRESULTS')
+            ptable.pprint()
     
     def get_mbol(self, L_sun=3.86E26*q.W, Mbol_sun=4.74):
         """
@@ -619,7 +652,7 @@ class MakeSED(object):
         except:
             self.Teff = self.Teff_unc = ''
     
-    def plot(self, photometry=True, spectra=True, integrals=True, app=True, scale=['log','log'], **kwargs):
+    def plot(self, photometry=True, spectra=True, integrals=True, app=True, scale=['log','log'], bokeh=True, **kwargs):
         """
         Plot the SED
         
@@ -633,36 +666,68 @@ class MakeSED(object):
             Plot the apparent SED instead of absolute
         scale: array-like
             The (x,y) scales to plot, 'linear' or 'log'
+        bokeh: bool
+            Plot in Bokeh
         """
-        # Make the figure
-        plt.figure(**kwargs)
-        plt.title(self.name)
-        plt.xlabel('Wavelength [{}]'.format(str(self.wave_units)))
-        plt.ylabel('Flux [{}]'.format(str(self.flux_units)))
-        
-        # Distinguish between apparent and absolute magnitude
-        pre = 'app_' if app else 'abs_'
-        
-        # Plot spectra
-        if spectra:
-            spec_SED = self.app_spec_SED if app else self.abs_spec_SED
-            plt.step(spec_SED[0], spec_SED[1], **kwargs)
+        if not bokeh:
             
-        # Plot photometry
-        if photometry:
-            phot_SED = self.app_phot_SED if app else self.abs_phot_SED
-            plt.errorbar(phot_SED[0], phot_SED[1], yerr=phot_SED[2], marker='o', ls='None', **kwargs)
+            import matplotlib
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as plt
             
-        # Plot the SED with linear interpolation completion
-        if integrals:
-            full_SED = self.app_SED if app else self.abs_SED
-            plt.plot(full_SED[0].value, full_SED[1].value, color='k', alpha=0.5, ls='--')
-            plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
-            
-        # Set the x andx  y scales
-        plt.xscale(scale[0], nonposx='clip')
-        plt.yscale(scale[1], nonposy='clip')
+            # Make the figure
+            plt.figure(**kwargs)
+            plt.title(self.name)
+            plt.xlabel('Wavelength [{}]'.format(str(self.wave_units)))
+            plt.ylabel('Flux [{}]'.format(str(self.flux_units)))
         
+            # Distinguish between apparent and absolute magnitude
+            pre = 'app_' if app else 'abs_'
+        
+            # Plot spectra
+            if spectra:
+                spec_SED = self.app_spec_SED if app else self.abs_spec_SED
+                plt.step(spec_SED[0], spec_SED[1], **kwargs)
+            
+            # Plot photometry
+            if photometry:
+                phot_SED = self.app_phot_SED if app else self.abs_phot_SED
+                plt.errorbar(phot_SED[0], phot_SED[1], yerr=phot_SED[2], marker='o', ls='None', **kwargs)
+            
+            # Plot the SED with linear interpolation completion
+            if integrals:
+                full_SED = self.app_SED if app else self.abs_SED
+                plt.plot(full_SED[0].value, full_SED[1].value, color='k', alpha=0.5, ls='--')
+                plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
+            
+            # Set the x andx  y scales
+            plt.xscale(scale[0], nonposx='clip')
+            plt.yscale(scale[1], nonposy='clip')
+            
+        else:
+            
+            # TOOLS = 'crosshair,resize,reset,hover,box,save'
+            fig = figure(plot_width=1000, plot_height=600, title=self.name, y_axis_type='log', x_axis_type='log', x_axis_label='Wavelength [{}]'.format(self.wave_units), y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
+            
+            # Plot spectra
+            if spectra:
+                spec_SED = self.app_spec_SED if app else self.abs_spec_SED
+                fig.line(spec_SED[0], spec_SED[1], **kwargs)
+                
+            # Plot photometry
+            if photometry:
+                phot_SED = self.app_phot_SED if app else self.abs_phot_SED
+                errorbar(fig, phot_SED[0], phot_SED[1], yerr=phot_SED[2])
+                
+            # Plot the SED with linear interpolation completion
+            if integrals:
+                full_SED = self.app_SED if app else self.abs_SED
+                # fig.line(full_SED[0].value, full_SED[1].value, color='k', alpha=0.5, ls='--')
+                # plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
+                
+            show(fig)
+            return fig
+            
     def write(self, dirpath, app=False, spec=True, phot=False):
         """
         Exports a file of photometry and a file of the composite spectra with minimal data headers
@@ -706,6 +771,28 @@ class MakeSED(object):
                 
             except IOError:
                 print("Couldn't print photometry.")
+        
+def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_kwargs={}):
+    """
+    Hack to make errorbar plots in bokeh
+    """
+    fig.circle(x, y, color=color, **point_kwargs)
+
+    if xerr!='':
+        x_err_x = []
+        x_err_y = []
+        for px, py, err in zip(x, y, xerr):
+            x_err_x.append((px - err, px + err))
+            x_err_y.append((py, py))
+        fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
+
+    if yerr!='':
+        y_err_x = []
+        y_err_y = []
+        for px, py, err in zip(x, y, yerr):
+            y_err_x.append((px, px))
+            y_err_y.append((py - err, py + err))
+        fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
         
 NYMG = {'TW Hya': {'age_min': 8, 'age_max': 20, 'age_ref': 0},
          'beta Pic': {'age_min': 12, 'age_max': 22, 'age_ref': 0},
