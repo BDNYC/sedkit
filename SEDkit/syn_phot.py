@@ -43,7 +43,7 @@ def all_mags(spectrum, bands='', plot=False, **kwargs):
         m, sig_m, F, sig_F = get_mag(spectrum, bandpass, fetch='both', **kwargs)
         
         # Only add it to the table if the magnitude is calculated
-        if m:
+        if isinstance(m, float) and m!=np.nan:
             eff = FILTERS.loc[bandpass]['WavelengthEff']
             w_unit = q.Unit(FILTERS.loc[bandpass]['WavelengthUnit'])
             f_unit = F.unit

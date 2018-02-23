@@ -11,9 +11,6 @@ import astropy.units as q
 import astropy.constants as ac
 import matplotlib.pyplot as plt
 from svo_filters import svo
-
-FILTERS = svo.filters()
-
 from astropy.utils.data_info import ParentDtypeInfo
 
 class ArrayWrapper(object):
@@ -258,8 +255,8 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
         The unit for the output flux
     """
     try:
-        # Get the band info
-        filt = FILTERS.loc[band]
+        if isinstance(band, str):
+            band = svo.Filter(band)
         
         # Make mag unitless
         if hasattr(mag,'unit'):
@@ -268,7 +265,7 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
             sig_m = sig_m.value
         
         # Calculate the flux density
-        zp = q.Quantity(filt['ZeroPoint'], filt['ZeroPointUnit'])
+        zp = q.Quantity(band.ZeroPoint, band.ZeroPointUnit)
         f = zp*10**(mag/-2.5)
         
         if isinstance(sig_m,str):

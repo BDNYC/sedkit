@@ -9,6 +9,10 @@ import numpy as np
 import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
+from astropy.modeling.models import custom_model
+from astropy.modeling import models, fitting
+from astropy.analytic_functions import blackbody_lambda
+from astropy.constants import b_wien
 from . import utilities as u
 from . import syn_phot as s
 from svo_filters import svo
@@ -17,6 +21,8 @@ from bokeh.plotting import figure, output_file, show, save
 
 FILTERS = svo.filters()
 FILTERS.add_index('Band')
+
+PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3'}
 
 def from_ids(db, **kwargs):
     """
@@ -57,7 +63,7 @@ def from_ids(db, **kwargs):
 
 class MakeSED(object):
     def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=5, SED_trim=[], split=[], trim=[], \
-        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name='', phot_aliases='guess'):
+        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name='', phot_aliases=PHOT_ALIASES):
         """
         Pulls all available data from the BDNYC Data Archive, 
         constructs an SED, and stores all calculations at *pickle_path*
@@ -276,6 +282,9 @@ class MakeSED(object):
         # Index and add units
         fill = np.zeros(len(self.photometry))
         
+        # Set up empty synthetic photometry table
+        self.syn_photometry = None
+        
         # Fill in empty columns
         for col in ['magnitude','magnitude_unc']:
             self.photometry[col][self.photometry[col]==None] = np.nan
@@ -284,7 +293,7 @@ class MakeSED(object):
         if isinstance(phot_aliases,dict):
             self.photometry['band'] = [phot_aliases.get(i) for i in self.photometry['band']]
         elif phot_aliases=='guess':
-            self.photometry['band'] = [min(list(FILTERS['Band']), key=lambda v: len(set(b) ^ set(v))) for b in self.photometry['band']]
+            self.photometry['band'] = [min(list(FILTERS['Band']), key=lambda v: len(set(b)^set(v))) for b in self.photometry['band']]
         else:
             pass
             
@@ -508,6 +517,11 @@ class MakeSED(object):
         # TODO
         self.fundamental_params()
         
+        # Set empty blackbody
+        self.blackbody = None
+        self.Teff_bb = None
+        self.bb_source = None
+        
         # =====================================================================
         # Save the data to file for cmd.py to read
         # =====================================================================
@@ -516,7 +530,7 @@ class MakeSED(object):
         print('\n'+'='*100)
         
         
-    def fundamental_params(self, age='', nymg='', evo_model='hybrid_solar_age', verbose=True):
+    def fundamental_params(self, age='', nymg='', blackbody=True, syn_photometry=True, evo_model='hybrid_solar_age', verbose=True):
         """
         Calculate the fundamental parameters of the current SED
         
@@ -533,8 +547,13 @@ class MakeSED(object):
         self.get_Mbol()
         self.get_Teff()
         
+        if syn_photometry:
+            self.get_syn_photometry()
+        
+        if blackbody:
+            self.fit_blackbody()
+        
         if verbose:
-            
             params = ['-','Lbol','Mbol','Teff']
             ptable = at.QTable(np.array([['Value',self.Lbol_sun,self.Mbol,self.Teff.value],['Error',self.Lbol_sun_unc,self.Mbol_unc,self.Teff_unc.value]]), names=params)
             print('\nRESULTS')
@@ -595,7 +614,7 @@ class MakeSED(object):
             
             # Calculate fbol_unc
             try:
-                self.fbol_unc = (np.sqrt(np.sum(self.app_SED[2]*np.gradient(self.app_SED[0]))**2)*self.flux_units*self.wave_units).to(units)
+                self.fbol_unc = (np.sqrt(np.nansum(self.app_SED[2].value*np.gradient(self.app_SED[0].value))**2)*self.flux_units*self.wave_units).to(units)
             except:
                 self.fbol_unc = ''
                 
@@ -620,7 +639,7 @@ class MakeSED(object):
             try:
                 self.Lbol_unc = self.Lbol*np.sqrt((self.fbol_unc/self.fbol).value**2+(2*self.distance_unc/self.distance).value**2)
                 self.Lbol_sun_unc = round(abs(self.Lbol_unc/(self.Lbol*np.log(10))).value, 3)
-            except:
+            except IOError:
                 self.Lbol_unc = self.Lbol_sun_unc = ''
                 
         # No dice
@@ -652,7 +671,45 @@ class MakeSED(object):
         except:
             self.Teff = self.Teff_unc = ''
     
-    def plot(self, photometry=True, spectra=True, integrals=True, app=True, scale=['log','log'], bokeh=True, **kwargs):
+    def get_syn_photometry(self, bands=[], plot=False):
+        """
+        Calculate the synthetic magnitudes
+        
+        Parameters
+        ----------
+        bands: sequence
+            The list of bands to calculate
+        """
+        if not any(bands):
+            bands = FILTERS['Band']
+            
+        # Only get mags in regions with spectral coverage
+        syn_mags = []
+        for spec in [i.as_void() for i in self.piecewise]:
+            syn_mags.append(s.all_mags(spec, bands=bands, plot=plot))
+            
+        # Stack the tables
+        self.syn_photometry = at.vstack(syn_mags)
+    
+    def fit_blackbody(self, fit_to='app_phot_SED'):
+        """
+        Fit a blackbody curve to the data
+        """
+        # Get the data
+        data = getattr(self, fit_to)
+        
+        # Initial guess
+        init = blackbody(temperature=2000)
+        
+        # Fit the blackbody
+        fit = fitting.LevMarLSQFitter()
+        self.blackbody = fit(init, data[0], data[1]/np.nanmax(data[1]))
+        
+        # Store the results
+        self.Teff_bb = int(self.blackbody.temperature.value)
+        self.bb_source = fit_to
+    
+    def plot(self, photometry=True, spectra=True, integrals=False, app=True, syn_photometry=True, blackbody=True, scale=['log','log'], bokeh=True, output=False, **kwargs):
         """
         Plot the SED
         
@@ -669,6 +726,17 @@ class MakeSED(object):
         bokeh: bool
             Plot in Bokeh
         """
+        # Distinguish between apparent and absolute magnitude
+        pre = 'app_' if app else 'abs_'
+        
+        # Calculate reasonable axis limits
+        spec_SED = getattr(self, pre+'spec_SED')
+        phot_SED = getattr(self, pre+'phot_SED')
+        mn_x = np.nanmin([np.nanmin(spec_SED[0].value),np.nanmin(phot_SED[0])])
+        mx_x = np.nanmax([np.nanmax(spec_SED[0].value),np.nanmax(phot_SED[0])])
+        mn_y = np.nanmin([np.nanmin(spec_SED[1].value[spec_SED[1]>0]),np.nanmin(phot_SED[1])])
+        mx_y = np.nanmax([np.nanmax(spec_SED[1].value[spec_SED[1]>0]),np.nanmax(phot_SED[1])])
+        
         if not bokeh:
             
             import matplotlib
@@ -680,24 +748,25 @@ class MakeSED(object):
             plt.title(self.name)
             plt.xlabel('Wavelength [{}]'.format(str(self.wave_units)))
             plt.ylabel('Flux [{}]'.format(str(self.flux_units)))
-        
-            # Distinguish between apparent and absolute magnitude
-            pre = 'app_' if app else 'abs_'
-        
+            
             # Plot spectra
             if spectra:
                 spec_SED = self.app_spec_SED if app else self.abs_spec_SED
-                plt.step(spec_SED[0], spec_SED[1], **kwargs)
+                plt.step(spec_SED[0], spec_SED[1], label='Spectra', **kwargs)
             
             # Plot photometry
             if photometry:
                 phot_SED = self.app_phot_SED if app else self.abs_phot_SED
-                plt.errorbar(phot_SED[0], phot_SED[1], yerr=phot_SED[2], marker='o', ls='None', **kwargs)
+                plt.errorbar(phot_SED[0], phot_SED[1], yerr=phot_SED[2], marker='o', ls='None', label='Photometry', **kwargs)
+            
+            # Plot synthetic photometry
+            if syn_photometry and self.syn_photometry:
+                plt.errorbar(self.syn_photometry['eff'], self.syn_photometry['app_flux'], yerr=self.syn_photometry['app_flux_unc'], marker='o', ls='none', label='Synthetic Photometry')
             
             # Plot the SED with linear interpolation completion
             if integrals:
                 full_SED = self.app_SED if app else self.abs_SED
-                plt.plot(full_SED[0].value, full_SED[1].value, color='k', alpha=0.5, ls='--')
+                plt.plot(full_SED[0].value, full_SED[1].value, color='k', alpha=0.5, ls='--', label='Integral Surface')
                 plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
             
             # Set the x andx  y scales
@@ -707,25 +776,41 @@ class MakeSED(object):
         else:
             
             # TOOLS = 'crosshair,resize,reset,hover,box,save'
-            fig = figure(plot_width=1000, plot_height=600, title=self.name, y_axis_type='log', x_axis_type='log', x_axis_label='Wavelength [{}]'.format(self.wave_units), y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
+            fig = figure(plot_width=1000, plot_height=600, title=self.name, y_axis_type=scale[1], x_axis_type=scale[0], x_axis_label='Wavelength [{}]'.format(self.wave_units), y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
             
             # Plot spectra
             if spectra:
-                spec_SED = self.app_spec_SED if app else self.abs_spec_SED
-                fig.line(spec_SED[0], spec_SED[1], **kwargs)
+                spec_SED = getattr(self, pre+'spec_SED')
+                fig.line(spec_SED[0], spec_SED[1], legend='Spectra', **kwargs)
                 
             # Plot photometry
             if photometry:
-                phot_SED = self.app_phot_SED if app else self.abs_phot_SED
-                errorbar(fig, phot_SED[0], phot_SED[1], yerr=phot_SED[2])
+                phot_SED = getattr(self, pre+'phot_SED')
+                errorbar(fig, phot_SED[0], phot_SED[1], yerr=phot_SED[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Photometry')
                 
+            # Plot synthetic photometry
+            if syn_photometry and self.syn_photometry:
+                errorbar(fig, self.syn_photometry['eff'], self.syn_photometry[pre+'flux'], yerr=self.syn_photometry[pre+'flux_unc'], point_kwargs={'fill_alpha':0, 'size':8}, legend='Synthetic Photometry')
+            
             # Plot the SED with linear interpolation completion
             if integrals:
-                full_SED = self.app_SED if app else self.abs_SED
-                # fig.line(full_SED[0].value, full_SED[1].value, color='k', alpha=0.5, ls='--')
+                full_SED = getattr(self, pre+'SED')
+                fig.line(full_SED[0].value, full_SED[1].value, line_color='black', alpha=0.3, legend='Integral Surface')
                 # plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
                 
-            show(fig)
+            if blackbody and self.blackbody:
+                bb_wav = np.linspace(mn_x, mx_x, 500)
+                bb_flx = self.blackbody(bb_wav*self.wave_units)*np.nanmax(getattr(self, self.bb_source)[1])
+                fig.line(bb_wav, bb_flx, line_color='red', legend='{} K'.format(self.Teff_bb))
+                
+            fig.legend.location = "top_right"
+            fig.legend.click_policy = "hide"
+            fig.x_range = Range1d(mn_x, mx_x)
+            fig.y_range = Range1d(mn_y, mx_y)
+                
+            if not output:
+                show(fig)
+            
             return fig
             
     def write(self, dirpath, app=False, spec=True, phot=False):
@@ -772,11 +857,11 @@ class MakeSED(object):
             except IOError:
                 print("Couldn't print photometry.")
         
-def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_kwargs={}):
+def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_kwargs={}, legend=''):
     """
     Hack to make errorbar plots in bokeh
     """
-    fig.circle(x, y, color=color, **point_kwargs)
+    fig.circle(x, y, color=color, legend=legend, **point_kwargs)
 
     if xerr!='':
         x_err_x = []
@@ -793,7 +878,54 @@ def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_
             y_err_x.append((px, px))
             y_err_y.append((py - err, py + err))
         fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
-        
+
+def test(n=1):
+    """
+    Run a test target
+    """
+    from astrodbkit import astrodb
+    from SEDkit import sed
+    db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
+    
+    if n==1:
+        source_id = 2
+        from_dict = {'spectra':3176, 'photometry':'*', 'parallaxes':575, 'sources':source_id}
+    if n==2:
+        source_id = 86
+        from_dict = {'spectra':[379,1580,2726], 'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
+    if n==3:
+        source_id = 2051
+        from_dict = {}
+    
+    x = sed.MakeSED(source_id, db, from_dict=from_dict)
+    x.fit_blackbody()
+    x.get_syn_photometry()
+    x.plot()
+    
+    return x
+
+@custom_model
+def blackbody(wavelength, temperature=2000):
+    """
+    Generate a blackbody of the given temperature at the given wavelengths
+    
+    Parameters
+    ----------
+    wavelength: array-like
+        The wavelength array [um]
+    temperature: float
+        The temperature of the star [K]
+    
+    Returns
+    -------
+    astropy.quantity.Quantity
+        The blackbody curve
+    """
+    wavelength = q.Quantity(wavelength, "um")
+    temperature = q.Quantity(temperature, "K")
+    max_val = blackbody_lambda((b_wien/temperature).to(q.um),temperature).value
+    return blackbody_lambda(wavelength, temperature).value/max_val
+
 NYMG = {'TW Hya': {'age_min': 8, 'age_max': 20, 'age_ref': 0},
          'beta Pic': {'age_min': 12, 'age_max': 22, 'age_ref': 0},
          'Tuc-Hor': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
