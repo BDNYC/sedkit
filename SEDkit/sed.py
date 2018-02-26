@@ -490,7 +490,9 @@ class MakeSED(object):
             covered = []
             for n, i in enumerate(WP0):
                 for N,spec in enumerate(self.piecewise):
-                    if i<spec['wavelength'][-1] and i>spec['wavelength'][0]:
+                    wav_mx = spec['wavelength'][-1]*q.um if isinstance(spec['wavelength'][-1],float) else spec['wavelength'][-1]
+                    wav_mn = spec['wavelength'][0]*q.um if isinstance(spec['wavelength'][0],float) else spec['wavelength'][0]
+                    if i<wav_mx and i>wav_mn:
                         covered.append(n)
             WP, FP, EP = [[i for n,i in enumerate(A) if n not in covered]*Q for A,Q in zip(self.app_phot_SED, units)]
         else:
@@ -687,12 +689,13 @@ class MakeSED(object):
             # Only get mags in regions with spectral coverage
             syn_mags = []
             for spec in [i.as_void() for i in self.piecewise]:
+                spec = [Q*(i.value if hasattr(i,'unit') else i) for i,Q in zip(spec,[self.wave_units,self.flux_units,self.flux_units])]
                 syn_mags.append(s.all_mags(spec, bands=bands, plot=plot))
             
             # Stack the tables
             self.syn_photometry = at.vstack(syn_mags)
         
-        except:
+        except IOError:
             print('No spectral coverage to calculate synthetic photometry.')
     
     def fit_blackbody(self, fit_to='app_phot_SED', epsilon=0.1, acc=5):
@@ -844,7 +847,7 @@ class MakeSED(object):
                 # Plot points with errors
                 pts = np.array([(x,y,z) for x,y,z in np.array(self.syn_photometry['eff',pre+'flux',pre+'flux_unc']) if not np.isnan(z)]).T
                 try:
-                    errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
+                    errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
                 except:
                     pass
             
@@ -949,7 +952,7 @@ def test(n=1):
         from_dict = {'spectra':3176, 'photometry':'*', 'parallaxes':575, 'sources':source_id}
     if n==2:
         source_id = 86
-        from_dict = {'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
+        from_dict = {'spectra':[379,1580,2726], 'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
     if n==3:
         source_id = 2051
         from_dict = {}
