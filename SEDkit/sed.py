@@ -16,7 +16,8 @@ from astropy.constants import b_wien
 from . import utilities as u
 from . import syn_phot as s
 from svo_filters import svo
-from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool
+from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool, ColumnDataSource
+
 from bokeh.plotting import figure, output_file, show, save
 
 FILTERS = svo.filters()
@@ -140,6 +141,14 @@ class MakeSED(object):
         self.flux_units = flux_units
         self.wave_units = wave_units
         units = [self.wave_units,self.flux_units,self.flux_units]
+        
+        # Set up empty synthetic photometry table
+        self.syn_photometry = None
+        
+        # Set up empty blackbody fit
+        self.blackbody = None
+        self.Teff_bb = None
+        self.bb_source = None
         
         # =====================================================================
         # Distance
@@ -282,9 +291,6 @@ class MakeSED(object):
         # Index and add units
         fill = np.zeros(len(self.photometry))
         
-        # Set up empty synthetic photometry table
-        self.syn_photometry = None
-        
         # Fill in empty columns
         for col in ['magnitude','magnitude_unc']:
             self.photometry[col][self.photometry[col]==None] = np.nan
@@ -336,12 +342,15 @@ class MakeSED(object):
                 
         # Make apparent photometric SED from photometry with uncertainties
         with_unc = self.photometry[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
-        self.app_phot_SED = np.array([with_unc['eff'], with_unc['app_flux'], with_unc['app_flux_unc']])
+        self.app_phot_SED = np.array([np.array([np.nanmean(with_unc.loc[b][col].value) for b in list(set(with_unc['band']))]) for col in ['eff','app_flux','app_flux_unc']])
         WP0, FP0, EP0 = [Q*i for Q,i in zip(units,self.app_phot_SED)]
+        
+        # Fit blackbody to the photometry
+        self.fit_blackbody()
         
         # Print
         print('\nPHOTOMETRY')
-        self.photometry[['id','band','app_magnitude','app_magnitude_unc','publication_shortname']].pprint()
+        self.photometry[['id','band','eff','app_magnitude','app_magnitude_unc','publication_shortname']].pprint()
         
         # =====================================================================
         # Spectra
@@ -448,8 +457,8 @@ class MakeSED(object):
             
         # Create Rayleigh Jeans Tail
         RJ_wav = np.arange(np.min([self.app_phot_SED[0][-1],12.]), 500, 0.1)*q.um
-        RJ_flx, RJ_unc = u.blackbody(RJ_wav, 3000*q.K, 100*q.K)
-        
+        RJ_flx, RJ_unc = u.blackbody(RJ_wav, self.Teff_bb*q.K, 100*q.K)
+
         # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
         RJ_flx *= self.app_phot_SED[1][-1]/RJ_flx[0].value
         RJ = [RJ_wav, RJ_flx, RJ_unc]
@@ -474,8 +483,7 @@ class MakeSED(object):
         if self.piecewise:
             self.app_spec_SED = (W, F, E) = [np.asarray(i)*Q for i,Q in zip(u.trim_spectrum([np.concatenate(j) for j in [list(self.piecewise[col]) for col in ['wavelength', 'app_flux', 'app_flux_unc']]], SED_trim), units)]
         else:
-            self.app_spec_SED = [np.array([])]*3
-            W, F, E = W0, F0, E0 = [Q*np.array([]) for Q in units]
+            W, F, E = W0, F0, E0 = self.app_spec_SED = [Q*np.array([]) for Q in units]
         
         # Exclude photometric points with spectrum coverage
         if self.piecewise:
@@ -496,13 +504,14 @@ class MakeSED(object):
             specPhot = u.finalize_spec([i*Q for i,Q in zip([j.value for j in [np.concatenate(i) for i in [[pp, ss] for pp, ss in zip([WP, FP, EP], [W, F, E])]]], units)])
         else:
             specPhot = [[999*q.um], None, None]
-            
+        
         # Create full SED from Wien tail, spectra, linear interpolation between photometry, and Rayleigh-Jeans tail
         try:
-            self.app_SED = [np.concatenate(i) for i in [[ww[Wein[0] < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip(Wein, RJ, specPhot)]]
+            self.app_SED = [np.concatenate(i).value for i in [[ww[Wein[0] < min([min(i) for i in [WP, specPhot[0] or [999 * q.um]] if any(i)])], sp, bb[RJ[0] > max([max(i) for i in [WP, specPhot[0] or [-999 * q.um]] if any(i)])]] for ww, bb, sp in zip(Wein, RJ, specPhot)]]
+            self.app_SED = [self.app_SED[0]*self.wave_units, self.app_SED[1]*self.flux_units, self.app_SED[2]*self.flux_units]
         except IOError:
             self.app_SED = ''
-            
+        
         # =====================================================================
         # Flux calibrate everything
         # =====================================================================
@@ -514,13 +523,7 @@ class MakeSED(object):
         # =====================================================================
         # Calculate Fundamental Params
         # =====================================================================
-        # TODO
         self.fundamental_params()
-        
-        # Set empty blackbody
-        self.blackbody = None
-        self.Teff_bb = None
-        self.bb_source = None
         
         # =====================================================================
         # Save the data to file for cmd.py to read
@@ -530,7 +533,7 @@ class MakeSED(object):
         print('\n'+'='*100)
         
         
-    def fundamental_params(self, age='', nymg='', blackbody=True, syn_photometry=True, evo_model='hybrid_solar_age', verbose=True):
+    def fundamental_params(self, age='', nymg='', evo_model='hybrid_solar_age', verbose=True):
         """
         Calculate the fundamental parameters of the current SED
         
@@ -546,12 +549,6 @@ class MakeSED(object):
         self.get_Lbol()
         self.get_Mbol()
         self.get_Teff()
-        
-        if syn_photometry:
-            self.get_syn_photometry()
-        
-        if blackbody:
-            self.fit_blackbody()
         
         if verbose:
             params = ['-','Lbol','Mbol','Teff']
@@ -610,7 +607,10 @@ class MakeSED(object):
         """
         # Calculate fbol
         try:
-            self.fbol = (np.trapz(self.app_SED[1], x=self.app_SED[0])*self.flux_units*self.wave_units).to(units)
+            # Scrub negatives and NaNs
+            app_sed = u.scrub(self.app_SED)
+            
+            self.fbol = np.trapz(app_sed[1], x=app_sed[0]).to(units)
             
             # Calculate fbol_unc
             try:
@@ -680,34 +680,51 @@ class MakeSED(object):
         bands: sequence
             The list of bands to calculate
         """
-        if not any(bands):
-            bands = FILTERS['Band']
+        try:
+            if not any(bands):
+                bands = FILTERS['Band']
             
-        # Only get mags in regions with spectral coverage
-        syn_mags = []
-        for spec in [i.as_void() for i in self.piecewise]:
-            syn_mags.append(s.all_mags(spec, bands=bands, plot=plot))
+            # Only get mags in regions with spectral coverage
+            syn_mags = []
+            for spec in [i.as_void() for i in self.piecewise]:
+                syn_mags.append(s.all_mags(spec, bands=bands, plot=plot))
             
-        # Stack the tables
-        self.syn_photometry = at.vstack(syn_mags)
+            # Stack the tables
+            self.syn_photometry = at.vstack(syn_mags)
+        
+        except:
+            print('No spectral coverage to calculate synthetic photometry.')
     
-    def fit_blackbody(self, fit_to='app_phot_SED'):
+    def fit_blackbody(self, fit_to='app_phot_SED', epsilon=0.1, acc=5):
         """
         Fit a blackbody curve to the data
         """
         # Get the data
         data = getattr(self, fit_to)
         
+        # Remove NaNs
+        data = np.array([(x,y,z) for x,y,z in zip(*data) if not any([np.isnan(i) for i in [x,y,z]]) and x<10]).T
+        
         # Initial guess
-        init = blackbody(temperature=2000)
+        try:
+            teff = self.Teff.value
+        except:
+            teff = 3000
+        init = blackbody(temperature=teff)
         
         # Fit the blackbody
         fit = fitting.LevMarLSQFitter()
-        self.blackbody = fit(init, data[0], data[1]/np.nanmax(data[1]))
+        bb = fit(init, data[0], data[1]/np.nanmax(data[1]), epsilon=epsilon, acc=acc)
         
         # Store the results
-        self.Teff_bb = int(self.blackbody.temperature.value)
-        self.bb_source = fit_to
+        try:
+            self.Teff_bb = int(bb.temperature.value)
+            self.bb_source = fit_to
+            self.blackbody = bb
+            print('\nBlackbody fit: {} K'.format(self.Teff_bb))
+        except IOError:
+            print('\nNo blackbody fit.')
+        
     
     def plot(self, photometry=True, spectra=True, integrals=False, app=True, syn_photometry=True, blackbody=True, scale=['log','log'], bokeh=True, output=False, **kwargs):
         """
@@ -732,10 +749,21 @@ class MakeSED(object):
         # Calculate reasonable axis limits
         spec_SED = getattr(self, pre+'spec_SED')
         phot_SED = getattr(self, pre+'phot_SED')
-        mn_x = np.nanmin([np.nanmin(spec_SED[0].value),np.nanmin(phot_SED[0])])
-        mx_x = np.nanmax([np.nanmax(spec_SED[0].value),np.nanmax(phot_SED[0])])
-        mn_y = np.nanmin([np.nanmin(spec_SED[1].value[spec_SED[1]>0]),np.nanmin(phot_SED[1])])
-        mx_y = np.nanmax([np.nanmax(spec_SED[1].value[spec_SED[1]>0]),np.nanmax(phot_SED[1])])
+        
+        # Check for min and max phot data
+        try:
+            mn_xp, mx_xp, mn_yp, mx_yp = np.nanmin(phot_SED[0]), np.nanmax(phot_SED[0]), np.nanmin(phot_SED[1]), np.nanmax(phot_SED[1])
+        except:
+            mn_xp, mx_xp, mn_yp, mx_yp = 0.3, 18, 0, 1
+        
+        # Check for min and max spec data
+        try:
+            mn_xs, mx_xs = np.nanmin(spec_SED[0].value), np.nanmax(spec_SED[0].value)
+            mn_ys, mx_ys = np.nanmin(spec_SED[1].value[spec_SED[1].value>0]), np.nanmax(spec_SED[1].value[spec_SED[1].value>0])
+        except:
+            mn_xs, mx_xs, mn_ys, mx_ys = 0.3, 18, 999, -999
+            
+        mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp,mn_xs]), np.nanmax([mx_xp,mx_xs]), np.nanmin([mn_yp,mn_ys]), np.nanmax([mx_yp,mx_ys])
         
         if not bokeh:
             
@@ -781,16 +809,44 @@ class MakeSED(object):
             # Plot spectra
             if spectra:
                 spec_SED = getattr(self, pre+'spec_SED')
-                fig.line(spec_SED[0], spec_SED[1], legend='Spectra', **kwargs)
+                source = ColumnDataSource(data=dict(x=spec_SED[0], y=spec_SED[1], z=spec_SED[2]))
+                hover = HoverTool(tooltips=[( 'wave', '$x'),( 'flux', '$y'),('unc','$z')], mode='vline')
+                fig.add_tools(hover)
+                fig.line('x', 'y', source=source, legend='Spectra')
                 
             # Plot photometry
             if photometry:
-                phot_SED = getattr(self, pre+'phot_SED')
-                errorbar(fig, phot_SED[0], phot_SED[1], yerr=phot_SED[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Photometry')
                 
+                # Plot points with errors
+                pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff',pre+'flux',pre+'flux_unc']) if not any([np.isnan(i) for i in [x,y,z]])]).T
+                try:
+                    errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Photometry')
+                except:
+                    pass
+
+                # Plot saturated photometry
+                # pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff','app_flux','app_flux_unc']) if np.isnan(z.value)]).T
+                # try:
+                #     errorbar(fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
+                # except:
+                #     pass
+
+                # Plot upper limits
+                # pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff','app_flux','app_flux_unc']) if np.isnan(z)]).T
+                # try:
+                #     errorbar(fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
+                # except:
+                #     pass
+
             # Plot synthetic photometry
             if syn_photometry and self.syn_photometry:
-                errorbar(fig, self.syn_photometry['eff'], self.syn_photometry[pre+'flux'], yerr=self.syn_photometry[pre+'flux_unc'], point_kwargs={'fill_alpha':0, 'size':8}, legend='Synthetic Photometry')
+                
+                # Plot points with errors
+                pts = np.array([(x,y,z) for x,y,z in np.array(self.syn_photometry['eff',pre+'flux',pre+'flux_unc']) if not np.isnan(z)]).T
+                try:
+                    errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
+                except:
+                    pass
             
             # Plot the SED with linear interpolation completion
             if integrals:
@@ -799,14 +855,15 @@ class MakeSED(object):
                 # plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
                 
             if blackbody and self.blackbody:
-                bb_wav = np.linspace(mn_x, mx_x, 500)
-                bb_flx = self.blackbody(bb_wav*self.wave_units)*np.nanmax(getattr(self, self.bb_source)[1])
+                fit_sed = getattr(self, self.bb_source)
+                bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
+                bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
                 fig.line(bb_wav, bb_flx, line_color='red', legend='{} K'.format(self.Teff_bb))
                 
             fig.legend.location = "top_right"
             fig.legend.click_policy = "hide"
-            fig.x_range = Range1d(mn_x, mx_x)
-            fig.y_range = Range1d(mn_y, mx_y)
+            fig.x_range = Range1d(mn_x*0.8, mx_x*1.2)
+            fig.y_range = Range1d(mn_y*0.5, mx_y*2)
                 
             if not output:
                 show(fig)
@@ -892,13 +949,12 @@ def test(n=1):
         from_dict = {'spectra':3176, 'photometry':'*', 'parallaxes':575, 'sources':source_id}
     if n==2:
         source_id = 86
-        from_dict = {'spectra':[379,1580,2726], 'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
+        from_dict = {'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
     if n==3:
         source_id = 2051
         from_dict = {}
     
     x = sed.MakeSED(source_id, db, from_dict=from_dict)
-    x.fit_blackbody()
     x.get_syn_photometry()
     x.plot()
     
