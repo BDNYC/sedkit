@@ -119,7 +119,7 @@ def isnumber(s):
     """
     return s.replace('.','').replace('-','').replace('+','').isnumeric()
 
-def finalize_spec(spec):
+def finalize_spec(spec, wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA):
     """
     Sort by wavelength and remove nans, negatives and zeroes
 
@@ -134,7 +134,7 @@ def finalize_spec(spec):
         The cleaned and ordered [W,F,E]
     """
     spec = list(zip(*sorted(zip(*map(list, [[i.value if hasattr(i, 'unit') else i for i in j] for j in spec])), key=lambda x: x[0])))
-    return scrub([spec[0]*q.um, spec[1]*q.erg/q.s/q.cm**2/q.AA, spec[2]*q.erg/q.s/q.cm**2/q.AA])
+    return scrub([spec[0]*wave_units, spec[1]*flux_units, spec[2]*flux_units])
 
 def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
     """

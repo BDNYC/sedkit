@@ -292,15 +292,13 @@ class MakeSED(object):
             
             print('\nNo photometry for this source.')
             
-            self.app_phot_SED = np.array([])
-            
         else:
             self.process_photometry(aliases=PHOT_ALIASES)
             
         # Make apparent photometric SED from photometry with uncertainties
         with_unc = self.photometry[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
         self.app_phot_SED = np.array([np.array([np.nanmean(with_unc.loc[b][col].value) for b in list(set(with_unc['band']))]) for col in ['eff','app_flux','app_flux_unc']])
-        WP0, FP0, EP0 = [Q*i for Q,i in zip(units,self.app_phot_SED)]
+        WP0, FP0, EP0 = u.finalize_spec(self.app_phot_SED, wave_units=self.wave_units, flux_units=self.flux_units)
         
         # =====================================================================
         # Blackbody fit
@@ -360,7 +358,7 @@ class MakeSED(object):
 
         # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
         RJ_flx *= self.app_phot_SED[1][-1]/RJ_flx[0].value
-        RJ = [RJ_wav, RJ_flx, RJ_unc]
+        RJ = u.finalize_spec([RJ_wav, RJ_flx, RJ_unc], wave_units=self.wave_units, flux_units=self.flux_units)
         
         # Normalize the composite spectra to the available photometry
         for n,spec in enumerate(piecewise):
@@ -738,32 +736,29 @@ class MakeSED(object):
         print('\nSPECTRAL TYPES')
         self.spectral_types[['id','spectral_type','spectral_type_unc','regime','suffix','gravity','publication_shortname']].pprint()
         
-    def fundamental_params(self, age='', membership='', evo_model='hybrid_solar_age', verbose=True, **kwargs):
+    def fundamental_params(self):
         """
         Calculate the fundamental parameters of the current SED
-        
-        Parameters
-        ----------
-        age: tuple, list (optional)
-            The lower and upper age limits of the source in astropy.units
-        membership: str (optional)
-            The nearby young moving group name
-        evo_model: str
-            The evolutionary model to use
         """
         self.get_Lbol()
         self.get_Mbol()
         self.get_Teff()
         
-        if verbose:
-            params = ['-','Lbol','Mbol','Teff']
-            ptable = at.QTable(np.array([['Value',self.Lbol_sun,self.Mbol,self.Teff.value],['Error',self.Lbol_sun_unc,self.Mbol_unc,self.Teff_unc.value]]), names=params)
-            print('\nRESULTS')
-            ptable.pprint()
+        params = ['-','Lbol','Mbol','Teff']
+        ptable = at.QTable(np.array([['Value',self.Lbol_sun,self.Mbol,self.Teff.value],['Error',self.Lbol_sun_unc,self.Mbol_unc,self.Teff_unc.value]]), names=params)
+        print('\nRESULTS')
+        ptable.pprint()
     
     def get_mbol(self, L_sun=3.86E26*q.W, Mbol_sun=4.74):
         """
         Calculate the apparent bolometric magnitude of the SED
+        
+        Parameters
+        ==========
+        L_sun: astropy.units.quantity.Quantity
+            The bolometric luminosity of the Sun
+        Mbol_sun: float
+            The absolute bolometric magnitude of the sun
         """
         # Calculate fbol if not present
         if not hasattr(self, 'fbol'):
@@ -824,7 +819,7 @@ class MakeSED(object):
                 self.fbol_unc = ''
                 
         # No dice
-        except IOError:
+        except:
             self.fbol = self.fbol_unc = ''
         
     def get_Lbol(self):
@@ -848,19 +843,12 @@ class MakeSED(object):
                 self.Lbol_unc = self.Lbol_sun_unc = ''
                 
         # No dice
-        except IOError:
+        except:
             self.Lbol = self.Lbol_sun = self.Lbol_unc = self.Lbol_sun_unc =''
                 
     def get_Teff(self):
         """
-        Calculate the effective temperature of the SED
-        
-        Parameters
-        ----------
-        r: astropy.quantity
-            The radius of the source in units of R_Jup
-        sig_r: astropy.quantity
-            The uncertainty in the radius
+        Calculate the effective temperature
         """
         # Calculate Teff
         try:
@@ -884,6 +872,8 @@ class MakeSED(object):
         ----------
         bands: sequence
             The list of bands to calculate
+        plot: bool
+            Plot the synthetic mags
         """
         try:
             if not any(bands):
@@ -898,12 +888,21 @@ class MakeSED(object):
             # Stack the tables
             self.syn_photometry = at.vstack(syn_mags)
         
-        except IOError:
+        except:
             print('No spectral coverage to calculate synthetic photometry.')
     
     def fit_blackbody(self, fit_to='app_phot_SED', epsilon=0.1, acc=5):
         """
         Fit a blackbody curve to the data
+        
+        Parameters
+        ==========
+        fit_to: str
+            The attribute name of the [W,F,E] to fit
+        epsilon: float
+            The step size
+        acc: float
+            The acceptible error
         """
         # Get the data
         data = getattr(self, fit_to)
@@ -928,26 +927,39 @@ class MakeSED(object):
             self.bb_source = fit_to
             self.blackbody = bb
             print('\nBlackbody fit: {} K'.format(self.Teff_bb))
-        except IOError:
+        except:
             print('\nNo blackbody fit.')
         
     
-    def plot(self, photometry=True, spectra=True, integrals=False, app=True, syn_photometry=True, blackbody=True, scale=['log','log'], bokeh=True, output=False, **kwargs):
+    def plot(self, app=True, photometry=True, spectra=True, integrals=False, syn_photometry=True, blackbody=True, scale=['log','log'], bokeh=True, output=False, **kwargs):
         """
         Plot the SED
         
         Parameters
         ----------
+        app: bool
+            Plot the apparent SED instead of absolute
         photometry: bool
             Plot the photometry
         spectra: bool
             Plot the spectra
-        app: bool
-            Plot the apparent SED instead of absolute
+        integrals: bool
+            Plot the curve used to calculate fbol
+        syn_photometry: bool
+            Plot the synthetic photometry
+        blackbody: bool
+            Polot the blackbody fit
         scale: array-like
             The (x,y) scales to plot, 'linear' or 'log'
         bokeh: bool
             Plot in Bokeh
+        output: bool
+            Just return figure, don't draw plot
+        
+        Returns
+        =======
+        bokeh.models.figure
+            The SED plot
         """
         # Distinguish between apparent and absolute magnitude
         pre = 'app_' if app else 'abs_'
@@ -1029,21 +1041,14 @@ class MakeSED(object):
                     errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Photometry')
                 except:
                     pass
-
+                    
                 # Plot saturated photometry
-                # pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff','app_flux','app_flux_unc']) if np.isnan(z.value)]).T
-                # try:
-                #     errorbar(fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
-                # except:
-                #     pass
-
-                # Plot upper limits
-                # pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff','app_flux','app_flux_unc']) if np.isnan(z)]).T
-                # try:
-                #     errorbar(fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
-                # except:
-                #     pass
-
+                pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff','app_flux','app_flux_unc']) if np.isnan(z) and not np.isnan(y)]).T
+                try:
+                    errorbar(fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
+                except:
+                    pass
+                    
             # Plot synthetic photometry
             if syn_photometry and self.syn_photometry:
                 
@@ -1123,6 +1128,25 @@ class MakeSED(object):
 def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_kwargs={}, legend=''):
     """
     Hack to make errorbar plots in bokeh
+    
+    Parameters
+    ==========
+    x: sequence
+        The x axis data
+    y: sequence
+        The y axis data
+    xerr: sequence (optional)
+        The x axis errors
+    yerr: sequence (optional)
+        The y axis errors
+    color: str
+        The marker and error bar color
+    point_kwargs: dict
+        kwargs for the point styling
+    error_kwargs: dict
+        kwargs for the error bar styling
+    legend: str
+        The text for the legend
     """
     fig.circle(x, y, color=color, legend=legend, **point_kwargs)
 
