@@ -23,7 +23,7 @@ from bokeh.plotting import figure, output_file, show, save
 FILTERS = svo.filters()
 FILTERS.add_index('Band')
 
-PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3'}
+PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_Y':'Wircam.Y', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3', 'HST_F125W':'WFC3_IR.F125W'}
 
 def from_ids(db, **kwargs):
     """
@@ -63,8 +63,97 @@ def from_ids(db, **kwargs):
     return data
 
 class MakeSED(object):
-    def __init__(self, source_id, db, from_dict='', pi='', dist='', pop=[], SNR=[], SNR_trim=5, SED_trim=[], split=[], trim=[], \
-        age='', radius='', membership='', spt='', flux_units=q.erg/q.s/q.cm**2/q.AA, wave_units=q.um, name='', phot_aliases=PHOT_ALIASES):
+    """
+    A class to construct spectral energy distributions and calculate fundamental paramaters of stars
+    
+    Attributes
+    ==========
+    Lbol: astropy.units.quantity.Quantity
+        The bolometric luminosity [erg/s]
+    Lbol_sun: astropy.units.quantity.Quantity
+        The bolometric luminosity [L_sun]
+    Lbol_sun_unc: astropy.units.quantity.Quantity
+        The bolometric luminosity [L_sun] uncertainty
+    Lbol_unc: astropy.units.quantity.Quantity
+        The bolometric luminosity [erg/s] uncertainty
+    Mbol: float
+        The absolute bolometric magnitude
+    Mbol_unc: float
+        The absolute bolometric magnitude uncertainty
+    SpT: float
+        The string spectral type
+    Teff: astropy.units.quantity.Quantity
+        The effective temperature calculated from the SED
+    Teff_bb: astropy.units.quantity.Quantity
+        The effective temperature calculated from the blackbody fit
+    Teff_unc: astropy.units.quantity.Quantity
+        The effective temperature calculated from the SED uncertainty
+    abs_SED: sequence
+        The [W,F,E] of the calculate absolute SED
+    abs_phot_SED: sequence
+        The [W,F,E] of the calculate absolute photometric SED
+    abs_spec_SED: sequence
+        The [W,F,E] of the calculate absolute spectroscopic SED
+    age_max: astropy.units.quantity.Quantity
+        The upper limit on the age of the target
+    age_min: astropy.units.quantity.Quantity
+        The lower limit on the age of the target
+    app_SED: sequence
+        The [W,F,E] of the calculate apparent SED
+    app_phot_SED: sequence
+        The [W,F,E] of the calculate apparent photometric SED
+    app_spec_SED: sequence
+        The [W,F,E] of the calculate apparent spectroscopic SED
+    bb_source: str
+        The [W,F,E] fit to calculate Teff_bb
+    blackbody: astropy.modeling.core.blackbody
+        The best fit blackbody function
+    distance: astropy.units.quantity.Quantity
+        The target distance
+    distance_unc: astropy.units.quantity.Quantity
+        The target distance uncertainty
+    fbol: astropy.units.quantity.Quantity
+        The apparent bolometric flux [erg/s/cm2]
+    fbol_unc: astropy.units.quantity.Quantity
+        The apparent bolometric flux [erg/s/cm2] uncertainty
+    flux_units: astropy.units.quantity.Quantity
+        The desired flux density units
+    gravity: str
+        The surface gravity suffix
+    mbol: float
+        The apparent bolometric magnitude
+    mbol_unc: float
+        The apparent bolometric magnitude uncertainty
+    name: str
+        The name of the target
+    parallaxes: astropy.table.QTable
+        The table of parallaxes
+    photometry: astropy.table.QTable
+        The table of photometry
+    piecewise: sequence
+        The list of all piecewise combined spectra for normalization
+    radius: astropy.units.quantity.Quantity
+        The target radius
+    radius_unc: astropy.units.quantity.Quantity
+        The target radius uncertainty
+    sources: astropy.table.QTable
+        The table of sources (with only one row of cource)
+    spectra: astropy.table.QTable
+        The table of spectra
+    spectral_type: float
+        The numeric spectral type, where 0-99 corresponds to spectral types O0-Y9
+    spectral_type_unc: float
+        The numeric spectral type uncertainty
+    spectral_types: astropy.table.QTable
+        The table of spectral types
+    suffix: str
+        The spectral type suffix
+    syn_photometry: astropy.table.QTable
+        The table of calcuated synthetic photometry
+    wave_units: astropy.units.quantity.Quantity
+        The desired wavelength units
+    """
+    def __init__(self, source_id, db, from_dict='', wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA, SED_trim=[], SED_split=[], name='', verbose=True, **kwargs):
         """
         Pulls all available data from the BDNYC Data Archive, 
         constructs an SED, and stores all calculations at *pickle_path*
@@ -77,6 +166,20 @@ class MakeSED(object):
         db: astrodbkit.astrodb.Database, dict
             The database instance to retreive data from or a dictionary
             of astropy tables to mimick the db query
+        from_dict: dict (optional)
+            A dictionary of the {table_name:[ids], ...} to construct the SED
+        wave_units: astropy.units.quantity.Quantity
+            The wavelength units to use
+        flux_units: astropy.units.quantity.Quantity
+            The flux density units to use
+        SED_trim: sequence (optional)
+            A sequence of (wave_min, wave_max) sequences to trim the SED by
+        SED_split: sequence (optional)
+            Wavelength positions to split spectra at so the pieces are independently normalized
+        name: str (optional)
+            A name for the target
+        verbose: bool
+            Print some diagnostic stuff
         
         Example 1
         ---------
@@ -142,288 +245,84 @@ class MakeSED(object):
         self.wave_units = wave_units
         units = [self.wave_units,self.flux_units,self.flux_units]
         
-        # Set up empty synthetic photometry table
-        self.syn_photometry = None
-        
-        # Set up empty blackbody fit
-        self.blackbody = None
-        self.Teff_bb = None
-        self.bb_source = None
-        
         # =====================================================================
         # Distance
         # =====================================================================
         
         # Punt if no distance info
-        if len(self.parallaxes)==0 and pi=='' and dist=='':
-            print("\nNo distance for this source")
+        if len(self.parallaxes)==0 and kwargs.get('pi')=='' and kwargs.get('dist')=='':
             
+            print("\nNo distance for this source")
             self.distance = self.distance_unc = ''
             
         else:
             
-            # Index and add units
-            fill = np.zeros(len(self.parallaxes))
-            
-            # Add distance columns to the parallaxes table
-            self.parallaxes.add_column(at.Column(fill, 'distance'))
-            self.parallaxes.add_column(at.Column(fill, 'distance_unc'))
-            
-            # Add units
-            self.parallaxes.add_row(np.zeros(len(self.parallaxes.colnames)))
-            self.parallaxes['parallax'].unit = q.mas
-            self.parallaxes['parallax_unc'].unit = q.mas
-            self.parallaxes['distance'].unit = q.pc
-            self.parallaxes['distance_unc'].unit = q.pc
-            self.parallaxes = self.parallaxes[:-1]
-            
-            # Check for input parallax or distance
-            if pi or dist:
-                self.parallaxes['adopted'] = fill
-                if pi:
-                    self.parallaxes.add_row({'parallax':pi[0], 'parallax_unc':pi[1], \
-                        'adopted':1, 'publication_shortname':'Input'})
-                elif dist:
-                    self.parallaxes.add_row({'distance':dist[0], 'distance_unc':dist[1],\
-                        'adopted':1, 'publication_shortname':'Input'})
-                        
-            # Calculate missing distance or parallax
-            for row in self.parallaxes:
-                if row['parallax'].value and not row['distance'].value:
-                    distance = u.pi2pc(row['parallax'], row['parallax_unc'])
-                    row['distance'] = distance[0]
-                    row['distance_unc'] = distance[1]
-                    
-                elif row['distance'].value and not row['parallax'].value:
-                    parallax = u.pi2pc(row['distance'], row['distance_unc'], pc2pi=True)
-                    row['parallax'] = parallax[0]
-                    row['parallax_unc'] = parallax[1]
-                    
-                else:
-                    pass
-                    
-            # Set adopted distance
-            if len(self.parallaxes)>0 and not any(self.parallaxes['adopted']==1):
-                self.parallaxes['adopted'][0] = 1
-                
-            # Sort by adopted distance
-            self.parallaxes.add_index('adopted')
-            
-            # Get the adopted distance
-            try:
-                self.distance = self.parallaxes.loc[1]['distance']
-                self.distance_unc = self.parallaxes.loc[1]['distance_unc']
-            except KeyError:
-                self.distance = self.distance_unc = ''
-                
-            # Print
-            print('\nPARALLAXES')
-            self.parallaxes[['id','distance','distance_unc','publication_shortname']].pprint()
+            self.process_parallaxes(**kwargs)
         
         # =====================================================================
         # Spectral Type
         # =====================================================================
         
         # Punt if no SpT info
-        if len(self.spectral_types)==0 and spt=='':
-            print("\nNo spectral type for this source")
+        if len(self.spectral_types)==0 and kwargs.get('spt')=='':
             
+            print("\nNo spectral type for this source")
             self.spectral_type = self.spectral_type_unc = self.gravity = self.suffix = self.SpT = ''
             
         else:
             
-            # Sort by adopted spectral types
-            fill = np.zeros(len(self.spectral_types))
-            
-            # Check for input parallax or distance
-            if spt:
-                self.spectral_types['adopted'] = fill
-                sp, sp_unc, sp_pre, sp_grv, sp_lc = u.specType(spt)
-                self.spectral_types.add_row({'spectral_type':sp, 'spectral_type_unc':sp_unc, 'gravity':sp_grv, 'suffix':sp_pre, 'adopted':1, 'publication_shortname':'Input'})
-                
-            # Set adopted spectral type
-            if len(self.spectral_types)>0 and not any(self.spectral_types['adopted']==1):
-                self.spectral_types['adopted'][0] = 1
-                
-            # Sort by adopted spectral type
-            self.spectral_types.add_index('adopted')
-            
-            # Get the adopted spectral type
-            try:
-                self.spectral_type = self.spectral_types.loc[1]['spectral_type']
-                self.spectral_type_unc = self.spectral_types.loc[1]['spectral_type_unc']
-                self.gravity = self.spectral_types.loc[1]['gravity']
-                self.suffix = self.spectral_types.loc[1]['suffix']
-                self.SpT = u.specType([self.spectral_type, self.spectral_type_unc, self.suffix, self.gravity, ''])
-                
-            except:
-                self.spectral_type = self.spectral_type_unc = self.gravity = self.suffix = self.SpT = ''
-                
-            # Print
-            print('\nSPECTRAL TYPES')
-            self.spectral_types[['id','spectral_type','spectral_type_unc','regime','suffix','gravity','publication_shortname']].pprint()
+            self.process_spectral_types(**kwargs)
         
         # =====================================================================
         # Age
         # =====================================================================
-        
-        # Retreive age data from input NYMG membership, input age range, or age estimate
-        if isinstance(age, tuple):
-            self.age_min, self.age_max = age
-        elif membership in NYMG:
-            self.age_min, self.age_max = (NYMG[membership]['age_min'], NYMG[membership]['age_min'])*q.Myr
-        elif self.gravity:
-            self.age_min, self.age_max = (0.01, 0.15)*q.Gyr
-        else:
-            self.age_min, self.age_max = (0.5, 10)*q.Gyr
+        self.process_age(**kwargs)
             
         # =====================================================================
         # Radius
         # =====================================================================
-        
-        # Use radius if given
-        self.radius, self.radius_unc = radius or [1.*ac.R_jup, ac.R_jup/100.]
+        self.process_radius(**kwargs)
         
         # =====================================================================
         # Photometry
         # =====================================================================
         
-        # Index and add units
-        fill = np.zeros(len(self.photometry))
-        
-        # Fill in empty columns
-        for col in ['magnitude','magnitude_unc']:
-            self.photometry[col][self.photometry[col]==None] = np.nan
+        # Punt if no photometry
+        if len(self.photometry)==0:
             
-        # Rename bands. What a pain in the ass.
-        if isinstance(phot_aliases,dict):
-            self.photometry['band'] = [phot_aliases.get(i) for i in self.photometry['band']]
-        elif phot_aliases=='guess':
-            self.photometry['band'] = [min(list(FILTERS['Band']), key=lambda v: len(set(b)^set(v))) for b in self.photometry['band']]
+            print('\nNo photometry for this source.')
+            
+            self.app_phot_SED = np.array([])
+            
         else:
-            pass
+            self.process_photometry(aliases=PHOT_ALIASES)
             
-        self.photometry.add_index('band')
-        self.photometry.rename_column('magnitude','app_magnitude')
-        self.photometry.rename_column('magnitude_unc','app_magnitude_unc')
-        self.photometry['app_magnitude'].unit = q.mag
-        self.photometry['app_magnitude_unc'].unit = q.mag
-        
-        # Add effective wavelengths to the photometry table
-        self.photometry.add_column(at.Column(fill, 'eff', unit=self.wave_units))
-        for row in self.photometry:
-            try:
-                band = FILTERS.loc[row['band']]
-                row['eff'] = band['WavelengthEff']*q.Unit(band['WavelengthUnit'])
-            except:
-                row['eff'] = np.nan
-            
-        # Add absolute magnitude columns to the photometry table
-        self.photometry.add_column(at.Column(fill, 'abs_magnitude', unit=q.mag))
-        self.photometry.add_column(at.Column(fill, 'abs_magnitude_unc', unit=q.mag))
-        
-        # Calculate absolute mags and add to the photometry table
-        if self.distance:
-            for row in self.photometry:
-                M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance, row['app_magnitude_unc'], self.distance_unc)
-                row['abs_magnitude'] = M
-                row['abs_magnitude_unc'] = M_unc
-            
-        # Add flux density columns to the photometry table
-        for colname in ['app_flux','app_flux_unc','abs_flux','abs_flux_unc']:
-            self.photometry.add_column(at.Column(fill, colname, unit=self.flux_units))
-            
-        # Calculate fluxes and add to the photometry table
-        for i in ['app_','abs_']:
-            for row in self.photometry:
-                ph_flux = u.mag2flux(row['band'], row[i+'magnitude'], sig_m=row[i+'magnitude_unc'])
-                row[i+'flux'] = ph_flux[0]
-                row[i+'flux_unc'] = ph_flux[1]
-                
         # Make apparent photometric SED from photometry with uncertainties
         with_unc = self.photometry[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
         self.app_phot_SED = np.array([np.array([np.nanmean(with_unc.loc[b][col].value) for b in list(set(with_unc['band']))]) for col in ['eff','app_flux','app_flux_unc']])
         WP0, FP0, EP0 = [Q*i for Q,i in zip(units,self.app_phot_SED)]
         
+        # =====================================================================
+        # Blackbody fit
+        # =====================================================================
+        
+        # Set up empty blackbody fit
+        self.blackbody = None
+        self.Teff_bb = None
+        self.bb_source = None
+        
         # Fit blackbody to the photometry
         self.fit_blackbody()
-        
-        # Print
-        print('\nPHOTOMETRY')
-        self.photometry[['id','band','eff','app_magnitude','app_magnitude_unc','publication_shortname']].pprint()
         
         # =====================================================================
         # Spectra
         # =====================================================================
         
-        # Index and add units
-        fill = np.zeros(len(self.spectra))
-        self.spectra.add_index('id')
-        
-        # Prepare apparent spectra
-        all_spectra = []
-        for n,row in enumerate(self.spectra):
+        if len(self.spectra)==0:
+            print('\nNo spectra available for this source')
             
-            # Unpack the spectrum
-            w, f = row['spectrum'].data[:2]
-            try:
-                e = row['spectrum'].data[2]
-            except IndexError:
-                e = ''
-            
-            # Convert log units to linear
-            if row['flux_units'].startswith('log '):
-                f = 10**f, 
-                try:
-                    e = 10**e
-                except:
-                    pass
-                row['flux_units'] = row['flux_units'].replace('log ', '')
-            if row['wavelength_units'].startswith('log '):
-                w = 10**w
-                row['wavelength_units'] = row['wavelength_units'].replace('log ', '')
-                
-            # Make sure the wavelength units are right
-            w = w*u.str2Q(row['wavelength_units']).to(self.wave_units).value
-            
-            # Convert F_nu to F_lam if necessary
-            if row['flux_units']=='Jy':
-                f = u.fnu2flam(f*q.Jy, w*self.wave_units, units=self.flux_units).value
-                try:
-                    e = u.fnu2flam(e*q.Jy, w*self.wave_units, units=self.flux_units).value
-                except:
-                    pass
-                    
-            # Force uncertainty array if none
-            if not any(e) or e=='':
-                e = f/10.
-                print('No uncertainty array for spectrum {}. Using SNR=10.'.format(row['id']))
-                
-            # Insert uncertainty array of set SNR to force plotting
-            for snr in SNR:
-                if snr[0]==row['id']:
-                    e = f/(1.*snr[1])
-                    
-            # Trim spectra frist up to first point with SNR>SNR_trim then manually
-            if isinstance(SNR_trim, (float, int)):
-                snr_trim = SNR_trim
-            elif SNR_trim and any([i[0]==row['id'] for i in SNR_trim]):
-                snr_trim = [i[1] for i in SNR_trim if i[0]==row['id']][0]
-            else:
-                snr_trim = 10
-                
-            if not SNR or not any([i[0]==row['id'] for i in SNR]):
-                keep, = np.where(f/e>=snr_trim)
-                if any(keep):
-                    w, f, e = [i[np.nanmin(keep):np.nanmax(keep)+1] for i in [w, f, e]]
-            if trim and any([i[0]==row['id'] for i in trim]):
-                w, f, e = u.trim_spectrum([w, f, e], [i[1:] for i in trim if i[0]==row['id']])
-                
-            all_spectra.append([w,f,e])
-            
-        # Print
-        print('\nSPECTRA')
-        self.spectra[['id','instrument_id','telescope_id','mode_id','publication_shortname']].pprint()
+        else:
+            self.process_spectra()
         
         # =====================================================================
         # Construct SED
@@ -431,15 +330,15 @@ class MakeSED(object):
         
         # Group overlapping spectra and make composites where possible
         # to form peacewise spectrum for flux calibration
-        if len(all_spectra) > 1:
-            groups, piecewise = u.group_spectra(all_spectra), []
+        if len(self.processed_spectra) > 1:
+            groups, piecewise = u.group_spectra(self.processed_spectra), []
             for group in groups:
                 composite = u.make_composite([[spec[0]*self.wave_units, spec[1]*self.flux_units, spec[2]*self.flux_units] for spec in group])
                 piecewise.append(composite)
                 
         # If only one spectrum, no need to make composite
-        elif len(all_spectra) == 1:
-            piecewise = np.copy(all_spectra)
+        elif len(self.processed_spectra) == 1:
+            piecewise = np.copy(self.processed_spectra)
             
         # If no spectra, forget it
         else:
@@ -448,9 +347,9 @@ class MakeSED(object):
             
         # Splitting
         keepers = []
-        if split:
+        if SED_split:
             for pw in piecewise:
-                wavs = list(filter(None, [np.where(pw[0]<i)[0][-1] if pw[0][0]<i and pw[0][-1]>i else None for i in split]))
+                wavs = list(filter(None, [np.where(pw[0]<i)[0][-1] if pw[0][0]<i and pw[0][-1]>i else None for i in SED_split]))
                 keepers += map(list, zip(*[np.split(i, list(wavs)) for i in pw]))
                 
             piecewise = np.copy(keepers)
@@ -513,10 +412,22 @@ class MakeSED(object):
             self.app_SED = [self.app_SED[0]*self.wave_units, self.app_SED[1]*self.flux_units, self.app_SED[2]*self.flux_units]
         except IOError:
             self.app_SED = ''
+            
         
         # =====================================================================
         # Flux calibrate everything
         # =====================================================================
+        
+        # Set up empty synthetic photometry table
+        self.syn_photometry = None
+        
+        # Find synthetic mags
+        self.get_syn_photometry()
+            
+        # =====================================================================
+        # Flux calibrate everything
+        # =====================================================================
+        
         # Calibrate using self.distance, self.distance_unc
         self.abs_SED = u.flux_calibrate(self.app_SED[1], self.distance, self.app_SED[2], self.distance_unc)
         self.abs_phot_SED = u.flux_calibrate(self.app_phot_SED[1], self.distance, self.app_phot_SED[2], self.distance_unc)
@@ -525,7 +436,7 @@ class MakeSED(object):
         # =====================================================================
         # Calculate Fundamental Params
         # =====================================================================
-        self.fundamental_params()
+        self.fundamental_params(**kwargs)
         
         # =====================================================================
         # Save the data to file for cmd.py to read
@@ -534,8 +445,300 @@ class MakeSED(object):
         
         print('\n'+'='*100)
         
+    def process_radius(self, radius='', **kwargs):
+        """
+        Process the radius
         
-    def fundamental_params(self, age='', nymg='', evo_model='hybrid_solar_age', verbose=True):
+        Parameters
+        ==========
+        radius: sequence (optional)
+            The radius and uncertainty of the target
+        """
+        # Input radius
+        if isinstance(radius, tuple):
+            
+            # Make sure it is a time unit
+            try:
+                _, _ = radius[0].to(q.m), age[1].to(q.m)
+                self.radius, self.radius_unc = radius
+            except:
+                print('Radius {} is not in units of length.'.format(radius))
+                
+        # Jupiter radius
+        else:
+            self.radius, self.radius_unc = 1.*ac.R_jup, ac.R_jup/100.
+    
+    def process_age(self, age='', membership='', **kwargs):
+        """
+        Process tha age
+        
+        Parameters
+        ==========
+        age: sequence (optional)
+            The age minimum and maximum of the target
+        membership: str (optional)
+            The name of the parent NYMG
+        """
+        # Input age
+        if isinstance(age, tuple):
+            
+            # Make sure it is a time unit
+            try:
+                _, _ = age[0].to(q.Myr), age[1].to(q.Myr)
+                self.age_min, self.age_max = age
+            except:
+                print('Age {} is not in units of time.'.format(age))
+                
+        # NYMG age
+        elif membership in NYMG:
+            self.age_min, self.age_max = (NYMG[membership]['age_min'], NYMG[membership]['age_min'])*q.Myr
+            
+        # Low-g age
+        elif self.gravity:
+            self.age_min, self.age_max = (0.01, 0.15)*q.Gyr
+            
+        # Field age
+        else:
+            self.age_min, self.age_max = (0.5, 10)*q.Gyr
+        
+    def process_spectra(self, SNR=[], SNR_trim=5, trim=[], **kwargs):
+        """
+        Process the spectra
+        
+        Parameters
+        ==========
+        SNR: sequence (optional)
+            A sequence of (spectrum_id, signal-to-noise) sequences to override spectrum SNR
+        SNR_trim: float (optional)
+            The SNR value to trim spectra edges up to
+        trim: sequence (optional)
+            A sequence of (spectrum_id, wave_min, wave_max) sequences to override spectrum trimming
+        """
+        # Index and add units
+        fill = np.zeros(len(self.spectra))
+        self.spectra.add_index('id')
+        
+        # Prepare apparent spectra
+        self.processed_spectra = []
+        for n,row in enumerate(self.spectra):
+            
+            # Unpack the spectrum
+            w, f = row['spectrum'].data[:2]
+            try:
+                e = row['spectrum'].data[2]
+            except IndexError:
+                e = ''
+            
+            # Convert log units to linear
+            if row['flux_units'].startswith('log '):
+                f = 10**f, 
+                try:
+                    e = 10**e
+                except:
+                    pass
+                row['flux_units'] = row['flux_units'].replace('log ', '')
+            if row['wavelength_units'].startswith('log '):
+                w = 10**w
+                row['wavelength_units'] = row['wavelength_units'].replace('log ', '')
+                
+            # Make sure the wavelength units are right
+            w = w*u.str2Q(row['wavelength_units']).to(self.wave_units).value
+            
+            # Convert F_nu to F_lam if necessary
+            if row['flux_units']=='Jy':
+                f = u.fnu2flam(f*q.Jy, w*self.wave_units, units=self.flux_units).value
+                try:
+                    e = u.fnu2flam(e*q.Jy, w*self.wave_units, units=self.flux_units).value
+                except:
+                    pass
+                    
+            # Force uncertainty array if none
+            if not any(e) or e=='':
+                e = f/10.
+                print('No uncertainty array for spectrum {}. Using SNR=10.'.format(row['id']))
+                
+            # Insert uncertainty array of set SNR to force plotting
+            for snr in SNR:
+                if snr[0]==row['id']:
+                    e = f/(1.*snr[1])
+                    
+            # Trim spectra frist up to first point with SNR>SNR_trim then manually
+            if isinstance(SNR_trim, (float, int)):
+                snr_trim = SNR_trim
+            elif SNR_trim and any([i[0]==row['id'] for i in SNR_trim]):
+                snr_trim = [i[1] for i in SNR_trim if i[0]==row['id']][0]
+            else:
+                snr_trim = 10
+                
+            if not SNR or not any([i[0]==row['id'] for i in SNR]):
+                keep, = np.where(f/e>=snr_trim)
+                if any(keep):
+                    w, f, e = [i[np.nanmin(keep):np.nanmax(keep)+1] for i in [w, f, e]]
+            if trim and any([i[0]==row['id'] for i in trim]):
+                w, f, e = u.trim_spectrum([w, f, e], [i[1:] for i in trim if i[0]==row['id']])
+                
+            self.processed_spectra.append([w,f,e])
+            
+        # Print
+        print('\nSPECTRA')
+        self.spectra[['id','instrument_id','telescope_id','mode_id','publication_shortname']].pprint()
+        
+    def process_photometry(self, aliases='', **kwargs):
+        """
+        Process the photometry
+        """
+        # Index and add units
+        fill = np.zeros(len(self.photometry))
+        
+        # Fill in empty columns
+        for col in ['magnitude','magnitude_unc']:
+            self.photometry[col][self.photometry[col]==None] = np.nan
+            
+        # Rename bands. What a pain in the ass.
+        if isinstance(aliases,dict):
+            self.photometry['band'] = [aliases.get(i) for i in self.photometry['band']]
+        elif phot_aliases=='guess':
+            self.photometry['band'] = [min(list(FILTERS['Band']), key=lambda v: len(set(b)^set(v))) for b in self.photometry['band']]
+        else:
+            pass
+        
+        self.photometry.add_index('band')
+        self.photometry.rename_column('magnitude','app_magnitude')
+        self.photometry.rename_column('magnitude_unc','app_magnitude_unc')
+        self.photometry['app_magnitude'].unit = q.mag
+        self.photometry['app_magnitude_unc'].unit = q.mag
+        
+        # Add effective wavelengths to the photometry table
+        self.photometry.add_column(at.Column(fill, 'eff', unit=self.wave_units))
+        for row in self.photometry:
+            try:
+                band = FILTERS.loc[row['band']]
+                row['eff'] = band['WavelengthEff']*q.Unit(band['WavelengthUnit'])
+            except:
+                row['eff'] = np.nan
+            
+        # Add absolute magnitude columns to the photometry table
+        self.photometry.add_column(at.Column(fill, 'abs_magnitude', unit=q.mag))
+        self.photometry.add_column(at.Column(fill, 'abs_magnitude_unc', unit=q.mag))
+        
+        # Calculate absolute mags and add to the photometry table
+        if self.distance:
+            for row in self.photometry:
+                M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance, row['app_magnitude_unc'], self.distance_unc)
+                row['abs_magnitude'] = M
+                row['abs_magnitude_unc'] = M_unc
+            
+        # Add flux density columns to the photometry table
+        for colname in ['app_flux','app_flux_unc','abs_flux','abs_flux_unc']:
+            self.photometry.add_column(at.Column(fill, colname, unit=self.flux_units))
+            
+        # Calculate fluxes and add to the photometry table
+        for i in ['app_','abs_']:
+            for row in self.photometry:
+                ph_flux = u.mag2flux(row['band'], row[i+'magnitude'], sig_m=row[i+'magnitude_unc'])
+                row[i+'flux'] = ph_flux[0]
+                row[i+'flux_unc'] = ph_flux[1]
+                
+        # Print
+        print('\nPHOTOMETRY')
+        self.photometry[['id','band','eff','app_magnitude','app_magnitude_unc','publication_shortname']].pprint()
+        
+    def process_parallaxes(self, pi='', dist='', **kwargs):
+        """
+        Process the parallax data
+        """
+        # Index and add units
+        fill = np.zeros(len(self.parallaxes))
+        
+        # Add distance columns to the parallaxes table
+        self.parallaxes.add_column(at.Column(fill, 'distance'))
+        self.parallaxes.add_column(at.Column(fill, 'distance_unc'))
+        
+        # Add units
+        self.parallaxes.add_row(np.zeros(len(self.parallaxes.colnames)))
+        self.parallaxes['parallax'].unit = q.mas
+        self.parallaxes['parallax_unc'].unit = q.mas
+        self.parallaxes['distance'].unit = q.pc
+        self.parallaxes['distance_unc'].unit = q.pc
+        self.parallaxes = self.parallaxes[:-1]
+        
+        # Check for input parallax or distance
+        if pi or dist:
+            self.parallaxes['adopted'] = fill
+            if pi:
+                self.parallaxes.add_row({'parallax':pi[0], 'parallax_unc':pi[1], 'adopted':1, 'publication_shortname':'Input'})
+            elif dist:
+                self.parallaxes.add_row({'distance':dist[0], 'distance_unc':dist[1], 'adopted':1, 'publication_shortname':'Input'})
+                    
+        # Calculate missing distance or parallax
+        for row in self.parallaxes:
+            if row['parallax'].value and not row['distance'].value:
+                distance = u.pi2pc(row['parallax'], row['parallax_unc'])
+                row['distance'] = distance[0]
+                row['distance_unc'] = distance[1]
+                
+            elif row['distance'].value and not row['parallax'].value:
+                parallax = u.pi2pc(row['distance'], row['distance_unc'], pc2pi=True)
+                row['parallax'] = parallax[0]
+                row['parallax_unc'] = parallax[1]
+                
+            else:
+                pass
+                
+        # Set adopted distance
+        if len(self.parallaxes)>0 and not any(self.parallaxes['adopted']==1):
+            self.parallaxes['adopted'][0] = 1
+            
+        # Sort by adopted distance
+        self.parallaxes.add_index('adopted')
+        
+        # Get the adopted distance
+        try:
+            self.distance = self.parallaxes.loc[1]['distance']
+            self.distance_unc = self.parallaxes.loc[1]['distance_unc']
+        except KeyError:
+            self.distance = self.distance_unc = ''
+            
+        # Print
+        print('\nPARALLAXES')
+        self.parallaxes[['id','distance','distance_unc','publication_shortname']].pprint()
+        
+    def process_spectral_types(self, spt='', **kwargs):
+        """
+        Process the spectral type data
+        """
+        # Sort by adopted spectral types
+        fill = np.zeros(len(self.spectral_types))
+        
+        # Check for input parallax or distance
+        if spt:
+            self.spectral_types['adopted'] = fill
+            sp, sp_unc, sp_pre, sp_grv, sp_lc = u.specType(spt)
+            self.spectral_types.add_row({'spectral_type':sp, 'spectral_type_unc':sp_unc, 'gravity':sp_grv, 'suffix':sp_pre, 'adopted':1, 'publication_shortname':'Input'})
+            
+        # Set adopted spectral type
+        if len(self.spectral_types)>0 and not any(self.spectral_types['adopted']==1):
+            self.spectral_types['adopted'][0] = 1
+            
+        # Sort by adopted spectral type
+        self.spectral_types.add_index('adopted')
+        
+        # Get the adopted spectral type
+        try:
+            self.spectral_type = self.spectral_types.loc[1]['spectral_type']
+            self.spectral_type_unc = self.spectral_types.loc[1]['spectral_type_unc']
+            self.gravity = self.spectral_types.loc[1]['gravity']
+            self.suffix = self.spectral_types.loc[1]['suffix']
+            self.SpT = u.specType([self.spectral_type, self.spectral_type_unc, self.suffix, self.gravity, ''])
+            
+        except:
+            self.spectral_type = self.spectral_type_unc = self.gravity = self.suffix = self.SpT = ''
+            
+        # Print
+        print('\nSPECTRAL TYPES')
+        self.spectral_types[['id','spectral_type','spectral_type_unc','regime','suffix','gravity','publication_shortname']].pprint()
+        
+    def fundamental_params(self, age='', membership='', evo_model='hybrid_solar_age', verbose=True, **kwargs):
         """
         Calculate the fundamental parameters of the current SED
         
@@ -543,7 +746,7 @@ class MakeSED(object):
         ----------
         age: tuple, list (optional)
             The lower and upper age limits of the source in astropy.units
-        nymg: str (optional)
+        membership: str (optional)
             The nearby young moving group name
         evo_model: str
             The evolutionary model to use
