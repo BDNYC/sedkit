@@ -293,7 +293,7 @@ class MakeSED(object):
             print('\nNo photometry for this source.')
             
         else:
-            self.process_photometry(aliases=PHOT_ALIASES)
+            self.process_photometry(**kwargs)
             
         # Make apparent photometric SED from photometry with uncertainties
         with_unc = self.photometry[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
@@ -317,6 +317,7 @@ class MakeSED(object):
         # =====================================================================
         
         if len(self.spectra)==0:
+            self.processed_spectra = []
             print('\nNo spectra available for this source')
             
         else:
@@ -411,9 +412,8 @@ class MakeSED(object):
         except IOError:
             self.app_SED = ''
             
-        
         # =====================================================================
-        # Flux calibrate everything
+        # Calculate synthetic photometry
         # =====================================================================
         
         # Set up empty synthetic photometry table
@@ -457,7 +457,7 @@ class MakeSED(object):
             
             # Make sure it is a time unit
             try:
-                _, _ = radius[0].to(q.m), age[1].to(q.m)
+                _, _ = radius[0].to(q.m), radius[1].to(q.m)
                 self.radius, self.radius_unc = radius
             except:
                 print('Radius {} is not in units of length.'.format(radius))
@@ -595,7 +595,7 @@ class MakeSED(object):
         # Rename bands. What a pain in the ass.
         if isinstance(aliases,dict):
             self.photometry['band'] = [aliases.get(i) for i in self.photometry['band']]
-        elif phot_aliases=='guess':
+        elif aliases=='guess':
             self.photometry['band'] = [min(list(FILTERS['Band']), key=lambda v: len(set(b)^set(v))) for b in self.photometry['band']]
         else:
             pass
@@ -736,7 +736,7 @@ class MakeSED(object):
         print('\nSPECTRAL TYPES')
         self.spectral_types[['id','spectral_type','spectral_type_unc','regime','suffix','gravity','publication_shortname']].pprint()
         
-    def fundamental_params(self):
+    def fundamental_params(self, **kwargs):
         """
         Calculate the fundamental parameters of the current SED
         """
@@ -745,7 +745,9 @@ class MakeSED(object):
         self.get_Teff()
         
         params = ['-','Lbol','Mbol','Teff']
-        ptable = at.QTable(np.array([['Value',self.Lbol_sun,self.Mbol,self.Teff.value],['Error',self.Lbol_sun_unc,self.Mbol_unc,self.Teff_unc.value]]), names=params)
+        teff = self.Teff.value if hasattr(self.Teff, 'unit') else self.Teff
+        teff_unc = self.Teff_unc.value if hasattr(self.Teff_unc, 'unit') else self.Teff_unc
+        ptable = at.QTable(np.array([['Value',self.Lbol_sun,self.Mbol,teff],['Error',self.Lbol_sun_unc,self.Mbol_unc,teff_unc]]), names=params)
         print('\nRESULTS')
         ptable.pprint()
     
@@ -908,8 +910,9 @@ class MakeSED(object):
         data = getattr(self, fit_to)
         
         # Remove NaNs
+        print(data)
         data = np.array([(x,y,z) for x,y,z in zip(*data) if not any([np.isnan(i) for i in [x,y,z]]) and x<10]).T
-        
+        print(data)
         # Initial guess
         try:
             teff = self.Teff.value
@@ -966,7 +969,7 @@ class MakeSED(object):
         
         # Calculate reasonable axis limits
         spec_SED = getattr(self, pre+'spec_SED')
-        phot_SED = getattr(self, pre+'phot_SED')
+        phot_SED = np.array([np.array([np.nanmean(self.photometry.loc[b][col].value) for b in list(set(self.photometry['band']))]) for col in ['eff',pre+'flux',pre+'flux_unc']])
         
         # Check for min and max phot data
         try:
@@ -1067,9 +1070,14 @@ class MakeSED(object):
                 
             if blackbody and self.blackbody:
                 fit_sed = getattr(self, self.bb_source)
+                fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
                 bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
                 bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-                fig.line(bb_wav, bb_flx, line_color='red', legend='{} K'.format(self.Teff_bb))
+                bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
+                bb_wav = np.linspace(0.2, 30, 1000)*q.um
+                bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+                print(bb_norm,bb_flx)
+                fig.line(bb_wav.value, bb_flx.value*bb_norm, line_color='red', legend='{} K'.format(self.Teff_bb))
                 
             fig.legend.location = "top_right"
             fig.legend.click_policy = "hide"
