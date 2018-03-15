@@ -9,7 +9,9 @@ import re
 import numpy as np
 import astropy.units as q
 import astropy.constants as ac
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+import pylab as plt
 from svo_filters import svo
 from astropy.utils.data_info import ParentDtypeInfo
 

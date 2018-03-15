@@ -7,7 +7,9 @@ import astropy.units as q
 import astropy.constants as ac
 import astropy.table as at
 from astropy.io import fits
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+import pylab as plt
 from . import utilities as u
 from svo_filters import svo
 import pkg_resources
