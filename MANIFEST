@@ -3,7 +3,6 @@ ah_bootstrap.py
 ez_setup.py
 setup.cfg
 setup.py
-SEDkit/SEDs.py
 SEDkit/__init__.py
 SEDkit/_astropy_init.py
 SEDkit/cmd.py

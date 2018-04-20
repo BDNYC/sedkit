@@ -62,6 +62,7 @@ def from_ids(db, **kwargs):
             
     return data
 
+# Might be of use: https://github.com/spacetelescope/JWSTUserTraining2016/blob/master/Workshop_Notebooks/Advanced_Tables/Advanced_Tables.ipynb
 class MakeSED(object):
     """
     A class to construct spectral energy distributions and calculate fundamental paramaters of stars
