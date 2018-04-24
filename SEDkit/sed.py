@@ -63,7 +63,7 @@ def from_ids(db, **kwargs):
     return data
 
 # Might be of use: https://github.com/spacetelescope/JWSTUserTraining2016/blob/master/Workshop_Notebooks/Advanced_Tables/Advanced_Tables.ipynb
-class MakeSED(object):
+class SED(object):
     """
     A class to construct spectral energy distributions and calculate fundamental paramaters of stars
     
@@ -154,7 +154,7 @@ class MakeSED(object):
     wave_units: astropy.units.quantity.Quantity
         The desired wavelength units
     """
-    def __init__(self, source_id, db, from_dict='', wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA, SED_trim=[], SED_split=[], name='', verbose=True, **kwargs):
+    def __init__(self, source_id, name='', verbose=True, **kwargs):
         """
         Pulls all available data from the BDNYC Data Archive, 
         constructs an SED, and stores all calculations at *pickle_path*
@@ -202,7 +202,12 @@ class MakeSED(object):
         """
         # TODO: resolve source_id in database given id, (ra,dec), name, etc.
         # source_id = db._resolve_source_id()
+        self.name = name
         
+    def from_database(self, db, from_dict=None):
+        """
+        Load the data from a SQL database
+        """
         # Get the data for the source from the dictionary of ids
         if isinstance(from_dict, dict):
             if not 'sources' in from_dict:
@@ -226,7 +231,17 @@ class MakeSED(object):
                 dummy = db.query(qry, fmt='table')
                 dummy.remove_row(0)
                 setattr(self, table, at.QTable(dummy))
-                
+    
+    def from_source(self, catalog):
+        """
+        Load the data from a locals Source object
+        """
+        pass
+        
+    def make_sed(self, wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA, SED_trim=[], SED_split=[], ):
+        """
+        Make the SED
+        """
         # =====================================================================
         # Metadata
         # =====================================================================
@@ -582,7 +597,7 @@ class MakeSED(object):
         print('\nSPECTRA')
         self.spectra[['id','instrument_id','telescope_id','mode_id','publication_shortname']].pprint()
         
-    def process_photometry(self, aliases='', **kwargs):
+    def process_photometry(self, aliases='guess', **kwargs):
         """
         Process the photometry
         """
@@ -1077,7 +1092,7 @@ class MakeSED(object):
                 bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
                 bb_wav = np.linspace(0.2, 30, 1000)*q.um
                 bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-                print(bb_norm,bb_flx)
+                # print(bb_norm,bb_flx)
                 fig.line(bb_wav.value, bb_flx.value*bb_norm, line_color='red', legend='{} K'.format(self.Teff_bb))
                 
             fig.legend.location = "top_right"
