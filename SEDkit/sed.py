@@ -17,7 +17,7 @@ from . import utilities as u
 from . import syn_phot as s
 from svo_filters import svo
 from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool, ColumnDataSource
-
+from jwst_phot import webbphot as wp
 from bokeh.plotting import figure, output_file, show, save
 
 FILTERS = svo.filters()
@@ -154,7 +154,7 @@ class SED(object):
     wave_units: astropy.units.quantity.Quantity
         The desired wavelength units
     """
-    def __init__(self, source_id, name='', verbose=True, **kwargs):
+    def __init__(self, name='My Target', verbose=True, **kwargs):
         """
         Pulls all available data from the BDNYC Data Archive, 
         constructs an SED, and stores all calculations at *pickle_path*
@@ -200,45 +200,323 @@ class SED(object):
         x.plot()
         
         """
-        # TODO: resolve source_id in database given id, (ra,dec), name, etc.
-        # source_id = db._resolve_source_id()
-        self.name = name
+        # Single valued attributes
+        self._name = name
+        self._age = None
+        self._distance = None
+        self._radius = None
+        self._spectral_type = None
         
-    def from_database(self, db, from_dict=None):
-        """
-        Load the data from a SQL database
-        """
-        # Get the data for the source from the dictionary of ids
-        if isinstance(from_dict, dict):
-            if not 'sources' in from_dict:
-                from_dict['sources'] = source_id
-            all_data = from_ids(db, **from_dict)
-            
-        # Or get the inventory from the database
-        else:
-            all_data = db.inventory(source_id, fetch=True)
-            
-        # Store the tables as attributes
-        for table in ['sources','spectra','photometry','spectral_types','parallaxes']:
-            
-            # Get data from the dictionary
-            if table in all_data:
-                setattr(self, table, at.QTable(all_data[table]))
-                
-            # If no data, generate dummy
-            else:
-                qry = "SELECT * FROM {} LIMIT 1".format(table)
-                dummy = db.query(qry, fmt='table')
-                dummy.remove_row(0)
-                setattr(self, table, at.QTable(dummy))
+        # Set the default wavelength and flux units
+        self._wave_units = q.um 
+        self._flux_units = q.erg/q.s/q.cm**2/q.AA
+        self.units = [self._wave_units, self._flux_units, self._flux_units]
+        
+        # Attributes of arbitrary length
+        self._spectra = []
+        phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc', 'app_flux', 'app_flux_unc', 'abs_magnitude', 'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc', 'bandpass')
+        phot_typs = ('U16', float, float, float, float, float, float, float, float, float, 'O')
+        self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
+        self._photometry['eff'].unit = self._wave_units
+        self._photometry['app_flux'].unit = self._flux_units
+        self._photometry['app_flux_unc'].unit = self._flux_units
+        self._photometry['abs_flux'].unit = self._flux_units
+        self._photometry['abs_flux_unc'].unit = self._flux_units
+        
+        # Try to set attributes from kwargs
+        for k,v in kwargs.items():
+            setattr(self, k, v)
+        
+    @property
+    def wave_units(self):
+        """A property for wave_units"""
+        return self._wave_units
     
-    def from_source(self, catalog):
-        """
-        Load the data from a locals Source object
-        """
-        pass
+    @wave_units.setter
+    def wave_units(self, new_wave_units):
+        """A setter for wave_units
         
-    def make_sed(self, wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA, SED_trim=[], SED_split=[], ):
+        Parameters
+        ----------
+        new_wave_units: astropy.units.quantity.Quantity
+            The astropy units of the SED wavelength
+        """
+        # Make sure it's a quantity
+        if not isinstance(new_wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+            raise TypeError('wave_units must be astropy.units.quantity.Quantity')
+            
+        # Make sure the values are in length units
+        try:
+            new_wave_units.to(q.um)
+        except:
+            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
+        
+        # Update the things that depend on wave_units!
+        self._photometry['eff'] = self._photometry['eff'].to(new_wave_units)
+        for n,spectrum in enumerate(self.spectra):
+            self.spectra[n][0] = (spectrum[0]*self._wave_units).to(new_wave_units).value
+            
+        # Set the wave_units!
+        self._wave_units = new_wave_units
+        self.units = [self._wave_units, self._flux_units, self._flux_units]
+            
+    @property
+    def flux_units(self):
+        """A property for flux_units"""
+        return self._flux_units
+    
+    @flux_units.setter
+    def flux_units(self, new_flux_units):
+        """A setter for flux_units
+        
+        Parameters
+        ----------
+        new_flux_units: astropy.units.quantity.Quantity
+            The astropy units of the SED wavelength
+        """
+        # Make sure it's a quantity
+        if not isinstance(new_flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+            raise TypeError('flux_units must be astropy.units.quantity.Quantity')
+            
+        # Make sure the values are in length units
+        try:
+            new_flux_units.to(q.erg/q.s/q.cm**2/q.AA)
+        except:
+            raise TypeError("flux_units must be a unit of length, e.g. 'um'")
+        
+        # fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA)
+        
+        # Update the things that depend on flux_units!
+        self._photometry['app_flux'] = self._photometry['app_flux'].to(new_flux_units)
+        self._photometry['app_flux_unc'] = self._photometry['app_flux_unc'].to(new_flux_units)
+        self._photometry['abs_flux'] = self._photometry['abs_flux'].to(new_flux_units)
+        self._photometry['abs_flux_unc'] = self._photometry['abs_flux_unc'].to(new_flux_units)
+        for n,spectrum in enumerate(self.spectra):
+            self.spectra[n][1] = (spectrum[1]*self._flux_units).to(new_flux_units).value
+            self.spectra[n][2] = (spectrum[2]*self._flux_units).to(new_flux_units).value
+            
+        # Set the flux_units!
+        self._flux_units = new_flux_units
+        self.units = [self._wave_units, self._flux_units, self._flux_units]
+        self._calibrate_photometry()
+        
+    @property
+    def age(self):
+        """A property for age"""
+        return self._age
+    
+    @age.setter
+    def age(self, new_age, age_units=q.Myr):
+        """A setter for age"""
+        # Make sure it's a sequence
+        if not isinstance(new_age, (tuple, list, np.ndarray)) or len(new_age) not in [2,3]:
+            raise TypeError('Age must be a sequence of (value, error) or (value, lower_error, upper_error).')
+            
+        # Make sure the values are in time units
+        try:
+            new_age = [i.to(age_units) for i in new_age]
+        except:
+            raise TypeError("Age values must be time units of astropy.units.quantity.Quantity, e.g. 'Myr'")
+        
+        # Set the age!
+        self._age = new_age
+        
+        # Update the things that depend on age!
+        
+    @property
+    def radius(self):
+        """A property for radius"""
+        return self._radius
+    
+    @radius.setter
+    def radius(self, new_radius, radius_units=q.Rjup):
+        """A setter for radius"""
+        # Make sure it's a sequence
+        if not isinstance(new_radius, (tuple, list, np.ndarray)) or len(new_radius) not in [2,3]:
+            raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
+            
+        # Make sure the values are in time units
+        try:
+            new_radius = [i.to(radius_units) for i in new_radius]
+        except:
+            raise TypeError("Radius values must be distance units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
+        
+        # Set the radius!
+        self._radius = new_radius
+        
+        # Update the things that depend on radius!
+        
+    @property
+    def distance(self):
+        """A property for distance"""
+        return self._distance
+    
+    @distance.setter
+    def distance(self, new_distance, distance_units=q.pc):
+        """A setter for distance
+        
+        Parameters
+        ----------
+        new_distance: sequence
+            The (distance, err) or (distance, lower_err, upper_err)
+        """
+        # Make sure it's a sequence
+        if not isinstance(new_distance, (tuple, list, np.ndarray)) or len(new_distance) not in [2,3]:
+            raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
+            
+        # Make sure the values are in time units
+        try:
+            new_distance = [i.to(distance_units) for i in new_distance]
+        except:
+            raise TypeError("Distance values must be distance units of astropy.units.quantity.Quantity, e.g. 'pc'")
+        
+        # Set the distance!
+        self._distance = new_distance
+        
+        # Update the things that depend on distance!
+        
+    @property
+    def spectra(self):
+        """A property for spectra"""
+        return self._spectra
+   
+    def add_spectrum(self, new_wave, new_flux, new_unc):
+        """A setter for spectra
+
+        Parameters
+        ----------
+        new_wave: np.ndarray
+            The wavelength array
+        new_flux: np.ndarray
+            The flux array
+        new_unc: np.ndarray
+            The uncertainty array
+        """
+        # Make sure the arrays are the same shape
+        if not new_wave.shape==new_flux.shape==new_unc.shape:
+            raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
+            
+        # Make sure the arrays are in correct units
+        try:
+            new_wave = new_wave.to(self._wave_units).value
+        except:
+            raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
+        try:
+            new_flux = new_flux.to(self._flux_units).value
+        except:
+            raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
+        try:
+            new_unc = new_unc.to(self._flux_units).value
+        except:
+            raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
+            
+        # Make the array
+        new_spectrum = np.array([new_wave, new_flux, new_unc])
+        
+        # Set the distance!
+        self._spectra.append(new_spectrum)
+        
+    def drop_spectrum(self, idx):
+        """Drop a spectrum by its index in the spectra list
+        """
+        self._spectra = [i for n,i in enumerate(self._spectra) if n!=idx]
+        
+    @property
+    def photometry(self):
+        """A property for photometry"""
+        return self._photometry
+   
+    def add_photometry(self, band, mag, mag_unc):
+        """A setter for photometry
+        """
+        # Make sure the arrays are the same shape
+        if not isinstance(mag, float) and not isinstance(mag_unc, float):
+            raise TypeError("Magnitude and uncertainty must be floats.")
+            
+        # Get the bandpass
+        # bp = s.bandpass(band)
+        bp = wp.bandpass('f277w', 'niriss')
+        
+        # Make a dict for the new point
+        new_photometry = {'band':band, 'eff':bp.pivot()*q.AA, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
+            
+        # Add it to the table
+        self._photometry.add_row(new_photometry)
+        
+        # Calculate flux and calibrate
+        self._calibrate_photometry()
+        
+    def drop_photometry(self, idx):
+        """Drop a photometry by its index in the photometry list
+        """
+        self._photometry.remove_row(idx)
+        
+    def _calibrate_photometry(self):
+        """
+        Calculate the absolute magnitudes and flux values of all rows in the photometry table
+        """
+        # Get the app_mags
+        m = np.array(self._photometry)['app_magnitude']
+        m_unc = np.array(self._photometry)['app_magnitude_unc']
+        
+        # Calculate app_flux values
+        for n,row in enumerate(self._photometry):
+            app_flx, app_flux_unc = u.mag2flux(row['band'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
+            self._photometry['app_flux'][n] = app_flx.to(self._flux_units)
+            self._photometry['app_flux_unc'][n] = app_flux_unc.to(self._flux_units)
+            
+        # Calculate absolute mags
+        if self._distance is not None:
+            
+            # Calculate abs_mags
+            M, M_unc = u.flux_calibrate(m, self._distance[0], m_unc, self._distance[1])
+            self._photometry['abs_magnitude'] = M
+            self._photometry['abs_magnitude_unc'] = M_unc
+            
+            # Calculate app_flux values
+            abs_fluxes = []
+            for row in self._photometry:
+                abs_fluxes.append(u.mag2flux(row['band'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc']))
+            abs_flx, abs_flux_unc = np.array(abs_fluxes).T
+            self._photometry['abs_flux'] = abs_flx.to(self._flux_units)
+            self._photometry['abs_flux_unc'] = abs_flux_unc.to(self._flux_units)
+
+        
+    # def from_database(self, db, from_dict=None):
+    #     """
+    #     Load the data from a SQL database
+    #     """
+    #     # Get the data for the source from the dictionary of ids
+    #     if isinstance(from_dict, dict):
+    #         if not 'sources' in from_dict:
+    #             from_dict['sources'] = source_id
+    #         all_data = from_ids(db, **from_dict)
+    #
+    #     # Or get the inventory from the database
+    #     else:
+    #         all_data = db.inventory(source_id, fetch=True)
+    #
+    #     # Store the tables as attributes
+    #     for table in ['sources','spectra','photometry','spectral_types','parallaxes']:
+    #
+    #         # Get data from the dictionary
+    #         if table in all_data:
+    #             setattr(self, table, at.QTable(all_data[table]))
+    #
+    #         # If no data, generate dummy
+    #         else:
+    #             qry = "SELECT * FROM {} LIMIT 1".format(table)
+    #             dummy = db.query(qry, fmt='table')
+    #             dummy.remove_row(0)
+    #             setattr(self, table, at.QTable(dummy))
+    #
+    # def from_source(self, catalog):
+    #     """
+    #     Load the data from a locals Source object
+    #     """
+    #     pass
+        
+    def make_sed(self, SED_trim=[], SED_split=[]):
         """
         Make the SED
         """
