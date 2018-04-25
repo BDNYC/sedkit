@@ -204,6 +204,7 @@ class SED(object):
         self._name = name
         self._age = None
         self._distance = None
+        self._parallax = None
         self._radius = None
         self._spectral_type = None
         
@@ -233,31 +234,33 @@ class SED(object):
         return self._wave_units
     
     @wave_units.setter
-    def wave_units(self, new_wave_units):
+    def wave_units(self, wave_units):
         """A setter for wave_units
         
         Parameters
         ----------
-        new_wave_units: astropy.units.quantity.Quantity
+        wave_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
         # Make sure it's a quantity
-        if not isinstance(new_wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+        if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
             raise TypeError('wave_units must be astropy.units.quantity.Quantity')
             
         # Make sure the values are in length units
         try:
-            new_wave_units.to(q.um)
+            wave_units.to(q.um)
         except:
             raise TypeError("wave_units must be a unit of length, e.g. 'um'")
         
-        # Update the things that depend on wave_units!
-        self._photometry['eff'] = self._photometry['eff'].to(new_wave_units)
+        # Update the photometry
+        self._photometry['eff'] = self._photometry['eff'].to(wave_units)
+        
+        # Update the spectra
         for n,spectrum in enumerate(self.spectra):
-            self.spectra[n][0] = (spectrum[0]*self._wave_units).to(new_wave_units).value
+            self.spectra[n][0] = (spectrum[0]*self._wave_units).to(wave_units).value
             
         # Set the wave_units!
-        self._wave_units = new_wave_units
+        self._wave_units = wave_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
             
     @property
@@ -266,37 +269,39 @@ class SED(object):
         return self._flux_units
     
     @flux_units.setter
-    def flux_units(self, new_flux_units):
+    def flux_units(self, flux_units):
         """A setter for flux_units
         
         Parameters
         ----------
-        new_flux_units: astropy.units.quantity.Quantity
+        flux_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
         # Make sure it's a quantity
-        if not isinstance(new_flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+        if not isinstance(flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
             raise TypeError('flux_units must be astropy.units.quantity.Quantity')
             
         # Make sure the values are in length units
         try:
-            new_flux_units.to(q.erg/q.s/q.cm**2/q.AA)
+            flux_units.to(q.erg/q.s/q.cm**2/q.AA)
         except:
             raise TypeError("flux_units must be a unit of length, e.g. 'um'")
         
         # fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA)
         
-        # Update the things that depend on flux_units!
-        self._photometry['app_flux'] = self._photometry['app_flux'].to(new_flux_units)
-        self._photometry['app_flux_unc'] = self._photometry['app_flux_unc'].to(new_flux_units)
-        self._photometry['abs_flux'] = self._photometry['abs_flux'].to(new_flux_units)
-        self._photometry['abs_flux_unc'] = self._photometry['abs_flux_unc'].to(new_flux_units)
+        # Update the photometry
+        self._photometry['app_flux'] = self._photometry['app_flux'].to(flux_units)
+        self._photometry['app_flux_unc'] = self._photometry['app_flux_unc'].to(flux_units)
+        self._photometry['abs_flux'] = self._photometry['abs_flux'].to(flux_units)
+        self._photometry['abs_flux_unc'] = self._photometry['abs_flux_unc'].to(flux_units)
+        
+        # Update the spectra
         for n,spectrum in enumerate(self.spectra):
-            self.spectra[n][1] = (spectrum[1]*self._flux_units).to(new_flux_units).value
-            self.spectra[n][2] = (spectrum[2]*self._flux_units).to(new_flux_units).value
+            self.spectra[n][1] = (spectrum[1]*self._flux_units).to(flux_units).value
+            self.spectra[n][2] = (spectrum[2]*self._flux_units).to(flux_units).value
             
         # Set the flux_units!
-        self._flux_units = new_flux_units
+        self._flux_units = flux_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         self._calibrate_photometry()
         
@@ -306,20 +311,20 @@ class SED(object):
         return self._age
     
     @age.setter
-    def age(self, new_age, age_units=q.Myr):
+    def age(self, age, age_units=q.Myr):
         """A setter for age"""
         # Make sure it's a sequence
-        if not isinstance(new_age, (tuple, list, np.ndarray)) or len(new_age) not in [2,3]:
+        if not isinstance(age, (tuple, list, np.ndarray)) or len(age) not in [2,3]:
             raise TypeError('Age must be a sequence of (value, error) or (value, lower_error, upper_error).')
             
         # Make sure the values are in time units
         try:
-            new_age = [i.to(age_units) for i in new_age]
+            age = [i.to(age_units) for i in age]
         except:
             raise TypeError("Age values must be time units of astropy.units.quantity.Quantity, e.g. 'Myr'")
         
         # Set the age!
-        self._age = new_age
+        self._age = age
         
         # Update the things that depend on age!
         
@@ -329,20 +334,20 @@ class SED(object):
         return self._radius
     
     @radius.setter
-    def radius(self, new_radius, radius_units=q.Rjup):
+    def radius(self, radius, radius_units=q.Rjup):
         """A setter for radius"""
         # Make sure it's a sequence
-        if not isinstance(new_radius, (tuple, list, np.ndarray)) or len(new_radius) not in [2,3]:
+        if not isinstance(radius, (tuple, list, np.ndarray)) or len(radius) not in [2,3]:
             raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
             
         # Make sure the values are in time units
         try:
-            new_radius = [i.to(radius_units) for i in new_radius]
+            radius = [i.to(radius_units) for i in radius]
         except:
             raise TypeError("Radius values must be distance units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
         
         # Set the radius!
-        self._radius = new_radius
+        self._radius = radius
         
         # Update the things that depend on radius!
         
@@ -352,69 +357,134 @@ class SED(object):
         return self._distance
     
     @distance.setter
-    def distance(self, new_distance, distance_units=q.pc):
+    def distance(self, distance, distance_units=q.pc):
         """A setter for distance
         
         Parameters
         ----------
-        new_distance: sequence
+        distance: sequence
             The (distance, err) or (distance, lower_err, upper_err)
         """
         # Make sure it's a sequence
-        if not isinstance(new_distance, (tuple, list, np.ndarray)) or len(new_distance) not in [2,3]:
+        if not isinstance(distance, (tuple, list, np.ndarray)) or len(distance) not in [2,3]:
             raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
             
         # Make sure the values are in time units
         try:
-            new_distance = [i.to(distance_units) for i in new_distance]
+            distance = [i.to(distance_units) for i in distance]
         except:
             raise TypeError("Distance values must be distance units of astropy.units.quantity.Quantity, e.g. 'pc'")
         
         # Set the distance!
-        self._distance = new_distance
+        self._distance = distance
         
         # Update the things that depend on distance!
+        self._parallax = u.pi2pc(*self.distance, pc2pi=True)
+        
+    @property
+    def parallax(self):
+        """A property for parallax"""
+        return self._parallax
+    
+    @parallax.setter
+    def parallax(self, parallax, parallax_units=q.mas):
+        """A setter for parallax
+        
+        Parameters
+        ----------
+        parallax: sequence
+            The (parallax, err) or (parallax, lower_err, upper_err)
+        """
+        # Make sure it's a sequence
+        if not isinstance(parallax, (tuple, list, np.ndarray)) or len(parallax) not in [2,3]:
+            raise TypeError('parallax must be a sequence of (value, error) or (value, lower_error, upper_error).')
+            
+        # Make sure the values are in time units
+        try:
+            parallax = [i.to(parallax_units) for i in parallax]
+        except:
+            raise TypeError("parallax values must be parallax units of astropy.units.quantity.Quantity, e.g. 'mas'")
+        
+        # Set the parallax!
+        self._parallax = parallax
+        
+        # Update the things that depend on parallax!
+        self._distance = u.pi2pc(*self.parallax)
         
     @property
     def spectra(self):
         """A property for spectra"""
         return self._spectra
    
-    def add_spectrum(self, new_wave, new_flux, new_unc):
-        """A setter for spectra
+    def add_spectrum(self, wave, flux, unc=None, snr=10, snr_trim=5, trim=[], **kwargs):
+        """Add a new spectrum to the SED object
 
         Parameters
         ----------
-        new_wave: np.ndarray
+        wave: np.ndarray
             The wavelength array
-        new_flux: np.ndarray
+        flux: np.ndarray
             The flux array
-        new_unc: np.ndarray
+        unc: np.ndarray
             The uncertainty array
+        snr: float (optional)
+            A value to override spectrum SNR
+        snr_trim: float (optional)
+            The SNR value to trim spectra edges up to
+        trim: sequence (optional)
+            A sequence of (wave_min, wave_max) sequences to override spectrum trimming
         """
         # Make sure the arrays are the same shape
-        if not new_wave.shape==new_flux.shape==new_unc.shape:
+        if not wave.shape==flux.shape==unc.shape:
             raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
             
-        # Make sure the arrays are in correct units
+        # Check wave units
         try:
-            new_wave = new_wave.to(self._wave_units).value
+            wave = wave.to(self._wave_units).value
         except:
             raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
+        
+        # Check flux units
         try:
-            new_flux = new_flux.to(self._flux_units).value
+            flux = flux.to(self._flux_units).value
         except:
             raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
+        
+        # Check uncertainty units
+        if unc is None:
+            try:
+                unc = flux/snr
+                print("No uncertainty array for this spectrum. Using SNR=",snr)
+            except:
+                raise TypeError("Not a valid SNR: ",snr)
+        
+        # Make sure the uncertainty array is in the correct units
         try:
-            new_unc = new_unc.to(self._flux_units).value
+            unc = unc.to(self._flux_units).value
         except:
             raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
+                
+        # Trim spectrum edges by SNR value
+        if isinstance(snr_trim, (float, int)):
+            idx, = np.where(flux/unc>=snr_trim)
+            if any(idx):
+                wave, flux, unc = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in [wave, flux, unc]]
+        
+        # Trim manually
+        if isinstance(trim, (list,tuple)):
+            for mn,mx in trim:
+                try:
+                    idx, = np.where((wave<mn)|(wave>mx))
+                    if any(idx):
+                        wave, flux, unc = [i[idx] for i in [wave, flux, unc]]
+                except TypeError:
+                    print('Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]')
             
         # Make the array
-        new_spectrum = np.array([new_wave, new_flux, new_unc])
+        spectrum = np.array([wave, flux, unc])
         
         # Set the distance!
-        self._spectra.append(new_spectrum)
+        self._spectra.append(spectrum)
         
     def drop_spectrum(self, idx):
         """Drop a spectrum by its index in the spectra list
@@ -426,7 +496,7 @@ class SED(object):
         """A property for photometry"""
         return self._photometry
    
-    def add_photometry(self, band, mag, mag_unc):
+    def add_photometry(self, band, mag, mag_unc, **kwargs):
         """A setter for photometry
         """
         # Make sure the arrays are the same shape
@@ -439,6 +509,9 @@ class SED(object):
         
         # Make a dict for the new point
         new_photometry = {'band':band, 'eff':bp.pivot()*q.AA, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
+        
+        # Add the kwargs
+        new_photometry.update(kwargs)
             
         # Add it to the table
         self._photometry.add_row(new_photometry)
@@ -480,7 +553,7 @@ class SED(object):
             abs_flx, abs_flux_unc = np.array(abs_fluxes).T
             self._photometry['abs_flux'] = abs_flx.to(self._flux_units)
             self._photometry['abs_flux_unc'] = abs_flux_unc.to(self._flux_units)
-
+            
         
     # def from_database(self, db, from_dict=None):
     #     """
@@ -520,62 +593,6 @@ class SED(object):
         """
         Make the SED
         """
-        # =====================================================================
-        # Metadata
-        # =====================================================================
-        
-        # Print source data
-        try:
-            self.name = name or self.sources['names'][0].split(',')[0].strip()
-        except:
-            self.name = 'Source {}'.format(source_id)
-        print('='*100)
-        print(self.name,'='*(99-len(self.name)))
-        print('='*100,'\n')
-        self.sources[['names','ra','dec','publication_shortname']].pprint()
-        
-        # Set some attributes
-        self.flux_units = flux_units
-        self.wave_units = wave_units
-        units = [self.wave_units,self.flux_units,self.flux_units]
-        
-        # =====================================================================
-        # Distance
-        # =====================================================================
-        
-        # Punt if no distance info
-        if len(self.parallaxes)==0 and kwargs.get('pi')=='' and kwargs.get('dist')=='':
-            
-            print("\nNo distance for this source")
-            self.distance = self.distance_unc = ''
-            
-        else:
-            
-            self.process_parallaxes(**kwargs)
-        
-        # =====================================================================
-        # Spectral Type
-        # =====================================================================
-        
-        # Punt if no SpT info
-        if len(self.spectral_types)==0 and kwargs.get('spt')=='':
-            
-            print("\nNo spectral type for this source")
-            self.spectral_type = self.spectral_type_unc = self.gravity = self.suffix = self.SpT = ''
-            
-        else:
-            
-            self.process_spectral_types(**kwargs)
-        
-        # =====================================================================
-        # Age
-        # =====================================================================
-        self.process_age(**kwargs)
-            
-        # =====================================================================
-        # Radius
-        # =====================================================================
-        self.process_radius(**kwargs)
         
         # =====================================================================
         # Photometry
@@ -606,16 +623,6 @@ class SED(object):
         # Fit blackbody to the photometry
         self.fit_blackbody()
         
-        # =====================================================================
-        # Spectra
-        # =====================================================================
-        
-        if len(self.spectra)==0:
-            self.processed_spectra = []
-            print('\nNo spectra available for this source')
-            
-        else:
-            self.process_spectra()
         
         # =====================================================================
         # Construct SED
@@ -729,271 +736,6 @@ class SED(object):
         # Calculate Fundamental Params
         # =====================================================================
         self.fundamental_params(**kwargs)
-        
-        # =====================================================================
-        # Save the data to file for cmd.py to read
-        # =====================================================================
-        # TODO
-        
-        print('\n'+'='*100)
-        
-    def process_radius(self, radius='', **kwargs):
-        """
-        Process the radius
-        
-        Parameters
-        ==========
-        radius: sequence (optional)
-            The radius and uncertainty of the target
-        """
-        # Input radius
-        if isinstance(radius, tuple):
-            
-            # Make sure it is a time unit
-            try:
-                _, _ = radius[0].to(q.m), radius[1].to(q.m)
-                self.radius, self.radius_unc = radius
-            except:
-                print('Radius {} is not in units of length.'.format(radius))
-                
-        # Jupiter radius
-        else:
-            self.radius, self.radius_unc = 1.*ac.R_jup, ac.R_jup/100.
-    
-    def process_age(self, age='', membership='', **kwargs):
-        """
-        Process tha age
-        
-        Parameters
-        ==========
-        age: sequence (optional)
-            The age minimum and maximum of the target
-        membership: str (optional)
-            The name of the parent NYMG
-        """
-        # Input age
-        if isinstance(age, tuple):
-            
-            # Make sure it is a time unit
-            try:
-                _, _ = age[0].to(q.Myr), age[1].to(q.Myr)
-                self.age_min, self.age_max = age
-            except:
-                print('Age {} is not in units of time.'.format(age))
-                
-        # NYMG age
-        elif membership in NYMG:
-            self.age_min, self.age_max = (NYMG[membership]['age_min'], NYMG[membership]['age_min'])*q.Myr
-            
-        # Low-g age
-        elif self.gravity:
-            self.age_min, self.age_max = (0.01, 0.15)*q.Gyr
-            
-        # Field age
-        else:
-            self.age_min, self.age_max = (0.5, 10)*q.Gyr
-        
-    def process_spectra(self, SNR=[], SNR_trim=5, trim=[], **kwargs):
-        """
-        Process the spectra
-        
-        Parameters
-        ==========
-        SNR: sequence (optional)
-            A sequence of (spectrum_id, signal-to-noise) sequences to override spectrum SNR
-        SNR_trim: float (optional)
-            The SNR value to trim spectra edges up to
-        trim: sequence (optional)
-            A sequence of (spectrum_id, wave_min, wave_max) sequences to override spectrum trimming
-        """
-        # Index and add units
-        fill = np.zeros(len(self.spectra))
-        self.spectra.add_index('id')
-        
-        # Prepare apparent spectra
-        self.processed_spectra = []
-        for n,row in enumerate(self.spectra):
-            
-            # Unpack the spectrum
-            w, f = row['spectrum'].data[:2]
-            try:
-                e = row['spectrum'].data[2]
-            except IndexError:
-                e = ''
-            
-            # Convert log units to linear
-            if row['flux_units'].startswith('log '):
-                f = 10**f, 
-                try:
-                    e = 10**e
-                except:
-                    pass
-                row['flux_units'] = row['flux_units'].replace('log ', '')
-            if row['wavelength_units'].startswith('log '):
-                w = 10**w
-                row['wavelength_units'] = row['wavelength_units'].replace('log ', '')
-                
-            # Make sure the wavelength units are right
-            w = w*u.str2Q(row['wavelength_units']).to(self.wave_units).value
-            
-            # Convert F_nu to F_lam if necessary
-            if row['flux_units']=='Jy':
-                f = u.fnu2flam(f*q.Jy, w*self.wave_units, units=self.flux_units).value
-                try:
-                    e = u.fnu2flam(e*q.Jy, w*self.wave_units, units=self.flux_units).value
-                except:
-                    pass
-                    
-            # Force uncertainty array if none
-            if not any(e) or e=='':
-                e = f/10.
-                print('No uncertainty array for spectrum {}. Using SNR=10.'.format(row['id']))
-                
-            # Insert uncertainty array of set SNR to force plotting
-            for snr in SNR:
-                if snr[0]==row['id']:
-                    e = f/(1.*snr[1])
-                    
-            # Trim spectra frist up to first point with SNR>SNR_trim then manually
-            if isinstance(SNR_trim, (float, int)):
-                snr_trim = SNR_trim
-            elif SNR_trim and any([i[0]==row['id'] for i in SNR_trim]):
-                snr_trim = [i[1] for i in SNR_trim if i[0]==row['id']][0]
-            else:
-                snr_trim = 10
-                
-            if not SNR or not any([i[0]==row['id'] for i in SNR]):
-                keep, = np.where(f/e>=snr_trim)
-                if any(keep):
-                    w, f, e = [i[np.nanmin(keep):np.nanmax(keep)+1] for i in [w, f, e]]
-            if trim and any([i[0]==row['id'] for i in trim]):
-                w, f, e = u.trim_spectrum([w, f, e], [i[1:] for i in trim if i[0]==row['id']])
-                
-            self.processed_spectra.append([w,f,e])
-            
-        # Print
-        print('\nSPECTRA')
-        self.spectra[['id','instrument_id','telescope_id','mode_id','publication_shortname']].pprint()
-        
-    def process_photometry(self, aliases='guess', **kwargs):
-        """
-        Process the photometry
-        """
-        # Index and add units
-        fill = np.zeros(len(self.photometry))
-        
-        # Fill in empty columns
-        for col in ['magnitude','magnitude_unc']:
-            self.photometry[col][self.photometry[col]==None] = np.nan
-            
-        # Rename bands. What a pain in the ass.
-        if isinstance(aliases,dict):
-            self.photometry['band'] = [aliases.get(i) for i in self.photometry['band']]
-        elif aliases=='guess':
-            self.photometry['band'] = [min(list(FILTERS['Band']), key=lambda v: len(set(b)^set(v))) for b in self.photometry['band']]
-        else:
-            pass
-        
-        self.photometry.add_index('band')
-        self.photometry.rename_column('magnitude','app_magnitude')
-        self.photometry.rename_column('magnitude_unc','app_magnitude_unc')
-        self.photometry['app_magnitude'].unit = q.mag
-        self.photometry['app_magnitude_unc'].unit = q.mag
-        
-        # Add effective wavelengths to the photometry table
-        self.photometry.add_column(at.Column(fill, 'eff', unit=self.wave_units))
-        for row in self.photometry:
-            try:
-                band = FILTERS.loc[row['band']]
-                row['eff'] = band['WavelengthEff']*q.Unit(band['WavelengthUnit'])
-            except:
-                row['eff'] = np.nan
-            
-        # Add absolute magnitude columns to the photometry table
-        self.photometry.add_column(at.Column(fill, 'abs_magnitude', unit=q.mag))
-        self.photometry.add_column(at.Column(fill, 'abs_magnitude_unc', unit=q.mag))
-        
-        # Calculate absolute mags and add to the photometry table
-        if self.distance:
-            for row in self.photometry:
-                M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance, row['app_magnitude_unc'], self.distance_unc)
-                row['abs_magnitude'] = M
-                row['abs_magnitude_unc'] = M_unc
-            
-        # Add flux density columns to the photometry table
-        for colname in ['app_flux','app_flux_unc','abs_flux','abs_flux_unc']:
-            self.photometry.add_column(at.Column(fill, colname, unit=self.flux_units))
-            
-        # Calculate fluxes and add to the photometry table
-        for i in ['app_','abs_']:
-            for row in self.photometry:
-                ph_flux = u.mag2flux(row['band'], row[i+'magnitude'], sig_m=row[i+'magnitude_unc'])
-                row[i+'flux'] = ph_flux[0]
-                row[i+'flux_unc'] = ph_flux[1]
-                
-        # Print
-        print('\nPHOTOMETRY')
-        self.photometry[['id','band','eff','app_magnitude','app_magnitude_unc','publication_shortname']].pprint()
-        
-    def process_parallaxes(self, pi='', dist='', **kwargs):
-        """
-        Process the parallax data
-        """
-        # Index and add units
-        fill = np.zeros(len(self.parallaxes))
-        
-        # Add distance columns to the parallaxes table
-        self.parallaxes.add_column(at.Column(fill, 'distance'))
-        self.parallaxes.add_column(at.Column(fill, 'distance_unc'))
-        
-        # Add units
-        self.parallaxes.add_row(np.zeros(len(self.parallaxes.colnames)))
-        self.parallaxes['parallax'].unit = q.mas
-        self.parallaxes['parallax_unc'].unit = q.mas
-        self.parallaxes['distance'].unit = q.pc
-        self.parallaxes['distance_unc'].unit = q.pc
-        self.parallaxes = self.parallaxes[:-1]
-        
-        # Check for input parallax or distance
-        if pi or dist:
-            self.parallaxes['adopted'] = fill
-            if pi:
-                self.parallaxes.add_row({'parallax':pi[0], 'parallax_unc':pi[1], 'adopted':1, 'publication_shortname':'Input'})
-            elif dist:
-                self.parallaxes.add_row({'distance':dist[0], 'distance_unc':dist[1], 'adopted':1, 'publication_shortname':'Input'})
-                    
-        # Calculate missing distance or parallax
-        for row in self.parallaxes:
-            if row['parallax'].value and not row['distance'].value:
-                distance = u.pi2pc(row['parallax'], row['parallax_unc'])
-                row['distance'] = distance[0]
-                row['distance_unc'] = distance[1]
-                
-            elif row['distance'].value and not row['parallax'].value:
-                parallax = u.pi2pc(row['distance'], row['distance_unc'], pc2pi=True)
-                row['parallax'] = parallax[0]
-                row['parallax_unc'] = parallax[1]
-                
-            else:
-                pass
-                
-        # Set adopted distance
-        if len(self.parallaxes)>0 and not any(self.parallaxes['adopted']==1):
-            self.parallaxes['adopted'][0] = 1
-            
-        # Sort by adopted distance
-        self.parallaxes.add_index('adopted')
-        
-        # Get the adopted distance
-        try:
-            self.distance = self.parallaxes.loc[1]['distance']
-            self.distance_unc = self.parallaxes.loc[1]['distance_unc']
-        except KeyError:
-            self.distance = self.distance_unc = ''
-            
-        # Print
-        print('\nPARALLAXES')
-        self.parallaxes[['id','distance','distance_unc','publication_shortname']].pprint()
         
     def process_spectral_types(self, spt='', **kwargs):
         """

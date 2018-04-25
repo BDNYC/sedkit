@@ -346,7 +346,7 @@ def norm_spec(spectrum, template, exclude=[]):
 
     return [i * Q for i, Q in zip(normed_spectrum, spectrum_units)]
 
-def pi2pc(dist, dist_unc='', pc2pi=False):
+def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, pc2pi=False):
     """
     Calculate the parallax from a distance or vice versa
     
@@ -359,18 +359,24 @@ def pi2pc(dist, dist_unc='', pc2pi=False):
     pc2pi: bool
         Convert from distance to parallax
     """
-    if dist:
-        unit = q.mas if pc2pi else q.pc
-        if isinstance(dist_unc,str):
-            dist_unc = 0*unit
-        
-        val = ((1*q.pc*q.arcsec)/dist).to(unit)
-        err = (dist_unc*val/dist).to(unit)
-        
-        return [val.round(2), err.round(2)]
+    print("Make this handle asymmetric uncertainties!")
+
+    unit = pi_unit if pc2pi else dist_unit
+    
+    if unc_lower is None:
+        unc_lower = 0*dist.unit
+    if unc_upper is None:
+        unc_upper = 0*dist.unit
+    
+    val = ((1*q.pc*q.arcsec)/dist).to(unit).round(2)
+    low = (unc_lower*val/dist).to(unit).round(2)
+    upp = (unc_upper*val/dist).to(unit).round(2)
+    
+    if unc_lower is not None and unc_upper is not None:
+        return val, low, upp
         
     else:
-        return [np.nan, np.nan]
+        return val, low
         
 def rebin_spec(spec, wavnew, oversamp=100, plot=False):
     """
