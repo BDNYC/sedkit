@@ -8,6 +8,7 @@ Make nicer spectrum objects to pass around SED class
 import numpy as np
 import astropy.units as q
 import pysynphot as ps
+import copy
 
 class Spectrum(ps.ArraySpectrum):
     """A spectrum object to add uncertainty handling to ps.ArraySpectrum
@@ -93,7 +94,7 @@ class Spectrum(ps.ArraySpectrum):
         """A property for auncertainty"""
         return self._unctable
     
-    def renormalize(self, RNval, RNUnits, band, force=True):
+    def renormalize(self, RNval, RNUnits, band, force=True, no_spec=False):
         """Include uncertainties in renorm() method"""
         # Caluclate the remornalized flux
         spec = self.renorm(RNval, RNUnits, band, force)
@@ -101,12 +102,47 @@ class Spectrum(ps.ArraySpectrum):
         # Caluclate the normalization factor
         norm = spec.flux/self.flux
         
+        # Just return the normalization factor
+        if no_spec:
+            return norm
+        
         # Apply it to the uncertainties
         spec.unc = self.unc*norm
         
         # Store spectrum with units
         data = [spec.wave, spec.flux, spec.unc]
         spec.spectrum = [i*Q for i,Q in zip(data, self.units)]
+        
+        return spec
+        
+    def norm_to_mags(self, photometry):
+        """
+        Normalize the spectrum to the given bandpasses
+    
+        Parameters
+        ----------
+        photometry: astropy.table.QTable
+            A table of the photometry
+    
+        Returns
+        -------
+        pysynphot.spectrum.ArraySpectralElement
+            The normalized spectrum object
+        """
+        # Collect normalization constants
+        norms = []
+
+        # Calculate the synthetic magnitude in each band
+        for row in photometry:
+            n = self.renormalize(row['app_magnitude'], 'vegamag', row['bandpass'], no_spec=True)
+            norms.append(n)
+        
+        # Get the average normalization factor
+        norm = np.nanmean(norms)
+        
+        spec = copy.copy(self)
+        spec._fluxtable = spec.flux*norm
+        spec._unctable = spec.unc*norm
         
         return spec
         

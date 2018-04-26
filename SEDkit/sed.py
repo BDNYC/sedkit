@@ -64,11 +64,14 @@ def from_ids(db, **kwargs):
     return data
 
 def testing():
-    s = SED(age=(1*q.Gyr,0.1*q.Gyr), radius=(1*q.Rjup,0.02*q.Rjup), distance=(200*q.pc,10*q.pc))
-    spec1 = [np.arange(10)*q.um, np.array([2,3,4,5,6,4,3,5,8,4])*1E-15*q.erg/q.s/q.cm**2/q.AA, np.array([2,3,4,5,6,4,3,5,8,4])*1E-16*q.erg/q.s/q.cm**2/q.AA]
+    s = SED(age=(1*q.Gyr,0.1*q.Gyr), radius=(1*q.Rjup,0.02*q.Rjup), distance=(11*q.pc,1*q.pc))
+    spec1 = [np.arange(1,11)*q.um, np.array([2,3,4,5,6,4,3,5,8,4])*1E-15*q.erg/q.s/q.cm**2/q.AA, np.array([2,3,4,5,6,4,3,5,8,4])*1E-16*q.erg/q.s/q.cm**2/q.AA]
     spec2 = [np.linspace(7,15,10)*q.um, np.array([6,3,2,4,7,4,1,4,3,6])*1E-12*q.erg/q.s/q.cm**2/q.AA, np.array([6,3,2,4,7,4,1,4,3,6])*1E-13*q.erg/q.s/q.cm**2/q.AA]
     s.add_spectrum(*spec1)
-    # s.add_spectrum(*spec2)
+    s.add_photometry('2MASS.J', 12.3, 0.1)
+    s.add_photometry('2MASS.H', 13.3, 0.05)
+    s.add_photometry('2MASS.Ks', 12.3, None)
+    
     return s
 
 # Might be of use: https://github.com/spacetelescope/JWSTUserTraining2016/blob/master/Workshop_Notebooks/Advanced_Tables/Advanced_Tables.ipynb
@@ -228,17 +231,14 @@ class SED(object):
         except:
             raise TypeError("wave_units must be a unit of length, e.g. 'um'")
         
-        # Update the photometry
-        self._photometry['eff'] = self._photometry['eff'].to(wave_units)
-        
-        # Update the spectra
-        for spectrum in self.spectra:
-            spectrum.wave_units = wave_units
-            
         # Set the wave_units!
         self._wave_units = wave_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
-            
+        
+        # Recalibrate the data
+        self._calibrate_photometry()
+        self._calibrate_spectra()
+        
     @property
     def flux_units(self):
         """A property for flux_units"""
@@ -264,21 +264,14 @@ class SED(object):
             raise TypeError("flux_units must be a unit of length, e.g. 'um'")
         
         # fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA)
-        
-        # Update the photometry
-        self._photometry['app_flux'] = self._photometry['app_flux'].to(flux_units)
-        self._photometry['app_flux_unc'] = self._photometry['app_flux_unc'].to(flux_units)
-        self._photometry['abs_flux'] = self._photometry['abs_flux'].to(flux_units)
-        self._photometry['abs_flux_unc'] = self._photometry['abs_flux_unc'].to(flux_units)
-        
-        # Update the spectra
-        for spectrum in self.spectra:
-            spectrum.flux_units = flux_units
             
         # Set the flux_units!
         self._flux_units = flux_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
+        
+        # Recalibrate the data
         self._calibrate_photometry()
+        self._calibrate_spectra()
         
     @property
     def age(self):
@@ -350,11 +343,17 @@ class SED(object):
         except:
             raise TypeError("Distance values must be distance units of astropy.units.quantity.Quantity, e.g. 'pc'")
         
-        # Set the distance!
+        # Set the distance
         self._distance = distance
         
-        # Update the things that depend on distance!
+        # Update the parallax
         self._parallax = u.pi2pc(*self.distance, pc2pi=True)
+        
+        # Update the absolute photometry
+        self._calibrate_photometry()
+
+        # Update the flux calibrated spectra
+        self._calibrate_spectra()
         
     @property
     def parallax(self):
@@ -380,11 +379,17 @@ class SED(object):
         except:
             raise TypeError("parallax values must be parallax units of astropy.units.quantity.Quantity, e.g. 'mas'")
         
-        # Set the parallax!
+        # Set the parallax
         self._parallax = parallax
         
-        # Update the things that depend on parallax!
+        # Update the distance
         self._distance = u.pi2pc(*self.parallax)
+        
+        # Update the absolute photometry
+        self._calibrate_photometry()
+        
+        # Update the flux calibrated spectra
+        self._calibrate_spectra()
         
     @property
     def spectra(self):
@@ -392,7 +397,7 @@ class SED(object):
         return self._spectra
    
     def add_spectrum(self, wave, flux, unc=None, **kwargs):
-        """Add a new spectrum to the SED object
+        """Add a new Spectrum object to the SED
 
         Parameters
         ----------
@@ -400,14 +405,8 @@ class SED(object):
             The wavelength array
         flux: np.ndarray
             The flux array
-        unc: np.ndarray
+        unc: np.ndarray (optional)
             The uncertainty array
-        snr: float (optional)
-            A value to override spectrum SNR
-        snr_trim: float (optional)
-            The SNR value to trim spectra edges up to
-        trim: sequence (optional)
-            A sequence of (wave_min, wave_max) sequences to override spectrum trimming
         """
         # Create the Spectrum object
         spec = sp.Spectrum(wave, flux, unc, **kwargs)
@@ -463,64 +462,234 @@ class SED(object):
     def _calibrate_photometry(self):
         """Calculate the absolute magnitudes and flux values of all rows in the photometry table
         """
-        # Get the app_mags
-        m = np.array(self._photometry)['app_magnitude']
-        m_unc = np.array(self._photometry)['app_magnitude_unc']
+        if self.photometry is not None and len(self.photometry)>0:
+            
+            # Update the photometry
+            self._photometry['eff'] = self._photometry['eff'].to(self.wave_units)
+            self._photometry['app_flux'] = self._photometry['app_flux'].to(self.flux_units)
+            self._photometry['app_flux_unc'] = self._photometry['app_flux_unc'].to(self.flux_units)
+            self._photometry['abs_flux'] = self._photometry['abs_flux'].to(self.flux_units)
+            self._photometry['abs_flux_unc'] = self._photometry['abs_flux_unc'].to(self.flux_units)
         
-        # Calculate app_flux values
-        for n,row in enumerate(self._photometry):
-            app_flux, app_flux_unc = u.mag2flux(row['band'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
-            self._photometry['app_flux'][n] = app_flux.to(self.flux_units)
-            self._photometry['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
-            
-        # Calculate absolute mags
-        if self._distance is not None:
-            
-            # Calculate abs_mags
-            M, M_unc = u.flux_calibrate(m, self._distance[0], m_unc, self._distance[1])
-            self._photometry['abs_magnitude'] = M
-            self._photometry['abs_magnitude_unc'] = M_unc
-            
-            # Calculate abs_flux values
+            # Get the app_mags
+            m = np.array(self._photometry)['app_magnitude']
+            m_unc = np.array(self._photometry)['app_magnitude_unc']
+        
+            # Calculate app_flux values
             for n,row in enumerate(self._photometry):
-                abs_flux, abs_flux_unc = u.mag2flux(row['band'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
-                self._photometry['abs_flux'][n] = abs_flux.to(self.flux_units)
-                self._photometry['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
+                app_flux, app_flux_unc = u.mag2flux(row['band'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
+                self._photometry['app_flux'][n] = app_flux.to(self.flux_units)
+                self._photometry['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
+            
+            # Calculate absolute mags
+            if self._distance is not None:
+            
+                # Calculate abs_mags
+                M, M_unc = u.flux_calibrate(m, self._distance[0], m_unc, self._distance[1])
+                self._photometry['abs_magnitude'] = M
+                self._photometry['abs_magnitude_unc'] = M_unc
+            
+                # Calculate abs_flux values
+                for n,row in enumerate(self._photometry):
+                    abs_flux, abs_flux_unc = u.mag2flux(row['band'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
+                    self._photometry['abs_flux'][n] = abs_flux.to(self.flux_units)
+                    self._photometry['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
 
-        # Make apparent photometric SED with photometry
-        phot_array = np.array(self.photometry[['eff','app_flux','app_flux_unc']])
-        phot_array = phot_array[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
-        self.app_phot_SED = [phot_array[i]*Q for i,Q in zip(['eff','app_flux','app_flux_unc'],self.units)]
+            # Make apparent photometric SED with photometry
+            app_cols = ['eff','app_flux','app_flux_unc']
+            phot_array = np.array(self.photometry[app_cols])
+            phot_array = phot_array[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
+            self.app_phot_SED = sp.Spectrum(*[phot_array[i]*Q for i,Q in zip(app_cols,self.units)])
 
-        # Make absolute photometric SED with photometry
-        phot_array = np.array(self.photometry[['eff','abs_flux','abs_flux_unc']])
-        phot_array = phot_array[(self.photometry['abs_flux']>0)&(self.photometry['abs_flux_unc']>0)]
-        self.abs_phot_SED = [phot_array[i]*Q for i,Q in zip(['eff','abs_flux','abs_flux_unc'],self.units)]
+            # Make absolute photometric SED with photometry
+            abs_cols = ['eff','abs_flux','abs_flux_unc']
+            phot_array = np.array(self.photometry[abs_cols])
+            phot_array = phot_array[(self.photometry['abs_flux']>0)&(self.photometry['abs_flux_unc']>0)]
+            self.abs_phot_SED = sp.Spectrum(*[phot_array[i]*Q for i,Q in zip(abs_cols,self.units)])
         
     def _calibrate_spectra(self):
         """
         Create composite spectra and flux calibrate
         """
-        # Group overlapping spectra and stitch together where possible
-        # to form peacewise spectrum for flux calibration
-        self.stitched_spectra = []
-        if len(self.spectra) > 1:
-            groups = u.group_spectra(self.spectra)
-            for group in groups:
-                composite = u.make_composite(group)
-                self.stitched_spectra.append(composite)
+        if self.spectra is not None and len(self.spectra)>0:
+            
+            # Update the spectra
+            for spectrum in self.spectra:
+                spectrum.flux_units = self.flux_units
+            
+            # Group overlapping spectra and stitch together where possible
+            # to form peacewise spectrum for flux calibration
+            self.stitched_spectra = []
+            if len(self.spectra) > 1:
+                groups = u.group_spectra(self.spectra)
+                for group in groups:
+                    composite = u.make_composite(group)
+                    self.stitched_spectra.append(composite)
                 
-        # If one or none, no need to make composite
-        elif len(self.spectra) == 1:
-            self.stitched_spectra = self.spectra
+            # If one or none, no need to make composite
+            elif len(self.spectra) == 1:
+                self.stitched_spectra = self.spectra
             
-        # If no spectra, forget it
-        else:
-            print('No spectra available for SED.')
+            # If no spectra, forget it
+            else:
+                print('No spectra available for SED.')
             
-        # # Renormalize the stitched spectra
-        # for n,st_spec in enumerate(self.stitched_spectra):
-        #     self.stitched_spectra[n] = u.renorm()
+            # # Renormalize the stitched spectra
+            # for n,st_spec in enumerate(self.stitched_spectra):
+            #     self.stitched_spectra[n] = u.renorm()
+        
+    # =========================================================================
+    # =================== Plotting ============================================
+    # =========================================================================
+    
+    def plot_spectra(self, fig=None, **kwargs):
+        """Plot the spectra"""
+        # Make the figure
+        if fig is None:
+            fig = figure()
+        
+        # Plot each spectrum
+        for spec in self.spectra:
+            fig.line(spec.wave, spec.flux)
+            
+        show(fig)
+        
+    def plot_photometry(self, pre='app', fig=None, **kwargs):
+        """Plot the photometry"""
+        # Make the figure
+        if fig is None:
+            fig = figure()
+            
+        # Plot the photometry with uncertainties
+        data = self.photometry[self.photometry[pre+'_flux_unc']>0]
+        errorbar(fig, data['eff'], data[pre+'_flux'], yerr=data[pre+'_flux_unc'], **kwargs)
+        
+        # Plot the photometry without uncertainties
+        data = self.photometry[self.photometry[pre+'_flux_unc']==np.nan]
+        errorbar(fig, data['eff'], data[pre+'_flux'], **kwargs)
+        
+        show(fig)
+        
+    def plot(self, app=True, photometry=True, spectra=True, integrals=False, syn_photometry=True, blackbody=True, scale=['log','log'], bokeh=True, output=False, **kwargs):
+        """
+        Plot the SED
+        
+        Parameters
+        ----------
+        app: bool
+            Plot the apparent SED instead of absolute
+        photometry: bool
+            Plot the photometry
+        spectra: bool
+            Plot the spectra
+        integrals: bool
+            Plot the curve used to calculate fbol
+        syn_photometry: bool
+            Plot the synthetic photometry
+        blackbody: bool
+            Polot the blackbody fit
+        scale: array-like
+            The (x,y) scales to plot, 'linear' or 'log'
+        bokeh: bool
+            Plot in Bokeh
+        output: bool
+            Just return figure, don't draw plot
+        
+        Returns
+        =======
+        bokeh.models.figure
+            The SED plot
+        """
+        # Distinguish between apparent and absolute magnitude
+        pre = 'app_' if app else 'abs_'
+        
+        # Calculate reasonable axis limits
+        spec_SED = getattr(self, pre+'spec_SED')
+        phot_SED = np.array([np.array([np.nanmean(self.photometry.loc[b][col].value) for b in list(set(self.photometry['band']))]) for col in ['eff',pre+'flux',pre+'flux_unc']])
+        
+        # Check for min and max phot data
+        try:
+            mn_xp, mx_xp, mn_yp, mx_yp = np.nanmin(phot_SED[0]), np.nanmax(phot_SED[0]), np.nanmin(phot_SED[1]), np.nanmax(phot_SED[1])
+        except:
+            mn_xp, mx_xp, mn_yp, mx_yp = 0.3, 18, 0, 1
+        
+        # Check for min and max spec data
+        try:
+            mn_xs, mx_xs = np.nanmin(spec_SED[0].value), np.nanmax(spec_SED[0].value)
+            mn_ys, mx_ys = np.nanmin(spec_SED[1].value[spec_SED[1].value>0]), np.nanmax(spec_SED[1].value[spec_SED[1].value>0])
+        except:
+            mn_xs, mx_xs, mn_ys, mx_ys = 0.3, 18, 999, -999
+            
+        mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp,mn_xs]), np.nanmax([mx_xp,mx_xs]), np.nanmin([mn_yp,mn_ys]), np.nanmax([mx_yp,mx_ys])
+            
+        # TOOLS = 'crosshair,resize,reset,hover,box,save'
+        fig = figure(plot_width=1000, plot_height=600, title=self.name, y_axis_type=scale[1], x_axis_type=scale[0], x_axis_label='Wavelength [{}]'.format(self.wave_units), y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
+        
+        # Plot spectra
+        if spectra:
+            spec_SED = getattr(self, pre+'spec_SED')
+            source = ColumnDataSource(data=dict(x=spec_SED[0], y=spec_SED[1], z=spec_SED[2]))
+            hover = HoverTool(tooltips=[( 'wave', '$x'),( 'flux', '$y'),('unc','$z')], mode='vline')
+            fig.add_tools(hover)
+            fig.line('x', 'y', source=source, legend='Spectra')
+            
+        # Plot photometry
+        if photometry:
+            
+            # Plot points with errors
+            pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff',pre+'flux',pre+'flux_unc']) if not any([np.isnan(i) for i in [x,y,z]])]).T
+            try:
+                errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Photometry')
+            except:
+                pass
+                
+            # Plot saturated photometry
+            pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff','app_flux','app_flux_unc']) if np.isnan(z) and not np.isnan(y)]).T
+            try:
+                errorbar(fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
+            except:
+                pass
+                
+        # Plot synthetic photometry
+        if syn_photometry and self.syn_photometry:
+            
+            # Plot points with errors
+            pts = np.array([(x,y,z) for x,y,z in np.array(self.syn_photometry['eff',pre+'flux',pre+'flux_unc']) if not np.isnan(z)]).T
+            try:
+                errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
+            except:
+                pass
+        
+        # Plot the SED with linear interpolation completion
+        if integrals:
+            full_SED = getattr(self, pre+'SED')
+            fig.line(full_SED[0].value, full_SED[1].value, line_color='black', alpha=0.3, legend='Integral Surface')
+            # plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
+            
+        if blackbody and self.blackbody:
+            fit_sed = getattr(self, self.bb_source)
+            fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
+            bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
+            bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+            bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
+            bb_wav = np.linspace(0.2, 30, 1000)*q.um
+            bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+            # print(bb_norm,bb_flx)
+            fig.line(bb_wav.value, bb_flx.value*bb_norm, line_color='red', legend='{} K'.format(self.Teff_bb))
+            
+        fig.legend.location = "top_right"
+        fig.legend.click_policy = "hide"
+        fig.x_range = Range1d(mn_x*0.8, mx_x*1.2)
+        fig.y_range = Range1d(mn_y*0.5, mx_y*2)
+            
+        if not output:
+            show(fig)
+        
+        return fig
+
+    # =========================================================================
+    # =========================================================================
+    # =========================================================================
         
     # def from_database(self, db, from_dict=None):
     #     """
@@ -893,161 +1062,6 @@ class SED(object):
         except:
             print('\nNo blackbody fit.')
         
-    
-    def plot(self, app=True, photometry=True, spectra=True, integrals=False, syn_photometry=True, blackbody=True, scale=['log','log'], bokeh=True, output=False, **kwargs):
-        """
-        Plot the SED
-        
-        Parameters
-        ----------
-        app: bool
-            Plot the apparent SED instead of absolute
-        photometry: bool
-            Plot the photometry
-        spectra: bool
-            Plot the spectra
-        integrals: bool
-            Plot the curve used to calculate fbol
-        syn_photometry: bool
-            Plot the synthetic photometry
-        blackbody: bool
-            Polot the blackbody fit
-        scale: array-like
-            The (x,y) scales to plot, 'linear' or 'log'
-        bokeh: bool
-            Plot in Bokeh
-        output: bool
-            Just return figure, don't draw plot
-        
-        Returns
-        =======
-        bokeh.models.figure
-            The SED plot
-        """
-        # Distinguish between apparent and absolute magnitude
-        pre = 'app_' if app else 'abs_'
-        
-        # Calculate reasonable axis limits
-        spec_SED = getattr(self, pre+'spec_SED')
-        phot_SED = np.array([np.array([np.nanmean(self.photometry.loc[b][col].value) for b in list(set(self.photometry['band']))]) for col in ['eff',pre+'flux',pre+'flux_unc']])
-        
-        # Check for min and max phot data
-        try:
-            mn_xp, mx_xp, mn_yp, mx_yp = np.nanmin(phot_SED[0]), np.nanmax(phot_SED[0]), np.nanmin(phot_SED[1]), np.nanmax(phot_SED[1])
-        except:
-            mn_xp, mx_xp, mn_yp, mx_yp = 0.3, 18, 0, 1
-        
-        # Check for min and max spec data
-        try:
-            mn_xs, mx_xs = np.nanmin(spec_SED[0].value), np.nanmax(spec_SED[0].value)
-            mn_ys, mx_ys = np.nanmin(spec_SED[1].value[spec_SED[1].value>0]), np.nanmax(spec_SED[1].value[spec_SED[1].value>0])
-        except:
-            mn_xs, mx_xs, mn_ys, mx_ys = 0.3, 18, 999, -999
-            
-        mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp,mn_xs]), np.nanmax([mx_xp,mx_xs]), np.nanmin([mn_yp,mn_ys]), np.nanmax([mx_yp,mx_ys])
-        
-        if not bokeh:
-            
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-            
-            # Make the figure
-            plt.figure(**kwargs)
-            plt.title(self.name)
-            plt.xlabel('Wavelength [{}]'.format(str(self.wave_units)))
-            plt.ylabel('Flux [{}]'.format(str(self.flux_units)))
-            
-            # Plot spectra
-            if spectra:
-                spec_SED = self.app_spec_SED if app else self.abs_spec_SED
-                plt.step(spec_SED[0], spec_SED[1], label='Spectra', **kwargs)
-            
-            # Plot photometry
-            if photometry:
-                phot_SED = self.app_phot_SED if app else self.abs_phot_SED
-                plt.errorbar(phot_SED[0], phot_SED[1], yerr=phot_SED[2], marker='o', ls='None', label='Photometry', **kwargs)
-            
-            # Plot synthetic photometry
-            if syn_photometry and self.syn_photometry:
-                plt.errorbar(self.syn_photometry['eff'], self.syn_photometry['app_flux'], yerr=self.syn_photometry['app_flux_unc'], marker='o', ls='none', label='Synthetic Photometry')
-            
-            # Plot the SED with linear interpolation completion
-            if integrals:
-                full_SED = self.app_SED if app else self.abs_SED
-                plt.plot(full_SED[0].value, full_SED[1].value, color='k', alpha=0.5, ls='--', label='Integral Surface')
-                plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
-            
-            # Set the x andx  y scales
-            plt.xscale(scale[0], nonposx='clip')
-            plt.yscale(scale[1], nonposy='clip')
-            
-        else:
-            
-            # TOOLS = 'crosshair,resize,reset,hover,box,save'
-            fig = figure(plot_width=1000, plot_height=600, title=self.name, y_axis_type=scale[1], x_axis_type=scale[0], x_axis_label='Wavelength [{}]'.format(self.wave_units), y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
-            
-            # Plot spectra
-            if spectra:
-                spec_SED = getattr(self, pre+'spec_SED')
-                source = ColumnDataSource(data=dict(x=spec_SED[0], y=spec_SED[1], z=spec_SED[2]))
-                hover = HoverTool(tooltips=[( 'wave', '$x'),( 'flux', '$y'),('unc','$z')], mode='vline')
-                fig.add_tools(hover)
-                fig.line('x', 'y', source=source, legend='Spectra')
-                
-            # Plot photometry
-            if photometry:
-                
-                # Plot points with errors
-                pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff',pre+'flux',pre+'flux_unc']) if not any([np.isnan(i) for i in [x,y,z]])]).T
-                try:
-                    errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Photometry')
-                except:
-                    pass
-                    
-                # Plot saturated photometry
-                pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff','app_flux','app_flux_unc']) if np.isnan(z) and not np.isnan(y)]).T
-                try:
-                    errorbar(fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
-                except:
-                    pass
-                    
-            # Plot synthetic photometry
-            if syn_photometry and self.syn_photometry:
-                
-                # Plot points with errors
-                pts = np.array([(x,y,z) for x,y,z in np.array(self.syn_photometry['eff',pre+'flux',pre+'flux_unc']) if not np.isnan(z)]).T
-                try:
-                    errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
-                except:
-                    pass
-            
-            # Plot the SED with linear interpolation completion
-            if integrals:
-                full_SED = getattr(self, pre+'SED')
-                fig.line(full_SED[0].value, full_SED[1].value, line_color='black', alpha=0.3, legend='Integral Surface')
-                # plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
-                
-            if blackbody and self.blackbody:
-                fit_sed = getattr(self, self.bb_source)
-                fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
-                bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
-                bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-                bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
-                bb_wav = np.linspace(0.2, 30, 1000)*q.um
-                bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-                # print(bb_norm,bb_flx)
-                fig.line(bb_wav.value, bb_flx.value*bb_norm, line_color='red', legend='{} K'.format(self.Teff_bb))
-                
-            fig.legend.location = "top_right"
-            fig.legend.click_policy = "hide"
-            fig.x_range = Range1d(mn_x*0.8, mx_x*1.2)
-            fig.y_range = Range1d(mn_y*0.5, mx_y*2)
-                
-            if not output:
-                show(fig)
-            
-            return fig
             
     def write(self, dirpath, app=False, spec=True, phot=False):
         """
