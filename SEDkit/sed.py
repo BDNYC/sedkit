@@ -9,19 +9,19 @@ import numpy as np
 import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
+import pysynphot as ps
 from astropy.modeling.models import custom_model
 from astropy.modeling import models, fitting
 from astropy.analytic_functions import blackbody_lambda
 from astropy.constants import b_wien
 from . import utilities as u
-from . import syn_phot as s
-from svo_filters import svo
-from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool, ColumnDataSource
-from jwst_phot import webbphot as wp
+from . import synphot as s
+# from svo_filters import svo
 from bokeh.plotting import figure, output_file, show, save
+from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool, ColumnDataSource
 
-FILTERS = svo.filters()
-FILTERS.add_index('Band')
+# FILTERS = svo.filters()
+# FILTERS.add_index('Band')
 
 PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_Y':'Wircam.Y', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3', 'HST_F125W':'WFC3_IR.F125W'}
 
@@ -61,6 +61,185 @@ def from_ids(db, **kwargs):
             print('Could not generate',k,'table.')
             
     return data
+
+def testing():
+    s = SED(age=(1*q.Gyr,0.1*q.Gyr), radius=(1*q.Rjup,0.02*q.Rjup), distance=(200*q.pc,10*q.pc))
+    spec1 = [np.arange(10)*q.um, np.array([2,3,4,5,6,4,3,5,8,4])*1E-15*q.erg/q.s/q.cm**2/q.AA, np.array([2,3,4,5,6,4,3,5,8,4])*1E-16*q.erg/q.s/q.cm**2/q.AA]
+    spec2 = [np.linspace(7,15,10)*q.um, np.array([6,3,2,4,7,4,1,4,3,6])*1E-12*q.erg/q.s/q.cm**2/q.AA, np.array([6,3,2,4,7,4,1,4,3,6])*1E-13*q.erg/q.s/q.cm**2/q.AA]
+    s.add_spectrum(*spec1)
+    # s.add_spectrum(*spec2)
+    return s
+
+class Spectrum(ps.ArraySpectrum):
+    """A spectrum object to add uncertainty handling to ps.ArraySpectrum
+    """
+    def __init__(self, wave, flux, unc=None, snr=10, snr_trim=5, trim=[]):
+        """Store the spectrum and units separately
+        
+        Parameters
+        ----------
+        wave: np.ndarray
+            The wavelength array
+        flux: np.ndarray
+            The flux array
+        unc: np.ndarray
+            The uncertainty array
+        snr: float (optional)
+            A value to override spectrum SNR
+        snr_trim: float (optional)
+            The SNR value to trim spectra edges up to
+        trim: sequence (optional)
+            A sequence of (wave_min, wave_max) sequences to override spectrum trimming
+        """
+        # Make sure the arrays are the same shape
+        if not wave.shape==flux.shape and ((unc is None) or not (unc.shape==flux.shape)):
+            raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
+            
+        # Check wave units
+        try:
+            _ = wave.to(q.um)
+        except:
+            raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
+        
+        # Check flux units
+        try:
+            _ = flux.to(q.erg/q.s/q.cm**2/q.AA)
+        except:
+            raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
+        
+        # Check uncertainty units
+        if unc is None:
+            try:
+                unc = flux/snr
+                print("No uncertainty array for this spectrum. Using SNR=",snr)
+            except:
+                raise TypeError("Not a valid SNR: ",snr)
+        
+        # Make sure the uncertainty array is in the correct units
+        try:
+            _ = unc.to(q.erg/q.s/q.cm**2/q.AA)
+        except:
+            raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
+            
+        # Trim spectrum edges by SNR value
+        if isinstance(snr_trim, (float, int)):
+            idx, = np.where(flux/unc>=snr_trim)
+            if any(idx):
+                wave, flux, unc = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in [wave, flux, unc]]
+        
+        # Trim manually
+        if isinstance(trim, (list,tuple)):
+            for mn,mx in trim:
+                try:
+                    idx, = np.where((wave<mn)|(wave>mx))
+                    if any(idx):
+                        wave, flux, unc = [i[idx] for i in [wave, flux, unc]]
+                except TypeError:
+                    print('Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]')
+            
+        # Strip and store units
+        self._wave_units = wave.unit
+        self._flux_units = flux.unit
+        self.units = [self._wave_units, self._flux_units, self._flux_units]
+        wave, flux, unc = [i.value for i in [wave,flux,unc]]
+        
+        # Inherit from ArraySpectrum
+        super().__init__(wave, flux)
+        
+        # Add the uncertainty
+        self._unctable = unc
+                
+    @property
+    def unc(self):
+        """A property for auncertainty"""
+        return self._unctable
+    
+    def renormalize(self, RNval, RNUnits, band, force=True):
+        """Include uncertainties in renorm() method"""
+        # Caluclate the remornalized flux
+        spec = self.renorm(RNval, RNUnits, band, force)
+        
+        # Caluclate the normalization factor
+        norm = spec.flux/self.flux
+        
+        # Apply it to the uncertainties
+        spec.unc = self.unc*norm
+        
+        # Store spectrum with units
+        data = [spec.wave, spec.flux, spec.unc]
+        spec.spectrum = [i*Q for i,Q in zip(data, self.units)]
+        
+        return spec
+        
+    @property
+    def spectrum(self):
+        """Store the spectrum with units
+        """
+        data = [self.wave, self.flux, self.unc]
+        return [i*Q for i,Q in zip(data, self.units)]
+        
+    @property
+    def wave_units(self):
+        """A property for wave_units"""
+        return self._wave_units
+    
+    @wave_units.setter
+    def wave_units(self, wave_units):
+        """A setter for wave_units
+        
+        Parameters
+        ----------
+        wave_units: astropy.units.quantity.Quantity
+            The astropy units of the SED wavelength
+        """
+        # Make sure it's a quantity
+        if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+            raise TypeError('wave_units must be astropy.units.quantity.Quantity')
+            
+        # Make sure the values are in length units
+        try:
+            wave_units.to(q.um)
+        except:
+            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
+        
+        # Update the wavelength array
+        self._wavetable = self.wave*self.wave_units.to(wave_units)
+            
+        # Set the wave_units!
+        self._wave_units = wave_units
+        self.units = [self._wave_units, self._flux_units, self._flux_units]
+            
+    @property
+    def flux_units(self):
+        """A property for flux_units"""
+        return self._flux_units
+    
+    @flux_units.setter
+    def flux_units(self, flux_units):
+        """A setter for flux_units
+        
+        Parameters
+        ----------
+        flux_units: astropy.units.quantity.Quantity
+            The astropy units of the SED wavelength
+        """
+        # Make sure it's a quantity
+        if not isinstance(flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+            raise TypeError('flux_units must be astropy.units.quantity.Quantity')
+            
+        # Make sure the values are in length units
+        try:
+            flux_units.to(q.erg/q.s/q.cm**2/q.AA)
+        except:
+            raise TypeError("flux_units must be a unit of length, e.g. 'um'")
+        
+        # Update the flux and unc arrays
+        self._fluxtable = self.flux*self.flux_units.to(flux_units)
+        self._unctable = self.unc*self.flux_units.to(flux_units)
+            
+        # Set the flux_units!
+        self._flux_units = flux_units
+        self.units = [self._wave_units, self._flux_units, self._flux_units]
 
 # Might be of use: https://github.com/spacetelescope/JWSTUserTraining2016/blob/master/Workshop_Notebooks/Advanced_Tables/Advanced_Tables.ipynb
 class SED(object):
@@ -161,44 +340,10 @@ class SED(object):
         
         Parameters
         ----------
-        source_id: int, str
-            The *source_id*, *unum*, *shortname* or *designation* for any 
-            source in the database.
-        db: astrodbkit.astrodb.Database, dict
-            The database instance to retreive data from or a dictionary
-            of astropy tables to mimick the db query
-        from_dict: dict (optional)
-            A dictionary of the {table_name:[ids], ...} to construct the SED
-        wave_units: astropy.units.quantity.Quantity
-            The wavelength units to use
-        flux_units: astropy.units.quantity.Quantity
-            The flux density units to use
-        SED_trim: sequence (optional)
-            A sequence of (wave_min, wave_max) sequences to trim the SED by
-        SED_split: sequence (optional)
-            Wavelength positions to split spectra at so the pieces are independently normalized
         name: str (optional)
             A name for the target
         verbose: bool
             Print some diagnostic stuff
-        
-        Example 1
-        ---------
-        from astrodbkit import astrodb
-        from SEDkit import sed
-        db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
-        x = sed.MakeSED(2051, db)
-        x.plot()
-        
-        Example 2
-        ---------
-        from astrodbkit import astrodb
-        from SEDkit import sed
-        db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
-        from_dict = {'spectra':3176, 'photometry':'*', 'parallaxes':575, 'sources':2}
-        x = sed.MakeSED(2, db, from_dict=from_dict)
-        x.plot()
-        
         """
         # Single valued attributes
         self._name = name
@@ -223,6 +368,7 @@ class SED(object):
         self._photometry['app_flux_unc'].unit = self._flux_units
         self._photometry['abs_flux'].unit = self._flux_units
         self._photometry['abs_flux_unc'].unit = self._flux_units
+        self._photometry.add_index('band')
         
         # Try to set attributes from kwargs
         for k,v in kwargs.items():
@@ -256,8 +402,8 @@ class SED(object):
         self._photometry['eff'] = self._photometry['eff'].to(wave_units)
         
         # Update the spectra
-        for n,spectrum in enumerate(self.spectra):
-            self.spectra[n][0] = (spectrum[0]*self._wave_units).to(wave_units).value
+        for spectrum in self.spectra:
+            spectrum.wave_units = wave_units
             
         # Set the wave_units!
         self._wave_units = wave_units
@@ -296,9 +442,8 @@ class SED(object):
         self._photometry['abs_flux_unc'] = self._photometry['abs_flux_unc'].to(flux_units)
         
         # Update the spectra
-        for n,spectrum in enumerate(self.spectra):
-            self.spectra[n][1] = (spectrum[1]*self._flux_units).to(flux_units).value
-            self.spectra[n][2] = (spectrum[2]*self._flux_units).to(flux_units).value
+        for spectrum in self.spectra:
+            spectrum.flux_units = flux_units
             
         # Set the flux_units!
         self._flux_units = flux_units
@@ -416,7 +561,7 @@ class SED(object):
         """A property for spectra"""
         return self._spectra
    
-    def add_spectrum(self, wave, flux, unc=None, snr=10, snr_trim=5, trim=[], **kwargs):
+    def add_spectrum(self, wave, flux, unc=None, **kwargs):
         """Add a new spectrum to the SED object
 
         Parameters
@@ -434,57 +579,18 @@ class SED(object):
         trim: sequence (optional)
             A sequence of (wave_min, wave_max) sequences to override spectrum trimming
         """
-        # Make sure the arrays are the same shape
-        if not wave.shape==flux.shape==unc.shape:
-            raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
-            
-        # Check wave units
-        try:
-            wave = wave.to(self._wave_units).value
-        except:
-            raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
+        # Create the Spectrum object
+        spec = Spectrum(wave, flux, unc, **kwargs)
         
-        # Check flux units
-        try:
-            flux = flux.to(self._flux_units).value
-        except:
-            raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
+        # Convert to SED units
+        spec.wave_units = self.wave_units
+        spec.flux_units = self.flux_units
         
-        # Check uncertainty units
-        if unc is None:
-            try:
-                unc = flux/snr
-                print("No uncertainty array for this spectrum. Using SNR=",snr)
-            except:
-                raise TypeError("Not a valid SNR: ",snr)
+        # Add the spectrum object to the list of spectra
+        self._spectra.append(spec)
         
-        # Make sure the uncertainty array is in the correct units
-        try:
-            unc = unc.to(self._flux_units).value
-        except:
-            raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
-                
-        # Trim spectrum edges by SNR value
-        if isinstance(snr_trim, (float, int)):
-            idx, = np.where(flux/unc>=snr_trim)
-            if any(idx):
-                wave, flux, unc = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in [wave, flux, unc]]
-        
-        # Trim manually
-        if isinstance(trim, (list,tuple)):
-            for mn,mx in trim:
-                try:
-                    idx, = np.where((wave<mn)|(wave>mx))
-                    if any(idx):
-                        wave, flux, unc = [i[idx] for i in [wave, flux, unc]]
-                except TypeError:
-                    print('Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]')
-            
-        # Make the array
-        spectrum = np.array([wave, flux, unc])
-        
-        # Set the distance!
-        self._spectra.append(spectrum)
+        # Combine spectra and flux calibrate
+        self._calibrate_spectra()
         
     def drop_spectrum(self, idx):
         """Drop a spectrum by its index in the spectra list
@@ -494,6 +600,7 @@ class SED(object):
     @property
     def photometry(self):
         """A property for photometry"""
+        self._photometry.sort('eff')
         return self._photometry
    
     def add_photometry(self, band, mag, mag_unc, **kwargs):
@@ -504,11 +611,10 @@ class SED(object):
             raise TypeError("Magnitude and uncertainty must be floats.")
             
         # Get the bandpass
-        # bp = s.bandpass(band)
-        bp = wp.bandpass('f277w', 'niriss')
+        bp = s.bandpass(band)
         
         # Make a dict for the new point
-        new_photometry = {'band':band, 'eff':bp.pivot()*q.AA, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
+        new_photometry = {'band':band, 'eff':bp.svo.WavelengthEff*q.um, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
         
         # Add the kwargs
         new_photometry.update(kwargs)
@@ -525,8 +631,7 @@ class SED(object):
         self._photometry.remove_row(idx)
         
     def _calibrate_photometry(self):
-        """
-        Calculate the absolute magnitudes and flux values of all rows in the photometry table
+        """Calculate the absolute magnitudes and flux values of all rows in the photometry table
         """
         # Get the app_mags
         m = np.array(self._photometry)['app_magnitude']
@@ -534,9 +639,9 @@ class SED(object):
         
         # Calculate app_flux values
         for n,row in enumerate(self._photometry):
-            app_flx, app_flux_unc = u.mag2flux(row['band'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
-            self._photometry['app_flux'][n] = app_flx.to(self._flux_units)
-            self._photometry['app_flux_unc'][n] = app_flux_unc.to(self._flux_units)
+            app_flux, app_flux_unc = u.mag2flux(row['band'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
+            self._photometry['app_flux'][n] = app_flux.to(self.flux_units)
+            self._photometry['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
             
         # Calculate absolute mags
         if self._distance is not None:
@@ -546,14 +651,46 @@ class SED(object):
             self._photometry['abs_magnitude'] = M
             self._photometry['abs_magnitude_unc'] = M_unc
             
-            # Calculate app_flux values
-            abs_fluxes = []
-            for row in self._photometry:
-                abs_fluxes.append(u.mag2flux(row['band'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc']))
-            abs_flx, abs_flux_unc = np.array(abs_fluxes).T
-            self._photometry['abs_flux'] = abs_flx.to(self._flux_units)
-            self._photometry['abs_flux_unc'] = abs_flux_unc.to(self._flux_units)
+            # Calculate abs_flux values
+            for n,row in enumerate(self._photometry):
+                abs_flux, abs_flux_unc = u.mag2flux(row['band'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
+                self._photometry['abs_flux'][n] = abs_flux.to(self.flux_units)
+                self._photometry['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
+
+        # Make apparent photometric SED with photometry
+        phot_array = np.array(self.photometry[['eff','app_flux','app_flux_unc']])
+        phot_array = phot_array[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
+        self.app_phot_SED = [phot_array[i]*Q for i,Q in zip(['eff','app_flux','app_flux_unc'],self.units)]
+
+        # Make absolute photometric SED with photometry
+        phot_array = np.array(self.photometry[['eff','abs_flux','abs_flux_unc']])
+        phot_array = phot_array[(self.photometry['abs_flux']>0)&(self.photometry['abs_flux_unc']>0)]
+        self.abs_phot_SED = [phot_array[i]*Q for i,Q in zip(['eff','abs_flux','abs_flux_unc'],self.units)]
+        
+    def _calibrate_spectra(self):
+        """
+        Create composite spectra and flux calibrate
+        """
+        # Group overlapping spectra and stitch together where possible
+        # to form peacewise spectrum for flux calibration
+        self.stitched_spectra = []
+        if len(self.spectra) > 1:
+            groups = u.group_spectra(self.spectra)
+            for group in groups:
+                composite = u.make_composite(group)
+                self.stitched_spectra.append(composite)
+                
+        # If one or none, no need to make composite
+        elif len(self.spectra) == 1:
+            self.stitched_spectra = self.spectra
             
+        # If no spectra, forget it
+        else:
+            print('No spectra available for SED.')
+            
+        # # Renormalize the stitched spectra
+        # for n,st_spec in enumerate(self.stitched_spectra):
+        #     self.stitched_spectra[n] = u.renorm()
         
     # def from_database(self, db, from_dict=None):
     #     """
@@ -593,66 +730,23 @@ class SED(object):
         """
         Make the SED
         """
+        # # Set up empty blackbody fit
+        # self.blackbody = None
+        # self.Teff_bb = None
+        # self.bb_source = None
+        #
+        # # Fit blackbody to the photometry
+        # self.fit_blackbody()
         
-        # =====================================================================
-        # Photometry
-        # =====================================================================
-        
-        # Punt if no photometry
-        if len(self.photometry)==0:
             
-            print('\nNo photometry for this source.')
-            
-        else:
-            self.process_photometry(**kwargs)
-            
-        # Make apparent photometric SED from photometry with uncertainties
-        with_unc = self.photometry[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
-        self.app_phot_SED = np.array([np.array([np.nanmean(with_unc.loc[b][col].value) for b in list(set(with_unc['band']))]) for col in ['eff','app_flux','app_flux_unc']])
-        WP0, FP0, EP0 = u.finalize_spec(self.app_phot_SED, wave_units=self.wave_units, flux_units=self.flux_units)
-        
-        # =====================================================================
-        # Blackbody fit
-        # =====================================================================
-        
-        # Set up empty blackbody fit
-        self.blackbody = None
-        self.Teff_bb = None
-        self.bb_source = None
-        
-        # Fit blackbody to the photometry
-        self.fit_blackbody()
-        
-        
-        # =====================================================================
-        # Construct SED
-        # =====================================================================
-        
-        # Group overlapping spectra and make composites where possible
-        # to form peacewise spectrum for flux calibration
-        if len(self.processed_spectra) > 1:
-            groups, piecewise = u.group_spectra(self.processed_spectra), []
-            for group in groups:
-                composite = u.make_composite([[spec[0]*self.wave_units, spec[1]*self.flux_units, spec[2]*self.flux_units] for spec in group])
-                piecewise.append(composite)
-                
-        # If only one spectrum, no need to make composite
-        elif len(self.processed_spectra) == 1:
-            piecewise = np.copy(self.processed_spectra)
-            
-        # If no spectra, forget it
-        else:
-            piecewise = []
-            print('No spectra available for SED.')
-            
-        # Splitting
-        keepers = []
-        if SED_split:
-            for pw in piecewise:
-                wavs = list(filter(None, [np.where(pw[0]<i)[0][-1] if pw[0][0]<i and pw[0][-1]>i else None for i in SED_split]))
-                keepers += map(list, zip(*[np.split(i, list(wavs)) for i in pw]))
-                
-            piecewise = np.copy(keepers)
+        # # Splitting
+        # keepers = []
+        # if SED_split:
+        #     for pw in piecewise:
+        #         wavs = list(filter(None, [np.where(pw[0]<i)[0][-1] if pw[0][0]<i and pw[0][-1]>i else None for i in SED_split]))
+        #         keepers += map(list, zip(*[np.split(i, list(wavs)) for i in pw]))
+        #
+        #     piecewise = np.copy(keepers)
             
         # Create Rayleigh Jeans Tail
         RJ_wav = np.arange(np.min([self.app_phot_SED[0][-1],12.]), 500, 0.1)*q.um

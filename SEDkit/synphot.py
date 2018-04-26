@@ -1,3 +1,4 @@
+import warnings
 import pysynphot as ps
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,22 +7,16 @@ import itertools
 import glob
 import astropy.table as at
 import astropy.io.ascii as asc
+from svo_filters import svo
 from pkg_resources import resource_filename
 
 # Area of the telescope has to be in centimeters2
-ps.setref(area=250000.)
+# ps.setref(area=250000.)
 
-FILT_PATH = resource_filename('SEDkit', 'data/filters/')
+FILTERS = svo.filters()
+warnings.simplefilter('ignore')
 
-# class bandpass(ps.ArrayBandpass):
-#     """
-#     A class that inherits from pysynphot and adds uncertainty handling
-#     """
-#     def __init__(self, band):
-#         pass
-        
-
-def bandpass(filt, inst, filt_dir=FILT_PATH):
+def bandpass(filt):
     """
     Creates a pysynphot bandpass with the given filter
     
@@ -29,24 +24,21 @@ def bandpass(filt, inst, filt_dir=FILT_PATH):
     ----------
     filt: str
         The filter name
-    inst: str
-        The instrument name
-    filt_dir: str
-        The directory of filters to look in
     
     Returns
     -------
     pysynphot.spectrum.ArraySpectralElement
         The bandpass object
     """
-    # Get the filename
-    filename = 'JWST_{}.{}.dat.txt'.format(inst.upper(),filt.upper())
-    
-    # Read the file
-    wave, thru = np.genfromtxt(os.path.join(filt_dir,filename), unpack=True)
+    # Get the throughput from svo_filters
+    filt = svo.Filter(filt)
+    wave, thru = filt.rsr
     
     # Create the bandpass
-    bandpass = ps.ArrayBandpass(wave=wave, throughput=thru, waveunits='angstrom', name=filt)
+    bandpass = ps.ArrayBandpass(wave=wave, throughput=thru, waveunits='um', name=filt)
+    
+    # Add the SVO filter to the bandpass object
+    bandpass.svo = filt
     
     return bandpass
 
@@ -83,7 +75,7 @@ def synthetic_magnitude(spectrum, bandpass, plot=False):
     
     return round(mag, 3)
 
-def mag_table(spectra=None, bandpasses=FILT_PATH, models='phoenix', jmag=10, save=None):
+def mag_table(spectra=None, bandpasses=FILTERS, models='phoenix', jmag=10, save=None):
     """
     Calculate the magnitude of all given spectra in all given bandpasses
     

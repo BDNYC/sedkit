@@ -12,47 +12,9 @@ import astropy.constants as ac
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
+import scipy.optimize as opt
 from svo_filters import svo
 from astropy.utils.data_info import ParentDtypeInfo
-
-class ArrayWrapper(object):
-    """
-    Minimal mixin using a simple wrapper around a numpy array
-    """
-    info = ParentDtypeInfo()
-
-    def __init__(self, data):
-        self.data = np.array(data)
-        self.unit = data.unit if hasattr(data, 'unit') else 1
-        if 'info' in getattr(data, '__dict__', ()):
-            self.info = data.info
-
-    def __getitem__(self, item):
-        if isinstance(item, (int, np.integer)):
-            out = self.data[item]
-        else:
-            out = self.__class__(self.data[item])
-            if 'info' in self.__dict__:
-                out.info = self.info
-        return out*self.unit
-
-    def __setitem__(self, item, value):
-        self.data[item] = value
-
-    def __len__(self):
-        return len(self.data)
-
-    @property
-    def dtype(self):
-        return self.data.dtype
-
-    @property
-    def shape(self):
-        return self.data.shape
-
-    def __repr__(self):
-        return ("<{0} name='{1}' data={2}>"
-                .format(self.__class__.__name__, self.info.name, self.data))
 
 def blackbody(lam, Teff, Teff_unc='', Flam=False, radius=1*ac.R_jup, dist=10*q.pc, plot=False):
     """
@@ -268,29 +230,50 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
         
         # Calculate the flux density
         zp = q.Quantity(band.ZeroPoint, band.ZeroPointUnit)
-        f = zp*10**(mag/-2.5)
+        f = (zp*10**(mag/-2.5)).to(units)
         
         if isinstance(sig_m,str):
             sig_m = np.nan
         
-        sig_f = f*sig_m*np.log(10)/2.5
+        sig_f = (f*sig_m*np.log(10)/2.5).to(units)
             
-        return [f, sig_f]
+        return np.array([f.value, sig_f.value])*units
         
     except IOError:
-        return [np.nan, np.nan]
+        return np.array([np.nan, np.nan])*units
+
+# def composite(spectra):
+#     spectrum = spectra.pop(0)
+# 
+
+
+def fmin_spec(spec1, spec2):
+    
+    def errfunc(p, a1, a2):
+        return np.sum(a1 - a2 * p)
+    
+    # Find the minimum fit
+    flux = np.interp(spec1[0], spec2[0], spec2[1], right=0, left=0)
+    p0 = spec1[1][-1]/spec2[0][0]
+    norm = opt.fmin(errfunc, p0, args=(spec1[1], flux), xtol=1, ftol=1)
+    
+    return [spec2[0], spec2[1]*norm, spec2[2]*norm]
+
 
 def make_composite(spectra):
     """
     Creates a composite spectrum from a list of overlapping spectra
     """
-    units = [i.unit for i in spectra[0]]
     spectrum = spectra.pop(0)
+    spectra = [norm_spec(spectrum, i) for i in spectra]
+    units = [i.unit for i in spectrum]
+    spectrum = [i.value for i in spectrum]
+
     if spectra:
-        spectra = [norm_spec(spec, spectrum) for spec in spectra]
-        spectrum = [i.value for i in spectrum]
         for n, spec in enumerate(spectra):
             spec = [i.value for i in spec]
+            # spec = fmin_spec(spectrum, spec)
+            # spec = norm_spec(spectrum, spec)
             IDX, idx = np.where(np.logical_and(spectrum[0] < spec[0][-1], spectrum[0] > spec[0][0]))[0], \
                        np.where(np.logical_and(spec[0] > spectrum[0][0], spec[0] < spectrum[0][-1]))[0]
             low_res, high_res = [i[IDX] for i in spectrum], rebin_spec([i[idx] for i in spec], spectrum[0][IDX])
@@ -302,6 +285,7 @@ def make_composite(spectra):
             spec1, spec2 = [i[np.where(spec1[0] < spectrum[0][IDX][0])[0]] for i in spec1], [
                 i[np.where(spec2[0] > spectrum[0][IDX][-1])[0]] for i in spec2]
             spectrum = [np.concatenate([i[:-1], j[1:-1], k[1:]]) for i, j, k in zip(spec1, mean_spec, spec2)]
+    
     return [i * Q for i, Q in zip([i.value if hasattr(i, 'unit') else i for i in spectrum], units)]
     
 def norm_spec(spectrum, template, exclude=[]):
@@ -327,7 +311,7 @@ def norm_spec(spectrum, template, exclude=[]):
     normed_spectrum = spectrum.copy()
 
     # Smooth both spectrum and template
-    template[1], spectrum[1] = [smooth(x, 1) for x in [template[1], spectrum[1]]]
+    # template[1], spectrum[1] = [smooth(x, 1) for x in [template[1], spectrum[1]]]
 
     # Find wavelength range of overlap for array masking
     spec_mask = np.logical_and(spectrum[0] > template[0][0], spectrum[0] < template[0][-1])
