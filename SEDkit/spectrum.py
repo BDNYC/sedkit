@@ -88,6 +88,37 @@ class Spectrum(ps.ArraySpectrum):
         
         # Add the uncertainty
         self._unctable = unc
+        
+    def __add__(self, spec2):
+        """Add another Spectrum to this Spectrum and return a new Spectrum"""
+        # Get the two spectra to stitch
+        s1 = self.spectrum
+        s2 = spec2.spectrum
+        
+        # Get the indexes of overlap
+        idx1, = np.where((s1[0]<s2[0][-1])&(s1[0]>s2[0][0]))
+        idx2, = np.where((s2[0]>s1[0][0])&(s2[0]<s1[0][-1]))
+        
+        # Interpolate the higher resolution to the lower
+        s2_flux = np.interp(s1[0][idx1], s2[0][idx2], s2[1][idx2])*self.flux_units
+        s2_unc = np.interp(s1[0][idx1], s2[2][idx2], s2[2][idx2])*self.flux_units
+        
+        # Get the average
+        s3_flux = np.nanmean([s1[1][idx1],s2_flux], axis=0)*self._flux_units
+        s3_unc = np.sqrt(s1[2][idx1]**2 + s2_unc**2)
+        
+        # Concatenate the pieces
+        if s2[0][0]<s1[0][0]:
+            s1, s2 = s2, s1
+            idx1, idx2 = idx2, idx1
+        s3 = [s1[0][idx1], s3_flux, s3_unc]
+        s3 = [np.concatenate([i[:idx1[0]-1], j, k[idx2[-1]+1:]]) for i, j, k in zip(s1, s3, s2)]
+        s3 = [i.value*Q for i,Q in zip(s3,self.units)]
+        
+        # Make new Spectrum obj
+        spec = Spectrum(*s3)
+        
+        return spec
                 
     @property
     def unc(self):

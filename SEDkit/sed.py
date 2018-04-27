@@ -65,7 +65,7 @@ def from_ids(db, **kwargs):
 
 def testing():
     s = SED(age=(1*q.Gyr,0.1*q.Gyr), radius=(1*q.Rjup,0.02*q.Rjup), distance=(11*q.pc,1*q.pc))
-    spec1 = [np.arange(1,11)*q.um, np.array([2,3,4,5,6,4,3,5,8,4])*1E-15*q.erg/q.s/q.cm**2/q.AA, np.array([2,3,4,5,6,4,3,5,8,4])*1E-16*q.erg/q.s/q.cm**2/q.AA]
+    spec1 = [np.arange(2,12)*q.um, np.array([2,3,4,5,6,4,3,5,8,4])*1E-15*q.erg/q.s/q.cm**2/q.AA, np.array([2,3,4,5,6,4,3,5,8,4])*1E-16*q.erg/q.s/q.cm**2/q.AA]
     spec2 = [np.linspace(7,15,10)*q.um, np.array([6,3,2,4,7,4,1,4,3,6])*1E-12*q.erg/q.s/q.cm**2/q.AA, np.array([6,3,2,4,7,4,1,4,3,6])*1E-13*q.erg/q.s/q.cm**2/q.AA]
     s.add_spectrum(*spec1)
     s.add_photometry('2MASS.J', 12.3, 0.1)
@@ -534,9 +534,11 @@ class SED(object):
             else:
                 print('No spectra available for SED.')
             
-            # # Renormalize the stitched spectra
-            # for n,st_spec in enumerate(self.stitched_spectra):
-            #     self.stitched_spectra[n] = u.renorm()
+            # Renormalize the stitched spectra
+            for n,st_spec in enumerate(self.stitched_spectra):
+                self.stitched_spectra[n] = st_spec.norm_to_mags(self.photometry)
+                
+            
         
     # =========================================================================
     # =================== Plotting ============================================
