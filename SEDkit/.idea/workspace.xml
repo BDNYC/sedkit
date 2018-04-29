@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="d0014980-b391-4344-ad1e-07ec9da226cb" name="Default" comment="">
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/SEDs.py" afterPath="$PROJECT_DIR$/SEDs.py" />
     </list>
     <ignored path="SEDkit.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -354,7 +353,14 @@
       <option name="project" value="LOCAL" />
       <updated>1525045985190</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Updated NYMG ages">
+      <created>1525046021965</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1525046021965</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="ToolWindowManager">
@@ -424,7 +430,8 @@
     <MESSAGE value="Added the updated versions from Joe to use for the subdwarfs" />
     <MESSAGE value="edits to remove hard coding of models in MakeSEDs" />
     <MESSAGE value="Added pan-starrs griyz photometry to filters" />
-    <option name="LAST_COMMIT_MESSAGE" value="Added pan-starrs griyz photometry to filters" />
+    <MESSAGE value="Updated NYMG ages" />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated NYMG ages" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager />
