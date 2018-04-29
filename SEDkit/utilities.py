@@ -32,6 +32,8 @@ def filter_info(band):
     *band*
         Name of filter band (e.g. 'J' from 2MASS, 'W1' from WISE, etc.) or list of filter systems (e.g. ['SDSS',
         '2MASS','WISE'])
+
+    **Don't forget to add the textfile of the photometric band to the data file that is used by the get_filters function
     """
     Filters = {
         "GALEX_FUV"  : {'eff'      : 0.154226, 'min': 0.134032, 'max': 0.180643, 'zp': 6.486734e-09,
@@ -179,7 +181,18 @@ def filter_info(band):
         "HST_F814W"  : {'eff'      : 0.790114, 'min': 0.697809, 'max': 0.968369, 'zp': 1.171e-9,
                         'zp_photon': 5.055354e+02, 'toVega': 0, 'ext': 0.65, 'system': 'HST'},
         "HST_F850LP" : {'eff'      : 0.963736, 'min': 0.832000, 'max': 1.100000, 'zp': 8.069014e-10,
-                        'zp_photon': 4.820083e+02, 'toVega': 0, 'ext': 0.46, 'system': 'HST'}}
+                        'zp_photon': 4.820083e+02, 'toVega': 0, 'ext': 0.46, 'system': 'HST'},
+
+        "PS_g"       : {'eff': 0.477562, 'min': 0.3943, 'max': 0.5593, 'zp': 5.139e-9, 'zp_photon': 1236.02,
+                        'toVega': -0.0801, 'ext': 1.19, 'system': 'PAN-STARRS'},
+        "PS_r"       : {'eff': 0.62195, 'min': 0.5386, 'max': 0.7036, 'zp': 2.515e-9, 'zp_photon': 776.35,
+                        'toVega': 0.154, 'ext': 0.89, 'system': 'PAN-STARRS'},
+        "PS_i"       : {'eff': 0.74846, 'min': 0.6778, 'max': 0.8304, 'zp':1.383e-9, 'zp_photon': 521.43,
+                        'toVega': 0.369, 'ext': 0.67, 'system': 'PAN-STARRS'},
+        "PS_y"       : {'eff': 0.96031, 'min': 0.9100, 'max': 1.0838, 'zp': 7.171e-10, 'zp_photon': 346.87,
+                        'toVega':0.541 , 'ext': 0.46, 'system': 'PAN-STARRS'},
+        "PS_z"       : {'eff': 0.86578, 'min': 0.8028, 'max': 0.9346, 'zp': 9.091e-10, 'zp_photon':633.28,
+                        'toVega':0.509, 'ext': 0.53, 'system': 'PAN-STARRS'}}
 
     if isinstance(band, list):
         for i in Filters.keys():
@@ -247,9 +260,9 @@ def flux2mag(band, f, sig_f='', photon=False, filter_dict=''):
 
 def get_filters(filter_directories=[package + '/Data/Filters/{}/'.format(i) for i in
                                     ['2MASS', 'SDSS', 'WISE', 'IRAC', 'MIPS', 'FourStar', 'HST', 'Johnson', 'Cousins',
-                                     'MKO', 'GALEX', 'DENIS', 'Gaia', 'DES']],
+                                     'MKO', 'GALEX', 'DENIS', 'Gaia', 'DES','PAN-STARRS']],
                 systems=['2MASS', 'SDSS', 'WISE', 'IRAC', 'MIPS', 'FourStar', 'HST', 'Johnson', 'Cousins', 'MKO',
-                         'GALEX', 'DENIS', 'Gaia', 'DES']):
+                         'GALEX', 'DENIS', 'Gaia', 'DES', 'PAN-STARRS']):
     """
     Grabs all the .txt spectral response curves and returns a dictionary of wavelength array [um], filter response [
     unitless], effective, min and max wavelengths [um], and zeropoint [erg s-1 cm-2 A-1].
