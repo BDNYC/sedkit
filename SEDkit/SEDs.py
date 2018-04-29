@@ -418,7 +418,7 @@ def NYMGs():
          'Carina': {'age_min': 38, 'age_max': 56, 'age_ref': 0},  # Bell et. al 2015
          'Argus': {'age_min': 30, 'age_max': 50, 'age_ref': 0},   # Malo 2013
          'AB Dor': {'age_min': 130, 'age_max': 200, 'age_ref': 0},  # Bell et. al 2015
-         'Pleiades': {'age_min': 110, 'age_max': 130, 'age_ref': 0}}  # Malo 2013
+         'Pleiades': {'age_min': 107, 'age_max': 117, 'age_ref': 0}}  # Dahm 2015
     return D
 
 
