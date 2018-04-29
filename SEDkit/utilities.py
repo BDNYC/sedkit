@@ -311,7 +311,7 @@ def norm_spec(spectrum, template, exclude=[]):
     normed_spectrum = spectrum.copy()
 
     # Smooth both spectrum and template
-    # template[1], spectrum[1] = [smooth(x, 1) for x in [template[1], spectrum[1]]]
+    template[1], spectrum[1] = [smooth(x, 1) for x in [template[1], spectrum[1]]]
 
     # Find wavelength range of overlap for array masking
     spec_mask = np.logical_and(spectrum[0] > template[0][0], spectrum[0] < template[0][-1])

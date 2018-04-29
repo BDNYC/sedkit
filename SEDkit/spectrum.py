@@ -9,6 +9,7 @@ import numpy as np
 import astropy.units as q
 import pysynphot as ps
 import copy
+from bokeh.plotting import figure, output_file, show, save
 
 class Spectrum(ps.ArraySpectrum):
     """A spectrum object to add uncertainty handling to ps.ArraySpectrum
@@ -146,6 +147,16 @@ class Spectrum(ps.ArraySpectrum):
         
         return spec
         
+    def integral(self, units=q.erg/q.s/q.cm**2):
+        """Include uncertainties in integrate() method"""
+        # Caluclate the integrated flux
+        value = self.integrate()*units
+        
+        # Apply it to the uncertainties
+        unc = (np.sqrt(np.nansum(self.unc*np.gradient(self.wave))**2)*self.flux_units*self.wave_units).to(units)
+        
+        return value, unc
+        
     def norm_to_mags(self, photometry):
         """
         Normalize the spectrum to the given bandpasses
@@ -246,3 +257,16 @@ class Spectrum(ps.ArraySpectrum):
         # Set the flux_units!
         self._flux_units = flux_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
+        
+    def plot(self, fig=None, **kwargs):
+        """Plot the spectrum"""
+        # Make the figure
+        if fig is None:
+            fig = figure()
+            fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
+            fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
+        
+        # Plot each spectrum
+        fig.line(self.wave, self.flux)
+            
+        show(fig)
