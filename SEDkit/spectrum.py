@@ -12,7 +12,7 @@ import copy
 from bokeh.plotting import figure, output_file, show, save
 
 class Spectrum(ps.ArraySpectrum):
-    """A spectrum object to add uncertainty handling to ps.ArraySpectrum
+    """A spectrum object to add uncertainty handling and spectrum stitching to ps.ArraySpectrum
     """
     def __init__(self, wave, flux, unc=None, snr=10, snr_trim=5, trim=[]):
         """Store the spectrum and units separately
@@ -103,6 +103,10 @@ class Spectrum(ps.ArraySpectrum):
         SEDkit.spectrum.Spectrum
             A new spectrum object with the input spectra stitched together
         """
+        # If None is added, just return a copy
+        if spec2 is None:
+            return Spectrum(*self.spectrum)
+            
         try:
             
             # Make spec2 the same units
@@ -129,14 +133,14 @@ class Spectrum(ps.ArraySpectrum):
             else:
             
                 # Get the left segemnt
-                left = s1[:, s1[0]<s2[0][0]]
+                left = s1[:, s1[0]<=s2[0][0]]
                 if not np.any(left):
-                    left = s2[:, s2[0]<s1[0][0]]
+                    left = s2[:, s2[0]<=s1[0][0]]
                 
                 # Get the right segment
-                right = s1[:, s1[0]>s2[0][-1]]
+                right = s1[:, s1[0]>=s2[0][-1]]
                 if not np.any(right):
-                    right = s2[:, s2[0]>s1[0][-1]]
+                    right = s2[:, s2[0]>=s1[0][-1]]
                 
                 # Get the overlapping segements
                 o1 = s1[:, np.where((s1[0]<right[0][0])&(s1[0]>left[0][-1]))].squeeze()
@@ -167,7 +171,7 @@ class Spectrum(ps.ArraySpectrum):
             
             return Spectrum(*spec)
             
-        except:
+        except IOError:
             raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
             
     @property
