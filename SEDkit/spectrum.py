@@ -9,6 +9,7 @@ import numpy as np
 import astropy.units as q
 import pysynphot as ps
 import copy
+from uncertainties import unumpy as unp
 from bokeh.plotting import figure, output_file, show, save
 
 class Spectrum(ps.ArraySpectrum):
@@ -192,23 +193,27 @@ class Spectrum(ps.ArraySpectrum):
             return norm
         
         # Apply it to the uncertainties
-        spec.unc = self.unc*norm
+        unc = self.unc*norm
         
         # Store spectrum with units
-        data = [spec.wave, spec.flux, spec.unc]
-        spec.spectrum = [i*Q for i,Q in zip(data, self.units)]
+        data = [spec.wave, spec.flux, unc]
         
-        return spec
+        return Spectrum(*[i*Q for i,Q in zip(data, self.units)])
         
     def integral(self, units=q.erg/q.s/q.cm**2):
         """Include uncertainties in integrate() method"""
-        # Caluclate the integrated flux
-        value = self.integrate()*units
+        # Calculate the factor for the given units
+        m = (self.flux_units*self.wave_units).to(units)
         
-        # Apply it to the uncertainties
-        unc = (np.sqrt(np.nansum(self.unc*np.gradient(self.wave))**2)*self.flux_units*self.wave_units).to(units)
+        # Calculate integral and uncertainty
+        u_arr = unp.uarray(self.data[1:])
+        value = np.trapz(u_arr, x=self.wave)
         
-        return value, unc
+        # Apply the units
+        val = float(unp.nominal_values(value)*m)*units
+        unc = float(unp.std_devs(value)*m)*units
+        
+        return val, unc
         
     def norm_to_mags(self, photometry):
         """
@@ -235,11 +240,7 @@ class Spectrum(ps.ArraySpectrum):
         # Get the average normalization factor
         norm = np.nanmean(norms)
         
-        spec = copy.copy(self)
-        spec._fluxtable = spec.flux*norm
-        spec._unctable = spec.unc*norm
-        
-        return spec
+        return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
         
     @property
     def spectrum(self):

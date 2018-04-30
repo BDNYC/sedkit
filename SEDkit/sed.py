@@ -10,6 +10,7 @@ import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
 import pysynphot as ps
+from uncertainties import unumpy as unp
 from astropy.modeling.models import custom_model
 from astropy.modeling import models, fitting
 from astropy.analytic_functions import blackbody_lambda
@@ -572,8 +573,7 @@ class SED(object):
 
     @staticmethod
     def group_spectra(spectra):
-        """
-        Puts a list of *spectra* into groups with overlapping wavelength arrays
+        """Puts a list of *spectra* into groups with overlapping wavelength arrays
         """
         groups, idx = [], []
         for N, S in enumerate(spectra):
@@ -587,8 +587,7 @@ class SED(object):
 
 
     def _calibrate_spectra(self):
-        """
-        Create composite spectra and flux calibrate
+        """Create composite spectra and flux calibrate
         """
         if self.spectra is not None and len(self.spectra)>0:
             
@@ -611,7 +610,7 @@ class SED(object):
             else:
                 print('No spectra available for SED.')
             
-            # Renormalize the stitched spectra
+            # Renormalize the stitched spectra (NOT WORKING?)
             self.stitched_spectra = [i.norm_to_mags(self.photometry) for i in self.stitched_spectra]
                 
             # Make apparent spectral SED
@@ -628,7 +627,8 @@ class SED(object):
             
             
     def make_sed(self):
-        """Construct the SED"""
+        """Construct the SED
+        """
         # Make a Wein tail that goes to (almost) zero flux at (almost) zero wavelength
         self.wein = sp.Spectrum(np.array([0.00001])*self.wave_units, np.array([1E-30])*self.flux_units, np.array([1E-30])*self.flux_units)
         
@@ -655,27 +655,30 @@ class SED(object):
                 self.app_specphot_SED = sp.Spectrum(WP, FP, EP)
         else:
             self.app_specphot_SED = self.app_phot_SED
-       
+
         # Construct full app_SED
-        self.app_SED = np.sum(self.wein, self.app_specphot_SED, self.rj)
-       
+        self.app_SED = np.sum([self.wein, self.app_specphot_SED, self.rj])
+
         # Flux calibrate SEDs
         if self.distance is not None:
             self.abs_SED = u.flux_calibrate(self.app_SED.flux, self.distance[0], self.app_SED.unc, self.distance[1])
-       
+
         # Calculate Fundamental Params
-        self.fundamental_params(**kwargs)
+        self.fundamental_params()
         
     def get_fbol(self, units=q.erg/q.s/q.cm**2):
-        """
-        Calculate the bolometric flux of the SED
+        """Calculate the bolometric flux of the SED
+        
+        Parameters
+        ----------
+        units: astropy.units.quantity.Quantity
+            The target untis for fbol
         """
         # Integrate the SED to get fbol
         self.fbol = self.app_SED.integral(units=units)
         
     def get_mbol(self, L_sun=3.86E26*q.W, Mbol_sun=4.74):
-        """
-        Calculate the apparent bolometric magnitude of the SED
+        """Calculate the apparent bolometric magnitude of the SED
         
         Parameters
         ==========
@@ -698,8 +701,7 @@ class SED(object):
         self.mbol = mbol, mbol_unc
         
     def get_Lbol(self):
-        """
-        Calculate the bolometric luminosity of the SED
+        """Calculate the bolometric luminosity of the SED
         """
         # Caluclate fbol if not present
         if not hasattr(self, 'fbol'):
@@ -711,7 +713,7 @@ class SED(object):
             Lbol_sun = round(np.log10((Lbol/ac.L_sun).decompose().value), 3)
             
             # Calculate Lbol_unc
-            Lbol_unc = self.Lbol*np.sqrt((self.fbol[1]/self.fbol[0]).value**2+(2*self.distance[1]/self.distance[0]).value**2)
+            Lbol_unc = Lbol*np.sqrt((self.fbol[1]/self.fbol[0]).value**2+(2*self.distance[1]/self.distance[0]).value**2)
             Lbol_sun_unc = round(abs(Lbol_unc/(Lbol*np.log(10))).value, 3)
             
             # Update the attributes
@@ -719,8 +721,7 @@ class SED(object):
             self.Lbol_sun = Lbol_sun, Lbol_sun_unc
             
     def get_Mbol(self):
-        """
-        Calculate the absolute bolometric magnitude of the SED
+        """Calculate the absolute bolometric magnitude of the SED
         """
         # Calculate mbol if not present
         if not hasattr(self, 'mbol'):
@@ -737,8 +738,7 @@ class SED(object):
             self.Mbol = Mbol, Mbol_unc
             
     def get_Teff(self):
-        """
-        Calculate the effective temperature
+        """Calculate the effective temperature
         """
         # Calculate Teff
         if self.distance is not None and self.radius is not None:
@@ -780,24 +780,6 @@ class SED(object):
         # Plot the photometry without uncertainties
         data = self.photometry[self.photometry[pre+'_flux_unc']==np.nan]
         errorbar(self.fig, data['eff'], data[pre+'_flux'], point_kwargs={'fill_color':'white', 'line_color':'navy'}, **kwargs)
-        
-    # def plot(self, pre='app', scale=['log', 'log'], photometry=True, spectra=True, integral=False, syn_photometry=True, **kwargs):
-    #     """Plot the SED"""
-    #     # Make the figure with axis labels
-    #     self.fig = figure(x_axis_type=scale[0], y_axis_type=scale[1])
-    #     self.fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
-    #     self.fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
-    #
-    #     # Plot the stitched spectra
-    #     if spectra:
-    #         getattr(self, '{}_spec_SED'.format(pre)).plot(fig=self.fig)
-    #
-    #     # Plot the photometry
-    #     if photometry:
-    #         self.plot_photometry(pre=pre)
-    #
-    #     # Show the figure
-    #     show(self.fig)
     
     def plot(self, app=True, photometry=True, spectra=True, integral=False, syn_photometry=True, blackbody=True, scale=['log','log'], output=False, **kwargs):
         """
