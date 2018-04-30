@@ -649,8 +649,10 @@ class SED(object):
                         covered.append(idx)
             WP, FP, EP = [[i for n,i in enumerate(A) if n not in covered]*Q for A,Q in zip(self.app_phot_SED.spectrum, self.units)]
             
-            # DO SOMETHING IF THIS IS AN EMPTY SPECTRUM!
-            self.app_specphot_SED = sp.Spectrum(WP, FP, EP)
+            if len(WP)==0:
+                self.app_specphot_SED = None
+            else:
+                self.app_specphot_SED = sp.Spectrum(WP, FP, EP)
         else:
             self.app_specphot_SED = self.app_phot_SED
        
@@ -779,27 +781,28 @@ class SED(object):
         data = self.photometry[self.photometry[pre+'_flux_unc']==np.nan]
         errorbar(self.fig, data['eff'], data[pre+'_flux'], point_kwargs={'fill_color':'white', 'line_color':'navy'}, **kwargs)
         
-    def plot(self, pre='app', scale=['log', 'log'], **kwargs):
-        """Plot the SED"""
-        # Make he figure
-        self.fig = figure(x_axis_type=scale[0], y_axis_type=scale[1])
-        
-        # Plot the stitched spectra
-        getattr(self, '{}_spec_SED'.format(pre)).plot(fig=self.fig)
-       
-        # Plot the photometry
-        self.plot_photometry(pre=pre)
-        
-        # Set the axis labels
-        self.fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
-        self.fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
-        
-        show(self.fig)
+    # def plot(self, pre='app', scale=['log', 'log'], photometry=True, spectra=True, integral=False, syn_photometry=True, **kwargs):
+    #     """Plot the SED"""
+    #     # Make the figure with axis labels
+    #     self.fig = figure(x_axis_type=scale[0], y_axis_type=scale[1])
+    #     self.fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
+    #     self.fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
+    #
+    #     # Plot the stitched spectra
+    #     if spectra:
+    #         getattr(self, '{}_spec_SED'.format(pre)).plot(fig=self.fig)
+    #
+    #     # Plot the photometry
+    #     if photometry:
+    #         self.plot_photometry(pre=pre)
+    #
+    #     # Show the figure
+    #     show(self.fig)
     
-    # def plot(self, app=True, photometry=True, spectra=True, integrals=False, syn_photometry=True, blackbody=True, scale=['log','log'], bokeh=True, output=False, **kwargs):
+    def plot(self, app=True, photometry=True, spectra=True, integral=False, syn_photometry=True, blackbody=True, scale=['log','log'], output=False, **kwargs):
         """
         Plot the SED
-        
+
         Parameters
         ----------
         app: bool
@@ -820,7 +823,7 @@ class SED(object):
             Plot in Bokeh
         output: bool
             Just return figure, don't draw plot
-        
+
         Returns
         =======
         bokeh.models.figure
@@ -828,90 +831,93 @@ class SED(object):
         """
         # Distinguish between apparent and absolute magnitude
         pre = 'app_' if app else 'abs_'
-        
+
         # Calculate reasonable axis limits
         spec_SED = getattr(self, pre+'spec_SED')
         phot_SED = np.array([np.array([np.nanmean(self.photometry.loc[b][col].value) for b in list(set(self.photometry['band']))]) for col in ['eff',pre+'flux',pre+'flux_unc']])
-        
+
         # Check for min and max phot data
         try:
             mn_xp, mx_xp, mn_yp, mx_yp = np.nanmin(phot_SED[0]), np.nanmax(phot_SED[0]), np.nanmin(phot_SED[1]), np.nanmax(phot_SED[1])
         except:
             mn_xp, mx_xp, mn_yp, mx_yp = 0.3, 18, 0, 1
-        
+
         # Check for min and max spec data
         try:
             mn_xs, mx_xs = np.nanmin(spec_SED[0].value), np.nanmax(spec_SED[0].value)
             mn_ys, mx_ys = np.nanmin(spec_SED[1].value[spec_SED[1].value>0]), np.nanmax(spec_SED[1].value[spec_SED[1].value>0])
         except:
             mn_xs, mx_xs, mn_ys, mx_ys = 0.3, 18, 999, -999
-            
+
         mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp,mn_xs]), np.nanmax([mx_xp,mx_xs]), np.nanmin([mn_yp,mn_ys]), np.nanmax([mx_yp,mx_ys])
-            
+
         # TOOLS = 'crosshair,resize,reset,hover,box,save'
-        fig = figure(plot_width=1000, plot_height=600, title=self.name, y_axis_type=scale[1], x_axis_type=scale[0], x_axis_label='Wavelength [{}]'.format(self.wave_units), y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
-        
+        self.fig = figure(plot_width=1000, plot_height=600, title=self.name, 
+                     y_axis_type=scale[1], x_axis_type=scale[0], 
+                     x_axis_label='Wavelength [{}]'.format(self.wave_units), 
+                     y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
+
         # Plot spectra
-        if spectra:
+        if spectra and self.spectra is not None:
             spec_SED = getattr(self, pre+'spec_SED')
-            source = ColumnDataSource(data=dict(x=spec_SED[0], y=spec_SED[1], z=spec_SED[2]))
+            source = ColumnDataSource(data=dict(x=spec_SED.wave, y=spec_SED.flux, z=spec_SED.unc))
             hover = HoverTool(tooltips=[( 'wave', '$x'),( 'flux', '$y'),('unc','$z')], mode='vline')
-            fig.add_tools(hover)
-            fig.line('x', 'y', source=source, legend='Spectra')
-            
+            self.fig.add_tools(hover)
+            self.fig.line('x', 'y', source=source, legend='Spectra')
+
         # Plot photometry
-        if photometry:
-            
+        if photometry and self.photometry is not None:
+
             # Plot points with errors
             pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff',pre+'flux',pre+'flux_unc']) if not any([np.isnan(i) for i in [x,y,z]])]).T
             try:
-                errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Photometry')
+                errorbar(self.fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Photometry')
             except:
                 pass
-                
+
             # Plot saturated photometry
             pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff','app_flux','app_flux_unc']) if np.isnan(z) and not np.isnan(y)]).T
             try:
-                errorbar(fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
+                errorbar(self.fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
             except:
                 pass
-                
-        # Plot synthetic photometry
-        if syn_photometry and self.syn_photometry:
-            
-            # Plot points with errors
-            pts = np.array([(x,y,z) for x,y,z in np.array(self.syn_photometry['eff',pre+'flux',pre+'flux_unc']) if not np.isnan(z)]).T
-            try:
-                errorbar(fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
-            except:
-                pass
-        
-        # Plot the SED with linear interpolation completion
-        if integrals:
-            full_SED = getattr(self, pre+'SED')
-            fig.line(full_SED[0].value, full_SED[1].value, line_color='black', alpha=0.3, legend='Integral Surface')
-            # plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
-            
-        if blackbody and self.blackbody:
-            fit_sed = getattr(self, self.bb_source)
-            fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
-            bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
-            bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-            bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
-            bb_wav = np.linspace(0.2, 30, 1000)*q.um
-            bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-            # print(bb_norm,bb_flx)
-            fig.line(bb_wav.value, bb_flx.value*bb_norm, line_color='red', legend='{} K'.format(self.Teff_bb))
-            
-        fig.legend.location = "top_right"
-        fig.legend.click_policy = "hide"
-        fig.x_range = Range1d(mn_x*0.8, mx_x*1.2)
-        fig.y_range = Range1d(mn_y*0.5, mx_y*2)
-            
+
+        # # Plot synthetic photometry
+        # if syn_photometry and self.syn_photometry is not None:
+        #
+        #     # Plot points with errors
+        #     pts = np.array([(x,y,z) for x,y,z in np.array(self.syn_photometry['eff',pre+'flux',pre+'flux_unc']) if not np.isnan(z)]).T
+        #     try:
+        #         errorbar(self.fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
+        #     except:
+        #         pass
+        #
+        # # Plot the SED with linear interpolation completion
+        # if integral:
+        #     full_SED = getattr(self, pre+'SED')
+        #     self.fig.line(full_SED[0].value, full_SED[1].value, line_color='black', alpha=0.3, legend='Integral Surface')
+        #     # plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
+        #
+        # if blackbody and self.blackbody:
+        #     fit_sed = getattr(self, self.bb_source)
+        #     fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
+        #     bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
+        #     bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+        #     bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
+        #     bb_wav = np.linspace(0.2, 30, 1000)*q.um
+        #     bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+        #     # print(bb_norm,bb_flx)
+        #     fig.line(bb_wav.value, bb_flx.value*bb_norm, line_color='red', legend='{} K'.format(self.Teff_bb))
+
+        self.fig.legend.location = "top_right"
+        self.fig.legend.click_policy = "hide"
+        self.fig.x_range = Range1d(mn_x*0.8, mx_x*1.2)
+        self.fig.y_range = Range1d(mn_y*0.5, mx_y*2)
+
         if not output:
-            show(fig)
-        
-        return fig
+            show(self.fig)
+
+        return self.fig
 
     def write(self, dirpath, app=False, spec=True, phot=False):
         """

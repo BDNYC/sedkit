@@ -91,35 +91,73 @@ class Spectrum(ps.ArraySpectrum):
         self._unctable = unc
         
     def __add__(self, spec2):
-        """Add another Spectrum to this Spectrum and return a new Spectrum"""
+        """Add the spectra of this and another Spectrum object
+        
+        Parameters
+        ----------
+        spec2: SEDkit.spectrum.Spectrum
+            The spectrum object to add
+        
+        Returns
+        -------
+        SEDkit.spectrum.Spectrum
+            A new spectrum object
+        """
+        # Make sure the spectrum to be added is also a Spectrum object (NOT WORKING?!)
+        # if not isinstance(spec2, type(self)):
+        #     raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
+            
+        # Make spec2 the same units
+        spec2.wave_units = self.wave_units
+        spec2.flux_units = self.flux_units
+        
         # Get the two spectra to stitch
-        s1 = self.spectrum
-        s2 = spec2.spectrum
+        s1 = self.data
+        s2 = spec2.data
         
-        # Get the indexes of overlap
-        idx1, = np.where((s1[0]<s2[0][-1])&(s1[0]>s2[0][0]))
-        idx2, = np.where((s2[0]>s1[0][0])&(s2[0]<s1[0][-1]))
+        # Determine if overlapping
+        overlap = True
+        if s1[0][-1]>s1[0][0]>s2[0][-1] or s2[0][-1]>s2[0][0]>s1[0][-1]:
+            overlap = False
+            
+        # Concatenate and order two segments if no overlap
+        if not overlap:
+            
+            # Concatenate arrays and sort by wavelength
+            spec = np.concatenate([s1,s2], axis=1).T
+            spec = spec[np.argsort(spec[:, 0])].T
+            
+        # Otherwise there are three segments, (x, x+y, y)
+        else:
+            
+            # Get the indexes of overlap
+            idx1, = np.where((s1[0]<s2[0][-1])&(s1[0]>s2[0][0]))
+            idx2, = np.where((s2[0]>s1[0][0])&(s2[0]<s1[0][-1]))
+            
+            # Make lower resolution s1
+            if len(idx1)>len(idx2):
+                s1, s2 = s2, s1
+                idx1, idx2 = idx2, idx1
+                
+            # Interpolate s2 to s1
+            s2_flux = np.interp(s1[0][idx1], s2[0][idx2], s2[1][idx2])
+            s2_unc = np.interp(s1[0][idx1], s2[2][idx2], s2[2][idx2])
+            
+            # Get the average
+            s3_flux = np.nanmean([s1[1][idx1],s2_flux], axis=0)
+            s3_unc = np.sqrt(s1[2][idx1]**2 + s2_unc**2)
+            s3 = np.array([s1[0][idx1], s3_flux, s3_unc])
+            
+            # Concatenate all the pieces and sort
+            keep_1, = [i for i in range(len(s1.shape[1])) if i not in idx1]
+            keep_2, = [i for i in range(len(s2.shape[1])) if i not in idx2]
+            spec = np.concatenate([s1[:,keep_1], s2[:, keep_2], s3], axis=1).T
+            spec = spec[np.argsort(spec[:, 0])].T
         
-        # Interpolate the higher resolution to the lower
-        s2_flux = np.interp(s1[0][idx1], s2[0][idx2], s2[1][idx2])*self.flux_units
-        s2_unc = np.interp(s1[0][idx1], s2[2][idx2], s2[2][idx2])*self.flux_units
+        # Add units
+        spec = [i*Q for i,Q in zip(spec, self.units)]
         
-        # Get the average
-        s3_flux = np.nanmean([s1[1][idx1],s2_flux], axis=0)*self._flux_units
-        s3_unc = np.sqrt(s1[2][idx1]**2 + s2_unc**2)
-        
-        # Concatenate the pieces
-        if s2[0][0]<s1[0][0]:
-            s1, s2 = s2, s1
-            idx1, idx2 = idx2, idx1
-        s3 = [s1[0][idx1], s3_flux, s3_unc]
-        s3 = [np.concatenate([i[:idx1[0]-1], j, k[idx2[-1]+1:]]) for i, j, k in zip(s1, s3, s2)]
-        s3 = [i.value*Q for i,Q in zip(s3,self.units)]
-        
-        # Make new Spectrum obj
-        spec = Spectrum(*s3)
-        
-        return spec
+        return Spectrum(*spec)
                 
     @property
     def unc(self):
@@ -192,8 +230,13 @@ class Spectrum(ps.ArraySpectrum):
     def spectrum(self):
         """Store the spectrum with units
         """
-        data = [self.wave, self.flux, self.unc]
-        return [i*Q for i,Q in zip(data, self.units)]
+        return [i*Q for i,Q in zip(self.data, self.units)]
+        
+    @property
+    def data(self):
+        """Store the spectrum without units
+        """
+        return np.array([self.wave, self.flux, self.unc])
         
     @property
     def wave_units(self):
