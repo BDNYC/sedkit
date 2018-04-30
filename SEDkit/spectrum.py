@@ -101,64 +101,75 @@ class Spectrum(ps.ArraySpectrum):
         Returns
         -------
         SEDkit.spectrum.Spectrum
-            A new spectrum object
+            A new spectrum object with the input spectra stitched together
         """
-        # Make sure the spectrum to be added is also a Spectrum object (NOT WORKING?!)
-        # if not isinstance(spec2, type(self)):
-        #     raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
+        try:
             
-        # Make spec2 the same units
-        spec2.wave_units = self.wave_units
-        spec2.flux_units = self.flux_units
-        
-        # Get the two spectra to stitch
-        s1 = self.data
-        s2 = spec2.data
-        
-        # Determine if overlapping
-        overlap = True
-        if s1[0][-1]>s1[0][0]>s2[0][-1] or s2[0][-1]>s2[0][0]>s1[0][-1]:
-            overlap = False
+            # Make spec2 the same units
+            spec2.wave_units = self.wave_units
+            spec2.flux_units = self.flux_units
             
-        # Concatenate and order two segments if no overlap
-        if not overlap:
+            # Get the two spectra to stitch
+            s1 = self.data
+            s2 = spec2.data
             
-            # Concatenate arrays and sort by wavelength
-            spec = np.concatenate([s1,s2], axis=1).T
-            spec = spec[np.argsort(spec[:, 0])].T
-            
-        # Otherwise there are three segments, (x, x+y, y)
-        else:
-            
-            # Get the indexes of overlap
-            idx1, = np.where((s1[0]<s2[0][-1])&(s1[0]>s2[0][0]))
-            idx2, = np.where((s2[0]>s1[0][0])&(s2[0]<s1[0][-1]))
-            
-            # Make lower resolution s1
-            if len(idx1)>len(idx2):
-                s1, s2 = s2, s1
-                idx1, idx2 = idx2, idx1
+            # Determine if overlapping
+            overlap = True
+            if s1[0][-1]>s1[0][0]>s2[0][-1] or s2[0][-1]>s2[0][0]>s1[0][-1]:
+                overlap = False
                 
-            # Interpolate s2 to s1
-            s2_flux = np.interp(s1[0][idx1], s2[0][idx2], s2[1][idx2])
-            s2_unc = np.interp(s1[0][idx1], s2[2][idx2], s2[2][idx2])
+            # Concatenate and order two segments if no overlap
+            if not overlap:
             
-            # Get the average
-            s3_flux = np.nanmean([s1[1][idx1],s2_flux], axis=0)
-            s3_unc = np.sqrt(s1[2][idx1]**2 + s2_unc**2)
-            s3 = np.array([s1[0][idx1], s3_flux, s3_unc])
-            
-            # Concatenate all the pieces and sort
-            keep_1, = [i for i in range(len(s1.shape[1])) if i not in idx1]
-            keep_2, = [i for i in range(len(s2.shape[1])) if i not in idx2]
-            spec = np.concatenate([s1[:,keep_1], s2[:, keep_2], s3], axis=1).T
-            spec = spec[np.argsort(spec[:, 0])].T
-        
-        # Add units
-        spec = [i*Q for i,Q in zip(spec, self.units)]
-        
-        return Spectrum(*spec)
+                # Concatenate arrays and sort by wavelength
+                spec = np.concatenate([s1,s2], axis=1).T
+                spec = spec[np.argsort(spec[:, 0])].T
                 
+            # Otherwise there are three segments, (left, overlap, right)
+            else:
+            
+                # Get the left segemnt
+                left = s1[:, s1[0]<s2[0][0]]
+                if not np.any(left):
+                    left = s2[:, s2[0]<s1[0][0]]
+                
+                # Get the right segment
+                right = s1[:, s1[0]>s2[0][-1]]
+                if not np.any(right):
+                    right = s2[:, s2[0]>s1[0][-1]]
+                
+                # Get the overlapping segements
+                o1 = s1[:, np.where((s1[0]<right[0][0])&(s1[0]>left[0][-1]))].squeeze()
+                o2 = s2[:, np.where((s2[0]<right[0][0])&(s2[0]>left[0][-1]))].squeeze()
+                
+                # Get the resolutions
+                r1 = s1.shape[1]/(max(s1[0])-min(s1[0]))
+                r2 = s2.shape[1]/(max(s2[0])-min(s2[0]))
+                
+                # Make higher resolution s1
+                if r1<r2:
+                    o1, o2 = o2, o1
+                    
+                # Interpolate s2 to s1
+                o2_flux = np.interp(o1[0], s2[0], s2[1])
+                o2_unc = np.interp(o1[0], s2[2], s2[2])
+                
+                # Get the average
+                o_flux = np.nanmean([o1[1], o2_flux], axis=0)
+                o_unc = np.sqrt(o1[2]**2 + o2_unc**2)
+                overlap = np.array([o1[0], o_flux, o_unc])
+                
+                # Concatenate the segments
+                spec = np.concatenate([left, overlap, right], axis=1)
+                
+            # Add units
+            spec = [i*Q for i,Q in zip(spec, self.units)]
+            
+            return Spectrum(*spec)
+            
+        except:
+            raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
+            
     @property
     def unc(self):
         """A property for auncertainty"""
