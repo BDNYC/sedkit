@@ -468,17 +468,24 @@ class SED(object):
     def spectral_type(self, spectral_type, spectral_type_unc=None, gravity=None, lum_class='V', prefix=None):
         """A setter for spectral_type"""
         # Make sure it's a sequence
-        if not isinstance(spectral_type, str):
-            raise TypeError('Spectral type must be a string')
+        if isinstance(spectral_type, str):
+            self.SpT = spectral_type
+            spec_type = u.specType(spectral_type)
+            spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type
             
-        # # Make sure the values are in time units
-        # try:
-        #     spectral_type = u.specType(spectral_type)
-        # except:
-        #     raise TypeError("Age values must be time units of astropy.units.quantity.Quantity, e.g. 'Myr'")
-        
         # Set the spectral_type!
         self._spectral_type = spectral_type
+        self.luminosity_class = lum_class
+        self.gravity = gravity or None
+        self.prefix = prefix or None
+        
+        # Set the age if not explicitly set
+        if self.age is None and self.gravity is not None:
+            if gravity in ['b','beta','g','gamma']:
+                self.age = 225*q.Myr, 75*q.Myr
+                
+            else:
+                print("{} is an invalid gravity. Please use 'beta' or 'gamma' instead.".format(gravity))
         
         # Update the things that depend on spectral_type!
         
