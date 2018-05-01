@@ -325,7 +325,7 @@ class SED(object):
         return self._age
     
     @age.setter
-    def age(self, age, age_units=q.Myr):
+    def age(self, age):
         """A setter for age"""
         # Make sure it's a sequence
         if not isinstance(age, (tuple, list, np.ndarray)) or len(age) not in [2,3]:
@@ -333,7 +333,7 @@ class SED(object):
             
         # Make sure the values are in time units
         try:
-            age = [i.to(age_units) for i in age]
+            _ = [i.to(q.Myr) for i in age]
         except:
             raise TypeError("Age values must be time units of astropy.units.quantity.Quantity, e.g. 'Myr'")
         
@@ -377,20 +377,20 @@ class SED(object):
         return self._radius
     
     @radius.setter
-    def radius(self, radius, radius_units=q.Rjup):
+    def radius(self, radius):
         """A setter for radius"""
         # Make sure it's a sequence
         if not isinstance(radius, (tuple, list, np.ndarray)) or len(radius) not in [2,3]:
             raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
             
-        # Make sure the values are in time units
+        # Make sure the values are in length units
         try:
-            radius = [i.to(radius_units) for i in radius]
+            _ = [i.to(q.m) for i in radius]
         except:
-            raise TypeError("Radius values must be distance units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
+            raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
         
         # Set the radius!
-        self._radius = radius
+        self._radius = tuple(radius)
         
         if self.verbose:
             print('Setting radius to',self.radius)
@@ -403,7 +403,7 @@ class SED(object):
         return self._distance
     
     @distance.setter
-    def distance(self, distance, distance_units=q.pc):
+    def distance(self, distance):
         """A setter for distance
         
         Parameters
@@ -417,9 +417,9 @@ class SED(object):
             
         # Make sure the values are in time units
         try:
-            distance = [i.to(distance_units) for i in distance]
+            _ = [i.to(q.pc) for i in distance]
         except:
-            raise TypeError("Distance values must be distance units of astropy.units.quantity.Quantity, e.g. 'pc'")
+            raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
         
         # Set the distance
         self._distance = distance
@@ -456,7 +456,7 @@ class SED(object):
             
         # Make sure the values are in time units
         try:
-            parallax = [i.to(parallax_units) for i in parallax]
+            _ = [i.to(q.mas) for i in parallax]
         except:
             raise TypeError("parallax values must be parallax units of astropy.units.quantity.Quantity, e.g. 'mas'")
         
@@ -956,16 +956,31 @@ class SED(object):
         
         # Get the results
         rows = []
-        for param in ['age', 'distance', 'parallax', 'radius', 'spectral_type',\
-                      'membership', 'fbol', 'mbol', 'Lbol', 'Mbol', 'Teff']:
+        for param in ['name', 'age', 'distance', 'parallax', 'radius',\
+                      'spectral_type', 'membership', 'fbol', 'mbol', \
+                      'Lbol', 'Mbol', 'Teff']:
             
+            # Get the values and format
             attr = getattr(self, param)
-            if attr is not None:
+            
+            if attr is None:
+                attr = '--'
+            
+            if isinstance(attr, (tuple,list)):
                 val, unc = attr[:2]
                 unit = val.unit if hasattr(val, 'unit') else '--'
                 val = val.value if hasattr(val, 'unit') else val
                 unc = unc.value if hasattr(unc, 'unit') else unc
+                if val<1E-4 or val>1e5:
+                    val = '{:.2e}'.format(val)
+                    unc = '{:.2e}'.format(unc)
                 rows.append([param, val, unc, unit])
+                
+            elif isinstance(attr, str):
+                rows.append([param, attr, '--', '--'])
+                
+            else:
+                pass
         
         return at.Table(np.asarray(rows), names=('param','value','unc','units'))
     
