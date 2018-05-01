@@ -972,8 +972,8 @@ class SED(object):
                 val = val.value if hasattr(val, 'unit') else val
                 unc = unc.value if hasattr(unc, 'unit') else unc
                 if val<1E-4 or val>1e5:
-                    val = '{:.2e}'.format(val)
-                    unc = '{:.2e}'.format(unc)
+                    val = float('{:.2e}'.format(val))
+                    unc = float('{:.2e}'.format(unc))
                 rows.append([param, val, unc, unit])
                 
             elif isinstance(attr, str):
