@@ -183,6 +183,7 @@ class SED(object):
         """
         # Single valued attributes
         self.name = name
+        self.verbose = verbose
         self._age = None
         self._distance = None
         self._parallax = None
@@ -339,6 +340,9 @@ class SED(object):
         # Set the age!
         self._age = age
         
+        if self.verbose:
+            print('Setting age to',self.age)
+        
         # Update the things that depend on age!
         
     @property
@@ -358,8 +362,11 @@ class SED(object):
             # Set the membership!
             self._membership = membership
             
+            if self.verbose:
+                print('Setting membership to',self.membership)
+            
             # Set the age
-            self._age = AGES.get(membership)
+            self.age = AGES.get(membership)
             
         else:
             print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(AGES.keys())))
@@ -384,6 +391,9 @@ class SED(object):
         
         # Set the radius!
         self._radius = radius
+        
+        if self.verbose:
+            print('Setting radius to',self.radius)
         
         # Update the things that depend on radius!
         
@@ -413,6 +423,9 @@ class SED(object):
         
         # Set the distance
         self._distance = distance
+        
+        if self.verbose:
+            print('Setting distance to',self.distance)
         
         # Update the parallax
         self._parallax = u.pi2pc(*self.distance, pc2pi=True)
@@ -474,7 +487,7 @@ class SED(object):
             spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type
             
         # Set the spectral_type!
-        self._spectral_type = spectral_type
+        self._spectral_type = spectral_type, spectral_type_unc or 0.5
         self.luminosity_class = lum_class
         self.gravity = gravity or None
         self.prefix = prefix or None
@@ -487,7 +500,9 @@ class SED(object):
             else:
                 print("{} is an invalid gravity. Please use 'beta' or 'gamma' instead.".format(gravity))
         
-        # Update the things that depend on spectral_type!
+        # Update the radius
+        if self.radius is None:
+            self.radius = get_radius()
         
     @property
     def spectra(self):
@@ -774,10 +789,10 @@ class SED(object):
         """
         # Calculate Teff
         if self.distance is not None and self.radius is not None:
-            Teff = np.sqrt(np.sqrt((self.Lbol[0]/(4*np.pi*ac.sigma_sb*self.radius[0]**2)).to(q.K**4))).round(0)
+            Teff = np.sqrt(np.sqrt((self.Lbol[0]/(4*np.pi*ac.sigma_sb*self.radius[0]**2)).to(q.K**4))).astype(int)
             
             # Calculate Teff_unc
-            Teff_unc = (Teff*np.sqrt((self.Lbol[1]/self.Lbol[0]).value**2 + (2*self.radius[1]/self.radius[0]).value**2)/4.).round(0)
+            Teff_unc = (Teff*np.sqrt((self.Lbol[1]/self.Lbol[0]).value**2 + (2*self.radius[1]/self.radius[0]).value**2)/4.).astype(int)
             
             # Update the attribute
             self.Teff = Teff, Teff_unc
@@ -932,6 +947,28 @@ class SED(object):
             show(self.fig)
 
         return self.fig
+        
+    @property
+    def results(self):
+        """A property for displaying the results"""
+        # Make the SED to get the most recent results
+        self.make_sed()
+        
+        # Get the results
+        rows = []
+        for param in ['age', 'distance', 'parallax', 'radius', 'spectral_type',\
+                      'membership', 'fbol', 'mbol', 'Lbol', 'Mbol', 'Teff']:
+            
+            attr = getattr(self, param)
+            if attr is not None:
+                val, unc = attr[:2]
+                unit = val.unit if hasattr(val, 'unit') else '--'
+                val = val.value if hasattr(val, 'unit') else val
+                unc = unc.value if hasattr(unc, 'unit') else unc
+                rows.append([param, val, unc, unit])
+        
+        return at.Table(np.asarray(rows), names=('param','value','unc','units'))
+    
 
     def write(self, dirpath, app=False, spec=True, phot=False):
         """
