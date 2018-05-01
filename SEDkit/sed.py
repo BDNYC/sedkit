@@ -10,7 +10,7 @@ import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
 import pysynphot as ps
-from uncertainties import unumpy as unp
+# from uncertainties import unumpy as unp
 from astropy.modeling.models import custom_model
 from astropy.modeling import models, fitting
 from astropy.analytic_functions import blackbody_lambda
@@ -73,10 +73,11 @@ def testing():
     s.add_photometry('2MASS.H', 13.3, 0.05)
     s.add_spectrum(*spec2)
     s.add_photometry('2MASS.Ks', 12.3, None)
+    s.make_sed()
     
     return s
 
-# Might be of use: https://github.com/spacetelescope/JWSTUserTraining2016/blob/master/Workshop_Notebooks/Advanced_Tables/Advanced_Tables.ipynb
+
 class SED(object):
     """
     A class to construct spectral energy distributions and calculate fundamental paramaters of stars
@@ -187,6 +188,7 @@ class SED(object):
         self._parallax = None
         self._radius = None
         self._spectral_type = None
+        self._membership = None
         
         # Set the default wavelength and flux units
         self._wave_units = q.um 
@@ -215,10 +217,10 @@ class SED(object):
     def from_database(self, db, from_dict=None, **kwargs):
         """
         Load the data from a SQL database
-        
+
         if 'photometry' in kwargs:
             # Get phot from database
-        
+
         """
         # Get the data for the source from the dictionary of ids
         if isinstance(from_dict, dict):
@@ -244,12 +246,12 @@ class SED(object):
                 dummy.remove_row(0)
                 setattr(self, table, at.QTable(dummy))
 
-    def from_source(self, catalog):
-        """
-        Load the data from a locals Source object
-        """
-        pass
-        
+    # def from_source(self, catalog):
+    #     """
+    #     Load the data from a locals Source object
+    #     """
+    #     pass
+            
     @property
     def wave_units(self):
         """A property for wave_units"""
@@ -339,6 +341,29 @@ class SED(object):
         
         # Update the things that depend on age!
         
+    @property
+    def membership(self):
+        """A property for membership"""
+        return self._membership
+    
+    @membership.setter
+    def membership(self, membership):
+        """A setter for membership"""
+        if membership is None:
+            
+            self._membership = None
+            
+        elif membership in AGES:
+            
+            # Set the membership!
+            self._membership = membership
+            
+            # Set the age
+            self._age = AGES.get(membership)
+            
+        else:
+            print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(AGES.keys())))
+            
     @property
     def radius(self):
         """A property for radius"""
@@ -1106,11 +1131,11 @@ def blackbody(wavelength, temperature=2000):
     max_val = blackbody_lambda((b_wien/temperature).to(q.um),temperature).value
     return blackbody_lambda(wavelength, temperature).value/max_val
 
-NYMG = {'TW Hya': {'age_min': 8, 'age_max': 20, 'age_ref': 0},
-         'beta Pic': {'age_min': 12, 'age_max': 22, 'age_ref': 0},
-         'Tuc-Hor': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
-         'Columba': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
-         'Carina': {'age_min': 10, 'age_max': 40, 'age_ref': 0},
-         'Argus': {'age_min': 30, 'age_max': 50, 'age_ref': 0},
-         'AB Dor': {'age_min': 50, 'age_max': 120, 'age_ref': 0},
-         'Pleiades': {'age_min': 110, 'age_max': 130, 'age_ref': 0}}
+AGES = {'TW Hya': (14*q.Myr, 6*q.Myr),
+       'beta Pic': (17*q.Myr, 5*q.Myr),
+       'Tuc-Hor': (25*q.Myr, 15*q.Myr),
+       'Columba': (25*q.Myr, 15*q.Myr),
+       'Carina': (25*q.Myr, 15*q.Myr),
+       'Argus': (40*q.Myr, 10*q.Myr),
+       'AB Dor': (85*q.Myr, 35*q.Myr),
+       'Pleiades': (120*q.Myr, 10*q.Myr)}
