@@ -9,8 +9,15 @@ import numpy as np
 import astropy.units as q
 import pysynphot as ps
 import copy
+import itertools
 from uncertainties import unumpy as unp
 from bokeh.plotting import figure, output_file, show, save
+from bokeh.palettes import Category10
+
+def color_gen():
+    """Color generator for Bokeh plots"""
+    yield from itertools.cycle(Category10[10])
+COLORS = color_gen()
 
 class Spectrum(ps.ArraySpectrum):
     """A spectrum object to add uncertainty handling and spectrum stitching to ps.ArraySpectrum
@@ -91,6 +98,9 @@ class Spectrum(ps.ArraySpectrum):
         # Add the uncertainty
         self._unctable = unc
         
+        # Store components is added
+        self.components = None
+        
     def __add__(self, spec2):
         """Add the spectra of this and another Spectrum object
         
@@ -170,7 +180,13 @@ class Spectrum(ps.ArraySpectrum):
             # Add units
             spec = [i*Q for i,Q in zip(spec, self.units)]
             
-            return Spectrum(*spec)
+            # Make the new spectrum object
+            new_spec = Spectrum(*spec)
+            
+            # Store the components
+            new_spec.components = self, spec2
+            
+            return new_spec
             
         except IOError:
             raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
@@ -317,7 +333,7 @@ class Spectrum(ps.ArraySpectrum):
         self._flux_units = flux_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         
-    def plot(self, fig=None, **kwargs):
+    def plot(self, fig=None, components=False, **kwargs):
         """Plot the spectrum"""
         # Make the figure
         if fig is None:
@@ -325,7 +341,13 @@ class Spectrum(ps.ArraySpectrum):
             fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
             fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
         
-        # Plot each spectrum
-        fig.line(self.wave, self.flux)
+        # Plot the spectrum
+        fig.line(self.wave, self.flux, color=next(COLORS))
+        
+        # Plot the components
+        if self.components is not None:
+            for spec in self.components:
+                fig.line(spec.wave, spec.flux, color=next(COLORS))
             
         show(fig)
+        

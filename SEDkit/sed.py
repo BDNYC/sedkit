@@ -64,16 +64,26 @@ def from_ids(db, **kwargs):
             
     return data
 
-def testing():
-    s = SED(age=(1*q.Gyr,0.1*q.Gyr), radius=(1*q.Rjup,0.02*q.Rjup), distance=(11*q.pc,1*q.pc))
-    spec1 = [np.linspace(0.8,2.5,200)*q.um, abs(np.random.normal(size=200))*1E-15*q.erg/q.s/q.cm**2/q.AA, abs(np.random.normal(size=200))*1E-16*q.erg/q.s/q.cm**2/q.AA]
-    spec2 = [np.linspace(21000,38000,150)*q.AA, abs(np.random.normal(size=150))*5E-14*q.erg/q.s/q.cm**2/q.AA, abs(np.random.normal(size=150))*5E-15*q.erg/q.s/q.cm**2/q.AA]
+def vega_test():
+    s = SED(age=(455*q.Myr,13*q.Myr), radius=(2.362*q.Rsun,0.02*q.Rjup), parallax=(130.23*q.mas,0.36*q.mas), spectral_type='A0V')
+    vega = ps.Vega
+    spec1 = [vega.wave[:4000]*q.AA, vega.flux[:4000]*q.erg/q.s/q.cm**2/q.AA]
+    spec2 = [vega.wave[3000:]*q.AA, vega.flux[3000:]*q.W/q.m**2/q.um]
     s.add_spectrum(*spec1)
-    s.add_photometry('2MASS.J', 12.3, 0.1)
-    s.add_photometry('2MASS.H', 13.3, 0.05)
     s.add_spectrum(*spec2)
-    s.add_photometry('2MASS.Ks', 12.3, None)
+    s.add_photometry('2MASS.J', -0.177, 0.206)
+    s.add_photometry('2MASS.H', -0.029, 0.146)
+    s.add_photometry('2MASS.Ks', 0.129, 0.186)
+    s.add_photometry('WISE.W1', 1.452, None)
+    s.add_photometry('WISE.W2', 1.143, 0.019)
+    s.add_photometry('WISE.W3', -0.067, 0.008)
+    s.add_photometry('WISE.W4', -0.127, 0.006)
     s.make_sed()
+    
+    # Teff should be 9602 ± 180 K
+    # Mbol should be 0.6
+    # Lbol should be 40.12 ± 0.45 Lsun
+    # Mass shoulf be 2.135 Msun
     
     return s
 
@@ -958,7 +968,7 @@ class SED(object):
         rows = []
         for param in ['name', 'age', 'distance', 'parallax', 'radius',\
                       'spectral_type', 'membership', 'fbol', 'mbol', \
-                      'Lbol', 'Mbol', 'Teff']:
+                      'Lbol', 'Lbol_sun', 'Mbol', 'Teff']:
             
             # Get the values and format
             attr = getattr(self, param)
