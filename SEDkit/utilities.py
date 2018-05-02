@@ -242,11 +242,6 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
     except IOError:
         return np.array([np.nan, np.nan])*units
 
-# def composite(spectra):
-#     spectrum = spectra.pop(0)
-# 
-
-
 def fmin_spec(spec1, spec2):
     
     def errfunc(p, a1, a2):

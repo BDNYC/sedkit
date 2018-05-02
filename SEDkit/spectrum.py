@@ -10,6 +10,7 @@ import astropy.units as q
 import pysynphot as ps
 import copy
 import itertools
+from . import synphot as syn
 from uncertainties import unumpy as unp
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.palettes import Category10
@@ -19,6 +20,31 @@ def color_gen():
     yield from itertools.cycle(Category10[10])
 COLORS = color_gen()
 
+def test_spec_norm():
+    """Test to see if spectra are being normalized properly
+    """
+    # Create the spectrum object
+    vega = ps.Vega
+    raw = [vega.wave[:4000]*q.AA, vega.flux[:4000]*q.erg/q.s/q.cm**2/q.AA]
+    spec = Spectrum(*raw)
+    spec.wave_units = q.um
+    # show(spec.plot())
+    
+    # Create a bandpass
+    bp = syn.bandpass('2MASS.J')
+    
+    # Normalize it to Vega Jmag=-0.177
+    norm_spec = spec.renormalize(-0.177, bp)
+    
+    # Make sure the synthetic mag of the normalized spectrum matches the input Jmag
+    Jmag = syn.synthetic_magnitude(norm_spec, bp)
+    
+    # Plot
+    fig = figure()
+    fig = spec.plot(fig=fig, color='blue')
+    norm_spec.plot(fig=fig, color='red')
+    show(fig)
+    
 class Spectrum(ps.ArraySpectrum):
     """A spectrum object to add uncertainty handling and spectrum stitching to ps.ArraySpectrum
     """
@@ -184,7 +210,7 @@ class Spectrum(ps.ArraySpectrum):
             new_spec = Spectrum(*spec)
             
             # Store the components
-            new_spec.components = self, spec2
+            new_spec.components = Spectrum(*self.spectrum), spec2
             
             return new_spec
             
@@ -196,13 +222,13 @@ class Spectrum(ps.ArraySpectrum):
         """A property for auncertainty"""
         return self._unctable
     
-    def renormalize(self, RNval, RNUnits, band, force=True, no_spec=False):
+    def renormalize(self, RNval, band, RNUnits='vegamag', force=True, no_spec=False):
         """Include uncertainties in renorm() method"""
         # Caluclate the remornalized flux
         spec = self.renorm(RNval, RNUnits, band, force)
         
         # Caluclate the normalization factor
-        norm = spec.flux/self.flux
+        norm = np.mean(spec.flux)/np.mean(self.flux)
         
         # Just return the normalization factor
         if no_spec:
@@ -349,5 +375,5 @@ class Spectrum(ps.ArraySpectrum):
             for spec in self.components:
                 fig.line(spec.wave, spec.flux, color=next(COLORS))
             
-        show(fig)
+        return fig
         

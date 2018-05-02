@@ -6,6 +6,7 @@ import os
 import itertools
 import glob
 import astropy.table as at
+import astropy.units as q
 import astropy.io.ascii as asc
 from svo_filters import svo
 from pkg_resources import resource_filename
@@ -64,7 +65,7 @@ def synthetic_magnitude(spectrum, bandpass, plot=False):
     star = ps.Observation(spectrum, bandpass, binset=bandpass.wave)
     
     # Calculate zeropoint flux in band
-    vega = ps.Observation(ps.Vega, bandpass, binset=bandpass.wave)
+    vega = ps.Observation(vega, bandpass, binset=bandpass.wave)
     
     # Calculate the magnitude
     mag = -2.5*np.log10(star.integrate()/vega.integrate())
@@ -74,7 +75,35 @@ def synthetic_magnitude(spectrum, bandpass, plot=False):
         plt.plot(star.wave, star.flux)
     
     return round(mag, 3)
+    
+def synthetic_flux(spectrum, bandpass):
+    mag = synthetic_magnitude(spectrum, bandpass)
+    
+    return mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA)
 
+def mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA):
+    """
+    Caluclate the flux for a given magnitude
+    
+    Parameters
+    ----------
+    mag: float, sequence
+        The magnitude or (magnitude, uncertainty)
+    bandpass: pysynphot.spectrum.ArraySpectralElement
+        The bandpass to use
+    units: astropy.unit.quantity.Quantity
+        The unit for the output flux
+    """
+    if isinstance(mag, float):
+        mag = mag, np.nan
+    
+    # Calculate the flux density
+    zp = (bandpass.svo.ZeroPoint*q.Unit(bandpass.svo.ZeroPointUnit)).to(units)
+    f = (zp*10**(mag[0]/-2.5)).to(units)
+    sig_f = (f*mag[1]*np.log(10)/2.5).to(units)
+        
+    return f, sig_f
+    
 def mag_table(spectra=None, bandpasses=FILTERS, models='phoenix', jmag=10, save=None):
     """
     Calculate the magnitude of all given spectra in all given bandpasses
