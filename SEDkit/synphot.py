@@ -1,6 +1,5 @@
 import warnings
 import pysynphot as ps
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import itertools
@@ -10,6 +9,7 @@ import astropy.units as q
 import astropy.io.ascii as asc
 from svo_filters import svo
 from pkg_resources import resource_filename
+from bokeh.plotting import figure, show
 
 # Area of the telescope has to be in centimeters2
 # ps.setref(area=250000.)
@@ -17,69 +17,70 @@ from pkg_resources import resource_filename
 FILTERS = svo.filters()
 warnings.simplefilter('ignore')
 
-def bandpass(filt):
-    """
-    Creates a pysynphot bandpass with the given filter
-    
-    Parameters
-    ----------
-    filt: str
-        The filter name
-    
-    Returns
-    -------
-    pysynphot.spectrum.ArraySpectralElement
-        The bandpass object
-    """
-    # Get the throughput from svo_filters
-    filt = svo.Filter(filt)
-    wave, thru = filt.rsr
-    
-    # Create the bandpass
-    bandpass = ps.ArrayBandpass(wave=wave, throughput=thru, waveunits='um', name=filt)
-    
-    # Add the SVO filter to the bandpass object
-    bandpass.svo = filt
-    
-    return bandpass
 
-def synthetic_magnitude(spectrum, bandpass, plot=False):
-    """
-    Calculate the magnitude in a bandpass
+class Bandpass(ps.ArrayBandpass):
+    def __init__(self, name):
+        """
+        Creates a pysynphot bandpass with the given filter
     
-    Parameters
-    ----------
-    spectrum: pysynphot.spectrum.ArraySpectralElement
-        The spectrum to process
-    bandpass: pysynphot.spectrum.ArraySpectralElement
-        The bandpass to use
-    plot: bool
-        Plot the original and processed spectrum
+        Parameters
+        ----------
+        name: str
+            The filter name
+        """
+        # Get the throughput from svo_filters
+        filt = svo.Filter(name)
+        wave, thru = filt.rsr
+        wave *= 10000
+        self._wave_units = q.AA
+        
+        # Inherit from ArrayBandpass
+        super().__init__(wave=wave, throughput=thru, waveunits='Angstrom', name=name)
+        
+        # Store SVO filter
+        self.svo = filt
+        
+    def plot(self, fig=None):
+        """Plot the throughput"""
+        if fig is None:
+            fig = figure()
+            
+        # Plot
+        fig.line(self.wave, self.throughput)
+        
+        show(fig)
+        
+    @property
+    def wave_units(self):
+        """A property for wave_units"""
+        return self._wave_units
     
-    Returns
-    -------
-    float
-        The magnitude
-    """
-    # Calculate flux in band
-    star = ps.Observation(spectrum, bandpass, binset=bandpass.wave)
-    
-    # Calculate zeropoint flux in band
-    vega = ps.Observation(vega, bandpass, binset=bandpass.wave)
-    
-    # Calculate the magnitude
-    mag = -2.5*np.log10(star.integrate()/vega.integrate())
-    
-    if plot:
-        plt.plot(spectrum.wave, spectrum.flux)
-        plt.plot(star.wave, star.flux)
-    
-    return round(mag, 3)
-    
-def synthetic_flux(spectrum, bandpass):
-    mag = synthetic_magnitude(spectrum, bandpass)
-    
-    return mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA)
+    @wave_units.setter
+    def wave_units(self, wave_units):
+        """A setter for wave_units
+        
+        Parameters
+        ----------
+        wave_units: astropy.units.quantity.Quantity
+            The astropy units of the SED wavelength
+        """
+        # Make sure it's a quantity
+        if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+            raise TypeError('wave_units must be astropy.units.quantity.Quantity')
+            
+        # Make sure the values are in length units
+        try:
+            wave_units.to(q.um)
+        except:
+            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
+        
+        # Update the wavelength array
+        self.convert(str(wave_units))
+        # self._wavetable = self.wave*self.wave_units.to(wave_units)
+            
+        # Set the wave_units!
+        self._wave_units = wave_units
+
 
 def mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA):
     """
@@ -141,7 +142,7 @@ def mag_table(spectra=None, bandpasses=FILTERS, models='phoenix', jmag=10, save=
         
     # Make the list of bandpasse
     if isinstance(bandpasses, (list,tuple)):
-        bandpasses = [bandpass(filt, inst) for filt, inst in bandpasses]
+        bandpasses = [Bandpass(filt, inst) for filt, inst in bandpasses]
         
     else:
         print("Please provide a list of (filter,instrument) tuples or a directory of filters.")

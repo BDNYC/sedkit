@@ -1,14 +1,42 @@
 import unittest
 import copy
-from ..spectrum import Spectrum
+import numpy as np
+import astropy.units as q
+from .. import synphot as syn
+from .. import spectrum as sp
+from bokeh.plotting import figure, output_file, show, save
 
 SPEC = [np.linspace(0.8,2.5,200)*q.um, abs(np.random.normal(size=200))*1E-15*q.erg/q.s/q.cm**2/q.AA, abs(np.random.normal(size=200))*1E-16*q.erg/q.s/q.cm**2/q.AA]
 
+
+def test_spec_norm():
+    """Test to see if spectra are being normalized properly
+    """
+    # Create the spectrum object
+    vega = sp.Vega()
+    
+    # Create a bandpass
+    bp = syn.Bandpass('2MASS.J')
+    bp.wave_units = vega.wave_units
+    
+    # Normalize it to Vega Jmag=-0.177
+    norm_spec = vega.renormalize(-0.177, bp)
+    
+    # Make sure the synthetic mag of the normalized spectrum matches the input Jmag
+    Jmag = norm_spec.synthetic_magnitude(bp)
+    
+    # Plot
+    fig = figure()
+    fig = vega.plot(fig=fig, color='blue')
+    norm_spec.plot(fig=fig, color='red')
+    show(fig)
+    
+
 class SpectrumTests(unittest.TestCase):
     """Tests for the Spectrum class"""
-    
-    # Make Spectrum class for testing
-    self.spec = Spectrum(*SPEC)
+    def __init__(self):
+        # Make Spectrum class for testing
+        self.spec = sp.Spectrum(*SPEC)
 
     def test_Spectrum_data(self):
         """Test that Spectrum is initialized properly"""

@@ -14,37 +14,14 @@ from . import synphot as syn
 from uncertainties import unumpy as unp
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.palettes import Category10
+from pkg_resources import resource_filename
 
 def color_gen():
     """Color generator for Bokeh plots"""
     yield from itertools.cycle(Category10[10])
 COLORS = color_gen()
 
-def test_spec_norm():
-    """Test to see if spectra are being normalized properly
-    """
-    # Create the spectrum object
-    vega = ps.Vega
-    raw = [vega.wave[:4000]*q.AA, vega.flux[:4000]*q.erg/q.s/q.cm**2/q.AA]
-    spec = Spectrum(*raw)
-    spec.wave_units = q.um
-    # show(spec.plot())
-    
-    # Create a bandpass
-    bp = syn.bandpass('2MASS.J')
-    
-    # Normalize it to Vega Jmag=-0.177
-    norm_spec = spec.renormalize(-0.177, bp)
-    
-    # Make sure the synthetic mag of the normalized spectrum matches the input Jmag
-    Jmag = syn.synthetic_magnitude(norm_spec, bp)
-    
-    # Plot
-    fig = figure()
-    fig = spec.plot(fig=fig, color='blue')
-    norm_spec.plot(fig=fig, color='red')
-    show(fig)
-    
+
 class Spectrum(ps.ArraySpectrum):
     """A spectrum object to add uncertainty handling and spectrum stitching to ps.ArraySpectrum
     """
@@ -70,9 +47,9 @@ class Spectrum(ps.ArraySpectrum):
         if not wave.shape==flux.shape and ((unc is None) or not (unc.shape==flux.shape)):
             raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
             
-        # Check wave units
+        # Check wave units and convert to Angstroms if necessary to work with pysynphot
         try:
-            _ = wave.to(q.um)
+            wave = wave.to(q.AA)
         except:
             raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
         
@@ -113,7 +90,7 @@ class Spectrum(ps.ArraySpectrum):
                     print('Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]')
             
         # Strip and store units
-        self._wave_units = wave.unit
+        self._wave_units = q.AA
         self._flux_units = flux.unit
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         wave, flux, unc = [i.value for i in [wave,flux,unc]]
@@ -321,7 +298,8 @@ class Spectrum(ps.ArraySpectrum):
             raise TypeError("wave_units must be a unit of length, e.g. 'um'")
         
         # Update the wavelength array
-        self._wavetable = self.wave*self.wave_units.to(wave_units)
+        self.convert(str(wave_units))
+        # self._wavetable = self.wave*self.wave_units.to(wave_units)
             
         # Set the wave_units!
         self._wave_units = wave_units
@@ -359,6 +337,43 @@ class Spectrum(ps.ArraySpectrum):
         self._flux_units = flux_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         
+    def synthetic_magnitude(self, bandpass, plot=False):
+        """
+        Calculate the magnitude in a bandpass
+    
+        Parameters
+        ----------
+        bandpass: pysynphot.spectrum.ArraySpectralElement
+            The bandpass to use
+        plot: bool
+            Plot the original and processed spectrum
+    
+        Returns
+        -------
+        float
+            The magnitude
+        """
+        # Calculate flux in band
+        star = ps.Observation(self, bandpass, binset=bandpass.wave)
+    
+        # Calculate zeropoint flux in band
+        vega = ps.Observation(Vega(), bandpass, binset=bandpass.wave)
+    
+        # Calculate the magnitude
+        mag = -2.5*np.log10(star.integrate()/vega.integrate())
+    
+        if plot:
+            fig = figure()
+            fig.line(spectrum.wave, spectrum.flux, color='navy')
+            fig.line(star.wave, star.flux, color='red')
+    
+        return round(mag, 3)
+        
+    def synthetic_flux(self, bandpass):
+        mag = self.synthetic_magnitude(bandpass)
+    
+        return syn.mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA)
+        
     def plot(self, fig=None, components=False, **kwargs):
         """Plot the spectrum"""
         # Make the figure
@@ -376,4 +391,11 @@ class Spectrum(ps.ArraySpectrum):
                 fig.line(spec.wave, spec.flux, color=next(COLORS))
             
         return fig
+        
+class Vega(Spectrum):
+    def __init__(self):
+        wave, flux = np.genfromtxt(resource_filename('SEDkit', 'data/STScI_Vega.txt'), unpack=True)
+        wave *= q.AA
+        flux *= q.erg/q.s/q.cm**2/q.AA
+        super().__init__(wave, flux)
         
