@@ -76,7 +76,6 @@ class Bandpass(ps.ArrayBandpass):
         
         # Update the wavelength array
         self.convert(str(wave_units))
-        # self._wavetable = self.wave*self.wave_units.to(wave_units)
             
         # Set the wave_units!
         self._wave_units = wave_units

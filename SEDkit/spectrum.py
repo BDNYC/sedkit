@@ -337,7 +337,7 @@ class Spectrum(ps.ArraySpectrum):
         self._flux_units = flux_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         
-    def synthetic_magnitude(self, bandpass, plot=False):
+    def synthetic_magnitude(self, bandpass):
         """
         Calculate the magnitude in a bandpass
     
@@ -345,8 +345,6 @@ class Spectrum(ps.ArraySpectrum):
         ----------
         bandpass: pysynphot.spectrum.ArraySpectralElement
             The bandpass to use
-        plot: bool
-            Plot the original and processed spectrum
     
         Returns
         -------
@@ -362,18 +360,35 @@ class Spectrum(ps.ArraySpectrum):
         # Calculate the magnitude
         mag = -2.5*np.log10(star.integrate()/vega.integrate())
     
-        if plot:
-            fig = figure()
-            fig.line(spectrum.wave, spectrum.flux, color='navy')
-            fig.line(star.wave, star.flux, color='red')
-    
         return round(mag, 3)
         
-    def synthetic_flux(self, bandpass):
-        mag = self.synthetic_magnitude(bandpass)
-    
-        return syn.mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA)
+    def synthetic_flux(self, bandpass, plot=False):
+        """
+        Calculate the synthetic flux in the given bandpass
         
+        Parameters
+        ----------
+        bandpass: pysynphot.spectrum.ArraySpectralElement
+            The bandpass to use
+        
+        Returns
+        -------
+        tuple
+            The flux and uncertainty
+        """
+        mag = self.synthetic_magnitude(bandpass)
+        
+        flx = syn.mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA)
+        
+        if plot:
+            fig = figure()
+            fig.line(self.wave, self.flux, color='navy')
+            fig.circle(bandpass.pivot(), flx, color='red')
+            show(fig)
+    
+        return flx
+        
+    @property
     def plot(self, fig=None, components=False, **kwargs):
         """Plot the spectrum"""
         # Make the figure

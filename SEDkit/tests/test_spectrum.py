@@ -17,13 +17,14 @@ def test_spec_norm():
     
     # Create a bandpass
     bp = syn.Bandpass('2MASS.J')
-    bp.wave_units = vega.wave_units
     
     # Normalize it to Vega Jmag=-0.177
     norm_spec = vega.renormalize(-0.177, bp)
     
     # Make sure the synthetic mag of the normalized spectrum matches the input Jmag
     Jmag = norm_spec.synthetic_magnitude(bp)
+    
+    print(Jmag)
     
     # Plot
     fig = figure()
