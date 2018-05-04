@@ -64,29 +64,6 @@ def from_ids(db, **kwargs):
             
     return data
 
-def vega_test():
-    s = SED(age=(455*q.Myr,13*q.Myr), radius=(2.362*q.Rsun,0.02*q.Rjup), parallax=(130.23*q.mas,0.36*q.mas), spectral_type='A0V')
-    vega = ps.Vega
-    spec1 = [vega.wave[:4000]*q.AA, vega.flux[:4000]*q.erg/q.s/q.cm**2/q.AA]
-    spec2 = [vega.wave[3000:]*q.AA, vega.flux[3000:]*q.W/q.m**2/q.um]
-    s.add_spectrum(*spec1)
-    s.add_spectrum(*spec2)
-    s.add_photometry('2MASS.J', -0.177, 0.206)
-    s.add_photometry('2MASS.H', -0.029, 0.146)
-    s.add_photometry('2MASS.Ks', 0.129, 0.186)
-    s.add_photometry('WISE.W1', 1.452, None)
-    s.add_photometry('WISE.W2', 1.143, 0.019)
-    s.add_photometry('WISE.W3', -0.067, 0.008)
-    s.add_photometry('WISE.W4', -0.127, 0.006)
-    s.make_sed()
-    
-    # Teff should be 9602 ± 180 K
-    # Mbol should be 0.6
-    # Lbol should be 40.12 ± 0.45 Lsun
-    # Mass shoulf be 2.135 Msun
-    
-    return s
-
 
 class SED(object):
     """
@@ -98,22 +75,14 @@ class SED(object):
         The bolometric luminosity [erg/s]
     Lbol_sun: astropy.units.quantity.Quantity
         The bolometric luminosity [L_sun]
-    Lbol_sun_unc: astropy.units.quantity.Quantity
-        The bolometric luminosity [L_sun] uncertainty
-    Lbol_unc: astropy.units.quantity.Quantity
-        The bolometric luminosity [erg/s] uncertainty
     Mbol: float
         The absolute bolometric magnitude
-    Mbol_unc: float
-        The absolute bolometric magnitude uncertainty
     SpT: float
         The string spectral type
     Teff: astropy.units.quantity.Quantity
         The effective temperature calculated from the SED
     Teff_bb: astropy.units.quantity.Quantity
         The effective temperature calculated from the blackbody fit
-    Teff_unc: astropy.units.quantity.Quantity
-        The effective temperature calculated from the SED uncertainty
     abs_SED: sequence
         The [W,F,E] of the calculate absolute SED
     abs_phot_SED: sequence
@@ -136,20 +105,14 @@ class SED(object):
         The best fit blackbody function
     distance: astropy.units.quantity.Quantity
         The target distance
-    distance_unc: astropy.units.quantity.Quantity
-        The target distance uncertainty
     fbol: astropy.units.quantity.Quantity
         The apparent bolometric flux [erg/s/cm2]
-    fbol_unc: astropy.units.quantity.Quantity
-        The apparent bolometric flux [erg/s/cm2] uncertainty
     flux_units: astropy.units.quantity.Quantity
         The desired flux density units
     gravity: str
         The surface gravity suffix
     mbol: float
         The apparent bolometric magnitude
-    mbol_unc: float
-        The apparent bolometric magnitude uncertainty
     name: str
         The name of the target
     parallaxes: astropy.table.QTable
@@ -160,16 +123,12 @@ class SED(object):
         The list of all piecewise combined spectra for normalization
     radius: astropy.units.quantity.Quantity
         The target radius
-    radius_unc: astropy.units.quantity.Quantity
-        The target radius uncertainty
     sources: astropy.table.QTable
         The table of sources (with only one row of cource)
     spectra: astropy.table.QTable
         The table of spectra
     spectral_type: float
         The numeric spectral type, where 0-99 corresponds to spectral types O0-Y9
-    spectral_type_unc: float
-        The numeric spectral type uncertainty
     spectral_types: astropy.table.QTable
         The table of spectral types
     suffix: str
@@ -224,301 +183,31 @@ class SED(object):
             
         # Make a plot
         self.fig = figure()
-        
-    def from_database(self, db, from_dict=None, **kwargs):
+    
+    
+    def add_photometry(self, band, mag, mag_unc, **kwargs):
+        """A setter for photometry
         """
-        Load the data from a SQL database
-
-        if 'photometry' in kwargs:
-            # Get phot from database
-
-        """
-        # Get the data for the source from the dictionary of ids
-        if isinstance(from_dict, dict):
-            if not 'sources' in from_dict:
-                from_dict['sources'] = source_id
-            all_data = from_ids(db, **from_dict)
-
-        # Or get the inventory from the database
-        else:
-            all_data = db.inventory(source_id, fetch=True)
-
-        # Store the tables as attributes
-        for table in ['sources','spectra','photometry','spectral_types','parallaxes']:
-
-            # Get data from the dictionary
-            if table in all_data:
-                setattr(self, table, at.QTable(all_data[table]))
-
-            # If no data, generate dummy
-            else:
-                qry = "SELECT * FROM {} LIMIT 1".format(table)
-                dummy = db.query(qry, fmt='table')
-                dummy.remove_row(0)
-                setattr(self, table, at.QTable(dummy))
-
-    # def from_source(self, catalog):
-    #     """
-    #     Load the data from a locals Source object
-    #     """
-    #     pass
+        # Make sure the arrays are the same shape
+        if not isinstance(mag, float) and not isinstance(mag_unc, float):
+            raise TypeError("Magnitude and uncertainty must be floats.")
             
-    @property
-    def wave_units(self):
-        """A property for wave_units"""
-        return self._wave_units
-    
-    @wave_units.setter
-    def wave_units(self, wave_units):
-        """A setter for wave_units
+        # Get the bandpass
+        bp = s.bandpass(band)
         
-        Parameters
-        ----------
-        wave_units: astropy.units.quantity.Quantity
-            The astropy units of the SED wavelength
-        """
-        # Make sure it's a quantity
-        if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
-            raise TypeError('wave_units must be astropy.units.quantity.Quantity')
+        # Make a dict for the new point
+        new_photometry = {'band':band, 'eff':bp.pivot()*q.um, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
+        
+        # Add the kwargs
+        new_photometry.update(kwargs)
             
-        # Make sure the values are in length units
-        try:
-            wave_units.to(q.um)
-        except:
-            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
+        # Add it to the table
+        self._photometry.add_row(new_photometry)
         
-        # Set the wave_units!
-        self._wave_units = wave_units
-        self.units = [self._wave_units, self._flux_units, self._flux_units]
-        
-        # Recalibrate the data
-        self._calibrate_photometry()
-        self._calibrate_spectra()
-        
-    @property
-    def flux_units(self):
-        """A property for flux_units"""
-        return self._flux_units
-    
-    @flux_units.setter
-    def flux_units(self, flux_units):
-        """A setter for flux_units
-        
-        Parameters
-        ----------
-        flux_units: astropy.units.quantity.Quantity
-            The astropy units of the SED wavelength
-        """
-        # Make sure it's a quantity
-        if not isinstance(flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
-            raise TypeError('flux_units must be astropy.units.quantity.Quantity')
-            
-        # Make sure the values are in length units
-        try:
-            flux_units.to(q.erg/q.s/q.cm**2/q.AA)
-        except:
-            raise TypeError("flux_units must be a unit of length, e.g. 'um'")
-        
-        # fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA)
-            
-        # Set the flux_units!
-        self._flux_units = flux_units
-        self.units = [self._wave_units, self._flux_units, self._flux_units]
-        
-        # Recalibrate the data
-        self._calibrate_photometry()
-        self._calibrate_spectra()
-        
-    @property
-    def age(self):
-        """A property for age"""
-        return self._age
-    
-    @age.setter
-    def age(self, age):
-        """A setter for age"""
-        # Make sure it's a sequence
-        if not isinstance(age, (tuple, list, np.ndarray)) or len(age) not in [2,3]:
-            raise TypeError('Age must be a sequence of (value, error) or (value, lower_error, upper_error).')
-            
-        # Make sure the values are in time units
-        try:
-            _ = [i.to(q.Myr) for i in age]
-        except:
-            raise TypeError("Age values must be time units of astropy.units.quantity.Quantity, e.g. 'Myr'")
-        
-        # Set the age!
-        self._age = age
-        
-        if self.verbose:
-            print('Setting age to',self.age)
-        
-        # Update the things that depend on age!
-        
-    @property
-    def membership(self):
-        """A property for membership"""
-        return self._membership
-    
-    @membership.setter
-    def membership(self, membership):
-        """A setter for membership"""
-        if membership is None:
-            
-            self._membership = None
-            
-        elif membership in AGES:
-            
-            # Set the membership!
-            self._membership = membership
-            
-            if self.verbose:
-                print('Setting membership to',self.membership)
-            
-            # Set the age
-            self.age = AGES.get(membership)
-            
-        else:
-            print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(AGES.keys())))
-            
-    @property
-    def radius(self):
-        """A property for radius"""
-        return self._radius
-    
-    @radius.setter
-    def radius(self, radius):
-        """A setter for radius"""
-        # Make sure it's a sequence
-        if not isinstance(radius, (tuple, list, np.ndarray)) or len(radius) not in [2,3]:
-            raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
-            
-        # Make sure the values are in length units
-        try:
-            _ = [i.to(q.m) for i in radius]
-        except:
-            raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
-        
-        # Set the radius!
-        self._radius = tuple(radius)
-        
-        if self.verbose:
-            print('Setting radius to',self.radius)
-        
-        # Update the things that depend on radius!
-        
-    @property
-    def distance(self):
-        """A property for distance"""
-        return self._distance
-    
-    @distance.setter
-    def distance(self, distance):
-        """A setter for distance
-        
-        Parameters
-        ----------
-        distance: sequence
-            The (distance, err) or (distance, lower_err, upper_err)
-        """
-        # Make sure it's a sequence
-        if not isinstance(distance, (tuple, list, np.ndarray)) or len(distance) not in [2,3]:
-            raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
-            
-        # Make sure the values are in time units
-        try:
-            _ = [i.to(q.pc) for i in distance]
-        except:
-            raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
-        
-        # Set the distance
-        self._distance = distance
-        
-        if self.verbose:
-            print('Setting distance to',self.distance)
-        
-        # Update the parallax
-        self._parallax = u.pi2pc(*self.distance, pc2pi=True)
-        
-        # Update the absolute photometry
-        self._calibrate_photometry()
-
-        # Update the flux calibrated spectra
-        self._calibrate_spectra()
-        
-    @property
-    def parallax(self):
-        """A property for parallax"""
-        return self._parallax
-    
-    @parallax.setter
-    def parallax(self, parallax, parallax_units=q.mas):
-        """A setter for parallax
-        
-        Parameters
-        ----------
-        parallax: sequence
-            The (parallax, err) or (parallax, lower_err, upper_err)
-        """
-        # Make sure it's a sequence
-        if not isinstance(parallax, (tuple, list, np.ndarray)) or len(parallax) not in [2,3]:
-            raise TypeError('parallax must be a sequence of (value, error) or (value, lower_error, upper_error).')
-            
-        # Make sure the values are in time units
-        try:
-            _ = [i.to(q.mas) for i in parallax]
-        except:
-            raise TypeError("parallax values must be parallax units of astropy.units.quantity.Quantity, e.g. 'mas'")
-        
-        # Set the parallax
-        self._parallax = parallax
-        
-        # Update the distance
-        self._distance = u.pi2pc(*self.parallax)
-        
-        # Update the absolute photometry
+        # Calculate flux and calibrate
         self._calibrate_photometry()
         
-        # Update the flux calibrated spectra
-        self._calibrate_spectra()
         
-    @property
-    def spectral_type(self):
-        """A property for spectral_type"""
-        return self._spectral_type
-    
-    @spectral_type.setter
-    def spectral_type(self, spectral_type, spectral_type_unc=None, gravity=None, lum_class='V', prefix=None):
-        """A setter for spectral_type"""
-        # Make sure it's a sequence
-        if isinstance(spectral_type, str):
-            self.SpT = spectral_type
-            spec_type = u.specType(spectral_type)
-            spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type
-            
-        # Set the spectral_type!
-        self._spectral_type = spectral_type, spectral_type_unc or 0.5
-        self.luminosity_class = lum_class
-        self.gravity = gravity or None
-        self.prefix = prefix or None
-        
-        # Set the age if not explicitly set
-        if self.age is None and self.gravity is not None:
-            if gravity in ['b','beta','g','gamma']:
-                self.age = 225*q.Myr, 75*q.Myr
-                
-            else:
-                print("{} is an invalid gravity. Please use 'beta' or 'gamma' instead.".format(gravity))
-        
-        # Update the radius
-        if self.radius is None:
-            self.radius = get_radius()
-        
-    @property
-    def spectra(self):
-        """A property for spectra"""
-        return self._spectra
-   
     def add_spectrum(self, wave, flux, unc=None, **kwargs):
         """Add a new Spectrum object to the SED
 
@@ -544,43 +233,34 @@ class SED(object):
         # Combine spectra and flux calibrate
         self._calibrate_spectra()
         
-    def drop_spectrum(self, idx):
-        """Drop a spectrum by its index in the spectra list
-        """
-        self._spectra = [i for n,i in enumerate(self._spectra) if n!=idx]
         
     @property
-    def photometry(self):
-        """A property for photometry"""
-        self._photometry.sort('eff')
-        return self._photometry
-   
-    def add_photometry(self, band, mag, mag_unc, **kwargs):
-        """A setter for photometry
-        """
-        # Make sure the arrays are the same shape
-        if not isinstance(mag, float) and not isinstance(mag_unc, float):
-            raise TypeError("Magnitude and uncertainty must be floats.")
+    def age(self):
+        """A property for age"""
+        return self._age
+    
+    
+    @age.setter
+    def age(self, age):
+        """A setter for age"""
+        # Make sure it's a sequence
+        if not isinstance(age, (tuple, list, np.ndarray)) or len(age) not in [2,3]:
+            raise TypeError('Age must be a sequence of (value, error) or (value, lower_error, upper_error).')
             
-        # Get the bandpass
-        bp = s.bandpass(band)
+        # Make sure the values are in time units
+        try:
+            _ = [i.to(q.Myr) for i in age]
+        except:
+            raise TypeError("Age values must be time units of astropy.units.quantity.Quantity, e.g. 'Myr'")
         
-        # Make a dict for the new point
-        new_photometry = {'band':band, 'eff':bp.svo.WavelengthEff*q.um, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
+        # Set the age!
+        self._age = age
         
-        # Add the kwargs
-        new_photometry.update(kwargs)
-            
-        # Add it to the table
-        self._photometry.add_row(new_photometry)
+        if self.verbose:
+            print('Setting age to',self.age)
         
-        # Calculate flux and calibrate
-        self._calibrate_photometry()
+        # Update the things that depend on age!
         
-    def drop_photometry(self, idx):
-        """Drop a photometry by its index in the photometry list
-        """
-        self._photometry.remove_row(idx)
         
     def _calibrate_photometry(self):
         """Calculate the absolute magnitudes and flux values of all rows in the photometry table
@@ -626,23 +306,8 @@ class SED(object):
 
             # Make absolute photometric SED with photometry
             self.abs_phot_SED = u.flux_calibrate(self.app_phot_SED.flux, self.distance[0], self.app_phot_SED.unc, self.distance[1])
-
-
-    @staticmethod
-    def group_spectra(spectra):
-        """Puts a list of *spectra* into groups with overlapping wavelength arrays
-        """
-        groups, idx = [], []
-        for N, S in enumerate(spectra):
-            if N not in idx:
-                group, idx = [S], idx + [N]
-                for n, s in enumerate(spectra):
-                    if n not in idx and any(np.where(np.logical_and(S.wave<s.wave[-1], S.wave>s.wave[0]))[0]):
-                        group.append(s), idx.append(n)
-                groups.append(group)
-        return groups
-
-
+    
+    
     def _calibrate_spectra(self):
         """Create composite spectra and flux calibrate
         """
@@ -681,8 +346,243 @@ class SED(object):
             # Make absolute spectral SED
             if self.app_spec_SED is not None and self.distance is not None:
                 self.abs_spec_SED = u.flux_calibrate(self.app_spec_SED.flux, self.distance[0], self.app_spec_SED.unc, self.distance[1])
+    
+    
+    @property
+    def distance(self):
+        """A property for distance"""
+        return self._distance
+    
+    
+    @distance.setter
+    def distance(self, distance):
+        """A setter for distance
+        
+        Parameters
+        ----------
+        distance: sequence
+            The (distance, err) or (distance, lower_err, upper_err)
+        """
+        # Make sure it's a sequence
+        if not isinstance(distance, (tuple, list, np.ndarray)) or len(distance) not in [2,3]:
+            raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
+            
+        # Make sure the values are in time units
+        try:
+            _ = [i.to(q.pc) for i in distance]
+        except:
+            raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
+        
+        # Set the distance
+        self._distance = distance
+        
+        if self.verbose:
+            print('Setting distance to',self.distance)
+        
+        # Update the parallax
+        self._parallax = u.pi2pc(*self.distance, pc2pi=True)
+        
+        # Update the absolute photometry
+        self._calibrate_photometry()
+
+        # Update the flux calibrated spectra
+        self._calibrate_spectra()
+        
+        
+    def drop_photometry(self, idx):
+        """Drop a photometry by its index in the photometry list
+        """
+        self._photometry.remove_row(idx)
+        
+        
+    def drop_spectrum(self, idx):
+        """Drop a spectrum by its index in the spectra list
+        """
+        self._spectra = [i for n,i in enumerate(self._spectra) if n!=idx]
+        
+        
+    @property
+    def flux_units(self):
+        """A property for flux_units"""
+        return self._flux_units
+    
+    
+    @flux_units.setter
+    def flux_units(self, flux_units):
+        """A setter for flux_units
+        
+        Parameters
+        ----------
+        flux_units: astropy.units.quantity.Quantity
+            The astropy units of the SED wavelength
+        """
+        # Make sure it's a quantity
+        if not isinstance(flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+            raise TypeError('flux_units must be astropy.units.quantity.Quantity')
+            
+        # Make sure the values are in length units
+        try:
+            flux_units.to(q.erg/q.s/q.cm**2/q.AA)
+        except:
+            raise TypeError("flux_units must be a unit of length, e.g. 'um'")
+        
+        # fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA)
+            
+        # Set the flux_units!
+        self._flux_units = flux_units
+        self.units = [self._wave_units, self._flux_units, self._flux_units]
+        
+        # Recalibrate the data
+        self._calibrate_photometry()
+        self._calibrate_spectra()
+        
+        
+    def from_database(self, db, from_dict=None, **kwargs):
+        """
+        Load the data from a SQL database
+
+        if 'photometry' in kwargs:
+            # Get phot from database
+
+        """
+        # Get the data for the source from the dictionary of ids
+        if isinstance(from_dict, dict):
+            if not 'sources' in from_dict:
+                from_dict['sources'] = source_id
+            all_data = from_ids(db, **from_dict)
+
+        # Or get the inventory from the database
+        else:
+            all_data = db.inventory(source_id, fetch=True)
+
+        # Store the tables as attributes
+        for table in ['sources','spectra','photometry','spectral_types','parallaxes']:
+
+            # Get data from the dictionary
+            if table in all_data:
+                setattr(self, table, at.QTable(all_data[table]))
+
+            # If no data, generate dummy
+            else:
+                qry = "SELECT * FROM {} LIMIT 1".format(table)
+                dummy = db.query(qry, fmt='table')
+                dummy.remove_row(0)
+                setattr(self, table, at.QTable(dummy))
+
+
+    def fundamental_params(self, **kwargs):
+        """
+        Calculate the fundamental parameters of the current SED
+        """
+        self.get_Lbol()
+        self.get_Mbol()
+        self.get_Teff()
+        
+        
+    def get_fbol(self, units=q.erg/q.s/q.cm**2):
+        """Calculate the bolometric flux of the SED
+        
+        Parameters
+        ----------
+        units: astropy.units.quantity.Quantity
+            The target untis for fbol
+        """
+        # Integrate the SED to get fbol
+        self.fbol = self.app_SED.integral(units=units)
+        
+        
+    def get_Lbol(self):
+        """Calculate the bolometric luminosity of the SED
+        """
+        # Caluclate fbol if not present
+        if not hasattr(self, 'fbol'):
+            self.get_fbol()
+            
+        # Calculate Lbol
+        if self.distance is not None:
+            Lbol = (4*np.pi*self.fbol[0]*self.distance[0]**2).to(q.erg/q.s)
+            Lbol_sun = round(np.log10((Lbol/ac.L_sun).decompose().value), 3)
+            
+            # Calculate Lbol_unc
+            Lbol_unc = Lbol*np.sqrt((self.fbol[1]/self.fbol[0]).value**2+(2*self.distance[1]/self.distance[0]).value**2)
+            Lbol_sun_unc = round(abs(Lbol_unc/(Lbol*np.log(10))).value, 3)
+            
+            # Update the attributes
+            self.Lbol = Lbol, Lbol_unc
+            self.Lbol_sun = Lbol_sun, Lbol_sun_unc
             
             
+    def get_mbol(self, L_sun=3.86E26*q.W, Mbol_sun=4.74):
+        """Calculate the apparent bolometric magnitude of the SED
+        
+        Parameters
+        ==========
+        L_sun: astropy.units.quantity.Quantity
+            The bolometric luminosity of the Sun
+        Mbol_sun: float
+            The absolute bolometric magnitude of the sun
+        """
+        # Calculate fbol if not present
+        if not hasattr(self, 'fbol'):
+            self.get_fbol()
+            
+        # Calculate mbol
+        mbol = round(-2.5*np.log10(self.fbol[0].value)-11.482, 3)
+            
+        # Calculate mbol_unc
+        mbol_unc = round((2.5/np.log(10))*(self.fbol[1]/self.fbol[0]).value, 3)
+        
+        # Update the attribute
+        self.mbol = mbol, mbol_unc
+        
+        
+    def get_Mbol(self):
+        """Calculate the absolute bolometric magnitude of the SED
+        """
+        # Calculate mbol if not present
+        if not hasattr(self, 'mbol'):
+            self.get_mbol()
+           
+        # Calculate Mbol
+        if self.distance is not None:
+            Mbol = round(self.mbol[0]-5*np.log10((self.distance[0]/10*q.pc).value), 3)
+            
+            # Calculate Mbol_unc
+            Mbol_unc = round(np.sqrt(self.mbol[1]**2+((2.5/np.log(10))*(self.distance[1]/self.distance[0]).value)**2), 3)
+            
+            # Update the attribute
+            self.Mbol = Mbol, Mbol_unc
+            
+            
+    def get_Teff(self):
+        """Calculate the effective temperature
+        """
+        # Calculate Teff
+        if self.distance is not None and self.radius is not None:
+            Teff = np.sqrt(np.sqrt((self.Lbol[0]/(4*np.pi*ac.sigma_sb*self.radius[0]**2)).to(q.K**4))).astype(int)
+            
+            # Calculate Teff_unc
+            Teff_unc = (Teff*np.sqrt((self.Lbol[1]/self.Lbol[0]).value**2 + (2*self.radius[1]/self.radius[0]).value**2)/4.).astype(int)
+            
+            # Update the attribute
+            self.Teff = Teff, Teff_unc
+    
+    
+    @staticmethod
+    def group_spectra(spectra):
+        """Puts a list of *spectra* into groups with overlapping wavelength arrays
+        """
+        groups, idx = [], []
+        for N, S in enumerate(spectra):
+            if N not in idx:
+                group, idx = [S], idx + [N]
+                for n, s in enumerate(spectra):
+                    if n not in idx and any(np.where(np.logical_and(S.wave<s.wave[-1], S.wave>s.wave[0]))[0]):
+                        group.append(s), idx.append(n)
+                groups.append(group)
+        return groups
+        
+        
     def make_sed(self):
         """Construct the SED
         """
@@ -723,121 +623,80 @@ class SED(object):
         # Calculate Fundamental Params
         self.fundamental_params()
         
-    def get_fbol(self, units=q.erg/q.s/q.cm**2):
-        """Calculate the bolometric flux of the SED
+        
+    @property
+    def membership(self):
+        """A property for membership"""
+        return self._membership
+    
+    
+    @membership.setter
+    def membership(self, membership):
+        """A setter for membership"""
+        if membership is None:
+            
+            self._membership = None
+            
+        elif membership in AGES:
+            
+            # Set the membership!
+            self._membership = membership
+            
+            if self.verbose:
+                print('Setting membership to',self.membership)
+            
+            # Set the age
+            self.age = AGES.get(membership)
+            
+        else:
+            print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(AGES.keys())))
+            
+            
+    @property
+    def parallax(self):
+        """A property for parallax"""
+        return self._parallax
+    
+    
+    @parallax.setter
+    def parallax(self, parallax, parallax_units=q.mas):
+        """A setter for parallax
         
         Parameters
         ----------
-        units: astropy.units.quantity.Quantity
-            The target untis for fbol
+        parallax: sequence
+            The (parallax, err) or (parallax, lower_err, upper_err)
         """
-        # Integrate the SED to get fbol
-        self.fbol = self.app_SED.integral(units=units)
+        # Make sure it's a sequence
+        if not isinstance(parallax, (tuple, list, np.ndarray)) or len(parallax) not in [2,3]:
+            raise TypeError('parallax must be a sequence of (value, error) or (value, lower_error, upper_error).')
+            
+        # Make sure the values are in time units
+        try:
+            _ = [i.to(q.mas) for i in parallax]
+        except:
+            raise TypeError("parallax values must be parallax units of astropy.units.quantity.Quantity, e.g. 'mas'")
         
-    def get_mbol(self, L_sun=3.86E26*q.W, Mbol_sun=4.74):
-        """Calculate the apparent bolometric magnitude of the SED
+        # Set the parallax
+        self._parallax = parallax
         
-        Parameters
-        ==========
-        L_sun: astropy.units.quantity.Quantity
-            The bolometric luminosity of the Sun
-        Mbol_sun: float
-            The absolute bolometric magnitude of the sun
-        """
-        # Calculate fbol if not present
-        if not hasattr(self, 'fbol'):
-            self.get_fbol()
-            
-        # Calculate mbol
-        mbol = round(-2.5*np.log10(self.fbol[0].value)-11.482, 3)
-            
-        # Calculate mbol_unc
-        mbol_unc = round((2.5/np.log(10))*(self.fbol[1]/self.fbol[0]).value, 3)
+        # Update the distance
+        self._distance = u.pi2pc(*self.parallax)
         
-        # Update the attribute
-        self.mbol = mbol, mbol_unc
+        # Update the absolute photometry
+        self._calibrate_photometry()
         
-    def get_Lbol(self):
-        """Calculate the bolometric luminosity of the SED
-        """
-        # Caluclate fbol if not present
-        if not hasattr(self, 'fbol'):
-            self.get_fbol()
-            
-        # Calculate Lbol
-        if self.distance is not None:
-            Lbol = (4*np.pi*self.fbol[0]*self.distance[0]**2).to(q.erg/q.s)
-            Lbol_sun = round(np.log10((Lbol/ac.L_sun).decompose().value), 3)
-            
-            # Calculate Lbol_unc
-            Lbol_unc = Lbol*np.sqrt((self.fbol[1]/self.fbol[0]).value**2+(2*self.distance[1]/self.distance[0]).value**2)
-            Lbol_sun_unc = round(abs(Lbol_unc/(Lbol*np.log(10))).value, 3)
-            
-            # Update the attributes
-            self.Lbol = Lbol, Lbol_unc
-            self.Lbol_sun = Lbol_sun, Lbol_sun_unc
-            
-    def get_Mbol(self):
-        """Calculate the absolute bolometric magnitude of the SED
-        """
-        # Calculate mbol if not present
-        if not hasattr(self, 'mbol'):
-            self.get_mbol()
-           
-        # Calculate Mbol
-        if self.distance is not None:
-            Mbol = round(self.mbol[0]-5*np.log10((self.distance[0]/10*q.pc).value), 3)
-            
-            # Calculate Mbol_unc
-            Mbol_unc = round(np.sqrt(self.mbol[1]**2+((2.5/np.log(10))*(self.distance[1]/self.distance[0]).value)**2), 3)
-            
-            # Update the attribute
-            self.Mbol = Mbol, Mbol_unc
-            
-    def get_Teff(self):
-        """Calculate the effective temperature
-        """
-        # Calculate Teff
-        if self.distance is not None and self.radius is not None:
-            Teff = np.sqrt(np.sqrt((self.Lbol[0]/(4*np.pi*ac.sigma_sb*self.radius[0]**2)).to(q.K**4))).astype(int)
-            
-            # Calculate Teff_unc
-            Teff_unc = (Teff*np.sqrt((self.Lbol[1]/self.Lbol[0]).value**2 + (2*self.radius[1]/self.radius[0]).value**2)/4.).astype(int)
-            
-            # Update the attribute
-            self.Teff = Teff, Teff_unc
-            
-    def fundamental_params(self, **kwargs):
-        """
-        Calculate the fundamental parameters of the current SED
-        """
-        self.get_Lbol()
-        self.get_Mbol()
-        self.get_Teff()
+        # Update the flux calibrated spectra
+        self._calibrate_spectra()
         
-    # =========================================================================
-    # =================== Plotting ============================================
-    # =========================================================================
-    
-    def plot_spectra(self, stitched=True, **kwargs):
-        """Plot the spectra"""
-        # Stitched or not
-        specs = self.stitched_spectra if stitched else self.spectra
         
-        # Plot each spectrum
-        for spec in specs:
-            spec.plot(fig=self.fig)
+    @property
+    def photometry(self):
+        """A property for photometry"""
+        self._photometry.sort('eff')
+        return self._photometry
         
-    def plot_photometry(self, pre='app', **kwargs):
-        """Plot the photometry"""
-        # Plot the photometry with uncertainties
-        data = self.photometry[self.photometry[pre+'_flux_unc']>0]
-        errorbar(self.fig, data['eff'], data[pre+'_flux'], yerr=data[pre+'_flux_unc'], color='navy', **kwargs)
         
-        # Plot the photometry without uncertainties
-        data = self.photometry[self.photometry[pre+'_flux_unc']==np.nan]
-        errorbar(self.fig, data['eff'], data[pre+'_flux'], point_kwargs={'fill_color':'white', 'line_color':'navy'}, **kwargs)
-    
     def plot(self, app=True, photometry=True, spectra=True, integral=False, syn_photometry=True, blackbody=True, scale=['log','log'], output=False, **kwargs):
         """
         Plot the SED
@@ -958,6 +817,56 @@ class SED(object):
 
         return self.fig
         
+    
+    def plot_photometry(self, pre='app', **kwargs):
+        """Plot the photometry"""
+        # Plot the photometry with uncertainties
+        data = self.photometry[self.photometry[pre+'_flux_unc']>0]
+        errorbar(self.fig, data['eff'], data[pre+'_flux'], yerr=data[pre+'_flux_unc'], color='navy', **kwargs)
+        
+        # Plot the photometry without uncertainties
+        data = self.photometry[self.photometry[pre+'_flux_unc']==np.nan]
+        errorbar(self.fig, data['eff'], data[pre+'_flux'], point_kwargs={'fill_color':'white', 'line_color':'navy'}, **kwargs)
+        
+        
+    def plot_spectra(self, stitched=True, **kwargs):
+        """Plot the spectra"""
+        # Stitched or not
+        specs = self.stitched_spectra if stitched else self.spectra
+        
+        # Plot each spectrum
+        for spec in specs:
+            spec.plot(fig=self.fig)
+            
+        
+    @property
+    def radius(self):
+        """A property for radius"""
+        return self._radius
+    
+    
+    @radius.setter
+    def radius(self, radius):
+        """A setter for radius"""
+        # Make sure it's a sequence
+        if not isinstance(radius, (tuple, list, np.ndarray)) or len(radius) not in [2,3]:
+            raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
+            
+        # Make sure the values are in length units
+        try:
+            _ = [i.to(q.m) for i in radius]
+        except:
+            raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
+        
+        # Set the radius!
+        self._radius = tuple(radius)
+        
+        if self.verbose:
+            print('Setting radius to',self.radius)
+        
+        # Update the things that depend on radius!
+        
+        
     @property
     def results(self):
         """A property for displaying the results"""
@@ -993,8 +902,83 @@ class SED(object):
                 pass
         
         return at.Table(np.asarray(rows), names=('param','value','unc','units'))
+        
+        
+    @property
+    def spectra(self):
+        """A property for spectra"""
+        return self._spectra
+        
+        
+    @property
+    def spectral_type(self):
+        """A property for spectral_type"""
+        return self._spectral_type
     
-
+    
+    @spectral_type.setter
+    def spectral_type(self, spectral_type, spectral_type_unc=None, gravity=None, lum_class='V', prefix=None):
+        """A setter for spectral_type"""
+        # Make sure it's a sequence
+        if isinstance(spectral_type, str):
+            self.SpT = spectral_type
+            spec_type = u.specType(spectral_type)
+            spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type
+            
+        # Set the spectral_type!
+        self._spectral_type = spectral_type, spectral_type_unc or 0.5
+        self.luminosity_class = lum_class
+        self.gravity = gravity or None
+        self.prefix = prefix or None
+        
+        # Set the age if not explicitly set
+        if self.age is None and self.gravity is not None:
+            if gravity in ['b','beta','g','gamma']:
+                self.age = 225*q.Myr, 75*q.Myr
+                
+            else:
+                print("{} is an invalid gravity. Please use 'beta' or 'gamma' instead.".format(gravity))
+        
+        # Update the radius
+        if self.radius is None:
+            # TODO self.radius = get_radius()
+            pass
+    
+    
+    @property
+    def wave_units(self):
+        """A property for wave_units"""
+        return self._wave_units
+    
+    
+    @wave_units.setter
+    def wave_units(self, wave_units):
+        """A setter for wave_units
+        
+        Parameters
+        ----------
+        wave_units: astropy.units.quantity.Quantity
+            The astropy units of the SED wavelength
+        """
+        # Make sure it's a quantity
+        if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+            raise TypeError('wave_units must be astropy.units.quantity.Quantity')
+            
+        # Make sure the values are in length units
+        try:
+            wave_units.to(q.um)
+        except:
+            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
+        
+        # Set the wave_units!
+        self._wave_units = wave_units
+        self.units = [self._wave_units, self._flux_units, self._flux_units]
+        
+        # Recalibrate the data
+        self._calibrate_photometry()
+        self._calibrate_spectra()
+    
+    
     def write(self, dirpath, app=False, spec=True, phot=False):
         """
         Exports a file of photometry and a file of the composite spectra with minimal data headers
