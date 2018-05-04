@@ -18,6 +18,7 @@ from astropy.constants import b_wien
 from . import utilities as u
 from . import synphot as s
 from . import spectrum as sp
+from . import isochrone as iso
 # from svo_filters import svo
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool, ColumnDataSource
@@ -167,6 +168,11 @@ class SED(object):
         
         # Attributes of arbitrary length
         self._spectra = []
+        self.stitched_spectra = None
+        self.app_spec_SED = None
+        self.abs_spec_SED = None
+        self.app_phot_SED = None
+        self.abs_phot_SED = None
         phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc', 'app_flux', 'app_flux_unc', 'abs_magnitude', 'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc', 'bandpass')
         phot_typs = ('U16', float, float, float, float, float, float, float, float, float, 'O')
         self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
@@ -183,18 +189,40 @@ class SED(object):
             
         # Make a plot
         self.fig = figure()
+        
+        # Empty result attributes
+        self.Teff = None
+        self.Lbol = None
+        self.Mbol = None
+        
+        # Default parameters
+        self.age = 6*q.Gyr, 4*q.Gyr
     
     
     def add_photometry(self, band, mag, mag_unc, **kwargs):
-        """A setter for photometry
+        """Add a photometric measurement to the photometry table
+        
+        Parameters
+        ----------
+        band: name, SEDkit.synphot.Bandpass
+            The bandpass name or instance
+        mag: float
+            The magnitude
+        mag_unc: float
+            The magnitude uncertainty
         """
         # Make sure the arrays are the same shape
         if not isinstance(mag, float) and not isinstance(mag_unc, float):
             raise TypeError("Magnitude and uncertainty must be floats.")
             
         # Get the bandpass
-        bp = s.bandpass(band)
-        
+        if isinstance(band, str):
+            bp = s.Bandpass(band)
+        elif isinstance(band, SEDkit.synphot.Bandpass):
+            bp, band = band, band.name
+        else:
+            print('Not a recognized bandpass:',band)
+            
         # Make a dict for the new point
         new_photometry = {'band':band, 'eff':bp.pivot()*q.um, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
         
@@ -206,6 +234,17 @@ class SED(object):
         
         # Calculate flux and calibrate
         self._calibrate_photometry()
+        
+        
+    def add_photometry_csv(self, csv_file):
+        """Add a table of photometry from a CSV file
+        
+        Parameters
+        ----------
+        csv_file: str
+            The path to the csv file
+        """
+        pass
         
         
     def add_spectrum(self, wave, flux, unc=None, **kwargs):
@@ -756,7 +795,7 @@ class SED(object):
                      y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
 
         # Plot spectra
-        if spectra and self.spectra is not None:
+        if spectra and len(self._spectra)>0:
             spec_SED = getattr(self, pre+'spec_SED')
             source = ColumnDataSource(data=dict(x=spec_SED.wave, y=spec_SED.flux, z=spec_SED.unc))
             hover = HoverTool(tooltips=[( 'wave', '$x'),( 'flux', '$y'),('unc','$z')], mode='vline')
@@ -867,6 +906,25 @@ class SED(object):
         # Update the things that depend on radius!
         
         
+    def radius_from_spectral_type(self):
+        """Estimate the radius from CMD plot
+        """
+        pass
+        
+        
+    def radius_from_age(self, radius_units=q.Rsun):
+        """Estimate the radius from model isochrones given an age and Lbol
+        """
+        if self.age is not None and self.Lbol is not None:
+            
+            radius = iso.isochrone_interp(self.Lbol, self.age)
+            
+            self.radius = (radius[0]*q.Rjup).to(radius_units), (radius[1]*q.Rjup).to(radius_units)
+            
+        else:
+            print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
+        
+        
     @property
     def results(self):
         """A property for displaying the results"""
@@ -880,7 +938,7 @@ class SED(object):
                       'Lbol', 'Lbol_sun', 'Mbol', 'Teff']:
             
             # Get the values and format
-            attr = getattr(self, param)
+            attr = getattr(self, param, None)
             
             if attr is None:
                 attr = '--'

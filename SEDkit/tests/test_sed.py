@@ -28,7 +28,24 @@ def vega_test():
     # Lbol should be 40.12 ± 0.45 Lsun
     # Mass shoulf be 2.135 Msun
     
-    return s.results
+    return s, s.results
+
+def no_spectra():
+    s = sed.SED(age=(455*q.Myr,13*q.Myr), radius=(2.362*q.Rsun,0.02*q.Rjup), parallax=(130.23*q.mas,0.36*q.mas), spectral_type='A0V')
+    s.add_photometry('2MASS.J', -0.177, 0.206)
+    s.add_photometry('2MASS.H', -0.029, 0.146)
+    s.add_photometry('2MASS.Ks', 0.129, 0.186)
+    s.add_photometry('WISE.W1', 1.452, None)
+    s.add_photometry('WISE.W2', 1.143, 0.019)
+    s.add_photometry('WISE.W3', -0.067, 0.008)
+    s.add_photometry('WISE.W4', -0.127, 0.006)
+    
+    # Teff should be 9602 ± 180 K
+    # Mbol should be 0.6
+    # Lbol should be 40.12 ± 0.45 Lsun
+    # Mass shoulf be 2.135 Msun
+    
+    return s, s.results
 
 class SEDTests(unittest.TestCase):
     """Tests for the SED class"""
