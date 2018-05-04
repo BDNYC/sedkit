@@ -213,7 +213,7 @@ class SED(object):
         mag_unc: float
             The magnitude uncertainty
         """
-        # Make sure the arrays are the same shape
+        # Make sure the magnitudes are floats
         if not isinstance(mag, float) and not isinstance(mag_unc, float):
             raise TypeError("Magnitude and uncertainty must be floats.")
             
@@ -225,8 +225,16 @@ class SED(object):
         else:
             print('Not a recognized bandpass:',band)
             
+        # Convert bandpass to desired units
+        bp.wave_units = self.wave_units
+        
+        
+        # Drop the current band if it exists
+        if band in self.photometry['band']:
+            self.drop_photometry(band)
+        
         # Make a dict for the new point
-        new_photometry = {'band':band, 'eff':bp.pivot()*q.um, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
+        new_photometry = {'band':band, 'eff':bp.eff, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
         
         # Add the kwargs
         new_photometry.update(kwargs)
@@ -238,13 +246,19 @@ class SED(object):
         self._calibrate_photometry()
         
         
-    def add_photometry_csv(self, csv_file):
+    def add_photometry_csv(self, csv_file, bands, err_wildcard='e_*'):
         """Add a table of photometry from a CSV file
         
         Parameters
         ----------
         csv_file: str
             The path to the csv file
+        bands: sequence
+            The name of the magnitude columns to ingest
+        err_wildcard: str
+            The wildcard string to identify the uncertainty columns,
+            e.g. If 'Jmag' is the magnitude column and 'e_Jmag' is
+            the associated error, err_wildcard='e_*'
         """
         pass
         
@@ -430,10 +444,14 @@ class SED(object):
         self._calibrate_spectra()
         
         
-    def drop_photometry(self, idx):
-        """Drop a photometry by its index in the photometry list
+    def drop_photometry(self, band):
+        """Drop a photometry by its index or name in the photometry list
         """
-        self._photometry.remove_row(idx)
+        if isinstance(band, str) and band in self.photometry['band']:
+            band = self._photometry.remove_row(np.where(self._photometry['band']==band)[0][0])
+
+        if isinstance(band, int) and band<=len(self._photometry):
+            self._photometry.remove_row(band)
         
         
     def drop_spectrum(self, idx):
@@ -1072,49 +1090,49 @@ class SED(object):
         self._calibrate_spectra()
     
     
-    def write(self, dirpath, app=False, spec=True, phot=False):
-        """
-        Exports a file of photometry and a file of the composite spectra with minimal data headers
-
-        Parameters
-        ----------
-        dirpath: str
-          The directory path to place the file
-        app: bool
-          Write apparent SED data
-        spec: bool
-          Write a file for the spectra with wavelength, flux and uncertainty columns
-        phot: bool
-          Write a file for the photometry with
-        """
-        if spec:
-            try:
-                spec_data = self.app_spec_SED.spectrum if app else self.abs_spec_SED.spectrum
-                if dirpath.endswith('.txt'):
-                    specpath = dirpath
-                else:
-                    specpath = dirpath + '{} SED.txt'.format(self.name)
-                
-                header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name, 'apparent' if app else 'flux calibrated')
-            
-                np.savetxt(specpath, np.asarray(spec_data).T, header=header)
-            
-            except IOError:
-                print("Couldn't print spectra.")
-            
-        if phot:
-            try:
-                phot = self.photometry
-            
-                if dirpath.endswith('.txt'):
-                    photpath = dirpath
-                else:
-                    photpath = dirpath + '{} phot.txt'.format(self.name)
-                
-                phot.write(photpath, format='ipac')
-            
-            except IOError:
-                print("Couldn't print photometry.")
+    # def write(self, dirpath, app=False, spec=True, phot=False):
+    #     """
+    #     Exports a file of photometry and a file of the composite spectra with minimal data headers
+    #
+    #     Parameters
+    #     ----------
+    #     dirpath: str
+    #       The directory path to place the file
+    #     app: bool
+    #       Write apparent SED data
+    #     spec: bool
+    #       Write a file for the spectra with wavelength, flux and uncertainty columns
+    #     phot: bool
+    #       Write a file for the photometry with
+    #     """
+    #     if spec:
+    #         try:
+    #             spec_data = self.app_spec_SED.spectrum if app else self.abs_spec_SED.spectrum
+    #             if dirpath.endswith('.txt'):
+    #                 specpath = dirpath
+    #             else:
+    #                 specpath = dirpath + '{} SED.txt'.format(self.name)
+    #
+    #             header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name, 'apparent' if app else 'flux calibrated')
+    #
+    #             np.savetxt(specpath, np.asarray(spec_data).T, header=header)
+    #
+    #         except IOError:
+    #             print("Couldn't print spectra.")
+    #
+    #     if phot:
+    #         try:
+    #             phot = self.photometry
+    #
+    #             if dirpath.endswith('.txt'):
+    #                 photpath = dirpath
+    #             else:
+    #                 photpath = dirpath + '{} phot.txt'.format(self.name)
+    #
+    #             phot.write(photpath, format='ipac')
+    #
+    #         except IOError:
+    #             print("Couldn't print photometry.")
 
     # =========================================================================
     # =========================================================================

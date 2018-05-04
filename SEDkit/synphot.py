@@ -37,6 +37,9 @@ class Bandpass(ps.ArrayBandpass):
         # Inherit from ArrayBandpass
         super().__init__(wave=wave, throughput=thru, waveunits='Angstrom', name=name)
         
+        # Set the effective wavelength
+        self.eff = self.pivot()*q.AA
+        
         # Store SVO filter
         self.svo = filt
         
@@ -76,6 +79,9 @@ class Bandpass(ps.ArrayBandpass):
         
         # Update the wavelength array
         self.convert(str(wave_units))
+        
+        # Update the effective wavelength
+        self.eff = self.eff.to(wave_units)
             
         # Set the wave_units!
         self._wave_units = wave_units
