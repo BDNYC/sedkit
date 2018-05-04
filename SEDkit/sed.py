@@ -13,7 +13,7 @@ import pysynphot as ps
 # from uncertainties import unumpy as unp
 from astropy.modeling.models import custom_model
 from astropy.modeling import models, fitting
-from astropy.analytic_functions import blackbody_lambda
+from astropy.modeling.blackbody import blackbody_lambda
 from astropy.constants import b_wien
 from . import utilities as u
 from . import synphot as s
