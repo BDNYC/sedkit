@@ -197,6 +197,8 @@ class SED(object):
         
         # Default parameters
         self.age = 6*q.Gyr, 4*q.Gyr
+        self.mass = None
+        self.logg = None
     
     
     def add_photometry(self, band, mag, mag_unc, **kwargs):
@@ -513,8 +515,17 @@ class SED(object):
         """
         Calculate the fundamental parameters of the current SED
         """
+        # Calculate bolometric luminosity (dependent on fbol and distance)
         self.get_Lbol()
         self.get_Mbol()
+        
+        # Interpolate surface gravity, mass and radius from isochrones
+        if self.radius is None:
+            self.radius_from_age()
+        self.logg_from_age()
+        self.mass_from_age()
+        
+        # Calculate Teff (dependent on Lbol, distance, and radius)
         self.get_Teff()
         
         
@@ -622,6 +633,17 @@ class SED(object):
         return groups
         
         
+    def logg_from_age(self):
+        """Estimate the surface gravity from model isochrones given an age and Lbol
+        """
+        if self.age is not None and self.Lbol is not None:
+            
+            self.logg = tuple(iso.isochrone_interp(self.Lbol, self.age, yparam='logg'))
+            
+        else:
+            print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
+        
+        
     def make_sed(self):
         """Construct the SED
         """
@@ -661,6 +683,19 @@ class SED(object):
 
         # Calculate Fundamental Params
         self.fundamental_params()
+        
+        
+    def mass_from_age(self, mass_units=q.Msun):
+        """Estimate the surface gravity from model isochrones given an age and Lbol
+        """
+        if self.age is not None and self.Lbol is not None:
+            
+            mass = iso.isochrone_interp(self.Lbol, self.age, yparam='mass')
+            
+            self.mass = (mass[0]*q.Mjup).to(mass_units), (mass[1]*q.Mjup).to(mass_units)
+            
+        else:
+            print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the mass.'.format(self))
         
         
     @property
@@ -935,7 +970,7 @@ class SED(object):
         rows = []
         for param in ['name', 'age', 'distance', 'parallax', 'radius',\
                       'spectral_type', 'membership', 'fbol', 'mbol', \
-                      'Lbol', 'Lbol_sun', 'Mbol', 'Teff']:
+                      'Lbol', 'Lbol_sun', 'Mbol', 'logg', 'mass', 'Teff']:
             
             # Get the values and format
             attr = getattr(self, param, None)
