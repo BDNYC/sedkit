@@ -253,7 +253,7 @@ class Spectrum(ps.ArraySpectrum):
 
         # Calculate the synthetic magnitude in each band
         for row in photometry:
-            n = self.renormalize(row['app_magnitude'], 'vegamag', row['bandpass'], no_spec=True)
+            n = self.renormalize(row['app_magnitude'], row['bandpass'], no_spec=True)
             norms.append(n)
         
         # Get the average normalization factor
