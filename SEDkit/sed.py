@@ -10,7 +10,6 @@ import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
 import pysynphot as ps
-# from uncertainties import unumpy as unp
 from astropy.modeling.models import custom_model
 from astropy.modeling import models, fitting
 from astropy.modeling.blackbody import blackbody_lambda
@@ -19,7 +18,6 @@ from . import utilities as u
 from . import synphot as s
 from . import spectrum as sp
 from . import isochrone as iso
-# from svo_filters import svo
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool, ColumnDataSource
 
@@ -227,7 +225,6 @@ class SED(object):
             
         # Convert bandpass to desired units
         bp.wave_units = self.wave_units
-        
         
         # Drop the current band if it exists
         if band in self.photometry['band']:

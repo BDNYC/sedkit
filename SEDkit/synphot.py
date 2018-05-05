@@ -7,14 +7,15 @@ import glob
 import astropy.table as at
 import astropy.units as q
 import astropy.io.ascii as asc
-from svo_filters import svo
+import astropy.io.votable as vo
 from pkg_resources import resource_filename
 from bokeh.plotting import figure, show
 
 # Area of the telescope has to be in centimeters2
 # ps.setref(area=250000.)
 
-FILTERS = svo.filters()
+FILTERS = [i.split('/')[-1] for i in glob.glob(resource_filename('SEDkit', 'data/filters/*'))]
+FILTER_PATH = resource_filename('SEDkit', 'data/filters/')
 warnings.simplefilter('ignore')
 
 
@@ -28,10 +29,20 @@ class Bandpass(ps.ArrayBandpass):
         name: str
             The filter name
         """
-        # Get the throughput from svo_filters
-        filt = svo.Filter(name)
-        wave, thru = filt.rsr
-        wave *= 10000
+        # Look for the file
+        if name in FILTERS:
+            file = glob.glob(resource_filename('SEDkit', 'data/filters/{}'.format(name)))[0]
+        
+        else:
+            raise IOError("No bandpass named {} in {}".format(name, FILTER_PATH))
+
+        # Parse the XML file
+        vot = vo.parse_single_table(file)
+        wave, thru = np.array([list(i) for i in vot.array]).T
+        
+        # Convert um to A if necessary
+        if wave[0]<100:
+            wave *= 10000
         self._wave_units = q.AA
         
         # Inherit from ArrayBandpass
@@ -39,9 +50,6 @@ class Bandpass(ps.ArrayBandpass):
         
         # Set the effective wavelength
         self.eff = self.pivot()*q.AA
-        
-        # Store SVO filter
-        self.svo = filt
         
     def plot(self, fig=None):
         """Plot the throughput"""
