@@ -390,7 +390,8 @@ class SED(object):
             self.app_phot_SED = sp.Spectrum(*[phot_array[i]*Q for i,Q in zip(app_cols,self.units)])
 
             # Make absolute photometric SED with photometry
-            self.abs_phot_SED = self.app_phot_SED.flux_calibrate(self.distance)
+            if self.distance is not None:
+                self.abs_phot_SED = self.app_phot_SED.flux_calibrate(self.distance)
     
     
     def _calibrate_spectra(self):
@@ -873,7 +874,7 @@ class SED(object):
         try:
             mn_xs, mx_xs = np.nanmin(spec_SED.wave), np.nanmax(spec_SED.wave)
             mn_ys, mx_ys = np.nanmin(spec_SED.flux[spec_SED.flux>0]), np.nanmax(spec_SED.flux[spec_SED.flux>0])
-        except IOError:
+        except:
             mn_xs, mx_xs, mn_ys, mx_ys = 0.3, 18, 999, -999
 
         mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp,mn_xs]), np.nanmax([mx_xp,mx_xs]), np.nanmin([mn_yp,mn_ys]), np.nanmax([mx_yp,mx_ys])
