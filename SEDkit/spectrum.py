@@ -11,6 +11,7 @@ import pysynphot as ps
 import copy
 import itertools
 from . import synphot as syn
+import astropy.constants as ac
 from uncertainties import unumpy as unp
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.palettes import Category10
@@ -49,6 +50,8 @@ class Spectrum(ps.ArraySpectrum):
             
         # Check wave units and convert to Angstroms if necessary to work with pysynphot
         try:
+            # Store original units
+            wave_units = wave.unit
             wave = wave.to(q.AA)
         except:
             raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
@@ -95,6 +98,10 @@ class Spectrum(ps.ArraySpectrum):
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         wave, flux, unc = [i.value for i in [wave,flux,unc]]
         
+        # Make negatives and zeros into nans
+        idx, = np.where(flux[flux>0])
+        wave, flux, unc = [i[idx] for i in [wave, flux, unc]]
+        
         # Inherit from ArraySpectrum
         super().__init__(wave, flux)
         
@@ -103,6 +110,10 @@ class Spectrum(ps.ArraySpectrum):
         
         # Store components is added
         self.components = None
+        
+        # Convert back to input units
+        self.wave_units = wave_units
+        
         
     def __add__(self, spec2):
         """Add the spectra of this and another Spectrum object
@@ -194,10 +205,12 @@ class Spectrum(ps.ArraySpectrum):
         except IOError:
             raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
             
+            
     @property
     def unc(self):
         """A property for auncertainty"""
         return self._unctable
+    
     
     def renormalize(self, RNval, band, RNUnits='vegamag', force=True, no_spec=False):
         """Include uncertainties in renorm() method"""
@@ -205,19 +218,17 @@ class Spectrum(ps.ArraySpectrum):
         spec = self.renorm(RNval, RNUnits, band, force)
         
         # Caluclate the normalization factor
-        norm = np.mean(spec.flux)/np.mean(self.flux)
+        norm = np.mean(self.flux)/np.mean(spec.flux)
         
         # Just return the normalization factor
         if no_spec:
             return norm
         
-        # Apply it to the uncertainties
-        unc = self.unc*norm
-        
-        # Store spectrum with units
-        data = [spec.wave, spec.flux, unc]
+        # Scale the spectrum
+        data = [spec.wave, self.flux*norm, self.unc*norm]
         
         return Spectrum(*[i*Q for i,Q in zip(data, self.units)])
+        
         
     def integral(self, units=q.erg/q.s/q.cm**2):
         """Include uncertainties in integrate() method"""
@@ -234,6 +245,7 @@ class Spectrum(ps.ArraySpectrum):
         
         return val, unc
         
+        
     def norm_to_mags(self, photometry):
         """
         Normalize the spectrum to the given bandpasses
@@ -248,18 +260,26 @@ class Spectrum(ps.ArraySpectrum):
         pysynphot.spectrum.ArraySpectralElement
             The normalized spectrum object
         """
-        # Collect normalization constants
-        norms = []
-
-        # Calculate the synthetic magnitude in each band
+        # Calculate all the synthetic magnitudes
+        data = []
         for row in photometry:
-            n = self.renormalize(row['app_magnitude'], row['bandpass'], no_spec=True)
-            norms.append(n)
-        
-        # Get the average normalization factor
-        norm = np.nanmean(norms)
+            try:
+                bp = row['bandpass']
+                syn_flx, syn_unc = self.synthetic_flux(bp)
+                weight = max(bp.wave)-min(bp.wave)
+                flx, unc = list(row['app_flux','app_flux_unc'])
+                data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
+            except IOError:
+                pass
+                
+        # Calculate the weighted normalization
+        f1, e1, f2, e2, weights = np.array(data).T
+        numerator = sum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2))
+        denominator = sum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
+        norm = numerator/denominator
         
         return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
+        
         
     @property
     def spectrum(self):
@@ -267,16 +287,19 @@ class Spectrum(ps.ArraySpectrum):
         """
         return [i*Q for i,Q in zip(self.data, self.units)]
         
+        
     @property
     def data(self):
         """Store the spectrum without units
         """
         return np.array([self.wave, self.flux, self.unc])
         
+        
     @property
     def wave_units(self):
         """A property for wave_units"""
         return self._wave_units
+    
     
     @wave_units.setter
     def wave_units(self, wave_units):
@@ -305,10 +328,12 @@ class Spectrum(ps.ArraySpectrum):
         self._wave_units = wave_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
             
+            
     @property
     def flux_units(self):
         """A property for flux_units"""
         return self._flux_units
+    
     
     @flux_units.setter
     def flux_units(self, flux_units):
@@ -337,7 +362,73 @@ class Spectrum(ps.ArraySpectrum):
         self._flux_units = flux_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         
-    def synthetic_magnitude(self, bandpass):
+        
+    # def synthetic_magnitude(self, bandpass):
+    #     """
+    #     Calculate the magnitude in a bandpass
+    #
+    #     Parameters
+    #     ----------
+    #     bandpass: pysynphot.spectrum.ArraySpectralElement
+    #         The bandpass to use
+    #
+    #     Returns
+    #     -------
+    #     float
+    #         The magnitude
+    #     """
+    #     # Convert self to bandpass units
+    #     self.wave_units = bandpass.wave_units
+    #
+    #     # Calculate flux in band
+    #     star = ps.Observation(self, bandpass, binset=bandpass.wave)
+    #
+    #     # Calculate zeropoint flux in band
+    #     vega = ps.Observation(Vega(wave_units=bandpass.wave_units), bandpass, binset=bandpass.wave)
+    #
+    #     # Calculate the magnitude
+    #     mag = -2.5*np.log10(star.integrate()/vega.integrate())
+    #
+    #     # Caluclate the uncertainty
+    #     wav = bandpass.wave*bandpass.wave_units
+    #     sig_f = np.interp(wav, star.wave, star.flux, left=0, right=0)*self.flux_units
+    #     rsr = bandpass.throughput
+    #     grad = np.gradient(wav).value
+    #     erg = (wav/(ac.h*ac.c)).to(1/q.erg)
+    #     print(sig_f*rsr*grad*erg)
+    #     unc = np.sqrt(np.sum(((sig_f*rsr*grad*erg)**2).to((self.flux_units/q.erg)**2)))
+    #
+    #     return round(mag, 3), round(unc, 3)
+    #
+    #
+    # def synthetic_flux(self, bandpass, plot=False):
+    #     """
+    #     Calculate the synthetic flux in the given bandpass
+    #
+    #     Parameters
+    #     ----------
+    #     bandpass: pysynphot.spectrum.ArraySpectralElement
+    #         The bandpass to use
+    #
+    #     Returns
+    #     -------
+    #     tuple
+    #         The flux and uncertainty
+    #     """
+    #     mag = self.synthetic_magnitude(bandpass)
+    #
+    #     flx = syn.mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA)
+    #
+    #     if plot:
+    #         fig = figure()
+    #         fig.line(self.wave, self.flux, color='navy')
+    #         fig.circle(bandpass.pivot(), flx, color='red')
+    #         show(fig)
+    #
+    #     return flx
+
+
+    def synthetic_flux(self, bandpass, plot=False):
         """
         Calculate the magnitude in a bandpass
     
@@ -345,26 +436,44 @@ class Spectrum(ps.ArraySpectrum):
         ----------
         bandpass: pysynphot.spectrum.ArraySpectralElement
             The bandpass to use
+        plot: bool
+            Plot the spectrum and the flux point
     
         Returns
         -------
         float
             The magnitude
         """
-        # Calculate flux in band
-        star = ps.Observation(self, bandpass, binset=bandpass.wave)
-    
-        # Calculate zeropoint flux in band
-        vega = ps.Observation(Vega(), bandpass, binset=bandpass.wave)
-    
-        # Calculate the magnitude
-        mag = -2.5*np.log10(star.integrate()/vega.integrate())
-    
-        return round(mag, 3)
+        # Convert self to bandpass units
+        self.wave_units = bandpass.wave_units
         
-    def synthetic_flux(self, bandpass, plot=False):
+        # Caluclate the bits
+        wav = bandpass.wave*bandpass.wave_units
+        rsr = bandpass.throughput
+        erg = (wav/(ac.h*ac.c)).to(1/q.erg)
+        grad = np.gradient(wav).value
+        
+        # Interpolate the spectrum to the filter wavelengths
+        f = np.interp(wav, self.wave, self.flux, left=0, right=0)*self.flux_units
+        sig_f = np.interp(wav, self.wave, self.unc, left=0, right=0)*self.flux_units
+        
+        # Calculate the flux
+        flx = (np.trapz(f*rsr, x=wav)/np.trapz(rsr, x=wav)).to(self.flux_units)
+        unc = np.sqrt(np.sum(((sig_f*rsr*grad)**2).to(self.flux_units**2)))
+        
+        # Plot it
+        if plot:
+            fig = figure()
+            fig.line(self.wave, self.flux, color='navy')
+            fig.circle(bandpass.pivot(), flx, color='red')
+            show(fig)
+    
+        return flx, unc
+        
+        
+    def synthetic_magnitude(self, bandpass):
         """
-        Calculate the synthetic flux in the given bandpass
+        Calculate the synthetic magnitude in the given bandpass
         
         Parameters
         ----------
@@ -376,17 +485,13 @@ class Spectrum(ps.ArraySpectrum):
         tuple
             The flux and uncertainty
         """
-        mag = self.synthetic_magnitude(bandpass)
+        flx = self.synthetic_flux(bandpass)
         
-        flx = syn.mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA)
+        # Calculate the magnitude
+        mag = syn.flux2mag(flx, bandpass)
         
-        if plot:
-            fig = figure()
-            fig.line(self.wave, self.flux, color='navy')
-            fig.circle(bandpass.pivot(), flx, color='red')
-            show(fig)
-    
-        return flx
+        return mag
+        
         
     @property
     def plot(self, fig=None, components=False, **kwargs):
@@ -407,10 +512,17 @@ class Spectrum(ps.ArraySpectrum):
             
         return fig
         
+        
 class Vega(Spectrum):
-    def __init__(self):
+    def __init__(self, wave_units=q.AA):
+        # Get the data and apply units
         wave, flux = np.genfromtxt(resource_filename('SEDkit', 'data/STScI_Vega.txt'), unpack=True)
         wave *= q.AA
         flux *= q.erg/q.s/q.cm**2/q.AA
+        
+        # Convert to target wave units
+        wave = wave.to(wave_units)
+        
+        # Make the Spectrum object
         super().__init__(wave, flux)
         

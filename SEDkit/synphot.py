@@ -5,6 +5,7 @@ import os
 import itertools
 import glob
 import astropy.table as at
+import astropy.constants as ac
 import astropy.units as q
 import astropy.io.ascii as asc
 import astropy.io.votable as vo
@@ -51,6 +52,27 @@ class Bandpass(ps.ArrayBandpass):
         # Set the effective wavelength
         self.eff = self.pivot()*q.AA
         
+        # Parse the SVO filter metadata
+        for p in [str(p).split() for p in vot.params]:
+        
+            # Extract the key/value pairs
+            key = p[1].split('"')[1]
+            val = p[-1].split('"')[1]
+        
+            # Do some formatting
+            if p[2].split('"')[1]=='float' or p[3].split('"')[1]=='float':
+                val = float(val)
+            
+            else:
+                val = val.replace('b&apos;','').replace('&apos','').replace('&amp;','&').strip(';')
+                 
+            # Set the attribute
+            if key!='Description':
+                setattr(self, key, val)
+                
+        # Convert Jy zero point to Flam units
+        self._zero_point = (self.ZeroPoint*q.Jy*ac.c/self.eff**2).to(q.erg/q.s/q.cm**2/q.AA)
+        
     def plot(self, fig=None):
         """Plot the throughput"""
         if fig is None:
@@ -93,6 +115,32 @@ class Bandpass(ps.ArrayBandpass):
             
         # Set the wave_units!
         self._wave_units = wave_units
+        
+        
+    @property
+    def zero_point(self):
+        return self._zero_point
+        
+        
+    @property
+    def zp_units(self):
+        """A getter for the zeropoint units"""
+        return self._zp_units
+    
+    
+    @zp_units.setter
+    def zp_units(self, zp_units):
+        """
+        Set the flux units of the zeropoint
+        
+        Parameters
+        ----------
+        zp_units: str, astropy.units.core.PrefixUnit
+            The units of the zeropoint flux density
+        """
+        # Convert to units
+        self._zero_point = self.zero_point.to(zp_units)
+        self._zp_units = zp_units
 
 
 def mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA):
@@ -112,11 +160,42 @@ def mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA):
         mag = mag, np.nan
     
     # Calculate the flux density
-    zp = (bandpass.svo.ZeroPoint*q.Unit(bandpass.svo.ZeroPointUnit)).to(units)
-    f = (zp*10**(mag[0]/-2.5)).to(units)
+    f = (bandpass.zero_point*10**(mag[0]/-2.5)).to(units)
     sig_f = (f*mag[1]*np.log(10)/2.5).to(units)
         
     return f, sig_f
+    
+    
+def flux2mag(flx, bandpass):
+    """Calculate the magnitude for a given flux
+    
+    Parameters
+    ----------
+    flx: astropy.units.quantity.Quantity, sequence
+        The flux or (flux, uncertainty)
+    bandpass: pysynphot.spectrum.ArraySpectralElement
+        The bandpass to use
+    """
+    if isinstance(flx, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+        flx = flx, np.nan*flx.unit
+        
+    # Calculate the magnitude
+    eff = bandpass.eff
+    zp = bandpass.zero_point
+    flx, unc = flx
+    unit = flx.unit
+    
+    # Convert energy units to photon counts
+    flx = (flx*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
+    zp = (zp*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
+    unc = (unc*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
+
+    # Calculate magnitude
+    m = -2.5*np.log10((flx/zp).value)
+    m_unc = (2.5/np.log(10))*(unc/flx).value
+    
+    return m, m_unc
+    
     
 def mag_table(spectra=None, bandpasses=FILTERS, models='phoenix', jmag=10, save=None):
     """

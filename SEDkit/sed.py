@@ -8,6 +8,7 @@ SEDkit rewritten with astropy and astrodbkit
 import numpy as np
 import astropy.table as at
 import astropy.units as q
+import astropy.io.ascii as ii
 import astropy.constants as ac
 import pysynphot as ps
 from astropy.modeling.models import custom_model
@@ -243,21 +244,29 @@ class SED(object):
         self._calibrate_photometry()
         
         
-    def add_photometry_csv(self, csv_file, bands, err_wildcard='e_*'):
-        """Add a table of photometry from a CSV file
+    def add_photometry_file(self, file):
+        """Add a table of photometry from an ASCII file that 
+        contains the columns 'band', 'magnitude', and 'uncertainty'
         
         Parameters
         ----------
-        csv_file: str
-            The path to the csv file
-        bands: sequence
-            The name of the magnitude columns to ingest
-        err_wildcard: str
-            The wildcard string to identify the uncertainty columns,
-            e.g. If 'Jmag' is the magnitude column and 'e_Jmag' is
-            the associated error, err_wildcard='e_*'
+        file: str
+            The path to the ascii file
         """
-        pass
+        # Read the data
+        table = ii.read(file)
+        
+        # Test to see if columns are present
+        cols = ['band','magnitude','uncertainty']
+        if not all([i in table.colnames for i in cols]):
+            raise TableError('File must contain columns', cols)
+        
+        # Keep relevant cols
+        table = table[cols]
+        
+        # Add the data to the SED object
+        for row in table:
+            self.add_photometry(*row)
         
         
     def add_spectrum(self, wave, flux, unc=None, **kwargs):
@@ -265,27 +274,59 @@ class SED(object):
 
         Parameters
         ----------
-        wave: np.ndarray
+        wave: astropy.units.quantity.Quantity
             The wavelength array
-        flux: np.ndarray
+        flux: astropy.units.quantity.Quantity
             The flux array
-        unc: np.ndarray (optional)
+        unc: astropy.units.quantity.Quantity (optional)
             The uncertainty array
         """
         # Create the Spectrum object
         spec = sp.Spectrum(wave, flux, unc, **kwargs)
         
-        # Convert to SED units
-        spec.wave_units = self.wave_units
-        spec.flux_units = self.flux_units
+        # Check to see if it is a duplicate spectrum
+        if len(self.spectra)>0 and any([all(spec.wave==i.wave) for i in self.spectra]):
+            print('Looks like you already added this spectrum. If you want to overwrite, run drop_spectrum() first.')
+            
+        else:
+            # Convert to SED units
+            spec.wave_units = self.wave_units
+            spec.flux_units = self.flux_units
         
-        # Add the spectrum object to the list of spectra
-        self._spectra.append(spec)
+            # Add the spectrum object to the list of spectra
+            self._spectra.append(spec)
         
-        # Combine spectra and flux calibrate
-        self._calibrate_spectra()
+            # Combine spectra and flux calibrate
+            self._calibrate_spectra()
         
         
+    def add_spectrum_file(self, file, wave_units, flux_units):
+        """Add a 2 or 3 column spectrum from an ASCII file
+        
+        Parameters
+        ----------
+        file: str
+            The path to the ascii file
+        wave_units: astropy.units.quantity.Quantity
+            The wavelength units
+        flux_units: astropy.units.quantity.Quantity
+            The flux units
+        """
+        # Read the data
+        data = np.genfromtxt(file, unpack=True)
+        
+        # Apply units
+        wave = data[0]*wave_units
+        flux = data[1]*flux_units
+        if len(data)>2:
+            unc = data[2]*flux_units
+        else:
+            unc = None
+        
+        # Add the data to the SED object
+        self.add_spectrum(wave, flux, unc=unc)
+            
+            
     @property
     def age(self):
         """A property for age"""
@@ -384,7 +425,7 @@ class SED(object):
             else:
                 print('No spectra available for SED.')
             
-            # Renormalize the stitched spectra (NOT WORKING?)
+            # Renormalize the stitched spectra
             self.stitched_spectra = [i.norm_to_mags(self.photometry) for i in self.stitched_spectra]
                 
             # Make apparent spectral SED
@@ -690,7 +731,7 @@ class SED(object):
             self.app_specphot_SED = self.app_phot_SED
 
         # Construct full app_SED
-        self.app_SED = np.sum([self.wein, self.app_specphot_SED, self.rj])
+        self.app_SED = np.sum([self.wein, self.app_specphot_SED, self.rj]+self.stitched_spectra)
 
         # Flux calibrate SEDs
         if self.distance is not None:
@@ -831,26 +872,27 @@ class SED(object):
 
         # Check for min and max spec data
         try:
-            mn_xs, mx_xs = np.nanmin(spec_SED[0].value), np.nanmax(spec_SED[0].value)
-            mn_ys, mx_ys = np.nanmin(spec_SED[1].value[spec_SED[1].value>0]), np.nanmax(spec_SED[1].value[spec_SED[1].value>0])
-        except:
+            mn_xs, mx_xs = np.nanmin(spec_SED.wave), np.nanmax(spec_SED.wave)
+            mn_ys, mx_ys = np.nanmin(spec_SED.flux[spec_SED.flux>0]), np.nanmax(spec_SED.flux[spec_SED.flux>0])
+        except IOError:
             mn_xs, mx_xs, mn_ys, mx_ys = 0.3, 18, 999, -999
 
         mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp,mn_xs]), np.nanmax([mx_xp,mx_xs]), np.nanmin([mn_yp,mn_ys]), np.nanmax([mx_yp,mx_ys])
 
         # TOOLS = 'crosshair,resize,reset,hover,box,save'
-        self.fig = figure(plot_width=1000, plot_height=600, title=self.name, 
+        self.fig = figure(plot_width=800, plot_height=500, title=self.name, 
                      y_axis_type=scale[1], x_axis_type=scale[0], 
                      x_axis_label='Wavelength [{}]'.format(self.wave_units), 
                      y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
 
         # Plot spectra
-        if spectra and len(self._spectra)>0:
+        if spectra and len(self.spectra)>0:
             spec_SED = getattr(self, pre+'spec_SED')
-            source = ColumnDataSource(data=dict(x=spec_SED.wave, y=spec_SED.flux, z=spec_SED.unc))
-            hover = HoverTool(tooltips=[( 'wave', '$x'),( 'flux', '$y'),('unc','$z')], mode='vline')
-            self.fig.add_tools(hover)
-            self.fig.line('x', 'y', source=source, legend='Spectra')
+            # source = ColumnDataSource(data=dict(x=spec_SED.wave, y=spec_SED.flux, z=spec_SED.unc))
+            # hover = HoverTool(tooltips=[( 'wave', '$x'),( 'flux', '$y'),('unc','$z')], mode='vline')
+            # self.fig.add_tools(hover)
+            # self.fig.line('x', 'y', source=source, legend='Spectra')
+            self.fig.line(spec_SED.wave, spec_SED.flux, legend='Spectra')
 
         # Plot photometry
         if photometry and self.photometry is not None:
