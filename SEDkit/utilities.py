@@ -13,7 +13,6 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
 import scipy.optimize as opt
-from svo_filters import svo
 from astropy.utils.data_info import ParentDtypeInfo
 
 def blackbody(lam, Teff, Teff_unc='', Flam=False, radius=1*ac.R_jup, dist=10*q.pc, plot=False):
@@ -209,7 +208,7 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
     
     Parameters
     ----------
-    band: str, svo.Filter
+    band: SEDkit.synphot.Bandpass
         The bandpass
     mag: float, astropy.unit.quantity.Quantity
         The magnitude
@@ -219,9 +218,6 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
         The unit for the output flux
     """
     try:
-        if isinstance(band, str):
-            band = svo.Filter(band)
-        
         # Make mag unitless
         if hasattr(mag,'unit'):
             mag = mag.value
@@ -229,7 +225,7 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
             sig_m = sig_m.value
         
         # Calculate the flux density
-        zp = q.Quantity(band.ZeroPoint, band.ZeroPointUnit)
+        zp = band.zero_point
         f = (zp*10**(mag/-2.5)).to(units)
         
         if isinstance(sig_m,str):

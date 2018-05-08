@@ -22,8 +22,6 @@ from . import isochrone as iso
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool, ColumnDataSource
 
-# FILTERS = svo.filters()
-# FILTERS.add_index('Band')
 
 PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_Y':'Wircam.Y', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3', 'HST_F125W':'WFC3_IR.F125W'}
 
@@ -365,7 +363,8 @@ class SED(object):
         
             # Calculate app_flux values
             for n,row in enumerate(self._photometry):
-                app_flux, app_flux_unc = u.mag2flux(row['band'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
+                # app_flux, app_flux_unc = u.mag2flux(row['band'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
+                app_flux, app_flux_unc = u.mag2flux(row['bandpass'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
                 self._photometry['app_flux'][n] = app_flux.to(self.flux_units)
                 self._photometry['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
             
@@ -379,7 +378,8 @@ class SED(object):
             
                 # Calculate abs_flux values
                 for n,row in enumerate(self._photometry):
-                    abs_flux, abs_flux_unc = u.mag2flux(row['band'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
+                    # abs_flux, abs_flux_unc = u.mag2flux(row['band'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
+                    abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
                     self._photometry['abs_flux'][n] = abs_flux.to(self.flux_units)
                     self._photometry['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
 
