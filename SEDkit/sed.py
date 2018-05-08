@@ -167,7 +167,7 @@ class SED(object):
         
         # Attributes of arbitrary length
         self._spectra = []
-        self.stitched_spectra = None
+        self.stitched_spectra = []
         self.app_spec_SED = None
         self.abs_spec_SED = None
         self.app_phot_SED = None
@@ -240,9 +240,6 @@ class SED(object):
         # Add it to the table
         self._photometry.add_row(new_photometry)
         
-        # Calculate flux and calibrate
-        self._calibrate_photometry()
-        
         
     def add_photometry_file(self, file):
         """Add a table of photometry from an ASCII file that 
@@ -295,9 +292,6 @@ class SED(object):
         
             # Add the spectrum object to the list of spectra
             self._spectra.append(spec)
-        
-            # Combine spectra and flux calibrate
-            self._calibrate_spectra()
         
         
     def add_spectrum_file(self, file, wave_units, flux_units):
@@ -352,8 +346,6 @@ class SED(object):
         if self.verbose:
             print('Setting age to',self.age)
         
-        # Update the things that depend on age!
-        
         
     def _calibrate_photometry(self):
         """Calculate the absolute magnitudes and flux values of all rows in the photometry table
@@ -398,7 +390,7 @@ class SED(object):
             self.app_phot_SED = sp.Spectrum(*[phot_array[i]*Q for i,Q in zip(app_cols,self.units)])
 
             # Make absolute photometric SED with photometry
-            self.abs_phot_SED = u.flux_calibrate(self.app_phot_SED.flux, self.distance[0], self.app_phot_SED.unc, self.distance[1])
+            self.abs_phot_SED = self.app_phot_SED.flux_calibrate(self.distance)
     
     
     def _calibrate_spectra(self):
@@ -423,6 +415,7 @@ class SED(object):
             
             # If no spectra, forget it
             else:
+                self.stitched_spectra = []
                 print('No spectra available for SED.')
             
             # Renormalize the stitched spectra
@@ -438,7 +431,7 @@ class SED(object):
             
             # Make absolute spectral SED
             if self.app_spec_SED is not None and self.distance is not None:
-                self.abs_spec_SED = u.flux_calibrate(self.app_spec_SED.flux, self.distance[0], self.app_spec_SED.unc, self.distance[1])
+                self.abs_spec_SED = self.app_spec_SED.flux_calibrate(self.distance)
     
     
     @property
@@ -703,6 +696,12 @@ class SED(object):
     def make_sed(self):
         """Construct the SED
         """
+        # Calculate flux and calibrate
+        self._calibrate_photometry()
+        
+        # Combine spectra and flux calibrate
+        self._calibrate_spectra()
+        
         # Make a Wein tail that goes to (almost) zero flux at (almost) zero wavelength
         self.wein = sp.Spectrum(np.array([0.00001])*self.wave_units, np.array([1E-30])*self.flux_units, np.array([1E-30])*self.flux_units)
         
@@ -735,7 +734,7 @@ class SED(object):
 
         # Flux calibrate SEDs
         if self.distance is not None:
-            self.abs_SED = u.flux_calibrate(self.app_SED.flux, self.distance[0], self.app_SED.unc, self.distance[1])
+            self.abs_SED = self.app_SED.flux_calibrate(self.distance)
 
         # Calculate Fundamental Params
         self.fundamental_params()

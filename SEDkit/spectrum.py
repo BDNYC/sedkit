@@ -207,127 +207,38 @@ class Spectrum(ps.ArraySpectrum):
             
             
     @property
-    def unc(self):
-        """A property for auncertainty"""
-        return self._unctable
-    
-    
-    def renormalize(self, RNval, band, RNUnits='vegamag', force=True, no_spec=False):
-        """Include uncertainties in renorm() method"""
-        # Caluclate the remornalized flux
-        spec = self.renorm(RNval, RNUnits, band, force)
-        
-        # Caluclate the normalization factor
-        norm = np.mean(self.flux)/np.mean(spec.flux)
-        
-        # Just return the normalization factor
-        if no_spec:
-            return norm
-        
-        # Scale the spectrum
-        data = [spec.wave, self.flux*norm, self.unc*norm]
-        
-        return Spectrum(*[i*Q for i,Q in zip(data, self.units)])
-        
-        
-    def integral(self, units=q.erg/q.s/q.cm**2):
-        """Include uncertainties in integrate() method"""
-        # Calculate the factor for the given units
-        m = (self.flux_units*self.wave_units).to(units)
-        
-        # Calculate integral and uncertainty
-        u_arr = unp.uarray(self.data[1:])
-        value = np.trapz(u_arr, x=self.wave)
-        
-        # Apply the units
-        val = float(unp.nominal_values(value)*m)*units
-        unc = float(unp.std_devs(value)*m)*units
-        
-        return val, unc
-        
-        
-    def norm_to_mags(self, photometry):
-        """
-        Normalize the spectrum to the given bandpasses
-    
-        Parameters
-        ----------
-        photometry: astropy.table.QTable
-            A table of the photometry
-    
-        Returns
-        -------
-        pysynphot.spectrum.ArraySpectralElement
-            The normalized spectrum object
-        """
-        # Calculate all the synthetic magnitudes
-        data = []
-        for row in photometry:
-            try:
-                bp = row['bandpass']
-                syn_flx, syn_unc = self.synthetic_flux(bp)
-                weight = max(bp.wave)-min(bp.wave)
-                flx, unc = list(row['app_flux','app_flux_unc'])
-                data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
-            except IOError:
-                pass
-                
-        # Calculate the weighted normalization
-        f1, e1, f2, e2, weights = np.array(data).T
-        numerator = sum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2))
-        denominator = sum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
-        norm = numerator/denominator
-        
-        return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
-        
-        
-    @property
-    def spectrum(self):
-        """Store the spectrum with units
-        """
-        return [i*Q for i,Q in zip(self.data, self.units)]
-        
-        
-    @property
     def data(self):
         """Store the spectrum without units
         """
         return np.array([self.wave, self.flux, self.unc])
         
         
-    @property
-    def wave_units(self):
-        """A property for wave_units"""
-        return self._wave_units
-    
-    
-    @wave_units.setter
-    def wave_units(self, wave_units):
-        """A setter for wave_units
+    def flux_calibrate(self, distance, target_distance=10*q.pc, flux_units=None):
+        """Flux calibrate the spectrum from the given distance to the target distance
         
         Parameters
         ----------
-        wave_units: astropy.units.quantity.Quantity
-            The astropy units of the SED wavelength
+        distance: astropy.unit.quantity.Quantity, sequence
+            The current distance or (distance, uncertainty) of the spectrum
+        target_distance: astropy.unit.quantity.Quantity
+            The distance to flux calibrate the spectrum to
+        flux_units: astropy.unit.quantity.Quantity
+            The desired flux units of the output
         """
-        # Make sure it's a quantity
-        if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
-            raise TypeError('wave_units must be astropy.units.quantity.Quantity')
+        # Set target flux units
+        if flux_units is None:
+            flux_units = self.flux_units
             
-        # Make sure the values are in length units
-        try:
-            wave_units.to(q.um)
-        except:
-            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
+        # Calculate the scaled flux
+        flux = (self.spectrum[1]*(distance[0]/target_distance)**2).to(flux_units)
         
-        # Update the wavelength array
-        self.convert(str(wave_units))
-        # self._wavetable = self.wave*self.wave_units.to(wave_units)
-            
-        # Set the wave_units!
-        self._wave_units = wave_units
-        self.units = [self._wave_units, self._flux_units, self._flux_units]
-            
+        # Calculate the scaled uncertainty
+        term1 = (self.spectrum[2]*distance[0]/target_distance).to(flux_units)
+        term2 = (2*self.spectrum[1]*(distance[1]*distance[0]/target_distance**2)).to(flux_units)
+        unc = np.sqrt(term1**2 + term2**2)
+        
+        return Spectrum(self.spectrum[0], flux, unc)
+        
             
     @property
     def flux_units(self):
@@ -363,69 +274,132 @@ class Spectrum(ps.ArraySpectrum):
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         
         
-    # def synthetic_magnitude(self, bandpass):
-    #     """
-    #     Calculate the magnitude in a bandpass
-    #
-    #     Parameters
-    #     ----------
-    #     bandpass: pysynphot.spectrum.ArraySpectralElement
-    #         The bandpass to use
-    #
-    #     Returns
-    #     -------
-    #     float
-    #         The magnitude
-    #     """
-    #     # Convert self to bandpass units
-    #     self.wave_units = bandpass.wave_units
-    #
-    #     # Calculate flux in band
-    #     star = ps.Observation(self, bandpass, binset=bandpass.wave)
-    #
-    #     # Calculate zeropoint flux in band
-    #     vega = ps.Observation(Vega(wave_units=bandpass.wave_units), bandpass, binset=bandpass.wave)
-    #
-    #     # Calculate the magnitude
-    #     mag = -2.5*np.log10(star.integrate()/vega.integrate())
-    #
-    #     # Caluclate the uncertainty
-    #     wav = bandpass.wave*bandpass.wave_units
-    #     sig_f = np.interp(wav, star.wave, star.flux, left=0, right=0)*self.flux_units
-    #     rsr = bandpass.throughput
-    #     grad = np.gradient(wav).value
-    #     erg = (wav/(ac.h*ac.c)).to(1/q.erg)
-    #     print(sig_f*rsr*grad*erg)
-    #     unc = np.sqrt(np.sum(((sig_f*rsr*grad*erg)**2).to((self.flux_units/q.erg)**2)))
-    #
-    #     return round(mag, 3), round(unc, 3)
-    #
-    #
-    # def synthetic_flux(self, bandpass, plot=False):
-    #     """
-    #     Calculate the synthetic flux in the given bandpass
-    #
-    #     Parameters
-    #     ----------
-    #     bandpass: pysynphot.spectrum.ArraySpectralElement
-    #         The bandpass to use
-    #
-    #     Returns
-    #     -------
-    #     tuple
-    #         The flux and uncertainty
-    #     """
-    #     mag = self.synthetic_magnitude(bandpass)
-    #
-    #     flx = syn.mag2flux(mag, bandpass, units=q.erg/q.s/q.cm**2/q.AA)
-    #
-    #     if plot:
-    #         fig = figure()
-    #         fig.line(self.wave, self.flux, color='navy')
-    #         fig.circle(bandpass.pivot(), flx, color='red')
-    #         show(fig)
-    #
-    #     return flx
+    def integral(self, units=q.erg/q.s/q.cm**2):
+        """Include uncertainties in integrate() method"""
+        # Calculate the factor for the given units
+        m = (self.flux_units*self.wave_units).to(units)
+    
+        # Calculate integral and uncertainty
+        u_arr = unp.uarray(self.data[1:])
+        value = np.trapz(u_arr, x=self.wave)
+    
+        # Apply the units
+        val = float(unp.nominal_values(value)*m)*units
+        unc = float(unp.std_devs(value)*m)*units
+    
+        return val, unc
+    
+    
+    def norm_to_mags(self, photometry, exclude=[]):
+        """
+        Normalize the spectrum to the given bandpasses
+    
+        Parameters
+        ----------
+        photometry: astropy.table.QTable
+            A table of the photometry
+        exclude: sequence
+            A list of bands to exclude from normalization
+    
+        Returns
+        -------
+        pysynphot.spectrum.ArraySpectralElement
+            The normalized spectrum object
+        """
+        if len(photometry)==0:
+            print('No photometry to normalize this spectrum.')
+            norm = 1
+            
+        else:
+            # Calculate all the synthetic magnitudes
+            data = []
+            for row in photometry:
+                if row['band'] not in exclude:
+                    try:
+                        bp = row['bandpass']
+                        syn_flx, syn_unc = self.synthetic_flux(bp)
+                        weight = max(bp.wave)-min(bp.wave)
+                        flx, unc = list(row['app_flux','app_flux_unc'])
+                        data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
+                    except IOError:
+                        pass
+                
+            # Check if there is overlap
+            if len(data)==0:
+                print('No photometry in the range {} to normalize this spectrum.'.format([self.min, self.max]))
+                
+            # Calculate the weighted normalization
+            else:
+                f1, e1, f2, e2, weights = np.array(data).T
+                numerator = np.nansum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2))
+                denominator = np.nansum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
+                norm = numerator/denominator
+        
+        return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
+        
+        
+    @property
+    def plot(self, fig=None, components=False, **kwargs):
+        """Plot the spectrum"""
+        # Make the figure
+        if fig is None:
+            fig = figure()
+            fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
+            fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
+        
+        # Plot the spectrum
+        fig.line(self.wave, self.flux, color=next(COLORS))
+        
+        # Plot the components
+        if self.components is not None:
+            for spec in self.components:
+                fig.line(spec.wave, spec.flux, color=next(COLORS))
+            
+        return fig
+        
+        
+    def renormalize(self, mag, bandpass, system='vegamag', force=True, no_spec=False):
+        """Include uncertainties in renorm() method
+        
+        Parameters
+        ----------
+        mag: float
+            The target magnitude
+        bandpass: SEDkit.synphot.Bandpass
+            The bandpass to use
+        system: str
+            The magnitude system to use
+        force: bool
+            Force the synthetic photometry even if incomplete coverage
+        no_spec: bool
+            Return the normalization constant only
+        
+        Returns
+        -------
+        float, pysynphot.spectrum.ArraySpectralElement
+            The normalization constant or normalized spectrum object
+        """
+        # Caluclate the remornalized flux
+        spec = self.renorm(mag, system, bandpass, force)
+    
+        # Caluclate the normalization factor
+        norm = np.mean(self.flux)/np.mean(spec.flux)
+    
+        # Just return the normalization factor
+        if no_spec:
+            return norm
+    
+        # Scale the spectrum
+        data = [spec.wave, self.flux*norm, self.unc*norm]
+    
+        return Spectrum(*[i*Q for i,Q in zip(data, self.units)])
+    
+    
+    @property
+    def spectrum(self):
+        """Store the spectrum with units
+        """
+        return [i*Q for i,Q in zip(self.data, self.units)]
 
 
     def synthetic_flux(self, bandpass, plot=False):
@@ -494,34 +468,68 @@ class Spectrum(ps.ArraySpectrum):
         
         
     @property
-    def plot(self, fig=None, components=False, **kwargs):
-        """Plot the spectrum"""
-        # Make the figure
-        if fig is None:
-            fig = figure()
-            fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
-            fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
+    def unc(self):
+        """A property for auncertainty"""
+        return self._unctable
         
-        # Plot the spectrum
-        fig.line(self.wave, self.flux, color=next(COLORS))
         
-        # Plot the components
-        if self.components is not None:
-            for spec in self.components:
-                fig.line(spec.wave, spec.flux, color=next(COLORS))
+    @property
+    def wave_units(self):
+        """A property for wave_units"""
+        return self._wave_units
+    
+    
+    @wave_units.setter
+    def wave_units(self, wave_units):
+        """A setter for wave_units
+        
+        Parameters
+        ----------
+        wave_units: astropy.units.quantity.Quantity
+            The astropy units of the SED wavelength
+        """
+        # Make sure it's a quantity
+        if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+            raise TypeError('wave_units must be astropy.units.quantity.Quantity')
             
-        return fig
+        # Make sure the values are in length units
+        try:
+            wave_units.to(q.um)
+        except:
+            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
         
+        # Update the wavelength array
+        self.convert(str(wave_units))
         
+        # Update min and max
+        self.min = min(self.spectrum[0]).to(wave_units)
+        self.max = max(self.spectrum[0]).to(wave_units)
+            
+        # Set the wave_units!
+        self._wave_units = wave_units
+        self.units = [self._wave_units, self._flux_units, self._flux_units]
+
+
 class Vega(Spectrum):
-    def __init__(self, wave_units=q.AA):
+    """A Spectrum object of Vega"""
+    def __init__(self, wave_units=q.AA, flux_units=q.erg/q.s/q.cm**2/q.AA):
+        """Initialize the Spectrum object
+        
+        Parameters
+        ----------
+        wave_units: astropy.units.quantity.Quantity
+            The desired wavelength units
+        flux_units: astropy.units.quantity.Quantity
+            The desired flux units
+        """
         # Get the data and apply units
         wave, flux = np.genfromtxt(resource_filename('SEDkit', 'data/STScI_Vega.txt'), unpack=True)
         wave *= q.AA
         flux *= q.erg/q.s/q.cm**2/q.AA
         
-        # Convert to target wave units
+        # Convert to target units
         wave = wave.to(wave_units)
+        flux = flux.to(flux_units)
         
         # Make the Spectrum object
         super().__init__(wave, flux)
