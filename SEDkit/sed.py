@@ -15,6 +15,7 @@ from astropy.modeling.models import custom_model
 from astropy.modeling import models, fitting
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.constants import b_wien
+from astropy.io import fits
 from . import utilities as u
 from . import synphot as s
 from . import spectrum as sp
@@ -292,8 +293,8 @@ class SED(object):
             self._spectra.append(spec)
         
         
-    def add_spectrum_file(self, file, wave_units, flux_units):
-        """Add a 2 or 3 column spectrum from an ASCII file
+    def add_spectrum_file(self, file, wave_units, flux_units, ext=0):
+        """Add a spectrum from an ASCII or FITS file
         
         Parameters
         ----------
@@ -303,9 +304,26 @@ class SED(object):
             The wavelength units
         flux_units: astropy.units.quantity.Quantity
             The flux units
+        ext: int, str
+            The FITS extension name or index
         """
         # Read the data
-        data = np.genfromtxt(file, unpack=True)
+        if file.endswith('.fits'):
+            raw = fits.getdata(file, ext=ext)
+            
+            # Check if it is a recarray
+            if isinstance(raw, fits.fitsrec.FITS_rec):
+                data = raw['WAVELENGTH'], raw['FLUX'], raw['ERROR']
+                
+            # Otherwise just an array
+            else:
+                data = raw
+            
+        elif file.endswith('.txt'):
+            data = np.genfromtxt(file, unpack=True)
+            
+        else:
+            raise FileError('The file needs to be ASCII or FITS.')
         
         # Apply units
         wave = data[0]*wave_units
