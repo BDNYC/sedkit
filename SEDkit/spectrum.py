@@ -12,7 +12,6 @@ import copy
 import itertools
 from . import synphot as syn
 import astropy.constants as ac
-from uncertainties import unumpy as unp
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.palettes import Category10
 from pkg_resources import resource_filename
@@ -188,6 +187,10 @@ class Spectrum(ps.ArraySpectrum):
                 o_unc = np.sqrt(o1[2]**2 + o2_unc**2)
                 overlap = np.array([o1[0], o_flux, o_unc])
                 
+                # Make sure it is 2D
+                if overlap.shape==(3,):
+                    overlap.shape = 3, 1
+                    
                 # Concatenate the segments
                 spec = np.concatenate([left, overlap, right], axis=1)
                 
@@ -259,11 +262,11 @@ class Spectrum(ps.ArraySpectrum):
         if not isinstance(flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
             raise TypeError('flux_units must be astropy.units.quantity.Quantity')
             
-        # Make sure the values are in length units
+        # Make sure the values are in flux density units
         try:
-            flux_units.to(q.erg/q.s/q.cm**2/q.AA)
+            _ = flux_units.to(q.erg/q.s/q.cm**2/q.AA)
         except:
-            raise TypeError("flux_units must be a unit of length, e.g. 'um'")
+            raise TypeError("flux_units must be in flux density units, e.g. 'erg/s/cm2/A'")
         
         # Update the flux and unc arrays
         self._fluxtable = self.flux*self.flux_units.to(flux_units)
@@ -275,19 +278,31 @@ class Spectrum(ps.ArraySpectrum):
         
         
     def integral(self, units=q.erg/q.s/q.cm**2):
-        """Include uncertainties in integrate() method"""
+        """Include uncertainties in integrate() method
+        
+        Parameters
+        ----------
+        units: astropy.units.quantity.Quantity
+            The target units for the integral
+        
+        Returns
+        -------
+        sequence
+            The integrated flux and uncertainty
+        """
+        # Make sure the target units are flux units
+        try:
+            _ = units.to(q.erg/q.s/q.cm**2)
+        except:
+            raise TypeError("units must be in flux units, e.g. 'erg/s/cm2'")
+            
         # Calculate the factor for the given units
-        m = (self.flux_units*self.wave_units).to(units)
+        m = self.flux_units*self.wave_units
+        
+        val = np.trapz(self.flux, x=self.wave)*m
+        unc = np.sqrt(np.sum((self.unc*np.gradient(self.wave)*m)**2))
     
-        # Calculate integral and uncertainty
-        u_arr = unp.uarray(self.data[1:])
-        value = np.trapz(u_arr, x=self.wave)
-    
-        # Apply the units
-        val = float(unp.nominal_values(value)*m)*units
-        unc = float(unp.std_devs(value)*m)*units
-    
-        return val, unc
+        return val.to(units), unc.to(units)
     
     
     def norm_to_mags(self, photometry, exclude=[]):
@@ -318,7 +333,7 @@ class Spectrum(ps.ArraySpectrum):
                     try:
                         bp = row['bandpass']
                         syn_flx, syn_unc = self.synthetic_flux(bp)
-                        weight = max(bp.wave)-min(bp.wave)
+                        weight = bp.FWHM#max(bp.wave)-min(bp.wave)
                         flx, unc = list(row['app_flux','app_flux_unc'])
                         data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
                     except IOError:
@@ -348,7 +363,13 @@ class Spectrum(ps.ArraySpectrum):
             fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
         
         # Plot the spectrum
-        fig.line(self.wave, self.flux, color=next(COLORS))
+        c = next(COLORS)
+        fig.line(self.wave, self.flux, color=c)
+        
+        # Plot the uncertainties
+        band_x = np.append(self.wave, self.wave[::-1])
+        band_y = np.append(self.flux-self.unc, (self.flux+self.unc)[::-1])
+        fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
         
         # Plot the components
         if self.components is not None:
@@ -358,7 +379,7 @@ class Spectrum(ps.ArraySpectrum):
         return fig
         
         
-    def renormalize(self, mag, bandpass, system='vegamag', force=True, no_spec=False):
+    def renormalize(self, mag, bandpass, system='vegamag', force=False, no_spec=False):
         """Include uncertainties in renorm() method
         
         Parameters
