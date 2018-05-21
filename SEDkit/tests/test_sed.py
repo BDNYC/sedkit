@@ -8,6 +8,30 @@ from .. import spectrum as sp
 SPEC1 = [np.linspace(0.8,2.5,200)*q.um, abs(np.random.normal(size=200))*1E-15*q.erg/q.s/q.cm**2/q.AA, abs(np.random.normal(size=200))*1E-16*q.erg/q.s/q.cm**2/q.AA]
 SPEC2 = [np.linspace(21000,38000,150)*q.AA, abs(np.random.normal(size=150))*5E-14*q.erg/q.s/q.cm**2/q.AA, abs(np.random.normal(size=150))*5E-15*q.erg/q.s/q.cm**2/q.AA]
 
+def test(n=1):
+    """
+    Run a test target
+    """
+    from astrodbkit import astrodb
+    from SEDkit import sed
+    db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
+    
+    if n==1:
+        source_id = 2
+        from_dict = {'spectra':3176, 'photometry':'*', 'parallaxes':575, 'sources':source_id}
+    if n==2:
+        source_id = 86
+        from_dict = {'spectra':[379,1580,2726], 'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
+    if n==3:
+        source_id = 2051
+        from_dict = {}
+    
+    x = sed.MakeSED(source_id, db, from_dict=from_dict)
+    x.get_syn_photometry()
+    x.plot()
+    
+    return x
+
 def vega_test():
     s = sed.SED(age=(455*q.Myr,13*q.Myr), radius=(2.362*q.Rsun,0.02*q.Rjup), parallax=(130.23*q.mas,0.36*q.mas), spectral_type='A0V')
     vega = sp.Vega()

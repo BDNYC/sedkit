@@ -99,7 +99,7 @@ def isochrone_interp(z, age, xparam='Lbol', yparam='radius', xlabel='', ylabel='
         # plt.plot(x, min_iso, ls='--', color='r'), plt.plot(x, max_iso, ls='--', color='r')
         plt.xlim(xlims), plt.ylim(ylims)
 
-    return [round(np.mean([y_min, y_max]), 2), round(abs(y_min - np.mean([y_min, y_max])), 2)]
+    return round(np.mean([y_min, y_max]), 2), round(abs(y_min - np.mean([y_min, y_max])), 2)
 
 # def isochrone_interp(z, z_unc, min_age, max_age, xparam='Lbol', yparam='radius', xlabel='', ylabel='', xlims='',
 #                      ylims='', evo_model='hybrid_solar_age', plot=False, ages=[0.01, 0.03, 0.05, 0.1, 0.2, 0.5, 1, 10],

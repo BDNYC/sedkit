@@ -11,6 +11,7 @@ import pysynphot as ps
 import copy
 import itertools
 from . import synphot as syn
+from . import utilities as u
 import astropy.constants as ac
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.palettes import Category10
@@ -74,7 +75,10 @@ class Spectrum(ps.ArraySpectrum):
             _ = unc.to(q.erg/q.s/q.cm**2/q.AA)
         except:
             raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
-            
+        
+        # Remove nans, negatives, zeros, and infs
+        wave, flux, unc = u.scrub([wave, flux, unc])
+        
         # Trim spectrum edges by SNR value
         if isinstance(snr_trim, (float, int)):
             idx, = np.where(flux/unc>=snr_trim)

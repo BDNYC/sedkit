@@ -11,6 +11,7 @@ import astropy.units as q
 import astropy.io.ascii as ii
 import astropy.constants as ac
 import pysynphot as ps
+import sqlite3 as sql
 from astropy.modeling.models import custom_model
 from astropy.modeling import models, fitting
 from astropy.modeling.blackbody import blackbody_lambda
@@ -22,46 +23,6 @@ from . import spectrum as sp
 from . import isochrone as iso
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.models import HoverTool, Label, Range1d, BoxZoomTool, ColumnDataSource
-
-
-PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_Y':'Wircam.Y', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3', 'HST_F125W':'WFC3_IR.F125W'}
-
-def from_ids(db, **kwargs):
-    """
-    Create dictionary of data tables from record id values or lists
-    
-    Example
-    -------
-    data = sed.from_ids(db, sources=2, photometry=[1096,1097,12511,12512], spectra=[3176,3773], parallaxes=575)
-    
-    Parameters
-    ----------
-    db: astrodbkit.astrodb.Database
-        The database to draw the records from
-    """
-    # Make an empty dict
-    data = {}.fromkeys(kwargs.keys())
-    
-    # Generate each table
-    for k,v in kwargs.items():
-        try:
-            # Option to get all records
-            if v=='*':
-                v = db.query("SELECT id from {} WHERE source_id={}".format(k,kwargs['sources']))['id']
-                
-            # Make sure it's a list
-            if isinstance(v, int):
-                v = [v]
-                
-            # Build the query with the provided ids
-            id_str = ','.join(list(map(str,v)))
-            qry = "SELECT * FROM {} WHERE id IN ({})".format(k,id_str)
-            data[k] = db.query(qry, fmt='table')
-            
-        except IOError:
-            print('Could not generate',k,'table.')
-            
-    return data
 
 
 class SED(object):
@@ -159,6 +120,9 @@ class SED(object):
         self._spectral_type = None
         self._membership = None
         
+        # Keep track of the calculation status
+        self.calculated = False
+        
         # Set the default wavelength and flux units
         self._wave_units = q.um 
         self._flux_units = q.erg/q.s/q.cm**2/q.AA
@@ -239,6 +203,9 @@ class SED(object):
         # Add it to the table
         self._photometry.add_row(new_photometry)
         
+        # Set SED as uncalculated
+        self.calculated = False
+        
         
     def add_photometry_file(self, file):
         """Add a table of photometry from an ASCII file that 
@@ -291,6 +258,9 @@ class SED(object):
         
             # Add the spectrum object to the list of spectra
             self._spectra.append(spec)
+            
+        # Set SED as uncalculated
+        self.calculated = False
         
         
     def add_spectrum_file(self, file, wave_units, flux_units, ext=0):
@@ -361,6 +331,9 @@ class SED(object):
         
         if self.verbose:
             print('Setting age to',self.age)
+            
+        # Set SED as uncalculated
+        self.calculated = False
         
         
     def _calibrate_photometry(self):
@@ -410,6 +383,9 @@ class SED(object):
             # Make absolute photometric SED with photometry
             if self.distance is not None:
                 self.abs_phot_SED = self.app_phot_SED.flux_calibrate(self.distance)
+                
+        # Set SED as uncalculated
+        self.calculated = False
     
     
     def _calibrate_spectra(self):
@@ -451,6 +427,9 @@ class SED(object):
             # Make absolute spectral SED
             if self.app_spec_SED is not None and self.distance is not None:
                 self.abs_spec_SED = self.app_spec_SED.flux_calibrate(self.distance)
+                
+        # Set SED as uncalculated
+        self.calculated = False
     
     
     @property
@@ -493,6 +472,9 @@ class SED(object):
         # Update the flux calibrated spectra
         self._calibrate_spectra()
         
+        # Set SED as uncalculated
+        self.calculated = False
+        
         
     def drop_photometry(self, band):
         """Drop a photometry by its index or name in the photometry list
@@ -502,12 +484,18 @@ class SED(object):
 
         if isinstance(band, int) and band<=len(self._photometry):
             self._photometry.remove_row(band)
+            
+        # Set SED as uncalculated
+        self.calculated = False
         
         
     def drop_spectrum(self, idx):
         """Drop a spectrum by its index in the spectra list
         """
         self._spectra = [i for n,i in enumerate(self._spectra) if n!=idx]
+        
+        # Set SED as uncalculated
+        self.calculated = False
         
         
     @property
@@ -546,38 +534,42 @@ class SED(object):
         self._calibrate_spectra()
         
         
-    def from_database(self, db, from_dict=None, **kwargs):
+    def from_database(self, db, **kwargs):
         """
-        Load the data from a SQL database
+        Load the data from a SQL database, 
 
+        """
+        # Initialize the database
+        if isinstance(db, str):
+            db = sql.connect(db, isolation_level=None, detect_types=sql.PARSE_DECLTYPES, check_same_thread=False)
+            
+        # Create dictionary factory
+        def dict_factory(cursor, row):
+            d = {}
+            for idx, col in enumerate(cursor.description):
+                d[col[0]] = row[idx]
+            return d
+            
+        # Make the row factory
+        df = db.cursor()
+        df.row_factory = dict_factory
+            
+        # Get the photometry
         if 'photometry' in kwargs:
-            # Get phot from database
-
-        """
-        # Get the data for the source from the dictionary of ids
-        if isinstance(from_dict, dict):
-            if not 'sources' in from_dict:
-                from_dict['sources'] = source_id
-            all_data = from_ids(db, **from_dict)
-
-        # Or get the inventory from the database
-        else:
-            all_data = db.inventory(source_id, fetch=True)
-
-        # Store the tables as attributes
-        for table in ['sources','spectra','photometry','spectral_types','parallaxes']:
-
-            # Get data from the dictionary
-            if table in all_data:
-                setattr(self, table, at.QTable(all_data[table]))
-
-            # If no data, generate dummy
-            else:
-                qry = "SELECT * FROM {} LIMIT 1".format(table)
-                dummy = db.query(qry, fmt='table')
-                dummy.remove_row(0)
-                setattr(self, table, at.QTable(dummy))
-
+            phot_ids = kwargs['photometry']
+            phot = df.execute("SELECT * FROM photometry WHERE id IN ({})".format(','.join(['?']*len(phot_ids))), phot_ids).fetchall()
+            
+            # Add the bands
+            for mag in phot:
+                self.add_photometry(mag['band'], mag['magnitude'], mag['magnitude_unc'])
+                
+        # Get the parallax
+        if 'parallax' in kwargs and isinstance(kwargs['parallax'],int):
+            plx = df.execute("SELECT * FROM parallaxes WHERE id==?", kwargs['parallax']).fetchone()
+            
+            # Add it to the object
+            self.parallax = plx['parallax']*q.mas, plx['parallax_unc']*q.mas 
+            
 
     def fundamental_params(self, **kwargs):
         """
@@ -713,8 +705,11 @@ class SED(object):
         
         
     def make_sed(self):
-        """Construct the SED
-        """
+        """Construct the SED"""
+        # Make sure the is data
+        if len(self.spectra)==0 and len(self.photometry)==0:
+            raise ValueError('Cannot make the SED without spectra or photometry!')
+        
         # Calculate flux and calibrate
         self._calibrate_photometry()
         
@@ -757,6 +752,9 @@ class SED(object):
 
         # Calculate Fundamental Params
         self.fundamental_params()
+        
+        # Set SED as calculated
+        self.calculated = True
         
         
     def mass_from_age(self, mass_units=q.Msun):
@@ -837,6 +835,9 @@ class SED(object):
         # Update the flux calibrated spectra
         self._calibrate_spectra()
         
+        # Set SED as uncalculated
+        self.calculated = False
+        
         
     @property
     def photometry(self):
@@ -879,6 +880,7 @@ class SED(object):
         pre = 'app_' if app else 'abs_'
 
         # Calculate reasonable axis limits
+        full_SED = getattr(self, pre+'SED')
         spec_SED = getattr(self, pre+'spec_SED')
         phot_SED = np.array([np.array([np.nanmean(self.photometry.loc[b][col].value) for b in list(set(self.photometry['band']))]) for col in ['eff',pre+'flux',pre+'flux_unc']])
 
@@ -897,37 +899,35 @@ class SED(object):
 
         mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp,mn_xs]), np.nanmax([mx_xp,mx_xs]), np.nanmin([mn_yp,mn_ys]), np.nanmax([mx_yp,mx_ys])
 
-        # TOOLS = 'crosshair,resize,reset,hover,box,save'
+        # Make the plot
+        TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
         self.fig = figure(plot_width=800, plot_height=500, title=self.name, 
                      y_axis_type=scale[1], x_axis_type=scale[0], 
                      x_axis_label='Wavelength [{}]'.format(self.wave_units), 
-                     y_axis_label='Flux Density [{}]'.format(str(self.flux_units)))
+                     y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
+                     tools=TOOLS)
 
         # Plot spectra
         if spectra and len(self.spectra)>0:
-            spec_SED = getattr(self, pre+'spec_SED')
-            # source = ColumnDataSource(data=dict(x=spec_SED.wave, y=spec_SED.flux, z=spec_SED.unc))
-            # hover = HoverTool(tooltips=[( 'wave', '$x'),( 'flux', '$y'),('unc','$z')], mode='vline')
-            # self.fig.add_tools(hover)
-            # self.fig.line('x', 'y', source=source, legend='Spectra')
             self.fig.line(spec_SED.wave, spec_SED.flux, legend='Spectra')
 
         # Plot photometry
         if photometry and self.photometry is not None:
-
+            
+            # Set up hover tool
+            phot_tips = [( 'Band', '@desc'), ('Wave', '@x'), ( 'Flux', '@y'), ('Unc', '@z')]
+            hover = HoverTool(names=['photometry','nondetection'], tooltips=phot_tips, mode='vline')
+            self.fig.add_tools(hover)
+            
             # Plot points with errors
-            pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff',pre+'flux',pre+'flux_unc']) if not any([np.isnan(i) for i in [x,y,z]])]).T
-            try:
-                errorbar(self.fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_alpha':0.7, 'size':8}, legend='Photometry')
-            except:
-                pass
-
-            # Plot saturated photometry
-            pts = np.array([(x,y,z) for x,y,z in np.array(self.photometry['eff','app_flux','app_flux_unc']) if np.isnan(z) and not np.isnan(y)]).T
-            try:
-                errorbar(self.fig, pts[0], pts[1], point_kwargs={'fill_alpha':0, 'size':8}, legend='Nondetection')
-            except:
-                pass
+            pts = np.array([(bnd,wav,flx,err) for bnd,wav,flx,err in np.array(self.photometry['band','eff',pre+'flux',pre+'flux_unc']) if not any([np.isnan(i) for i in [wav,flx,err]])], dtype=[('desc','S20'),('x',float),('y',float),('z',float)])
+            source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
+            self.fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', fill_alpha=0.7, size=8)
+            
+            # Plot points with errors
+            pts = np.array([(bnd,wav,flx,err) for bnd,wav,flx,err in np.array(self.photometry['band','eff',pre+'flux',pre+'flux_unc']) if np.isnan(err) and not np.isnan(flx)], dtype=[('desc','S20'),('x',float),('y',float),('z',float)])
+            source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
+            self.fig.circle('x', 'y', source=source, legend='Nondetection', name='nondetection', fill_alpha=0, size=8)
 
         # # Plot synthetic photometry
         # if syn_photometry and self.syn_photometry is not None:
@@ -938,12 +938,11 @@ class SED(object):
         #         errorbar(self.fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
         #     except:
         #         pass
-        #
-        # # Plot the SED with linear interpolation completion
-        # if integral:
-        #     full_SED = getattr(self, pre+'SED')
-        #     self.fig.line(full_SED[0].value, full_SED[1].value, line_color='black', alpha=0.3, legend='Integral Surface')
-        #     # plt.fill_between(full_SED[0].value, full_SED[1].value-full_SED[2].value, full_SED[1].value+full_SED[2].value, color='k', alpha=0.1)
+
+        # Plot the SED with linear interpolation completion
+        if integral:
+            self.fig.line(full_SED.wave, full_SED.flux, line_color='black', alpha=0.3, legend='Integral Surface')
+
         #
         # if blackbody and self.blackbody:
         #     fit_sed = getattr(self, self.bb_source)
@@ -967,25 +966,25 @@ class SED(object):
         return self.fig
         
     
-    def plot_photometry(self, pre='app', **kwargs):
-        """Plot the photometry"""
-        # Plot the photometry with uncertainties
-        data = self.photometry[self.photometry[pre+'_flux_unc']>0]
-        errorbar(self.fig, data['eff'], data[pre+'_flux'], yerr=data[pre+'_flux_unc'], color='navy', **kwargs)
-        
-        # Plot the photometry without uncertainties
-        data = self.photometry[self.photometry[pre+'_flux_unc']==np.nan]
-        errorbar(self.fig, data['eff'], data[pre+'_flux'], point_kwargs={'fill_color':'white', 'line_color':'navy'}, **kwargs)
-        
-        
-    def plot_spectra(self, stitched=True, **kwargs):
-        """Plot the spectra"""
-        # Stitched or not
-        specs = self.stitched_spectra if stitched else self.spectra
-        
-        # Plot each spectrum
-        for spec in specs:
-            spec.plot(fig=self.fig)
+    # def plot_photometry(self, pre='app', **kwargs):
+    #     """Plot the photometry"""
+    #     # Plot the photometry with uncertainties
+    #     data = self.photometry[self.photometry[pre+'_flux_unc']>0]
+    #     errorbar(self.fig, data['eff'], data[pre+'_flux'], yerr=data[pre+'_flux_unc'], color='navy', **kwargs)
+    #
+    #     # Plot the photometry without uncertainties
+    #     data = self.photometry[self.photometry[pre+'_flux_unc']==np.nan]
+    #     errorbar(self.fig, data['eff'], data[pre+'_flux'], point_kwargs={'fill_color':'white', 'line_color':'navy'}, **kwargs)
+    #
+    #
+    # def plot_spectra(self, stitched=True, **kwargs):
+    #     """Plot the spectra"""
+    #     # Stitched or not
+    #     specs = self.stitched_spectra if stitched else self.spectra
+    #
+    #     # Plot each spectrum
+    #     for spec in specs:
+    #         spec.plot(fig=self.fig)
             
         
     @property
@@ -1014,6 +1013,10 @@ class SED(object):
             print('Setting radius to',self.radius)
         
         # Update the things that depend on radius!
+        self.get_Teff()
+        
+        # Set SED as uncalculated
+        self.calculated = False
         
         
     def radius_from_spectral_type(self):
@@ -1039,7 +1042,8 @@ class SED(object):
     def results(self):
         """A property for displaying the results"""
         # Make the SED to get the most recent results
-        self.make_sed()
+        if not self.calculated:
+            self.make_sed()
         
         # Get the results
         rows = []
@@ -1061,6 +1065,9 @@ class SED(object):
                 if val<1E-4 or val>1e5:
                     val = float('{:.2e}'.format(val))
                     unc = float('{:.2e}'.format(unc))
+                if 0<val<1:
+                    val = round(val,3)
+                    unc = round(unc,3)
                 rows.append([param, val, unc, unit])
                 
             elif isinstance(attr, str):
@@ -1111,6 +1118,9 @@ class SED(object):
         if self.radius is None:
             # TODO self.radius = get_radius()
             pass
+            
+        # Set SED as uncalculated
+        self.calculated = False
     
     
     @property
@@ -1305,30 +1315,116 @@ def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_
             y_err_x.append((px, px))
             y_err_y.append((py - err, py + err))
         fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
-
-def test(n=1):
-    """
-    Run a test target
-    """
-    from astrodbkit import astrodb
-    from SEDkit import sed
-    db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
+        
+        
+class SEDCatalog:
+    """An object to collect SED results for plotting and analysis"""
+    def __init__(self):
+        """Initialize the SEDCatalog object"""
+        # List all the results columns
+        self.cols = ['name', 'age', 'age_unc', 'distance', 'distance_unc',
+                     'parallax', 'parallax_unc', 'radius', 'radius_unc',
+                     'spectral_type', 'spectral_type_unc', 'membership',
+                     'fbol', 'fbol_unc', 'mbol', 'mbol_unc', 'Lbol', 'Lbol_unc',
+                     'Lbol_sun', 'Lbol_sun_unc', 'Mbol', 'Mbol_unc',
+                     'logg', 'logg_unc', 'mass', 'mass_unc', 'Teff', 'Teff_unc']
+                
+        # A master table of all SED results
+        self.results = at.QTable(names=self.cols, dtype=['O']*len(self.cols))
+        
+        # Set the units
+        self.results['age'].unit = q.Myr
+        self.results['age_unc'].unit = q.Myr
+        self.results['distance'].unit = q.pc
+        self.results['distance_unc'].unit = q.pc
+        self.results['parallax'].unit = q.mas
+        self.results['parallax_unc'].unit = q.mas
+        self.results['radius'].unit = ac.R_sun
+        self.results['radius'].unit = ac.R_sun
+        self.results['fbol'].unit = q.erg/q.s/q.cm**2
+        self.results['fbol_unc'].unit = q.erg/q.s/q.cm**2
+        self.results['Lbol'].unit = q.erg/q.s
+        self.results['Lbol_unc'].unit = q.erg/q.s
+        self.results['mass'].unit = q.M_sun
+        self.results['mass_unc'].unit = q.M_sun
+        self.results['Teff'].unit = q.K
+        self.results['Teff_unc'].unit = q.K
+        
     
-    if n==1:
-        source_id = 2
-        from_dict = {'spectra':3176, 'photometry':'*', 'parallaxes':575, 'sources':source_id}
-    if n==2:
-        source_id = 86
-        from_dict = {'spectra':[379,1580,2726], 'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
-    if n==3:
-        source_id = 2051
-        from_dict = {}
+    def add_SED(self, sed):
+        """Add an SED to the catalog
+        
+        Parameters
+        ----------
+        sed: SEDkit.sed.SED
+            The SED object to add
+        """
+        # Add the values and uncertainties if applicable
+        results = []
+        for col in self.cols:
+            if col+'_unc' in self.cols:
+                val = getattr(sed, col)[0]
+            elif col.endswith('_unc'):
+                val = getattr(sed, col.replace('_unc',''))[1]
+            else:
+                val = getattr(sed, col)
+        
+            val = val.to(self.results[col.replace('_unc','')].unit).value if hasattr(val, 'unit') else val
+            
+            results.append(val)
+        
+        # Make the table
+        results = np.array(results)
+        
+        # Add the photometry
+        self.results.add_row(results)
+        
     
-    x = sed.MakeSED(source_id, db, from_dict=from_dict)
-    x.get_syn_photometry()
-    x.plot()
-    
-    return x
+    def plot(self, x, y, scale=['linear','linear'], fig=None):
+        """Plot parameter x versus parameter y
+        
+        Parameters
+        ----------
+        x: str
+            The name of the x axis parameter, e.g. 'SpT'
+        y: str
+            The name of the y axis parameter, e.g. 'Teff'
+        """
+        # Make the figure
+        if fig is None:
+            # Make the plot
+            TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
+            title = '{} v {}'.format(x,y)
+            fig = figure(plot_width=800, plot_height=500, title=title, 
+                         y_axis_type=scale[1], x_axis_type=scale[0], 
+                         x_axis_label='{} [{}]'.format(x, self.results[x].unit), 
+                         y_axis_label='{} [{}]'.format(y, self.results[y].unit),
+                         tools=TOOLS)
+                         
+            
+        # Get the data
+        x = self.results[x]
+        y = self.results[y]
+        
+        # Make the scatter plot
+        fig.circle(x, y)
+        
+        
+        # # Set up hover tool
+        # phot_tips = [( 'Band', '@desc'), ('Wave', '@x'), ( 'Flux', '@y'), ('Unc', '@z')]
+        # hover = HoverTool(names=['photometry','nondetection'], tooltips=phot_tips, mode='vline')
+        # self.fig.add_tools(hover)
+        #
+        # # Plot points with errors
+        # pts = np.array([(bnd,wav,flx,err) for bnd,wav,flx,err in np.array(self.photometry['band','eff',pre+'flux',pre+'flux_unc']) if not any([np.isnan(i) for i in [wav,flx,err]])]])
+        # source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
+        # self.fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', fill_alpha=0.7, size=8)
+        
+        fig.legend.location = "top_right"
+        fig.legend.click_policy = "hide"
+        
+        return fig
+        
 
 @custom_model
 def blackbody(wavelength, temperature=2000):
