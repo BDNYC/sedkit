@@ -5,7 +5,9 @@
 """
 SEDkit rewritten with astropy and astrodbkit
 """
+import os
 import numpy as np
+import pickle
 import astropy.table as at
 import astropy.units as q
 import astropy.io.ascii as ii
@@ -1379,10 +1381,30 @@ class SEDCatalog:
         results.append(sed)
         
         # Make the table
-        results = np.array(results)
+        cat = SEDCatalog()
+        table = cat.results
+        table.add_row(results)
         
-        # Add the photometry
-        self.results.add_row(results)
+        # Append apparent and absolute photometry
+        for row in sed.photometry:
+
+            # Add the apparent magnitude
+            cat.results.add_column(at.Column([row['app_magnitude']], name=row['band']))
+
+            # Add the apparent uncertainty
+            cat.results.add_column(at.Column([row['app_magnitude_unc']], name=row['band']+'_unc'))
+
+            # Add the absolute magnitude
+            cat.results.add_column(at.Column([row['abs_magnitude']], name='M_'+row['band']))
+
+            # Add the absolute uncertainty
+            cat.results.add_column(at.Column([row['abs_magnitude_unc']], name='M_'+row['band']+'_unc'))
+        
+        # Stack with current table
+        if len(self.results)==0:
+            self.results = table
+        else:
+            self.results = at.vstack([self.results,table])
         
         
     def get_SED(self, name):
@@ -1404,6 +1426,21 @@ class SEDCatalog:
         cat.results = self.results[self.results[param]==value]
         
         return cat
+        
+        
+    def load(self, file):
+        """Load a saved SEDCatalog"""
+        if os.path.isfile(file):
+            
+            f = open(file)
+            cat = pickle.load(f)
+            f.close()
+            
+            f = open(file, 'rb')
+            cat = pickle.load(f)
+            f.close()
+
+            self.results = cat
         
     
     def plot(self, x, y, scale=['linear','linear'], fig=None,
@@ -1472,6 +1509,30 @@ class SEDCatalog:
         
         return fig
         
+        
+    def save(self, file):
+        """Save the serialized data
+        
+        Parameters
+        ----------
+        file: str
+            The filepath
+        """
+        path = os.path.dirname(file)
+        
+        if os.path.exists(path):
+            
+            # Make the file if necessary
+            if not os.path.isfile(file):
+                os.system('touch {}'.format(file))
+                
+            # Write the file
+            f = open(file, 'wb')
+            pickle.dump(self.results, f, pickle.HIGHEST_PROTOCOL)
+            f.close()
+            
+            print('SEDCatalog saved to',file)
+
 
 @custom_model
 def blackbody(wavelength, temperature=2000):
