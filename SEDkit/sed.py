@@ -1327,10 +1327,12 @@ class SEDCatalog:
                      'spectral_type', 'spectral_type_unc', 'membership',
                      'fbol', 'fbol_unc', 'mbol', 'mbol_unc', 'Lbol', 'Lbol_unc',
                      'Lbol_sun', 'Lbol_sun_unc', 'Mbol', 'Mbol_unc',
-                     'logg', 'logg_unc', 'mass', 'mass_unc', 'Teff', 'Teff_unc']
+                     'logg', 'logg_unc', 'mass', 'mass_unc', 'Teff', 'Teff_unc',
+                     'SED']
                 
         # A master table of all SED results
         self.results = at.QTable(names=self.cols, dtype=['O']*len(self.cols))
+        self.results.add_index('name')
         
         # Set the units
         self.results['age'].unit = q.Myr
@@ -1361,7 +1363,7 @@ class SEDCatalog:
         """
         # Add the values and uncertainties if applicable
         results = []
-        for col in self.cols:
+        for col in self.cols[:-1]:
             if col+'_unc' in self.cols:
                 val = getattr(sed, col)[0]
             elif col.endswith('_unc'):
@@ -1372,12 +1374,36 @@ class SEDCatalog:
             val = val.to(self.results[col.replace('_unc','')].unit).value if hasattr(val, 'unit') else val
             
             results.append(val)
+            
+        # Add the SED
+        results.append(sed)
         
         # Make the table
         results = np.array(results)
         
         # Add the photometry
         self.results.add_row(results)
+        
+        
+    def get_SED(self, name):
+        """Retrieve the SED for the given object"""
+        # Get the rows
+        try:
+            return self.results.loc[name]['SED']
+            
+        except:
+            print('No SEDs named',name)
+            
+            return
+        
+        
+    def filter(self, param, value):
+        """Retrieve the filtered rows"""
+        cat = SEDCatalog()
+        
+        cat.results = self.results[self.results[param]==value]
+        
+        return cat
         
     
     def plot(self, x, y, scale=['linear','linear'], fig=None,
