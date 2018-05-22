@@ -162,7 +162,7 @@ class SED(object):
         self.logg = None
     
     
-    def add_photometry(self, band, mag, mag_unc, **kwargs):
+    def add_photometry(self, band, mag, mag_unc=None, **kwargs):
         """Add a photometric measurement to the photometry table
         
         Parameters
@@ -171,12 +171,20 @@ class SED(object):
             The bandpass name or instance
         mag: float
             The magnitude
-        mag_unc: float
+        mag_unc: float (optional)
             The magnitude uncertainty
         """
         # Make sure the magnitudes are floats
-        if not isinstance(mag, float) and not isinstance(mag_unc, float):
-            raise TypeError("Magnitude and uncertainty must be floats.")
+        if not isinstance(mag, float):
+            raise TypeError("Magnitude must be a float.")
+            
+        # Check the uncertainty
+        if not isinstance(mag, (float,None)):
+            raise TypeError("Magnitude must be a float, NaN, or None.")
+            
+        # Make NaN if 0
+        if isinstance(mag_unc, float) and mag_unc==0:
+            mag_unc = np.nan
             
         # Get the bandpass
         if isinstance(band, str):
@@ -228,6 +236,12 @@ class SED(object):
         
         # Add the data to the SED object
         for row in table:
+            
+            # Convert masked values to NaN
+            if isinstance(row[2], np.ma.core.MaskedConstant):
+                row[2] = np.nan
+            
+            # Add the magnitude
             self.add_photometry(*row)
         
         
@@ -963,27 +977,6 @@ class SED(object):
             show(self.fig)
 
         return self.fig
-        
-    
-    # def plot_photometry(self, pre='app', **kwargs):
-    #     """Plot the photometry"""
-    #     # Plot the photometry with uncertainties
-    #     data = self.photometry[self.photometry[pre+'_flux_unc']>0]
-    #     errorbar(self.fig, data['eff'], data[pre+'_flux'], yerr=data[pre+'_flux_unc'], color='navy', **kwargs)
-    #
-    #     # Plot the photometry without uncertainties
-    #     data = self.photometry[self.photometry[pre+'_flux_unc']==np.nan]
-    #     errorbar(self.fig, data['eff'], data[pre+'_flux'], point_kwargs={'fill_color':'white', 'line_color':'navy'}, **kwargs)
-    #
-    #
-    # def plot_spectra(self, stitched=True, **kwargs):
-    #     """Plot the spectra"""
-    #     # Stitched or not
-    #     specs = self.stitched_spectra if stitched else self.spectra
-    #
-    #     # Plot each spectrum
-    #     for spec in specs:
-    #         spec.plot(fig=self.fig)
             
         
     @property

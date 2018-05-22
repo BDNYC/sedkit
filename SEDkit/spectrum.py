@@ -337,8 +337,8 @@ class Spectrum(ps.ArraySpectrum):
                     try:
                         bp = row['bandpass']
                         syn_flx, syn_unc = self.synthetic_flux(bp)
-                        weight = bp.FWHM#max(bp.wave)-min(bp.wave)
                         flx, unc = list(row['app_flux','app_flux_unc'])
+                        weight = bp.FWHM#max(bp.wave)-min(bp.wave)
                         data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
                     except IOError:
                         pass
