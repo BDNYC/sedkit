@@ -1380,7 +1380,8 @@ class SEDCatalog:
         self.results.add_row(results)
         
     
-    def plot(self, x, y, scale=['linear','linear'], fig=None):
+    def plot(self, x, y, scale=['linear','linear'], fig=None,
+             xlabel=None, ylabel=None):
         """Plot parameter x versus parameter y
         
         Parameters
@@ -1397,29 +1398,49 @@ class SEDCatalog:
             title = '{} v {}'.format(x,y)
             fig = figure(plot_width=800, plot_height=500, title=title, 
                          y_axis_type=scale[1], x_axis_type=scale[0], 
-                         x_axis_label='{} [{}]'.format(x, self.results[x].unit), 
-                         y_axis_label='{} [{}]'.format(y, self.results[y].unit),
                          tools=TOOLS)
                          
+        # Get the source names
+        names = self.results['name'] 
+                        
+        # Get the x data
+        if '-' in x:
+            x1, x2 = x.split('-')
+            if self.results[x1].unit!=self.results[x2].unit:
+                raise TypeError('x-axis columns must be the same units.')
             
-        # Get the data
-        x = self.results[x]
-        y = self.results[y]
+            xunit = self.results[x1].unit
+            xdata = self.results[x1]-self.results[x2]
+        else:
+            xunit = self.results[x].unit
+            xdata = self.results[x]
+            
+        # Get the y data
+        if '-' in y:
+            y1, y2 = y.split('-')
+            if self.results[y1].unit!=self.results[y2].unit:
+                raise TypeError('y-axis columns must be the same units.')
+                
+            yunit = self.results[y1].unit
+            ydata = self.results[y1]-self.results[y2]
+        else:
+            yunit = self.results[y].unit
+            ydata = self.results[y]
+            
+        # Set axis labels
+        fig.xaxis.axis_label = '{} [{}]'.format(x, xunit)
+        fig.yaxis.axis_label = '{} [{}]'.format(y, yunit)
         
-        # Make the scatter plot
-        fig.circle(x, y)
+        # Set up hover tool
+        tips = [( 'Name', '@desc'), (x, '@x'), (y, '@y')]
+        hover = HoverTool(tooltips=tips)
+        fig.add_tools(hover)
+
+        # Plot points with tips
+        source = ColumnDataSource(data=dict(x=xdata, y=ydata, desc=names))
+        fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', fill_alpha=0.7, size=8)
         
-        
-        # # Set up hover tool
-        # phot_tips = [( 'Band', '@desc'), ('Wave', '@x'), ( 'Flux', '@y'), ('Unc', '@z')]
-        # hover = HoverTool(names=['photometry','nondetection'], tooltips=phot_tips, mode='vline')
-        # self.fig.add_tools(hover)
-        #
-        # # Plot points with errors
-        # pts = np.array([(bnd,wav,flx,err) for bnd,wav,flx,err in np.array(self.photometry['band','eff',pre+'flux',pre+'flux_unc']) if not any([np.isnan(i) for i in [wav,flx,err]])]])
-        # source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
-        # self.fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', fill_alpha=0.7, size=8)
-        
+        # Formatting
         fig.legend.location = "top_right"
         fig.legend.click_policy = "hide"
         
