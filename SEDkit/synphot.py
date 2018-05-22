@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Author: Joe Filippazzo, jfilippazzo@stsci.edu
+#!python3
+"""
+A module to calculate synthetic photometry
+"""
 import warnings
 import pysynphot as ps
 import numpy as np
