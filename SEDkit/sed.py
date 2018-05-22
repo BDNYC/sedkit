@@ -1420,10 +1420,89 @@ class SEDCatalog:
         
         
     def filter(self, param, value):
-        """Retrieve the filtered rows"""
+        """Retrieve the filtered rows
+        
+        Parameters
+        ----------
+        param: str
+            The parameter to filter by, e.g. 'Teff'
+        value: str, float, int, sequence
+            The criteria to filter by, 
+            which can be single valued like 1400
+            or a range with operators [<,<=,>,>=],
+            e.g. (>1200,<1400), ()
+        
+        Returns
+        -------
+        SEDkit.sed.SEDCatalog
+            The filtered catalog
+        """
+        # Make a new catalog
         cat = SEDCatalog()
         
-        cat.results = self.results[self.results[param]==value]
+        # Wildcard case
+        if isinstance(value, str) and '*' in value:
+            
+            # Strip souble quotes
+            value = value.replace("'",'').replace('"','')
+            
+            # Split the wildcard
+            start, end = value.split('*')
+            
+            # Get indexes
+            data = np.array(self.results[param])
+            idx = np.where([np.logical_and(i.startswith(start),i.endswith(end)) for i in data])
+            
+            # Filter results
+            cat.results = self.results[idx]
+            
+        else:
+            
+            # Make single value string into conditions
+            if isinstance(value, str):
+                
+                # Check for operator
+                if any([value.startswith(o) for o in ['<','>','=']]):
+                    value = [value]
+                    
+                # Assume eqality if no operator
+                else:
+                    value = ['=='+value]
+                
+            # Turn numbers into strings
+            if isinstance(value, (int,float)):
+                value = ["=={}".format(value)]
+            
+            # Iterate through multiple conditions
+            for cond in value:
+                
+                # Equality
+                if cond.startswith('='):
+                    v = cond.replace('=','')
+                    cat.results = self.results[self.results[param]==eval(v)]
+                
+                # Less than or equal
+                elif cond.startswith('<='):
+                    v = cond.replace('<=','')
+                    cat.results = self.results[self.results[param]<=eval(v)]
+                
+                # Less than
+                elif cond.startswith('<'):
+                    v = cond.replace('<','')
+                    cat.results = self.results[self.results[param]<eval(v)]
+            
+                # Greater than or equal
+                elif cond.startswith('>='):
+                    v = cond.replace('>=','')
+                    cat.results = self.results[self.results[param]>=eval(v)]
+                
+                # Greater than
+                elif cond.startswith('>'):
+                    v = cond.replace('>','')
+                    cat.results = self.results[self.results[param]>eval(v)]
+                
+                else:
+                    raise ValueError("'{}' operator not understood.".format(cond))
         
         return cat
         
@@ -1491,8 +1570,8 @@ class SEDCatalog:
             ydata = self.results[y]
             
         # Set axis labels
-        fig.xaxis.axis_label = '{} [{}]'.format(x, xunit)
-        fig.yaxis.axis_label = '{} [{}]'.format(y, yunit)
+        fig.xaxis.axis_label = '{}{}'.format(x, '[{}]'.format(xunit) if xunit else '')
+        fig.yaxis.axis_label = '{}{}'.format(y, '[{}]'.format(yunit) if yunit else '')
         
         # Set up hover tool
         tips = [( 'Name', '@desc'), (x, '@x'), (y, '@y')]
@@ -1508,6 +1587,17 @@ class SEDCatalog:
         fig.legend.click_policy = "hide"
         
         return fig
+        
+        
+    def remove_SED(self, idx_or_name):
+        """Remove an SED from the catalog
+        
+        Parameters
+        ----------
+        idx_or_name: str, int
+            The name or index of the SED to remove
+        """
+        pass
         
         
     def save(self, file):
