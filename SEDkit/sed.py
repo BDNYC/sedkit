@@ -23,6 +23,7 @@ from . import isochrone as iso
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 
+PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_Y':'Wircam.Y', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3', 'HST_F125W':'WFC3_IR.F125W'}
 
 class SED(object):
     """
@@ -585,28 +586,41 @@ class SED(object):
         self._calibrate_spectra()
         
         
-    def from_database(self, db, **kwargs):
+    def from_database(self, db, rename_bands=PHOT_ALIASES, **kwargs):
         """
-        Load the data from a SQL database, 
-
+        Load the data from an astrodbkit.astrodb.Database
+        
+        Parameters
+        ----------
+        db: astrodbkit.astrodb.Database
+            The database instance to query
+        rename_bands: dict
+            A lookup dictionary to map database bandpass
+            names to SEDkit required bandpass names, 
+            e.g. {'2MASS_J': '2MASS.J', 'WISE_W1': 'WISE.W1'}
         """
         # Check that astrodbkit is imported
-        if not isinstance(db, astrodb.Database):
+        if not hasattr(db, 'query'):
             raise TypeError("Please provide an astrodbkit.astrodb.Database object to query.")
         
         # Get the photometry
         if 'photometry' in kwargs:
             phot_ids = kwargs['photometry']
             phot_q = "SELECT * FROM photometry WHERE id IN ({})".format(','.join(['?']*len(phot_ids)))
-            phot = db.query(phot_q, phot_ids)
+            phot = db.query(phot_q, phot_ids, fmt='dict')
         
             # Add the bands
-            for mag in phot:
-                self.add_photometry(mag['band'], mag['magnitude'], mag['magnitude_unc'])
+            for row in phot:
+                
+                # Make sure the bandpass name is right
+                if row['band'] in rename_bands:
+                    row['band'] = rename_bands.get(row['band'])
+                
+                self.add_photometry(row['band'], row['magnitude'], row['magnitude_unc'])
             
         # Get the parallax
         if 'parallax' in kwargs and isinstance(kwargs['parallax'], int):
-            plx = db.query("SELECT * FROM parallaxes WHERE id=?", kwargs['parallax'])
+            plx = db.query("SELECT * FROM parallaxes WHERE id=?", (kwargs['parallax'],), fmt='dict', fetch='one')
         
             # Add it to the object
             self.parallax = plx['parallax']*q.mas, plx['parallax_unc']*q.mas 
@@ -614,17 +628,17 @@ class SED(object):
         # Get the spectral type
         if 'spectral_type' in kwargs and isinstance(kwargs['spectral_type'], int):
             spt_id = kwargs['spectral_type']
-            spt = db.query("SELECT * FROM spectral_types WHERE id=?", spt_id, fmt='dict', fetch='one')
+            spt = db.query("SELECT * FROM spectral_types WHERE id=?", (spt_id,), fmt='dict', fetch='one')
         
             # Add it to the object
             spectral_type = spt.get('spectral_type')
-            spectral_type_unc = spt.get('spectral_type', 0.5)
+            spectral_type_unc = spt.get('spectral_type_unc', 0.5)
             gravity = spt.get('gravity')
             lum_class = spt.get('lum_class', 'V')
             prefix = spt.get('prefix')
             
             # Add it to the object
-            self.spectral_type = spectral_type, spectral_type_unc
+            self.spectral_type = spectral_type, spectral_type_unc, gravity, lum_class, prefix
 
     def fundamental_params(self, **kwargs):
         """
