@@ -5,9 +5,9 @@
 `SEDkit` is a collection of pure Python 3.5 modules for simple SED construction and analysis. Users can create individual SEDs or SED catalogs from spectra and/or photometry and calculate fundamental parameters (f~bol~, M~bol~, L~bol~, T~eff~, mass, log(g)) using the methods presented in [Filippazzo et al. (2015)](http://adsabs.harvard.edu/abs/2015ApJ...810..158F).
 
 Requirements:
-- `astropy` v3.0.2+
-- `bokeh` v0.12.6+
-- `pysynphot` v0.9.8.5+
+- `astropy-3.0.2+`
+- `bokeh-0.12.6+`
+- `pysynphot-0.9.8.5+`
 
 
 ## Licensed
