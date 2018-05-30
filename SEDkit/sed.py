@@ -16,6 +16,7 @@ from astropy.modeling.models import custom_model
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.constants import b_wien
 from astropy.io import fits
+from astropy.coordinates import SkyCoord
 from . import utilities as u
 from . import synphot as s
 from . import spectrum as sp
@@ -119,6 +120,7 @@ class SED(object):
         self._radius = None
         self._spectral_type = None
         self._membership = None
+        self._sky_coords = None
         
         # Keep track of the calculation status
         self.calculated = False
@@ -602,6 +604,18 @@ class SED(object):
         # Check that astrodbkit is imported
         if not hasattr(db, 'query'):
             raise TypeError("Please provide an astrodbkit.astrodb.Database object to query.")
+            
+        # Get the metadata
+        if 'source_id' in kwargs:
+            source = db.query("SELECT * FROM sources WHERE id=?", (kwargs['source_id'],), fmt='dict', fetch='one')
+            
+            # Set the name
+            self.name = source.get('designation', source.get('names', self.name))
+            
+            # Set the coordinates
+            ra = source.get('ra')*q.deg
+            dec = source.get('dec')*q.deg
+            self.sky_coords = SkyCoord(ra=ra, dec=dec, frame='icrs')
         
         # Get the photometry
         if 'photometry' in kwargs:
@@ -639,6 +653,24 @@ class SED(object):
             
             # Add it to the object
             self.spectral_type = spectral_type, spectral_type_unc, gravity, lum_class, prefix
+            
+        # Get the spectra
+        if 'spectra' in kwargs:
+            spec_ids = kwargs['spectra']
+            spec_q = "SELECT * FROM spectra WHERE id IN ({})".format(','.join(['?']*len(spec_ids)))
+            spec = db.query(spec_q, spec_ids, fmt='dict')
+            
+            # Add the spectra
+            for row in spec:
+                
+                # Make the Spectrum object
+                wav, flx, unc = row['spectrum'].data
+                wave_unit = u.str2Q(row['wavelength_units'])
+                flux_unit = u.str2Q(row['flux_units'])
+                
+                # Add the spectrum to the object
+                self.add_spectrum(wav*wave_unit, flx*flux_unit, unc*flux_unit)
+                
 
     def fundamental_params(self, **kwargs):
         """
@@ -1036,6 +1068,23 @@ class SED(object):
             show(self.fig)
 
         return self.fig
+        
+        
+    @property
+    def sky_coords(self):
+        """A property for sky coordinates"""
+        return self._sky_coords
+    
+    
+    @sky_coords.setter
+    def sky_coords(self, sky_coords):
+        """A setter for sky coordinates"""
+        # Make sure it's a sky coordinate
+        if not isinstance(sky_coords, SkyCoord):
+            raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord.')
+        
+        # Set the sky coordinates
+        self._sky_coords = sky_coords
             
         
     @property
