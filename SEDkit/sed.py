@@ -121,7 +121,7 @@ class SED(object):
         self._spectral_type = None
         self._membership = None
         self._sky_coords = None
-        self.search_radius = 15*q.mas
+        self.search_radius = 15*q.arcsec
         
         # Keep track of the calculation status
         self.calculated = False
@@ -890,6 +890,18 @@ class SED(object):
                         group.append(s), idx.append(n)
                 groups.append(group)
         return groups
+        
+        
+    @property
+    def info(self):
+        """
+        Print all the source info
+        """
+        
+        for attr in dir(self):
+            if not attr.startswith('_') and attr not in ['info','results'] and not callable(getattr(self, attr)):
+                val = getattr(self, attr)
+                print('{0: <25}= {1}{2}'.format(attr, '\n' if isinstance(val, at.QTable) else '', val))
         
         
     def logg_from_age(self):
