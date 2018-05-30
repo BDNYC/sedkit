@@ -6,6 +6,8 @@
 A module to produce spectral energy distributions 
 and calculate fundamental and atmospheric parameters
 """
+import os
+import glob
 import numpy as np
 import astropy.table as at
 import astropy.units as q
@@ -17,6 +19,7 @@ from astropy.constants import b_wien
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astroquery.vizier import Vizier
+from pkg_resources import resource_filename
 from . import utilities as u
 from . import synphot as s
 from . import spectrum as sp
@@ -122,6 +125,7 @@ class SED(object):
         self._membership = None
         self._sky_coords = None
         self.search_radius = 15*q.arcsec
+        self._evo_model = 'hybrid_solar_age'
         
         # Keep track of the calculation status
         self.calculated = False
@@ -561,6 +565,34 @@ class SED(object):
         
         # Set SED as uncalculated
         self.calculated = False
+        
+    
+    @property
+    def evo_model(self):
+        """A getter for the evolutionary model"""
+        return self._evo_model
+        
+        
+    @evo_model.setter
+    def evo_model(self, model):
+        """A setter for the evolutionary model
+        
+        Parameters
+        ----------
+        model: str
+            The evolutionary model name
+        """
+        if model not in self.evo_models:
+            raise ModelError("Please use an evolutionary model from the list:", self.evo_models)
+            
+        self._evo_model = model
+        
+    @property
+    def evo_models(self):
+        """Show a list of all supported evolutionary models"""
+        models = glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))
+        
+        return [os.path.basename(m).replace('.txt', '') for m in models]
             
             
     def find_2MASS(self, search_radius=None, catalog='II/246/out'):
@@ -895,9 +927,8 @@ class SED(object):
     @property
     def info(self):
         """
-        Print all the source info
+        Print all the SED info
         """
-        
         for attr in dir(self):
             if not attr.startswith('_') and attr not in ['info','results'] and not callable(getattr(self, attr)):
                 val = getattr(self, attr)
@@ -909,7 +940,7 @@ class SED(object):
         """
         if self.age is not None and self.Lbol is not None:
             
-            self.logg = tuple(iso.isochrone_interp(self.Lbol, self.age, yparam='logg'))
+            self.logg = tuple(iso.isochrone_interp(self.Lbol, self.age, yparam='logg', evo_model=self.evo_model))
             
         else:
             print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
@@ -976,7 +1007,7 @@ class SED(object):
         """
         if self.age is not None and self.Lbol is not None:
             
-            mass = iso.isochrone_interp(self.Lbol, self.age, yparam='mass')
+            mass = iso.isochrone_interp(self.Lbol, self.age, yparam='mass', evo_model=self.evo_model)
             
             self.mass = (mass[0]*q.Mjup).to(mass_units), (mass[1]*q.Mjup).to(mass_units)
             
@@ -1223,7 +1254,7 @@ class SED(object):
         """
         if self.age is not None and self.Lbol is not None:
             
-            radius = iso.isochrone_interp(self.Lbol, self.age)
+            radius = iso.isochrone_interp(self.Lbol, self.age, evo_model=self.evo_model)
             
             self.radius = (radius[0]*q.Rjup).to(radius_units), (radius[1]*q.Rjup).to(radius_units)
             
