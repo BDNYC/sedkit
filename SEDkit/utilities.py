@@ -334,8 +334,6 @@ def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, p
     pc2pi: bool
         Convert from distance to parallax
     """
-    print("Make this handle asymmetric uncertainties!")
-
     unit = pi_unit if pc2pi else dist_unit
     
     if unc_lower is None:

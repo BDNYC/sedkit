@@ -80,6 +80,58 @@ class Bandpass(ps.ArrayBandpass):
         # Convert Jy zero point to Flam units
         self._zero_point = (self.ZeroPoint*q.Jy*ac.c/self.eff**2).to(q.erg/q.s/q.cm**2/q.AA)
         
+    
+    def overlap(self, other):
+        """
+            |---------- other ----------|
+               |------ self ------|
+
+        Examples of partial overlap::
+
+            |---------- self ----------|
+               |------ other ------|
+
+            |---- other ----|
+               |---- self ----|
+
+            |---- self ----|
+               |---- other ----|
+
+        Examples of no overlap::
+
+            |---- self ----|  |---- other ----|
+
+            |---- other ----|  |---- self ----|
+
+        Parameters
+        ----------
+        other: SEDkit.spectrum.Spectrum
+            The other spectrum
+
+        Returns
+        -------
+        ans : {'full', 'partial', 'none'}
+            Overlap status.
+
+        """
+        swave = self.wave[np.where(self.throughput != 0)]*self.wave_units
+        s1, s2 = swave.min(), swave.max()
+
+        owave = other[0]
+        o1, o2 = owave.min(), owave.max()
+
+        if (s1 >= o1 and s2 <= o2):
+            ans = 'full'
+
+        elif (s2 < o1) or (o2 < s1):
+            ans = 'none'
+
+        else:
+            ans = 'partial'
+
+        return ans
+        
+        
     def plot(self, fig=None):
         """Plot the throughput"""
         if fig is None:

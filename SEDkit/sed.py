@@ -134,6 +134,8 @@ class SED(object):
         self.abs_spec_SED = None
         self.app_phot_SED = None
         self.abs_phot_SED = None
+        
+        # Photometry
         phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc', 'app_flux', 'app_flux_unc', 'abs_magnitude', 'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc', 'bandpass')
         phot_typs = ('U16', float, float, float, float, float, float, float, float, float, 'O')
         self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
@@ -143,6 +145,15 @@ class SED(object):
         self._photometry['abs_flux'].unit = self._flux_units
         self._photometry['abs_flux_unc'].unit = self._flux_units
         self._photometry.add_index('band')
+        
+        # Synthetic photometry
+        self._synthetic_photometry = at.QTable(names=phot_cols, dtype=phot_typs)
+        self._synthetic_photometry['eff'].unit = self._wave_units
+        self._synthetic_photometry['app_flux'].unit = self._flux_units
+        self._synthetic_photometry['app_flux_unc'].unit = self._flux_units
+        self._synthetic_photometry['abs_flux'].unit = self._flux_units
+        self._synthetic_photometry['abs_flux_unc'].unit = self._flux_units
+        self._synthetic_photometry.add_index('band')
         
         # Try to set attributes from kwargs
         for k,v in kwargs.items():
@@ -348,6 +359,33 @@ class SED(object):
         # Set SED as uncalculated
         self.calculated = False
         
+        
+    def calculate_synthetic_mags(self):
+        """Calculate synthetic magnitudes of all stitched spectra"""
+        if len(self.stitched_spectra)>0:
+            
+            # Iterate over spectra
+            for spec in self.stitched_spectra:
+                
+                # and over bandpasses
+                for band in s.FILTERS:
+                    
+                    # Get the bandpass
+                    bp = s.Bandpass(band)
+                    
+                    # Check for overlap before calculating
+                    if bp.check_overlap(spec) in ['full','partial']:
+                        
+                        # Calculate the magnitiude
+                        mag, mag_unc = spec.synthetic_mag(bp)
+                        
+                        # Make a dict for the new point
+                        new_photometry = {'band':band, 'eff':bp.eff, 'bandpass':bp,
+                                          'app_magnitude':mag, 'app_magnitude_unc':mag_unc}
+                                      
+                        # Add it to the table
+                        self._synthetic_photometry.add_row(new_photometry)
+                    
         
     def _calibrate_photometry(self):
         """Calculate the absolute magnitudes and flux values of all rows in the photometry table
@@ -728,6 +766,9 @@ class SED(object):
         
         # Combine spectra and flux calibrate
         self._calibrate_spectra()
+        
+        # Get synthetic mags
+        # self.calculate_synthetic_mags()
         
         # Make a Wein tail that goes to (almost) zero flux at (almost) zero wavelength
         self.wein = sp.Spectrum(np.array([0.00001])*self.wave_units, np.array([1E-30])*self.flux_units, np.array([1E-30])*self.flux_units)
@@ -1113,6 +1154,13 @@ class SED(object):
             
         # Set SED as uncalculated
         self.calculated = False
+        
+        
+    @property
+    def synthetic_photometry(self):
+        """A property for synthetic photometry"""
+        self._synthetic_photometry.sort('eff')
+        return self._synthetic_photometry
     
     
     @property
