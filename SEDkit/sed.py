@@ -27,7 +27,15 @@ from . import isochrone as iso
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 
+# A dictionary of all supported moving group ages
+AGES = {'TW Hya': (14*q.Myr, 6*q.Myr), 'beta Pic': (17*q.Myr, 5*q.Myr), 'Tuc-Hor': (25*q.Myr, 15*q.Myr), 'Columba': (25*q.Myr, 15*q.Myr), 'Carina': (25*q.Myr, 15*q.Myr), 'Argus': (40*q.Myr, 10*q.Myr), 'AB Dor': (85*q.Myr, 35*q.Myr), 'Pleiades': (120*q.Myr, 10*q.Myr)}
+
+# A list of all supported evolutionary models
+EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]
+
+# A dict of BDNYCdb band names to work with SEDkit
 PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_Y':'Wircam.Y', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3', 'HST_F125W':'WFC3_IR.F125W'}
+
 
 class SED(object):
     """
@@ -376,7 +384,7 @@ class SED(object):
             for spec in self.stitched_spectra:
                 
                 # and over bandpasses
-                for band in s.FILTERS:
+                for band in s.BANDPASSES:
                     
                     # Get the bandpass
                     bp = s.Bandpass(band)
@@ -582,17 +590,10 @@ class SED(object):
         model: str
             The evolutionary model name
         """
-        if model not in self.evo_models:
-            raise ModelError("Please use an evolutionary model from the list:", self.evo_models)
+        if model not in EVO_MODELS:
+            raise IOError("Please use an evolutionary model from the list: {}".format(EVO_MODELS))
             
         self._evo_model = model
-        
-    @property
-    def evo_models(self):
-        """Show a list of all supported evolutionary models"""
-        models = glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))
-        
-        return [os.path.basename(m).replace('.txt', '') for m in models]
             
             
     def find_2MASS(self, search_radius=None, catalog='II/246/out'):
@@ -1487,7 +1488,7 @@ class SED(object):
     #     """
     #     try:
     #         if not any(bands):
-    #             bands = FILTERS['Band']
+    #             bands = BANDPASSES['Band']
     #
     #         # Only get mags in regions with spectral coverage
     #         syn_mags = []
@@ -1606,12 +1607,3 @@ def blackbody(wavelength, temperature=2000):
     temperature = q.Quantity(temperature, "K")
     max_val = blackbody_lambda((b_wien/temperature).to(q.um),temperature).value
     return blackbody_lambda(wavelength, temperature).value/max_val
-
-AGES = {'TW Hya': (14*q.Myr, 6*q.Myr),
-       'beta Pic': (17*q.Myr, 5*q.Myr),
-       'Tuc-Hor': (25*q.Myr, 15*q.Myr),
-       'Columba': (25*q.Myr, 15*q.Myr),
-       'Carina': (25*q.Myr, 15*q.Myr),
-       'Argus': (40*q.Myr, 10*q.Myr),
-       'AB Dor': (85*q.Myr, 35*q.Myr),
-       'Pleiades': (120*q.Myr, 10*q.Myr)}

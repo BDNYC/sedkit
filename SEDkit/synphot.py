@@ -22,8 +22,8 @@ from bokeh.plotting import figure, show
 # Area of the telescope has to be in centimeters2
 # ps.setref(area=250000.)
 
-FILTERS = [i.split('/')[-1] for i in glob.glob(resource_filename('SEDkit', 'data/filters/*'))]
-FILTER_PATH = resource_filename('SEDkit', 'data/filters/')
+BANDPASSES = [i.split('/')[-1] for i in glob.glob(resource_filename('SEDkit', 'data/bandpasses/*'))]
+BANDPASS_PATH = resource_filename('SEDkit', 'data/bandpasses/')
 warnings.simplefilter('ignore')
 
 
@@ -38,11 +38,11 @@ class Bandpass(ps.ArrayBandpass):
             The filter name
         """
         # Look for the file
-        if name in FILTERS:
-            file = glob.glob(resource_filename('SEDkit', 'data/filters/{}'.format(name)))[0]
+        if name in BANDPASSES:
+            file = glob.glob(resource_filename('SEDkit', 'data/bandpasses/{}'.format(name)))[0]
         
         else:
-            raise IOError("No bandpass named {} in {}".format(name, FILTER_PATH))
+            raise IOError("No bandpass named {} in {}".format(name, BANDPASS_PATH))
 
         # Parse the XML file
         vot = vo.parse_single_table(file)
@@ -256,7 +256,7 @@ def flux2mag(flx, bandpass):
     return m, m_unc
     
     
-def mag_table(spectra=None, bandpasses=FILTERS, models='phoenix', jmag=10, save=None):
+def mag_table(spectra=None, bandpasses=BANDPASSES, models='phoenix', jmag=10, save=None):
     """
     Calculate the magnitude of all given spectra in all given bandpasses
     
