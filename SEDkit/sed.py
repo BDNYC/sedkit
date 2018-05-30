@@ -590,37 +590,41 @@ class SED(object):
         Load the data from a SQL database, 
 
         """
-        # Initialize the database
-        if isinstance(db, str):
-            db = sql.connect(db, isolation_level=None, detect_types=sql.PARSE_DECLTYPES, check_same_thread=False)
-            
-        # Create dictionary factory
-        def dict_factory(cursor, row):
-            d = {}
-            for idx, col in enumerate(cursor.description):
-                d[col[0]] = row[idx]
-            return d
-            
-        # Make the row factory
-        df = db.cursor()
-        df.row_factory = dict_factory
-            
+        # Check that astrodbkit is imported
+        if not isinstance(db, astrodb.Database):
+            raise TypeError("Please provide an astrodbkit.astrodb.Database object to query.")
+        
         # Get the photometry
         if 'photometry' in kwargs:
             phot_ids = kwargs['photometry']
-            phot = df.execute("SELECT * FROM photometry WHERE id IN ({})".format(','.join(['?']*len(phot_ids))), phot_ids).fetchall()
-            
+            phot_q = "SELECT * FROM photometry WHERE id IN ({})".format(','.join(['?']*len(phot_ids)))
+            phot = db.query(phot_q, phot_ids)
+        
             # Add the bands
             for mag in phot:
                 self.add_photometry(mag['band'], mag['magnitude'], mag['magnitude_unc'])
-                
-        # Get the parallax
-        if 'parallax' in kwargs and isinstance(kwargs['parallax'],int):
-            plx = df.execute("SELECT * FROM parallaxes WHERE id==?", kwargs['parallax']).fetchone()
             
+        # Get the parallax
+        if 'parallax' in kwargs and isinstance(kwargs['parallax'], int):
+            plx = db.query("SELECT * FROM parallaxes WHERE id=?", kwargs['parallax'])
+        
             # Add it to the object
             self.parallax = plx['parallax']*q.mas, plx['parallax_unc']*q.mas 
             
+        # Get the spectral type
+        if 'spectral_type' in kwargs and isinstance(kwargs['spectral_type'], int):
+            spt_id = kwargs['spectral_type']
+            spt = db.query("SELECT * FROM spectral_types WHERE id=?", spt_id, fmt='dict', fetch='one')
+        
+            # Add it to the object
+            spectral_type = spt.get('spectral_type')
+            spectral_type_unc = spt.get('spectral_type', 0.5)
+            gravity = spt.get('gravity')
+            lum_class = spt.get('lum_class', 'V')
+            prefix = spt.get('prefix')
+            
+            # Add it to the object
+            self.spectral_type = spectral_type, spectral_type_unc
 
     def fundamental_params(self, **kwargs):
         """
@@ -1125,7 +1129,7 @@ class SED(object):
     
     
     @spectral_type.setter
-    def spectral_type(self, spectral_type, spectral_type_unc=None, gravity=None, lum_class='V', prefix=None):
+    def spectral_type(self, spectral_type, spectral_type_unc=None, gravity=None, lum_class=None, prefix=None):
         """A setter for spectral_type"""
         # Make sure it's a sequence
         if isinstance(spectral_type, str):
@@ -1133,9 +1137,24 @@ class SED(object):
             spec_type = u.specType(spectral_type)
             spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type
             
+        elif isinstance(spectral_type, tuple):
+            spectral_type, spectral_type_unc, *other = spectral_type
+            gravity = lum_class = prefix = ''
+            if other:
+                gravity, *other = other
+            if other:
+                lum_class, *other = other
+            if other:
+                prefix = other[0]
+
+            self.SpT = u.specType([spectral_type, spectral_type_unc, prefix, gravity, lum_class or 'V'])
+                
+        else:
+            raise TypeError('Please provide a string or tuple to set the spectral type.')
+            
         # Set the spectral_type!
         self._spectral_type = spectral_type, spectral_type_unc or 0.5
-        self.luminosity_class = lum_class
+        self.luminosity_class = lum_class or 'V'
         self.gravity = gravity or None
         self.prefix = prefix or None
         

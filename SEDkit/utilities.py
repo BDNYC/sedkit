@@ -538,19 +538,19 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
                 unc = ''
                 
             # Get the prefix
-            if len(SpT)>2:
+            if len(SpT)>2 and SpT[2]:
                 pre = str(SpT[2])
             else:
                 pre = ''
                 
             # Get the gravity
-            if len(SpT)>3:
+            if len(SpT)>3 and SpT[3]:
                 grv = str(SpT[3])
             else:
                 grv = ''
                 
-            # Get the gravity
-            if len(SpT)>4:
+            # Get the luminosity class
+            if len(SpT)>4 and SpT[4]:
                 LC = str(SpT[4])
             else:
                 LC = ''
