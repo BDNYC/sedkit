@@ -11,7 +11,6 @@ import astropy.table as at
 import astropy.units as q
 import astropy.io.ascii as ii
 import astropy.constants as ac
-import sqlite3 as sql
 from astropy.modeling.models import custom_model
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.constants import b_wien
