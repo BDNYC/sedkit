@@ -16,6 +16,7 @@ from astropy.modeling.models import custom_model
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.constants import b_wien
 from astropy.io import fits
+from astropy.coordinates import SkyCoord
 from . import utilities as u
 from . import synphot as s
 from . import spectrum as sp
@@ -23,6 +24,7 @@ from . import isochrone as iso
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 
+PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_Y':'Wircam.Y', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3', 'HST_F125W':'WFC3_IR.F125W'}
 
 class SED(object):
     """
@@ -118,6 +120,7 @@ class SED(object):
         self._radius = None
         self._spectral_type = None
         self._membership = None
+        self._sky_coords = None
         
         # Keep track of the calculation status
         self.calculated = False
@@ -585,42 +588,89 @@ class SED(object):
         self._calibrate_spectra()
         
         
-    def from_database(self, db, **kwargs):
+    def from_database(self, db, rename_bands=PHOT_ALIASES, **kwargs):
         """
-        Load the data from a SQL database, 
-
+        Load the data from an astrodbkit.astrodb.Database
+        
+        Parameters
+        ----------
+        db: astrodbkit.astrodb.Database
+            The database instance to query
+        rename_bands: dict
+            A lookup dictionary to map database bandpass
+            names to SEDkit required bandpass names, 
+            e.g. {'2MASS_J': '2MASS.J', 'WISE_W1': 'WISE.W1'}
         """
-        # Initialize the database
-        if isinstance(db, str):
-            db = sql.connect(db, isolation_level=None, detect_types=sql.PARSE_DECLTYPES, check_same_thread=False)
+        # Check that astrodbkit is imported
+        if not hasattr(db, 'query'):
+            raise TypeError("Please provide an astrodbkit.astrodb.Database object to query.")
             
-        # Create dictionary factory
-        def dict_factory(cursor, row):
-            d = {}
-            for idx, col in enumerate(cursor.description):
-                d[col[0]] = row[idx]
-            return d
+        # Get the metadata
+        if 'source_id' in kwargs:
+            source = db.query("SELECT * FROM sources WHERE id=?", (kwargs['source_id'],), fmt='dict', fetch='one')
             
-        # Make the row factory
-        df = db.cursor()
-        df.row_factory = dict_factory
+            # Set the name
+            self.name = source.get('designation', source.get('names', self.name))
             
+            # Set the coordinates
+            ra = source.get('ra')*q.deg
+            dec = source.get('dec')*q.deg
+            self.sky_coords = SkyCoord(ra=ra, dec=dec, frame='icrs')
+        
         # Get the photometry
         if 'photometry' in kwargs:
             phot_ids = kwargs['photometry']
-            phot = df.execute("SELECT * FROM photometry WHERE id IN ({})".format(','.join(['?']*len(phot_ids))), phot_ids).fetchall()
-            
+            phot_q = "SELECT * FROM photometry WHERE id IN ({})".format(','.join(['?']*len(phot_ids)))
+            phot = db.query(phot_q, phot_ids, fmt='dict')
+        
             # Add the bands
-            for mag in phot:
-                self.add_photometry(mag['band'], mag['magnitude'], mag['magnitude_unc'])
+            for row in phot:
                 
-        # Get the parallax
-        if 'parallax' in kwargs and isinstance(kwargs['parallax'],int):
-            plx = df.execute("SELECT * FROM parallaxes WHERE id==?", kwargs['parallax']).fetchone()
+                # Make sure the bandpass name is right
+                if row['band'] in rename_bands:
+                    row['band'] = rename_bands.get(row['band'])
+                
+                self.add_photometry(row['band'], row['magnitude'], row['magnitude_unc'])
             
+        # Get the parallax
+        if 'parallax' in kwargs and isinstance(kwargs['parallax'], int):
+            plx = db.query("SELECT * FROM parallaxes WHERE id=?", (kwargs['parallax'],), fmt='dict', fetch='one')
+        
             # Add it to the object
             self.parallax = plx['parallax']*q.mas, plx['parallax_unc']*q.mas 
             
+        # Get the spectral type
+        if 'spectral_type' in kwargs and isinstance(kwargs['spectral_type'], int):
+            spt_id = kwargs['spectral_type']
+            spt = db.query("SELECT * FROM spectral_types WHERE id=?", (spt_id,), fmt='dict', fetch='one')
+        
+            # Add it to the object
+            spectral_type = spt.get('spectral_type')
+            spectral_type_unc = spt.get('spectral_type_unc', 0.5)
+            gravity = spt.get('gravity')
+            lum_class = spt.get('lum_class', 'V')
+            prefix = spt.get('prefix')
+            
+            # Add it to the object
+            self.spectral_type = spectral_type, spectral_type_unc, gravity, lum_class, prefix
+            
+        # Get the spectra
+        if 'spectra' in kwargs:
+            spec_ids = kwargs['spectra']
+            spec_q = "SELECT * FROM spectra WHERE id IN ({})".format(','.join(['?']*len(spec_ids)))
+            spec = db.query(spec_q, spec_ids, fmt='dict')
+            
+            # Add the spectra
+            for row in spec:
+                
+                # Make the Spectrum object
+                wav, flx, unc = row['spectrum'].data
+                wave_unit = u.str2Q(row['wavelength_units'])
+                flux_unit = u.str2Q(row['flux_units'])
+                
+                # Add the spectrum to the object
+                self.add_spectrum(wav*wave_unit, flx*flux_unit, unc*flux_unit)
+                
 
     def fundamental_params(self, **kwargs):
         """
@@ -1018,6 +1068,23 @@ class SED(object):
             show(self.fig)
 
         return self.fig
+        
+        
+    @property
+    def sky_coords(self):
+        """A property for sky coordinates"""
+        return self._sky_coords
+    
+    
+    @sky_coords.setter
+    def sky_coords(self, sky_coords):
+        """A setter for sky coordinates"""
+        # Make sure it's a sky coordinate
+        if not isinstance(sky_coords, SkyCoord):
+            raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord.')
+        
+        # Set the sky coordinates
+        self._sky_coords = sky_coords
             
         
     @property
@@ -1125,7 +1192,7 @@ class SED(object):
     
     
     @spectral_type.setter
-    def spectral_type(self, spectral_type, spectral_type_unc=None, gravity=None, lum_class='V', prefix=None):
+    def spectral_type(self, spectral_type, spectral_type_unc=None, gravity=None, lum_class=None, prefix=None):
         """A setter for spectral_type"""
         # Make sure it's a sequence
         if isinstance(spectral_type, str):
@@ -1133,9 +1200,24 @@ class SED(object):
             spec_type = u.specType(spectral_type)
             spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type
             
+        elif isinstance(spectral_type, tuple):
+            spectral_type, spectral_type_unc, *other = spectral_type
+            gravity = lum_class = prefix = ''
+            if other:
+                gravity, *other = other
+            if other:
+                lum_class, *other = other
+            if other:
+                prefix = other[0]
+
+            self.SpT = u.specType([spectral_type, spectral_type_unc, prefix, gravity, lum_class or 'V'])
+                
+        else:
+            raise TypeError('Please provide a string or tuple to set the spectral type.')
+            
         # Set the spectral_type!
         self._spectral_type = spectral_type, spectral_type_unc or 0.5
-        self.luminosity_class = lum_class
+        self.luminosity_class = lum_class or 'V'
         self.gravity = gravity or None
         self.prefix = prefix or None
         

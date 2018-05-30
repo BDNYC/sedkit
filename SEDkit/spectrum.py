@@ -325,9 +325,9 @@ class Spectrum(ps.ArraySpectrum):
         pysynphot.spectrum.ArraySpectralElement
             The normalized spectrum object
         """
+        norm = 1
         if len(photometry)==0:
             print('No photometry to normalize this spectrum.')
-            norm = 1
             
         else:
             # Calculate all the synthetic magnitudes
