@@ -309,7 +309,7 @@ class Spectrum(ps.ArraySpectrum):
         return val.to(units), unc.to(units)
     
     
-    def norm_to_mags(self, photometry, exclude=[]):
+    def norm_to_mags(self, photometry, force=False, exclude=[]):
         """
         Normalize the spectrum to the given bandpasses
     
@@ -336,10 +336,11 @@ class Spectrum(ps.ArraySpectrum):
                 if row['band'] not in exclude:
                     try:
                         bp = row['bandpass']
-                        syn_flx, syn_unc = self.synthetic_flux(bp)
-                        flx, unc = list(row['app_flux','app_flux_unc'])
-                        weight = bp.FWHM#max(bp.wave)-min(bp.wave)
-                        data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
+                        syn_flx, syn_unc = self.synthetic_flux(bp, force=force)
+                        if syn_flx is not None:
+                            flx, unc = list(row['app_flux','app_flux_unc'])
+                            weight = 1#bp.FWHM#max(bp.wave)-min(bp.wave)
+                            data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
                     except IOError:
                         pass
                 
@@ -427,7 +428,7 @@ class Spectrum(ps.ArraySpectrum):
         return [i*Q for i,Q in zip(self.data, self.units)]
 
 
-    def synthetic_flux(self, bandpass, plot=False):
+    def synthetic_flux(self, bandpass, force=False, plot=False):
         """
         Calculate the magnitude in a bandpass
     
@@ -435,6 +436,9 @@ class Spectrum(ps.ArraySpectrum):
         ----------
         bandpass: pysynphot.spectrum.ArraySpectralElement
             The bandpass to use
+        force: bool
+            Force the magnitude calculation even if
+            overlap is only partial
         plot: bool
             Plot the spectrum and the flux point
     
@@ -443,34 +447,42 @@ class Spectrum(ps.ArraySpectrum):
         float
             The magnitude
         """
-        # Convert self to bandpass units
-        self.wave_units = bandpass.wave_units
+        # Test overlap
+        overlap = bandpass.overlap(self.spectrum)
         
-        # Caluclate the bits
-        wav = bandpass.wave*bandpass.wave_units
-        rsr = bandpass.throughput
-        erg = (wav/(ac.h*ac.c)).to(1/q.erg)
-        grad = np.gradient(wav).value
+        # Initialize
+        flx = unc = None
         
-        # Interpolate the spectrum to the filter wavelengths
-        f = np.interp(wav, self.wave, self.flux, left=0, right=0)*self.flux_units
-        sig_f = np.interp(wav, self.wave, self.unc, left=0, right=0)*self.flux_units
+        if overlap=='full' or (overlap=='partial' and force):
+
+            # Convert self to bandpass units
+            self.wave_units = bandpass.wave_units
         
-        # Calculate the flux
-        flx = (np.trapz(f*rsr, x=wav)/np.trapz(rsr, x=wav)).to(self.flux_units)
-        unc = np.sqrt(np.sum(((sig_f*rsr*grad)**2).to(self.flux_units**2)))
+            # Caluclate the bits
+            wav = bandpass.wave*bandpass.wave_units
+            rsr = bandpass.throughput
+            erg = (wav/(ac.h*ac.c)).to(1/q.erg)
+            grad = np.gradient(wav).value
         
-        # Plot it
-        if plot:
-            fig = figure()
-            fig.line(self.wave, self.flux, color='navy')
-            fig.circle(bandpass.pivot(), flx, color='red')
-            show(fig)
+            # Interpolate the spectrum to the filter wavelengths
+            f = np.interp(wav, self.wave, self.flux, left=0, right=0)*self.flux_units
+            sig_f = np.interp(wav, self.wave, self.unc, left=0, right=0)*self.flux_units
+        
+            # Calculate the flux
+            flx = (np.trapz(f*rsr, x=wav)/np.trapz(rsr, x=wav)).to(self.flux_units)
+            unc = np.sqrt(np.sum(((sig_f*rsr*grad)**2).to(self.flux_units**2)))
+        
+            # Plot it
+            if plot:
+                fig = figure()
+                fig.line(self.wave, self.flux, color='navy')
+                fig.circle([bandpass.eff], [flx], color='red')
+                show(fig)
     
         return flx, unc
         
         
-    def synthetic_magnitude(self, bandpass):
+    def synthetic_magnitude(self, bandpass, force=False):
         """
         Calculate the synthetic magnitude in the given bandpass
         
@@ -478,13 +490,16 @@ class Spectrum(ps.ArraySpectrum):
         ----------
         bandpass: pysynphot.spectrum.ArraySpectralElement
             The bandpass to use
+        force: bool
+            Force the magnitude calculation even if
+            overlap is only partial
         
         Returns
         -------
         tuple
             The flux and uncertainty
         """
-        flx = self.synthetic_flux(bandpass)
+        flx = self.synthetic_flux(bandpass, force=force)
         
         # Calculate the magnitude
         mag = syn.flux2mag(flx, bandpass)
