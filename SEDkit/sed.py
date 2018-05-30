@@ -16,6 +16,7 @@ from astropy.modeling.blackbody import blackbody_lambda
 from astropy.constants import b_wien
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
+from astroquery.vizier import Vizier
 from . import utilities as u
 from . import synphot as s
 from . import spectrum as sp
@@ -120,6 +121,7 @@ class SED(object):
         self._spectral_type = None
         self._membership = None
         self._sky_coords = None
+        self.search_radius = 15*q.mas
         
         # Keep track of the calculation status
         self.calculated = False
@@ -531,6 +533,11 @@ class SED(object):
         
     def drop_photometry(self, band):
         """Drop a photometry by its index or name in the photometry list
+        
+        Parameters
+        ----------
+        band: str, int
+            The bandpass name or index to drop
         """
         if isinstance(band, str) and band in self.photometry['band']:
             band = self._photometry.remove_row(np.where(self._photometry['band']==band)[0][0])
@@ -544,11 +551,103 @@ class SED(object):
         
     def drop_spectrum(self, idx):
         """Drop a spectrum by its index in the spectra list
+        
+        Parameters
+        ----------
+        idx: int
+            The index of the spectrum to drop
         """
         self._spectra = [i for n,i in enumerate(self._spectra) if n!=idx]
         
         # Set SED as uncalculated
         self.calculated = False
+            
+            
+    def find_2MASS(self, search_radius=None, catalog='II/246/out'):
+        """
+        Search for 2MASS data
+        
+        Parameters
+        ----------
+        search_radius: astropy.units.quantity.Quantity
+            The radius for the cone search
+        catalog: str
+            The Vizier catalog to search
+        """
+        # Make sure there are coordinates
+        if not isinstance(self.sky_coords, SkyCoord):
+            raise TypeError("Can't find 2MASS photometry without coordinates!")
+            
+        viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius or self.search_radius, catalog=[catalog])
+        
+        if len(viz_cat)>0:
+            tmass = viz_cat[0][0]
+        
+            for band,viz in zip(['2MASS.J','2MASS.H','2MASS.Ks'],['Jmag','Hmag','Kmag']):
+                try:
+                    mag, unc = list(tmass[[viz,'e_'+viz]])
+                    self.add_photometry(band, float(mag), float(unc))
+                except IOError:
+                    pass
+                    
+                    
+    def find_Gaia(self, search_radius=None, catalog='I/345/gaia2'):
+        """
+        Search for Gaia data
+        
+        Parameters
+        ----------
+        search_radius: astropy.units.quantity.Quantity
+            The radius for the cone search
+        catalog: str
+            The Vizier catalog to search
+        """
+        # Make sure there are coordinates
+        if not isinstance(self.sky_coords, SkyCoord):
+            raise TypeError("Can't find Gaia data without coordinates!")
+            
+        parallaxes = Vizier.query_region(self.sky_coords, radius=search_radius or self.search_radius, catalog=[catalog])
+                        
+        if parallaxes:
+            
+            parallax = list(parallaxes[0][0][['Plx','e_Plx']])
+        
+            self.parallax = parallax[0]*q.mas, parallax[1]*q.mas
+        
+            # Get Gband while we're here
+            try:
+                mag, unc = list(parallaxes[0][0][['Gmag','e_Gmag']])
+                self.add_photometry('Gaia.G', mag, unc)
+            except:
+                pass
+                    
+                    
+    def find_WISE(self, search_radius=None, catalog='II/328/allwise'):
+        """
+        Search for WISE data
+        
+        Parameters
+        ----------
+        search_radius: astropy.units.quantity.Quantity
+            The radius for the cone search
+        catalog: str
+            The Vizier catalog to search
+        """
+        # Make sure there are coordinates
+        if not isinstance(self.sky_coords, SkyCoord):
+            raise TypeError("Can't find WISE photometry without coordinates!")
+            
+        viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius or self.search_radius, catalog=[catalog])
+        
+        if len(viz_cat)>0:
+            wise = viz_cat[0][0]
+        
+            for band,viz in zip(['WISE.W1','WISE.W2','WISE.W3','WISE.W4'],['W1mag','W2mag','W3mag','W4mag']):
+                try:
+                    mag, unc = list(wise[[viz,'e_'+viz]])
+                    self.add_photometry(band, float(mag), float(unc))
+                except IOError:
+                    pass
         
         
     @property
@@ -1070,23 +1169,6 @@ class SED(object):
         
         
     @property
-    def sky_coords(self):
-        """A property for sky coordinates"""
-        return self._sky_coords
-    
-    
-    @sky_coords.setter
-    def sky_coords(self, sky_coords):
-        """A setter for sky coordinates"""
-        # Make sure it's a sky coordinate
-        if not isinstance(sky_coords, SkyCoord):
-            raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord.')
-        
-        # Set the sky coordinates
-        self._sky_coords = sky_coords
-            
-        
-    @property
     def radius(self):
         """A property for radius"""
         return self._radius
@@ -1176,6 +1258,28 @@ class SED(object):
                 pass
         
         return at.Table(np.asarray(rows), names=('param','value','unc','units'))
+        
+        
+    @property
+    def sky_coords(self):
+        """A property for sky coordinates"""
+        return self._sky_coords
+    
+    
+    @sky_coords.setter
+    def sky_coords(self, sky_coords):
+        """A setter for sky coordinates"""
+        # Make sure it's a sky coordinate
+        if not isinstance(sky_coords, (SkyCoord, tuple)):
+            raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
+        
+        if isinstance(sky_coords, tuple) and len(sky_coords)==2\
+        and all([isinstance(coord, q.quantity.Quantity) for coord in sky_coords]):
+            
+            sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], frame='icrs')
+        
+        # Set the sky coordinates
+        self._sky_coords = sky_coords
         
         
     @property
