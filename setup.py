@@ -11,11 +11,9 @@ except ImportError:
 from codecs import open
 from os import path
 
-from SEDkit import __version__
-
 setup(
     name='SEDkit',
-    version=__version__,
+    version='0.2.0',
     description='Spectral energy distribution construction and analysis tools',
     url='https://github.com/hover2pi/SEDkit',
     author='Joe Filippazzo',
