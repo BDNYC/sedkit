@@ -1,0 +1,6 @@
+numpy
+astropy
+scipy
+bokeh
+astroquery
+pysynphot
