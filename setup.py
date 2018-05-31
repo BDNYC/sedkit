@@ -23,10 +23,11 @@ setup(
         'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
     ],
     keywords='astrophysics',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     install_requires=['numpy','astropy','bokeh','pysynphot','scipy','astroquery'],
+    include_package_data=True,
 
 )
