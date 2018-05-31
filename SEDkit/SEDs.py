@@ -418,7 +418,7 @@ def NYMGs():
          'Carina': {'age_min': 38, 'age_max': 56, 'age_ref': 0},  # Bell et. al 2015
          'Argus': {'age_min': 30, 'age_max': 50, 'age_ref': 0},   # Malo 2013
          'AB Dor': {'age_min': 130, 'age_max': 200, 'age_ref': 0},  # Bell et. al 2015
-         'Pleiades': {'age_min': 110, 'age_max': 130, 'age_ref': 0}}  # Malo 2013
+         'Pleiades': {'age_min': 107, 'age_max': 117, 'age_ref': 0}}  # Dahm 2015
     return D
 
 
@@ -1877,7 +1877,7 @@ class MakeSED(object):
             # ==========================================================================================================
 
             # Calculate all fundamental paramters without models
-            self.data = fundamental_params(self.data, p='', plot=diagnostics)
+            self.data = fundamental_params(self.data, p='', evo_model=evo_model, plot=diagnostics)
 
             # ==========================================================================================================
             # ======================================= PRINTING =========================================================
@@ -2149,7 +2149,7 @@ class MakeSED(object):
                     self.data['m_SED_abs'] = ''
 
                 # Calculate fundamental parameters if model atmospheres are used to fill in the gaps
-                self.data = fundamental_params(self.data, p='m_')
+                self.data = fundamental_params(self.data, p='m_', evo_model=evo_model)
 
             except IOError:
                 self.data['m_SED_app'], self.data['m_SED_abs'] = '', ''
@@ -2361,7 +2361,7 @@ class MakeSED(object):
                 print("Couldn't print photometry.")
 
 
-def fundamental_params(D, p='', plot=False):
+def fundamental_params(D, p='', evo_model='hybrid_solar_age', plot=False):
     '''
   Calculates all possible fundamental parameters given a dictionary of data
 
@@ -2405,15 +2405,15 @@ def fundamental_params(D, p='', plot=False):
                 # Get radius from *radius* argument or radius interpolation of evolutionary model isochrones, then calculate Teff
                 D[p + 'radius'], D[p + 'radius_unc'] = (D['radius'], D['radius_unc']) if D[
                                                                                              'radius'] != '' else isochrone_interp(
-                    D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'], D['age_max'], plot=plot)
+                    D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'], D['age_max'], plot=plot, evo_model=evo_model)
                 D[p + 'teff'], D[p + 'teff_unc'] = get_teff(D[p + 'Lbol_W'], D[p + 'Lbol_W_unc'], D[p + 'radius'],
                                                             D[p + 'radius_unc'])
 
                 # Also calculate model mass and logg
                 D[p + 'logg'], D[p + 'logg_unc'] = isochrone_interp(D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'],
-                                                                    D['age_max'], yparam='logg', plot=plot)
+                                                                    D['age_max'], yparam='logg', plot=plot, evo_model=evo_model)
                 D[p + 'mass'], D[p + 'mass_unc'] = isochrone_interp(D[p + 'Lbol'], D[p + 'Lbol_unc'], D['age_min'],
-                                                                    D['age_max'], yparam='mass', plot=plot)
+                                                                    D['age_max'], yparam='mass', plot=plot, evo_model=evo_model)
 
         else:
             pass
