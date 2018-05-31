@@ -182,6 +182,7 @@ class SED(object):
         self.Teff = None
         self.Lbol = None
         self.Mbol = None
+        self.Lbol_sun = None
         
         # Default parameters
         self.age = 6*q.Gyr, 4*q.Gyr
@@ -944,7 +945,8 @@ class SED(object):
             self.logg = tuple(iso.isochrone_interp(self.Lbol, self.age, yparam='logg', evo_model=self.evo_model))
             
         else:
-            print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
+            if self.verbose:
+                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
         
         
     def make_sed(self):
@@ -1013,7 +1015,8 @@ class SED(object):
             self.mass = (mass[0]*q.Mjup).to(mass_units), (mass[1]*q.Mjup).to(mass_units)
             
         else:
-            print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the mass.'.format(self))
+            if self.verbose:
+                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the mass.'.format(self))
         
         
     @property
@@ -1260,7 +1263,8 @@ class SED(object):
             self.radius = (radius[0]*q.Rjup).to(radius_units), (radius[1]*q.Rjup).to(radius_units)
             
         else:
-            print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
+            if self.verbose:
+                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
         
         
     @property
