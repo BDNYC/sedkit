@@ -5,7 +5,7 @@ dependencies:
   - scipy
   - bokeh
   - astropy
-  - pysynphot
   - pip:
+    - pysynphot
     - numpydoc
     - sphinx-automodapi
