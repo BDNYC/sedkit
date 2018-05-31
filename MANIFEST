@@ -5,10 +5,10 @@ setup.cfg
 setup.py
 SEDkit/__init__.py
 SEDkit/_astropy_init.py
-SEDkit/cmd.py
+SEDkit/catalog.py
+SEDkit/cmds.py
 SEDkit/conftest.py
 SEDkit/cython_version.py
-SEDkit/interact.py
 SEDkit/isochrone.py
 SEDkit/sed.py
 SEDkit/spectrum.py
@@ -19,9 +19,7 @@ SEDkit/data/M0V_photometry.txt
 SEDkit/data/M0V_spectrum.txt
 SEDkit/data/README.rst
 SEDkit/data/STScI_Vega.txt
-SEDkit/example_subpkg/__init__.py
-SEDkit/example_subpkg/setup_package.py
-SEDkit/example_subpkg/tests/__init__.py
+SEDkit/data/coords.txt
 SEDkit/extern/__init__.py
 SEDkit/tests/__init__.py
 SEDkit/tests/coveragerc
