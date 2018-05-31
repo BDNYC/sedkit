@@ -13,6 +13,7 @@ import astropy.units as q
 import astropy.constants as ac
 from bokeh.plotting import figure
 from bokeh.models import HoverTool, ColumnDataSource
+from .sed import SED
 
 class SEDCatalog:
     """An object to collect SED results for plotting and analysis"""
@@ -58,13 +59,23 @@ class SEDCatalog:
         sed: SEDkit.sed.SED
             The SED object to add
         """
+        # Turn off print statements
+        sed.verbose = False
+        
         # Add the values and uncertainties if applicable
         results = []
         for col in self.cols[:-1]:
+            
             if col+'_unc' in self.cols:
-                val = getattr(sed, col)[0]
+                if isinstance(getattr(sed, col), tuple):
+                    val = getattr(sed, col)[0]
+                else:
+                    val = None
             elif col.endswith('_unc'):
-                val = getattr(sed, col.replace('_unc',''))[1]
+                if isinstance(getattr(sed, col.replace('_unc', '')), tuple):
+                    val = getattr(sed, col.replace('_unc', ''))[1]
+                else:
+                    val = None
             else:
                 val = getattr(sed, col)
         
@@ -79,21 +90,22 @@ class SEDCatalog:
         cat = SEDCatalog()
         table = cat.results
         table.add_row(results)
+        table = at.Table(table)
         
         # Append apparent and absolute photometry
         for row in sed.photometry:
 
             # Add the apparent magnitude
-            cat.results.add_column(at.Column([row['app_magnitude']], name=row['band']))
+            table.add_column(at.Column([row['app_magnitude']], name=row['band']))
 
             # Add the apparent uncertainty
-            cat.results.add_column(at.Column([row['app_magnitude_unc']], name=row['band']+'_unc'))
+            table.add_column(at.Column([row['app_magnitude_unc']], name=row['band']+'_unc'))
 
             # Add the absolute magnitude
-            cat.results.add_column(at.Column([row['abs_magnitude']], name='M_'+row['band']))
+            table.add_column(at.Column([row['abs_magnitude']], name='M_'+row['band']))
 
             # Add the absolute uncertainty
-            cat.results.add_column(at.Column([row['abs_magnitude_unc']], name='M_'+row['band']+'_unc'))
+            table.add_column(at.Column([row['abs_magnitude_unc']], name='M_'+row['band']+'_unc'))
         
         # Stack with current table
         if len(self.results)==0:
@@ -205,6 +217,31 @@ class SEDCatalog:
         return cat
         
         
+    def from_file(self, coords):
+        """Generate a catalog from a list of coordinates
+        
+        Parameters
+        ----------
+        coords: str
+            The path to the two-column file of ra, dec values
+        """
+        data = np.genfromtxt(coords)
+        
+        for ra, dec, *k in data:
+
+            # Make the SED
+            s = SED()
+            s.verbose = False
+            s.sky_coords = ra*q.deg, dec*q.deg
+            s.find_Gaia()
+            s.find_2MASS()
+            s.find_WISE()
+            s.make_sed()
+
+            # Add it to the catalog
+            self.add_SED(s)
+        
+        
     def load(self, file):
         """Load a saved SEDCatalog"""
         if os.path.isfile(file):
@@ -268,8 +305,8 @@ class SEDCatalog:
             ydata = self.results[y]
             
         # Set axis labels
-        fig.xaxis.axis_label = '{}{}'.format(x, '[{}]'.format(xunit) if xunit else '')
-        fig.yaxis.axis_label = '{}{}'.format(y, '[{}]'.format(yunit) if yunit else '')
+        fig.xaxis.axis_label = '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
+        fig.yaxis.axis_label = '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
         
         # Set up hover tool
         tips = [( 'Name', '@desc'), (x, '@x'), (y, '@y')]
