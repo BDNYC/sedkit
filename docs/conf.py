@@ -49,7 +49,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'astrodbkit'
+project = u'SEDkit'
 copyright = u'2015, Joe Filippazzo'
 author = u'Joe Filippazzo'
 
