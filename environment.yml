@@ -1,0 +1,10 @@
+name: py35
+dependencies:
+- numpy
+- astropy>=3.0.2
+- python>=3.5
+- bokeh>=0.12.6
+- astroquery>=0.3.8
+- scipy>=0.17.0
+- pip:
+  - pysynphot>=0.9.8.5
