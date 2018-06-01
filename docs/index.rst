@@ -24,12 +24,12 @@ Contents
 .. toctree::
    :maxdepth: 4
    
-.. automodule:: catalog
-.. automodule:: isochrone
-.. automodule:: sed
-.. automodule:: spectrum
-.. automodule:: synphot
-.. automodule:: utilities
+.. automodule:: SEDkit.catalog
+.. automodule:: SEDkit.isochrone
+.. automodule:: SEDkit.sed
+.. automodule:: SEDkit.spectrum
+.. automodule:: SEDkit.synphot
+.. automodule:: SEDkit.utilities
 
 Indices and tables
 
