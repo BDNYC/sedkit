@@ -61,3 +61,8 @@ target/
 # Notebooks
 .ipynb_checkpoints/
 .ipynb_checkpoints
+
+# RTD
+_build
+_static
+_templates

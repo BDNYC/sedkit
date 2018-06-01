@@ -22,15 +22,14 @@ Contents
 ========
 
 .. toctree::
-  :maxdepth: 2
-  
-   SEDkit/index.rst
-   catalog
-   isochrone
-   sed
-   spectrum
-   synphot
-   utilities
+   :maxdepth: 4
+   
+.. automodule:: catalog
+.. automodule:: isochrone
+.. automodule:: sed
+.. automodule:: spectrum
+.. automodule:: synphot
+.. automodule:: utilities
 
 Indices and tables
 
