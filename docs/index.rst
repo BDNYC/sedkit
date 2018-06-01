@@ -1,7 +1,14 @@
-Documentation
-=============
+Welcome to SEDkit's documentation!
+======================================
 
-Spectral energy distribution construction and analysis tools
+This documentation describes a toolkit of classes, methods, and functions useful for the creation and analysis of spectral energy distributions.
+
+Installation
+============
+
+To install **SEDkit**, do::
+
+    pip install SEDkit
   
 Contents
 ========
