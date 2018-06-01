@@ -9,6 +9,14 @@ Installation
 To install **SEDkit**, do::
 
     pip install SEDkit
+    
+Alternatively, clone the Github repo with::
+
+    git clone https://github.com/hover2pi/SEDkit.git
+    
+And then install with::
+
+    python SEDkit/setup.py install
   
 Contents
 ========
