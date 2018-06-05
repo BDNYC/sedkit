@@ -24,6 +24,7 @@ from . import utilities as u
 from . import synphot as s
 from . import spectrum as sp
 from . import isochrone as iso
+from . import relations as rel
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 
@@ -615,6 +616,7 @@ class SED(object):
         viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius or self.search_radius, catalog=[catalog])
         
         if len(viz_cat)>0:
+            print('{} 2MASS records found.'.format(len(viz_cat)))
             tmass = viz_cat[0][0]
         
             for band,viz in zip(['2MASS.J','2MASS.H','2MASS.Ks'],['Jmag','Hmag','Kmag']):
@@ -625,7 +627,7 @@ class SED(object):
                     pass
                     
                     
-    def find_Gaia(self, search_radius=None, catalog='I/345/gaia2'):
+    def find_Gaia(self, search_radius=15*q.arcsec, catalog='I/345/gaia2'):
         """
         Search for Gaia data
         
@@ -641,7 +643,7 @@ class SED(object):
             raise TypeError("Can't find Gaia data without coordinates!")
             
         parallaxes = Vizier.query_region(self.sky_coords, radius=search_radius or self.search_radius, catalog=[catalog])
-                        
+        
         if parallaxes:
             
             parallax = list(parallaxes[0][0][['Plx','e_Plx']])
@@ -656,7 +658,7 @@ class SED(object):
                 pass
                     
                     
-    def find_WISE(self, search_radius=None, catalog='II/328/allwise'):
+    def find_WISE(self, search_radius=10*q.arcsec, catalog='II/328/allwise'):
         """
         Search for WISE data
         
@@ -671,9 +673,11 @@ class SED(object):
         if not isinstance(self.sky_coords, SkyCoord):
             raise TypeError("Can't find WISE photometry without coordinates!")
             
-        viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius or self.search_radius, catalog=[catalog])
+        rad = search_radius or self.search_radius
+        viz_cat = Vizier.query_region(self.sky_coords, radius=rad, catalog=[catalog])
         
         if len(viz_cat)>0:
+            print('{} WISE records found.'.format(len(viz_cat)))
             wise = viz_cat[0][0]
         
             for band,viz in zip(['WISE.W1','WISE.W2','WISE.W3','WISE.W4'],['W1mag','W2mag','W3mag','W4mag']):
@@ -1247,10 +1251,20 @@ class SED(object):
         self.calculated = False
         
         
-    def radius_from_spectral_type(self):
+    def radius_from_spectral_type(self, spt=None):
         """Estimate the radius from CMD plot
+        
+        Parameters
+        ----------
+        spt: float
+            The spectral type float, where 0-99 correspond to types O0-Y9
         """
-        pass
+        spt = spt or self.spectral_type[0]
+        try:
+            self.radius = rel.spt_radius_relation(spt)
+            
+        except:
+            print("Could not estimate radius from spectral type {}".format(spt))
         
         
     def radius_from_age(self, radius_units=q.Rsun):
@@ -1291,12 +1305,9 @@ class SED(object):
                 unit = val.unit if hasattr(val, 'unit') else '--'
                 val = val.value if hasattr(val, 'unit') else val
                 unc = unc.value if hasattr(unc, 'unit') else unc
-                if val<1E-4 or val>1e5:
+                if val<1E-3 or val>1e5:
                     val = float('{:.2e}'.format(val))
                     unc = float('{:.2e}'.format(unc))
-                if 0<val<1:
-                    val = round(val,3)
-                    unc = round(unc,3)
                 rows.append([param, val, unc, unit])
                 
             elif isinstance(attr, str):
@@ -1380,10 +1391,9 @@ class SED(object):
             else:
                 print("{} is an invalid gravity. Please use 'beta' or 'gamma' instead.".format(gravity))
         
-        # Update the radius
-        if self.radius is None:
-            # TODO self.radius = get_radius()
-            pass
+        # If radius not explicitly set, estimate it from spectral type
+        if self.spectral_type is not None and self.radius is None:
+            self.radius_from_spectral_type()
             
         # Set SED as uncalculated
         self.calculated = False
