@@ -27,6 +27,7 @@ from . import isochrone as iso
 from . import relations as rel
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
+from dustmaps.bayestar import BayestarWebQuery
 
 # A dictionary of all supported moving group ages
 AGES = {'TW Hya': (14*q.Myr, 6*q.Myr), 'beta Pic': (17*q.Myr, 5*q.Myr), 'Tuc-Hor': (25*q.Myr, 15*q.Myr), 'Columba': (25*q.Myr, 15*q.Myr), 'Carina': (25*q.Myr, 15*q.Myr), 'Argus': (40*q.Myr, 10*q.Myr), 'AB Dor': (85*q.Myr, 35*q.Myr), 'Pleiades': (120*q.Myr, 10*q.Myr)}
@@ -162,6 +163,7 @@ class SED(object):
         self._photometry['abs_flux'].unit = self._flux_units
         self._photometry['abs_flux_unc'].unit = self._flux_units
         self._photometry.add_index('band')
+        self.reddening = 0
         
         # Synthetic photometry
         self._synthetic_photometry = at.QTable(names=phot_cols, dtype=phot_typs)
@@ -535,6 +537,9 @@ class SED(object):
         # Update the parallax
         self._parallax = u.pi2pc(*self.distance, pc2pi=True)
         
+        # Try to calculate reddening
+        self.get_reddening()
+        
         # Update the absolute photometry
         self._calibrate_photometry()
 
@@ -899,6 +904,14 @@ class SED(object):
             
             # Update the attribute
             self.Mbol = Mbol, Mbol_unc
+        
+        
+    def get_reddening(self):
+        """Calculate the reddening from the Bayestar17 dust map"""
+        if self.distance is not None and self.sky_coords is not None:
+            gal_coords = SkyCoord(self.sky_coords.galactic, frame='galactic', distance=self.distance[0])
+            bayestar = BayestarWebQuery(version='bayestar2017')
+            self.reddening = bayestar(gal_coords, mode='random_sample')
             
             
     def get_Teff(self):
@@ -1081,6 +1094,9 @@ class SED(object):
         
         # Update the distance
         self._distance = u.pi2pc(*self.parallax)
+        
+        # Try to calculate reddening
+        self.get_reddening()
         
         # Update the absolute photometry
         self._calibrate_photometry()
@@ -1340,6 +1356,9 @@ class SED(object):
         # Set the sky coordinates
         self._sky_coords = sky_coords
         
+        # Try to calculate reddening
+        self.get_reddening()
+    
         
     @property
     def spectra(self):

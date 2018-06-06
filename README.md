@@ -9,6 +9,8 @@ Requirements:
 - `bokeh>=0.12.6`
 - `pysynphot>=0.9.8.5`
 - `astroquery>=0.3.8`
+- `dustmaps>=1.0`
+- `numpy>=1.13.3`
 
 
 ## Licensed
