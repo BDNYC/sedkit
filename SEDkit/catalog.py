@@ -62,6 +62,9 @@ class SEDCatalog:
         # Turn off print statements
         sed.verbose = False
         
+        # Run the SED
+        sed.make_sed()
+        
         # Add the values and uncertainties if applicable
         results = []
         for col in self.cols[:-1]:

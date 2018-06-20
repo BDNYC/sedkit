@@ -125,12 +125,13 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
         
         if isinstance(dist, q.quantity.Quantity):
             
-            Mag = mag*(dist/scale_to)**2
+            # Mag = mag - 2.5*np.log10(dist/scale_to)**2
+            Mag = mag -5*np.log10(dist.value) + 5*np.log10(scale_to.value)
             Mag = Mag.round(3)
             
             if isinstance(sig_d, q.quantity.Quantity) and sig_m!='':
-                Mag_unc = np.sqrt((sig_m*dist/scale_to)**2 + (2*mag*(sig_d*dist/scale_to**2))**2)
-                Mag_unc = Mag_unc.round(3)
+                Mag_unc = np.sqrt(sig_m**2 + (2.5*sig_d/(np.log(10)*dist))**2)
+                Mag_unc = Mag_unc.round(3).value
                 
             else:
                 Mag_unc = np.nan

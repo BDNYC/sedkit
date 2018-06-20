@@ -19,6 +19,7 @@ from astropy.constants import b_wien
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astroquery.vizier import Vizier
+from astroquery.simbad import Simbad
 from pkg_resources import resource_filename
 from . import utilities as u
 from . import synphot as s
@@ -126,6 +127,7 @@ class SED(object):
         """
         # Single valued attributes
         self.name = name
+        self.all_names = []
         self.verbose = verbose
         self._age = None
         self._distance = None
@@ -182,6 +184,8 @@ class SED(object):
         self.fig = figure()
         
         # Empty result attributes
+        self.fbol = None
+        self.mbol = None
         self.Teff = None
         self.Lbol = None
         self.Mbol = None
@@ -307,7 +311,27 @@ class SED(object):
         self.calculated = False
         
         
-    def add_spectrum_file(self, file, wave_units, flux_units, ext=0):
+    def add_SDSS_spectrum(self, file=None, plate=None, mjd=None, fiber=None):
+        
+        # Get the local file
+        if file is not None:
+            spec = SDSSfits(file)
+        
+        elif plate is not None and mjd is not None and fiber is not None:
+            spec = fetch_sdss_spectrum(plate, mjd, fiber)
+            
+        else:
+            raise ValueError('Huh?')
+            
+        wave = spec.wavelength()*q.AA
+        flux = spec.spectrum*1E-17*q.erg/q.s/q.cm**2/q.AA
+        unc = spec.error*1E-17*q.erg/q.s/q.cm**2/q.AA
+    
+        # Add the data to the SED object
+        self.add_spectrum(wave, flux, unc=unc)
+        
+        
+    def add_spectrum_file(self, file, wave_units=None, flux_units=None, ext=0, survey=None):
         """Add a spectrum from an ASCII or FITS file
         
         Parameters
@@ -320,25 +344,37 @@ class SED(object):
             The flux units
         ext: int, str
             The FITS extension name or index
+        survey: str (optional)
+            The name of the survey
         """
         # Read the data
         if file.endswith('.fits'):
+            
             raw = fits.getdata(file, ext=ext)
             
+            if survey=='SDSS':
+                header = fits.getheader(file)
+                flux_units = 1E-17*q.erg/q.s/q.cm**2/q.AA
+                wave_units = q.AA
+                data = [10**(header['COEFF0']+header['COEFF1']*np.arange(len(raw.flux))), raw.flux, raw.ivar]
+        
             # Check if it is a recarray
-            if isinstance(raw, fits.fitsrec.FITS_rec):
+            elif isinstance(raw, fits.fitsrec.FITS_rec):
+            
+                # Check if it's an SDSS spectrum
+                raw = fits.getdata(file, ext=ext)
                 data = raw['WAVELENGTH'], raw['FLUX'], raw['ERROR']
-                
+            
             # Otherwise just an array
             else:
                 data = raw
-            
+        
         elif file.endswith('.txt'):
             data = np.genfromtxt(file, unpack=True)
-            
+        
         else:
             raise FileError('The file needs to be ASCII or FITS.')
-        
+    
         # Apply units
         wave = data[0]*wave_units
         flux = data[1]*flux_units
@@ -425,22 +461,20 @@ class SED(object):
         
             # Calculate app_flux values
             for n,row in enumerate(self._photometry):
-                # app_flux, app_flux_unc = u.mag2flux(row['band'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
                 app_flux, app_flux_unc = u.mag2flux(row['bandpass'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
                 self._photometry['app_flux'][n] = app_flux.to(self.flux_units)
                 self._photometry['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
             
             # Calculate absolute mags
-            if self._distance is not None:
+            if self.distance is not None:
             
                 # Calculate abs_mags
-                M, M_unc = u.flux_calibrate(m, self._distance[0], m_unc, self._distance[1])
+                M, M_unc = u.flux_calibrate(m, self.distance[0], m_unc, self.distance[1])
                 self._photometry['abs_magnitude'] = M
                 self._photometry['abs_magnitude_unc'] = M_unc
             
                 # Calculate abs_flux values
                 for n,row in enumerate(self._photometry):
-                    # abs_flux, abs_flux_unc = u.mag2flux(row['band'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
                     abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
                     self._photometry['abs_flux'][n] = abs_flux.to(self.flux_units)
                     self._photometry['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
@@ -601,35 +635,13 @@ class SED(object):
             raise IOError("Please use an evolutionary model from the list: {}".format(EVO_MODELS))
             
         self._evo_model = model
+        
             
-            
-    def find_2MASS(self, search_radius=None, catalog='II/246/out'):
+    def find_2MASS(self, search_radius=None):
         """
         Search for 2MASS data
-        
-        Parameters
-        ----------
-        search_radius: astropy.units.quantity.Quantity
-            The radius for the cone search
-        catalog: str
-            The Vizier catalog to search
         """
-        # Make sure there are coordinates
-        if not isinstance(self.sky_coords, SkyCoord):
-            raise TypeError("Can't find 2MASS photometry without coordinates!")
-            
-        viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius or self.search_radius, catalog=[catalog])
-        
-        if len(viz_cat)>0:
-            print('{} 2MASS records found.'.format(len(viz_cat)))
-            tmass = viz_cat[0][0]
-        
-            for band,viz in zip(['2MASS.J','2MASS.H','2MASS.Ks'],['Jmag','Hmag','Kmag']):
-                try:
-                    mag, unc = list(tmass[[viz,'e_'+viz]])
-                    self.add_photometry(band, float(mag), float(unc))
-                except IOError:
-                    pass
+        self.find_photometry('2MASS', 'II/246/out', ['Jmag','Hmag','Kmag'], ['2MASS.J','2MASS.H','2MASS.Ks'], search_radius=search_radius)
                     
                     
     def find_Gaia(self, search_radius=15*q.arcsec, catalog='I/345/gaia2'):
@@ -646,13 +658,15 @@ class SED(object):
         # Make sure there are coordinates
         if not isinstance(self.sky_coords, SkyCoord):
             raise TypeError("Can't find Gaia data without coordinates!")
-            
+        
+        # Query the catalog
         parallaxes = Vizier.query_region(self.sky_coords, radius=search_radius or self.search_radius, catalog=[catalog])
         
+        # Parse the records
         if parallaxes:
             
+            # Grab the first record
             parallax = list(parallaxes[0][0][['Plx','e_Plx']])
-        
             self.parallax = parallax[0]*q.mas, parallax[1]*q.mas
         
             # Get Gband while we're here
@@ -661,36 +675,90 @@ class SED(object):
                 self.add_photometry('Gaia.G', mag, unc)
             except:
                 pass
-                    
-                    
-    def find_WISE(self, search_radius=10*q.arcsec, catalog='II/328/allwise'):
+                
+                
+    def find_PanSTARRS(self, search_radius=10*q.arcsec):
         """
-        Search for WISE data
+        Search for PanSTARRS data
+        """
+        self.find_photometry('PanSTARRS', 'II/349/ps1', ['gmag','rmag','imag','zmag','ymag'], ['PS1.g','PS1.r','PS1.i','PS1.z','PS1.y'], search_radius=search_radius)
+                
+                
+    def find_photometry(self, name, catalog, band_names, target_names, search_radius=None):
+        """
+        Search Vizier for photometry in the given catalog
+        """
+        # Make sure there are coordinates
+        if not isinstance(self.sky_coords, SkyCoord):
+            raise TypeError("Can't find {} photometry without coordinates!".format(name))
+            
+        # See if the designation was fetched by Simbad
+        des = [name for name in self.all_names if name.startswith(name)]
+        
+        # Get photometry using designation...
+        if len(des)>0:
+            viz_cat = Vizier.query_object(des[0], catalog=[catalog])
+            
+        # ...or from the coordinates
+        else:
+            rad = search_radius or self.search_radius
+            viz_cat = Vizier.query_region(self.sky_coords, radius=rad, catalog=[catalog])
+        
+        # Parse the record
+        if len(viz_cat)>0:
+            if len(viz_cat)>1:
+                print('{} {} records found.'.format(len(viz_cat),name))
+            
+            # Grab the first record
+            rec = viz_cat[0][0]
+            
+            # Pull out the photometry
+            for band,viz in zip(target_names,band_names):
+                try:
+                    mag, unc = list(rec[[viz,'e_'+viz]])
+                    self.add_photometry(band, float(mag), float(unc))
+                except IOError:
+                    pass
+                
+                
+    def find_SDSS(self, search_radius=None):
+        """
+        Search for SDSS data
+        """
+        self.find_photometry('SDSS', 'V/147', ['umag','gmag','rmag','imag','zmag'], ['SDSS.u','SDSS.g','SDSS.r','SDSS.i','SDSS.z'], search_radius=search_radius)
+                
+                
+    def find_SIMBAD(self, search_radius=10*q.arcsec):
+        """
+        Search for a SIMBAD record
         
         Parameters
         ----------
         search_radius: astropy.units.quantity.Quantity
             The radius for the cone search
-        catalog: str
-            The Vizier catalog to search
         """
         # Make sure there are coordinates
         if not isinstance(self.sky_coords, SkyCoord):
             raise TypeError("Can't find WISE photometry without coordinates!")
             
+        # Search Simbad by radius
         rad = search_radius or self.search_radius
-        viz_cat = Vizier.query_region(self.sky_coords, radius=rad, catalog=[catalog])
+        viz_cat = Simbad.query_region(self.sky_coords, radius=rad)
         
-        if len(viz_cat)>0:
-            print('{} WISE records found.'.format(len(viz_cat)))
-            wise = viz_cat[0][0]
+        # Parse the record and save the names
+        if viz_cat is not None:
+            main_ID = viz_cat[0]['MAIN_ID'].decode("utf-8")
+            self.all_names = list(Simbad.query_objectids(main_ID)['ID'])
+            
+            if self.name is None:
+                self.name = main_ID
         
-            for band,viz in zip(['WISE.W1','WISE.W2','WISE.W3','WISE.W4'],['W1mag','W2mag','W3mag','W4mag']):
-                try:
-                    mag, unc = list(wise[[viz,'e_'+viz]])
-                    self.add_photometry(band, float(mag), float(unc))
-                except IOError:
-                    pass
+    
+    def find_WISE(self, search_radius=10*q.arcsec):
+        """
+        Search for WISE data
+        """
+        self.find_photometry('WISE', 'II/328/allwise', ['W1mag','W2mag','W3mag','W4mag'], ['WISE.W1','WISE.W2','WISE.W3','WISE.W4'], search_radius=search_radius)
         
         
     @property
@@ -847,7 +915,7 @@ class SED(object):
         """Calculate the bolometric luminosity of the SED
         """
         # Caluclate fbol if not present
-        if not hasattr(self, 'fbol'):
+        if self.fbol is None:
             self.get_fbol()
             
         # Calculate Lbol
@@ -875,7 +943,7 @@ class SED(object):
             The absolute bolometric magnitude of the sun
         """
         # Calculate fbol if not present
-        if not hasattr(self, 'fbol'):
+        if self.fbol is None:
             self.get_fbol()
             
         # Calculate mbol
@@ -892,7 +960,7 @@ class SED(object):
         """Calculate the absolute bolometric magnitude of the SED
         """
         # Calculate mbol if not present
-        if not hasattr(self, 'mbol'):
+        if self.mbol is None:
             self.get_mbol()
            
         # Calculate Mbol
@@ -1306,8 +1374,8 @@ class SED(object):
         
         # Get the results
         rows = []
-        for param in ['name', 'age', 'distance', 'parallax', 'radius',\
-                      'spectral_type', 'membership', 'fbol', 'mbol', \
+        for param in ['name', 'age', 'distance', 'parallax', 'radius', 'SpT',\
+                      'spectral_type', 'membership', 'reddening', 'fbol', 'mbol', \
                       'Lbol', 'Lbol_sun', 'Mbol', 'logg', 'mass', 'Teff']:
             
             # Get the values and format
@@ -1358,6 +1426,9 @@ class SED(object):
         
         # Try to calculate reddening
         self.get_reddening()
+        
+        # Try to find the source in Simbad
+        self.find_SIMBAD()
     
         
     @property
