@@ -22,7 +22,7 @@ class SEDCatalog:
         # List all the results columns
         self.cols = ['name', 'age', 'age_unc', 'distance', 'distance_unc',
                      'parallax', 'parallax_unc', 'radius', 'radius_unc',
-                     'spectral_type', 'spectral_type_unc', 'membership',
+                     'spectral_type', 'spectral_type_unc', 'membership', 'reddening',
                      'fbol', 'fbol_unc', 'mbol', 'mbol_unc', 'Lbol', 'Lbol_unc',
                      'Lbol_sun', 'Lbol_sun_unc', 'Mbol', 'Mbol_unc',
                      'logg', 'logg_unc', 'mass', 'mass_unc', 'Teff', 'Teff_unc',
