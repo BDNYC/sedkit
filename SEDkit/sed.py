@@ -13,7 +13,7 @@ import astropy.table as at
 import astropy.units as q
 import astropy.io.ascii as ii
 import astropy.constants as ac
-from astropy.modeling.models import custom_model
+from astropy.modeling import models, fitting
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.constants import b_wien
 from astropy.io import fits
@@ -197,6 +197,11 @@ class SED(object):
         self.age = 6*q.Gyr, 4*q.Gyr
         self.mass = None
         self.logg = None
+        
+        # Fit
+        self.Teff_bb = None
+        self.bb_source = None
+        self.blackbody = None
     
     
     def add_photometry(self, band, mag, mag_unc=None, **kwargs):
@@ -777,6 +782,45 @@ class SED(object):
         self.find_photometry('WISE', 'II/328/allwise', ['W1mag','W2mag','W3mag','W4mag'], ['WISE.W1','WISE.W2','WISE.W3','WISE.W4'], **kwargs)
         
         
+    def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=3000, epsilon=0.1, acc=5.0):
+        """
+        Fit a blackbody curve to the data
+
+        Parameters
+        ==========
+        fit_to: str
+            The attribute name of the [W,F,E] to fit
+        initial: int
+            The initial guess
+        epsilon: float
+            The step size
+        acc: float
+            The acceptible error
+        """
+        # Get the data and remove NaNs
+        data = u.scrub(getattr(self, fit_to).data)
+
+        # Initial guess
+        if self.Teff is not None:
+            teff = self.Teff[0].value
+        else:
+            teff = Teff_init
+        init = blackbody(temperature=teff)
+
+        # Fit the blackbody
+        fit = fitting.LevMarLSQFitter()
+        bb = fit(init, data[0], data[1]/np.nanmax(data[1]), epsilon=epsilon, acc=acc)
+
+        # Store the results
+        try:
+            self.Teff_bb = int(bb.temperature.value)
+            self.bb_source = fit_to
+            self.blackbody = bb
+            print('\nBlackbody fit: {} K'.format(self.Teff_bb))
+        except:
+            print('\nNo blackbody fit.')
+            
+            
     @property
     def flux_units(self):
         """A property for flux_units"""
@@ -1317,17 +1361,16 @@ class SED(object):
         if integral:
             self.fig.line(full_SED.wave, full_SED.flux, line_color='black', alpha=0.3, legend='Integral Surface')
 
-        #
-        # if blackbody and self.blackbody:
-        #     fit_sed = getattr(self, self.bb_source)
-        #     fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
-        #     bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
-        #     bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-        #     bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
-        #     bb_wav = np.linspace(0.2, 30, 1000)*q.um
-        #     bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-        #     # print(bb_norm,bb_flx)
-        #     fig.line(bb_wav.value, bb_flx.value*bb_norm, line_color='red', legend='{} K'.format(self.Teff_bb))
+        # Plot the blackbody fit
+        if blackbody and self.blackbody:
+            fit_sed = getattr(self, self.bb_source).data
+            fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
+            bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
+            bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+            bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
+            bb_wav = np.linspace(0.2, 30, 1000)*q.um
+            bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+            self.fig.line(bb_wav.value, bb_flx.value*bb_norm, line_color='red', legend='{} K'.format(self.Teff_bb))
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
@@ -1349,24 +1392,28 @@ class SED(object):
     @radius.setter
     def radius(self, radius):
         """A setter for radius"""
-        # Make sure it's a sequence
-        if not isinstance(radius, (tuple, list, np.ndarray)) or len(radius) not in [2,3]:
-            raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
+        if radius is None:
+            self._radius = None
             
-        # Make sure the values are in length units
-        try:
-            _ = [i.to(q.m) for i in radius]
-        except:
-            raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
+        else:
+            # Make sure it's a sequence
+            if not isinstance(radius, (tuple, list, np.ndarray)) or len(radius) not in [2,3]:
+                raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
+            
+            # Make sure the values are in length units
+            try:
+                _ = [i.to(q.m) for i in radius]
+            except:
+                raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
         
-        # Set the radius!
-        self._radius = tuple(radius)
+            # Set the radius!
+            self._radius = tuple(radius)
         
-        if self.verbose:
-            print('Setting radius to',self.radius)
+            if self.verbose:
+                print('Setting radius to',self.radius)
         
-        # Update the things that depend on radius!
-        self.get_Teff()
+            # Update the things that depend on radius!
+            self.get_Teff()
         
         # Set SED as uncalculated
         self.calculated = False
@@ -1645,46 +1692,6 @@ class SED(object):
     #
     #     except:
     #         print('No spectral coverage to calculate synthetic photometry.')
-    #
-    # def fit_blackbody(self, fit_to='app_phot_SED', epsilon=0.1, acc=5):
-    #     """
-    #     Fit a blackbody curve to the data
-    #
-    #     Parameters
-    #     ==========
-    #     fit_to: str
-    #         The attribute name of the [W,F,E] to fit
-    #     epsilon: float
-    #         The step size
-    #     acc: float
-    #         The acceptible error
-    #     """
-    #     # Get the data
-    #     data = getattr(self, fit_to)
-    #
-    #     # Remove NaNs
-    #     print(data)
-    #     data = np.array([(x,y,z) for x,y,z in zip(*data) if not any([np.isnan(i) for i in [x,y,z]]) and x<10]).T
-    #     print(data)
-    #     # Initial guess
-    #     try:
-    #         teff = self.Teff.value
-    #     except:
-    #         teff = 3000
-    #     init = blackbody(temperature=teff)
-    #
-    #     # Fit the blackbody
-    #     fit = fitting.LevMarLSQFitter()
-    #     bb = fit(init, data[0], data[1]/np.nanmax(data[1]), epsilon=epsilon, acc=acc)
-    #
-    #     # Store the results
-    #     try:
-    #         self.Teff_bb = int(bb.temperature.value)
-    #         self.bb_source = fit_to
-    #         self.blackbody = bb
-    #         print('\nBlackbody fit: {} K'.format(self.Teff_bb))
-    #     except:
-    #         print('\nNo blackbody fit.')
         
             
         
@@ -1730,7 +1737,7 @@ def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_
         fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
 
 
-@custom_model
+@models.custom_model
 def blackbody(wavelength, temperature=2000):
     """
     Generate a blackbody of the given temperature at the given wavelengths
@@ -1750,4 +1757,5 @@ def blackbody(wavelength, temperature=2000):
     wavelength = q.Quantity(wavelength, "um")
     temperature = q.Quantity(temperature, "K")
     max_val = blackbody_lambda((b_wien/temperature).to(q.um),temperature).value
+    
     return blackbody_lambda(wavelength, temperature).value/max_val
