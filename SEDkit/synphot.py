@@ -27,6 +27,11 @@ BANDPASS_PATH = resource_filename('SEDkit', 'data/bandpasses/')
 warnings.simplefilter('ignore')
 
 
+EXTINCTION = {'PS1.g':3.384, 'PS1.r':2.483, 'PS1.i':1.838, 'PS1.z':1.414, 'PS1.y':1.126,
+              'SDSS.u':4.0, 'SDSS.g':3.384, 'SDSS.r':2.483, 'SDSS.i':1.838, 'SDSS.z':1.414,
+              '2MASS.J':0.650, '2MASS.H':0.327, '2MASS.Ks':0.161}
+
+
 class Bandpass(ps.ArrayBandpass):
     def __init__(self, name):
         """
@@ -79,6 +84,9 @@ class Bandpass(ps.ArrayBandpass):
                 
         # Convert Jy zero point to Flam units
         self._zero_point = (self.ZeroPoint*q.Jy*ac.c/self.eff**2).to(q.erg/q.s/q.cm**2/q.AA)
+        
+        # Try to get the extinction vector R from Green et al. (2018)
+        self.ext_vector = EXTINCTION.get(name, 0)
         
     
     def overlap(self, other):

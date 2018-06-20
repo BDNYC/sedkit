@@ -30,6 +30,8 @@ from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 from dustmaps.bayestar import BayestarWebQuery
 
+Vizier.columns = ["**", "+_r"]
+
 # A dictionary of all supported moving group ages
 AGES = {'TW Hya': (14*q.Myr, 6*q.Myr), 'beta Pic': (17*q.Myr, 5*q.Myr), 'Tuc-Hor': (25*q.Myr, 15*q.Myr), 'Columba': (25*q.Myr, 15*q.Myr), 'Carina': (25*q.Myr, 15*q.Myr), 'Argus': (40*q.Myr, 10*q.Myr), 'AB Dor': (85*q.Myr, 35*q.Myr), 'Pleiades': (120*q.Myr, 10*q.Myr)}
 
@@ -115,8 +117,7 @@ class SED(object):
     """
     def __init__(self, name='My Target', verbose=True, **kwargs):
         """
-        Pulls all available data from the BDNYC Data Archive, 
-        constructs an SED, and stores all calculations at *pickle_path*
+        Initialize an SED object
         
         Parameters
         ----------
@@ -126,7 +127,7 @@ class SED(object):
             Print some diagnostic stuff
         """
         # Single valued attributes
-        self.name = name
+        self._name = None
         self.all_names = []
         self.verbose = verbose
         self._age = None
@@ -179,6 +180,7 @@ class SED(object):
         # Try to set attributes from kwargs
         for k,v in kwargs.items():
             setattr(self, k, v)
+        self.name = name
             
         # Make a plot
         self.fig = figure()
@@ -235,6 +237,9 @@ class SED(object):
         # Drop the current band if it exists
         if band in self.photometry['band']:
             self.drop_photometry(band)
+            
+        # Apply the dereddening by subtracting the (bandpass extinction vector)*(source dust column density)
+        mag -= bp.ext_vector*self.reddening
         
         # Make a dict for the new point
         new_photometry = {'band':band, 'eff':bp.eff, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
@@ -637,11 +642,11 @@ class SED(object):
         self._evo_model = model
         
             
-    def find_2MASS(self, search_radius=None):
+    def find_2MASS(self, **kwargs):
         """
         Search for 2MASS data
         """
-        self.find_photometry('2MASS', 'II/246/out', ['Jmag','Hmag','Kmag'], ['2MASS.J','2MASS.H','2MASS.Ks'], search_radius=search_radius)
+        self.find_photometry('2MASS', 'II/246/out', ['Jmag','Hmag','Kmag'], ['2MASS.J','2MASS.H','2MASS.Ks'], **kwargs)
                     
                     
     def find_Gaia(self, search_radius=15*q.arcsec, catalog='I/345/gaia2'):
@@ -677,14 +682,14 @@ class SED(object):
                 pass
                 
                 
-    def find_PanSTARRS(self, search_radius=10*q.arcsec):
+    def find_PanSTARRS(self, **kwargs):
         """
         Search for PanSTARRS data
         """
-        self.find_photometry('PanSTARRS', 'II/349/ps1', ['gmag','rmag','imag','zmag','ymag'], ['PS1.g','PS1.r','PS1.i','PS1.z','PS1.y'], search_radius=search_radius)
+        self.find_photometry('PanSTARRS', 'II/349/ps1', ['gmag','rmag','imag','zmag','ymag'], ['PS1.g','PS1.r','PS1.i','PS1.z','PS1.y'], **kwargs)
                 
                 
-    def find_photometry(self, name, catalog, band_names, target_names, search_radius=None):
+    def find_photometry(self, name, catalog, band_names, target_names, search_radius=None, idx=0, **kwargs):
         """
         Search Vizier for photometry in the given catalog
         """
@@ -709,8 +714,8 @@ class SED(object):
             if len(viz_cat)>1:
                 print('{} {} records found.'.format(len(viz_cat),name))
             
-            # Grab the first record
-            rec = viz_cat[0][0]
+            # Grab the record
+            rec = viz_cat[0][idx]
             
             # Pull out the photometry
             for band,viz in zip(target_names,band_names):
@@ -721,11 +726,11 @@ class SED(object):
                     pass
                 
                 
-    def find_SDSS(self, search_radius=None):
+    def find_SDSS(self, **kwargs):
         """
         Search for SDSS data
         """
-        self.find_photometry('SDSS', 'V/147', ['umag','gmag','rmag','imag','zmag'], ['SDSS.u','SDSS.g','SDSS.r','SDSS.i','SDSS.z'], search_radius=search_radius)
+        self.find_photometry('SDSS', 'V/147', ['umag','gmag','rmag','imag','zmag'], ['SDSS.u','SDSS.g','SDSS.r','SDSS.i','SDSS.z'], **kwargs)
                 
                 
     def find_SIMBAD(self, search_radius=10*q.arcsec):
@@ -737,28 +742,39 @@ class SED(object):
         search_radius: astropy.units.quantity.Quantity
             The radius for the cone search
         """
-        # Make sure there are coordinates
-        if not isinstance(self.sky_coords, SkyCoord):
-            raise TypeError("Can't find WISE photometry without coordinates!")
+        # Check for coordinates
+        if isinstance(self.sky_coords, SkyCoord):
             
-        # Search Simbad by radius
-        rad = search_radius or self.search_radius
-        viz_cat = Simbad.query_region(self.sky_coords, radius=rad)
-        
+            # Search Simbad by sky coords
+            viz_cat = Simbad.query_region(self.sky_coords, radius=search_radius or self.search_radius)
+                    
+        elif self.name is not None:
+            
+            viz_cat = Simbad.query_object(self.name)
+            
+        else:
+            return
+            
         # Parse the record and save the names
         if viz_cat is not None:
             main_ID = viz_cat[0]['MAIN_ID'].decode("utf-8")
-            self.all_names = list(Simbad.query_objectids(main_ID)['ID'])
+            self.all_names += list(Simbad.query_objectids(main_ID)['ID'])
             
+            # Remove duplicates
+            self.all_names = list(set(self.all_names))
+        
             if self.name is None:
                 self.name = main_ID
+                
+            if self.sky_coords is None:
+                self.sky_coords = tuple(viz_cat[0][['RA','DEC']])
         
     
-    def find_WISE(self, search_radius=10*q.arcsec):
+    def find_WISE(self, **kwargs):
         """
         Search for WISE data
         """
-        self.find_photometry('WISE', 'II/328/allwise', ['W1mag','W2mag','W3mag','W4mag'], ['WISE.W1','WISE.W2','WISE.W3','WISE.W4'], search_radius=search_radius)
+        self.find_photometry('WISE', 'II/328/allwise', ['W1mag','W2mag','W3mag','W4mag'], ['WISE.W1','WISE.W2','WISE.W3','WISE.W4'], **kwargs)
         
         
     @property
@@ -1133,6 +1149,27 @@ class SED(object):
             
             
     @property
+    def name(self):
+        """A property for name"""
+        return self._name
+        
+        
+    @name.setter
+    def name(self, new_name):
+        """A setter for the source name, which looks up metadata given a SIMBAD name
+        
+        Parameters
+        ----------
+        new_name: str
+            The name
+        """
+        self._name = new_name
+        
+        # Check for sky coords
+        self.find_SIMBAD()
+            
+            
+    @property
     def parallax(self):
         """A property for parallax"""
         return self._parallax
@@ -1416,10 +1453,13 @@ class SED(object):
         if not isinstance(sky_coords, (SkyCoord, tuple)):
             raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
         
-        if isinstance(sky_coords, tuple) and len(sky_coords)==2\
-        and all([isinstance(coord, q.quantity.Quantity) for coord in sky_coords]):
+        if isinstance(sky_coords, tuple) and len(sky_coords)==2:
             
-            sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], frame='icrs')
+            if isinstance(sky_coords[0], str):
+                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.hour, q.degree), frame='icrs')
+                
+            else:
+                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], frame='icrs')
         
         # Set the sky coordinates
         self._sky_coords = sky_coords
