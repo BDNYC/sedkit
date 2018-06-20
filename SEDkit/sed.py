@@ -782,7 +782,7 @@ class SED(object):
         self.find_photometry('WISE', 'II/328/allwise', ['W1mag','W2mag','W3mag','W4mag'], ['WISE.W1','WISE.W2','WISE.W3','WISE.W4'], **kwargs)
         
         
-    def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=3000, epsilon=0.1, acc=5.0):
+    def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=3000, epsilon=0.1, acc=5.0, trim=[]):
         """
         Fit a blackbody curve to the data
 
@@ -799,6 +799,16 @@ class SED(object):
         """
         # Get the data and remove NaNs
         data = u.scrub(getattr(self, fit_to).data)
+        
+        # Trim manually
+        if isinstance(trim, (list,tuple)):
+            for mn,mx in trim:
+                try:
+                    idx, = np.where((data[0]<mn)|(data[0]>mx))
+                    if any(idx):
+                        data = [i[idx] for i in data]
+                except TypeError:
+                    print('Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]')
 
         # Initial guess
         if self.Teff is not None:
@@ -1460,7 +1470,7 @@ class SED(object):
         rows = []
         for param in ['name', 'age', 'distance', 'parallax', 'radius', 'SpT',\
                       'spectral_type', 'membership', 'reddening', 'fbol', 'mbol', \
-                      'Lbol', 'Lbol_sun', 'Mbol', 'logg', 'mass', 'Teff']:
+                      'Lbol', 'Lbol_sun', 'Mbol', 'logg', 'mass', 'Teff', 'Teff_bb']:
             
             # Get the values and format
             attr = getattr(self, param, None)
