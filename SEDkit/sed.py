@@ -306,17 +306,18 @@ class SED(object):
         spec = sp.Spectrum(wave, flux, unc, **kwargs)
         
         # Check to see if it is a duplicate spectrum
-        if len(self.spectra)>0 and any([all(spec.wave==i.wave) for i in self.spectra]):
-            print('Looks like you already added this spectrum. If you want to overwrite, run drop_spectrum() first.')
-            
-        else:
-            # Convert to SED units
-            spec.wave_units = self.wave_units
-            spec.flux_units = self.flux_units
+        # if len(self.spectra)>0 and any([all([i==j for i,j in zip(spec.wave,k.wave)]) for k in self.spectra]):
+        #     del spec
+        #     print('Looks like you already added this spectrum. If you want to overwrite, run drop_spectrum() first.')
+        #     return
+
+        # Convert to SED units
+        spec.wave_units = self.wave_units
+        spec.flux_units = self.flux_units
+
+        # Add the spectrum object to the list of spectra
+        self._spectra.append(spec)
         
-            # Add the spectrum object to the list of spectra
-            self._spectra.append(spec)
-            
         # Set SED as uncalculated
         self.calculated = False
         
@@ -341,7 +342,7 @@ class SED(object):
         self.add_spectrum(wave, flux, unc=unc)
         
         
-    def add_spectrum_file(self, file, wave_units=None, flux_units=None, ext=0, survey=None):
+    def add_spectrum_file(self, file, wave_units=None, flux_units=None, ext=0, survey=None, **kwargs):
         """Add a spectrum from an ASCII or FITS file
         
         Parameters
@@ -394,7 +395,7 @@ class SED(object):
             unc = None
         
         # Add the data to the SED object
-        self.add_spectrum(wave, flux, unc=unc)
+        self.add_spectrum(wave, flux, unc=unc, **kwargs)
             
             
     @property
@@ -517,9 +518,9 @@ class SED(object):
             self.stitched_spectra = []
             if len(self.spectra) > 1:
                 groups = self.group_spectra(self.spectra)
-                self.stitched_spectra = [np.sum(group) if len(group)>1 else group for group in groups]
+                self.stitched_spectra = [np.sum(group) if len(group)>1 else group[0] for group in groups]
                 
-            # If one or none, no need to make composite
+            # If one spectrum, no need to make composite
             elif len(self.spectra) == 1:
                 self.stitched_spectra = self.spectra
             
@@ -532,9 +533,9 @@ class SED(object):
             self.stitched_spectra = [i.norm_to_mags(self.photometry) for i in self.stitched_spectra]
                 
             # Make apparent spectral SED
-            if len(self.stitched_spectra)>1:
-                self.app_spec_SED = sum(self.stitched_spectra)
-            elif len(self.stitched_spectra)==1:
+            if len(self.stitched_spectra) > 1:
+                self.app_spec_SED = np.sum(self.stitched_spectra)
+            elif len(self.stitched_spectra) == 1:
                 self.app_spec_SED = self.stitched_spectra[0]
             else:
                 self.app_spec_SED = None
@@ -1336,8 +1337,13 @@ class SED(object):
                      tools=TOOLS)
 
         # Plot spectra
-        if spectra and len(self.spectra)>0:
-            self.fig.line(spec_SED.wave, spec_SED.flux, legend='Spectra')
+        if spectra is not False and len(self.spectra)>0:
+            
+            if spectra == 'all':
+                for n,spec in enumerate(self.spectra):
+                    self.fig.line(spec.wave, spec.flux, color=next(sp.COLORS), legend='Spectrum {}'.format(n))
+            else:
+                self.fig.line(spec_SED.wave, spec_SED.flux, legend='Spectra')
 
         # Plot photometry
         if photometry and self.photometry is not None:

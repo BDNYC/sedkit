@@ -26,7 +26,7 @@ COLORS = color_gen()
 class Spectrum(ps.ArraySpectrum):
     """A spectrum object to add uncertainty handling and spectrum stitching to ps.ArraySpectrum
     """
-    def __init__(self, wave, flux, unc=None, snr=10, snr_trim=5, trim=[]):
+    def __init__(self, wave, flux, unc=None, snr=10, snr_trim=5, trim=[], name=None, verbose=False):
         """Store the spectrum and units separately
         
         Parameters
@@ -43,7 +43,15 @@ class Spectrum(ps.ArraySpectrum):
             The SNR value to trim spectra edges up to
         trim: sequence (optional)
             A sequence of (wave_min, wave_max) sequences to override spectrum trimming
+        name: str
+            A name for the spectrum
+        verbose: bool
+            Print helpful stuff
         """
+        # Meta
+        self.name = name
+        self.verbose = verbose
+        
         # Make sure the arrays are the same shape
         if not wave.shape==flux.shape and ((unc is None) or not (unc.shape==flux.shape)):
             raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
@@ -149,7 +157,7 @@ class Spectrum(ps.ArraySpectrum):
             overlap = True
             if s1[0][-1]>s1[0][0]>s2[0][-1] or s2[0][-1]>s2[0][0]>s1[0][-1]:
                 overlap = False
-                
+            
             # Concatenate and order two segments if no overlap
             if not overlap:
             
@@ -327,7 +335,8 @@ class Spectrum(ps.ArraySpectrum):
         """
         norm = 1
         if len(photometry)==0:
-            print('No photometry to normalize this spectrum.')
+            if self.verbose:
+                print('No photometry to normalize this spectrum.')
             
         else:
             # Calculate all the synthetic magnitudes
@@ -346,7 +355,8 @@ class Spectrum(ps.ArraySpectrum):
                 
             # Check if there is overlap
             if len(data)==0:
-                print('No photometry in the range {} to normalize this spectrum.'.format([self.min, self.max]))
+                if self.verbose:
+                    print('No photometry in the range {} to normalize this spectrum.'.format([self.min, self.max]))
                 
             # Calculate the weighted normalization
             else:
@@ -405,18 +415,21 @@ class Spectrum(ps.ArraySpectrum):
         float, pysynphot.spectrum.ArraySpectralElement
             The normalization constant or normalized spectrum object
         """
-        # Caluclate the remornalized flux
-        spec = self.renorm(mag, system, bandpass, force)
-    
-        # Caluclate the normalization factor
-        norm = np.mean(self.flux)/np.mean(spec.flux)
+        # # Caluclate the remornalized flux
+        # spec = self.renorm(mag, system, bandpass, force)
+        #
+        # # Caluclate the normalization factor
+        # norm = np.mean(self.flux)/np.mean(spec.flux)
+        
+        # My solution
+        norm = syn.mag2flux(mag, bandpass)[0]/self.synthetic_flux(bandpass, force=force)[0]
     
         # Just return the normalization factor
         if no_spec:
             return norm
-    
+            
         # Scale the spectrum
-        data = [spec.wave, self.flux*norm, self.unc*norm]
+        data = [self.wave, self.flux*norm, self.unc*norm]
     
         return Spectrum(*[i*Q for i,Q in zip(data, self.units)])
     
