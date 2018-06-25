@@ -827,9 +827,11 @@ class SED(object):
             self.Teff_bb = int(bb.temperature.value)
             self.bb_source = fit_to
             self.blackbody = bb
-            print('\nBlackbody fit: {} K'.format(self.Teff_bb))
+            if self.verbose:
+                print('\nBlackbody fit: {} K'.format(self.Teff_bb))
         except:
-            print('\nNo blackbody fit.')
+            if self.verbose:
+                print('\nNo blackbody fit.')
             
             
     @property
