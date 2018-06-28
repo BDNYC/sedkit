@@ -117,17 +117,20 @@ class SEDCatalog:
             self.results = at.vstack([self.results,table])
         
         
-    def get_SED(self, name):
+    def get_SED(self, name_or_idx):
         """Retrieve the SED for the given object"""
         # Add the index
         self.results.add_index('name')
         
         # Get the rows
-        try:
+        if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
             return self.results.loc[name]['SED']
             
-        except IOError:
-            print('No SEDs named',name)
+        elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
+            return self.results[name_or_idx]['SED']
+            
+        else:
+            print('Could not retrieve SED',name)
             
             return
         

@@ -798,6 +798,9 @@ class SED(object):
         acc: float
             The acceptible error
         """
+        if not self.calculated:
+            self.make_sed()
+            
         # Get the data and remove NaNs
         data = u.scrub(getattr(self, fit_to).data)
         
@@ -1425,13 +1428,10 @@ class SED(object):
                 raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
         
             # Set the radius!
-            self._radius = tuple(radius)
+            self._radius = radius
         
             if self.verbose:
                 print('Setting radius to',self.radius)
-        
-            # Update the things that depend on radius!
-            self.get_Teff()
         
         # Set SED as uncalculated
         self.calculated = False
