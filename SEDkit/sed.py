@@ -1,13 +1,12 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# Author: Joe Filippazzo, jfilippazzo@stsci.edu
-#!python3
 """
-A module to produce spectral energy distributions 
+A module to produce spectral energy distributions
 and calculate fundamental and atmospheric parameters
+
+Author: Joe Filippazzo, jfilippazzo@stsci.edu
 """
 import os
 import glob
+import shutil
 import numpy as np
 import astropy.table as at
 import astropy.units as q
@@ -26,26 +25,51 @@ from . import synphot as s
 from . import spectrum as sp
 from . import isochrone as iso
 from . import relations as rel
+from bokeh.io import export_png
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 from dustmaps.bayestar import BayestarWebQuery
+try:
+    import splat
+    import splat.model as spmod
+    has_splat = True
+except ImportError:
+    has_splat = False
 
 Vizier.columns = ["**", "+_r"]
 
 # A dictionary of all supported moving group ages
-AGES = {'TW Hya': (14*q.Myr, 6*q.Myr), 'beta Pic': (17*q.Myr, 5*q.Myr), 'Tuc-Hor': (25*q.Myr, 15*q.Myr), 'Columba': (25*q.Myr, 15*q.Myr), 'Carina': (25*q.Myr, 15*q.Myr), 'Argus': (40*q.Myr, 10*q.Myr), 'AB Dor': (85*q.Myr, 35*q.Myr), 'Pleiades': (120*q.Myr, 10*q.Myr)}
+AGES = {'TW Hya': (14*q.Myr, 6*q.Myr), 'beta Pic': (17*q.Myr, 5*q.Myr),
+        'Tuc-Hor': (25*q.Myr, 15*q.Myr), 'Columba': (25*q.Myr, 15*q.Myr),
+        'Carina': (25*q.Myr, 15*q.Myr), 'Argus': (40*q.Myr, 10*q.Myr),
+        'AB Dor': (85*q.Myr, 35*q.Myr), 'Pleiades': (120*q.Myr, 10*q.Myr)}
 
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]
 
 # A dict of BDNYCdb band names to work with SEDkit
-PHOT_ALIASES = {'2MASS_J':'2MASS.J', '2MASS_H':'2MASS.H', '2MASS_Ks':'2MASS.Ks', 'WISE_W1':'WISE.W1', 'WISE_W2':'WISE.W2', 'WISE_W3':'WISE.W3', 'WISE_W4':'WISE.W4', 'IRAC_ch1':'IRAC.I1', 'IRAC_ch2':'IRAC.I2', 'IRAC_ch3':'IRAC.I3', 'IRAC_ch4':'IRAC.I4', 'SDSS_u':'SDSS.u', 'SDSS_g':'SDSS.g', 'SDSS_r':'SDSS.r', 'SDSS_i':'SDSS.i', 'SDSS_z':'SDSS.z', 'MKO_J':'NSFCam.J', 'MKO_Y':'Wircam.Y', 'MKO_H':'NSFCam.H', 'MKO_K':'NSFCam.K', "MKO_L'":'NSFCam.Lp', "MKO_M'":'NSFCam.Mp', 'Johnson_V':'Johnson.V', 'Cousins_R':'Cousins.R', 'Cousins_I':'Cousins.I', 'FourStar_J':'FourStar.J', 'FourStar_J1':'FourStar.J1', 'FourStar_J2':'FourStar.J2', 'FourStar_J3':'FourStar.J3', 'HST_F125W':'WFC3_IR.F125W'}
+PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
+                '2MASS_Ks': '2MASS.Ks', 'WISE_W1': 'WISE.W1',
+                'WISE_W2': 'WISE.W2', 'WISE_W3': 'WISE.W3',
+                'WISE_W4': 'WISE.W4', 'IRAC_ch1': 'IRAC.I1',
+                'IRAC_ch2': 'IRAC.I2', 'IRAC_ch3': 'IRAC.I3',
+                'IRAC_ch4': 'IRAC.I4', 'SDSS_u': 'SDSS.u',
+                'SDSS_g': 'SDSS.g', 'SDSS_r': 'SDSS.r',
+                'SDSS_i': 'SDSS.i', 'SDSS_z': 'SDSS.z',
+                'MKO_J': 'NSFCam.J', 'MKO_Y': 'Wircam.Y',
+                'MKO_H': 'NSFCam.H', 'MKO_K': 'NSFCam.K',
+                "MKO_L'": 'NSFCam.Lp', "MKO_M'": 'NSFCam.Mp',
+                'Johnson_V': 'Johnson.V', 'Cousins_R': 'Cousins.R',
+                'Cousins_I': 'Cousins.I', 'FourStar_J': 'FourStar.J',
+                'FourStar_J1': 'FourStar.J1', 'FourStar_J2': 'FourStar.J2',
+                'FourStar_J3': 'FourStar.J3', 'HST_F125W': 'WFC3_IR.F125W'}
 
 
 class SED(object):
     """
-    A class to construct spectral energy distributions and calculate fundamental paramaters of stars
-    
+    A class to construct spectral energy distributions and calculate
+    fundamental paramaters of stars
+
     Attributes
     ==========
     Lbol: astropy.units.quantity.Quantity
@@ -61,23 +85,23 @@ class SED(object):
     Teff_bb: astropy.units.quantity.Quantity
         The effective temperature calculated from the blackbody fit
     abs_SED: sequence
-        The [W,F,E] of the calculate absolute SED
+        The [W, F, E] of the calculate absolute SED
     abs_phot_SED: sequence
-        The [W,F,E] of the calculate absolute photometric SED
+        The [W, F, E] of the calculate absolute photometric SED
     abs_spec_SED: sequence
-        The [W,F,E] of the calculate absolute spectroscopic SED
+        The [W, F, E] of the calculate absolute spectroscopic SED
     age_max: astropy.units.quantity.Quantity
         The upper limit on the age of the target
     age_min: astropy.units.quantity.Quantity
         The lower limit on the age of the target
     app_SED: sequence
-        The [W,F,E] of the calculate apparent SED
+        The [W, F, E] of the calculate apparent SED
     app_phot_SED: sequence
-        The [W,F,E] of the calculate apparent photometric SED
+        The [W, F, E] of the calculate apparent photometric SED
     app_spec_SED: sequence
-        The [W,F,E] of the calculate apparent spectroscopic SED
+        The [W, F, E] of the calculate apparent spectroscopic SED
     bb_source: str
-        The [W,F,E] fit to calculate Teff_bb
+        The [W, F, E] fit to calculate Teff_bb
     blackbody: astropy.modeling.core.blackbody
         The best fit blackbody function
     distance: astropy.units.quantity.Quantity
@@ -105,7 +129,8 @@ class SED(object):
     spectra: astropy.table.QTable
         The table of spectra
     spectral_type: float
-        The numeric spectral type, where 0-99 corresponds to spectral types O0-Y9
+        The numeric spectral type, where 0-99 corresponds to spectral
+        types O0-Y9
     spectral_types: astropy.table.QTable
         The table of spectral types
     suffix: str
@@ -118,7 +143,7 @@ class SED(object):
     def __init__(self, name='My Target', verbose=True, **kwargs):
         """
         Initialize an SED object
-        
+
         Parameters
         ----------
         name: str (optional)
@@ -139,15 +164,15 @@ class SED(object):
         self._sky_coords = None
         self.search_radius = 15*q.arcsec
         self._evo_model = 'hybrid_solar_age'
-        
+
         # Keep track of the calculation status
         self.calculated = False
-        
+
         # Set the default wavelength and flux units
-        self._wave_units = q.um 
+        self._wave_units = q.um
         self._flux_units = q.erg/q.s/q.cm**2/q.AA
         self.units = [self._wave_units, self._flux_units, self._flux_units]
-        
+
         # Attributes of arbitrary length
         self._spectra = []
         self.stitched_spectra = []
@@ -155,10 +180,14 @@ class SED(object):
         self.abs_spec_SED = None
         self.app_phot_SED = None
         self.abs_phot_SED = None
-        
+
         # Photometry
-        phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc', 'app_flux', 'app_flux_unc', 'abs_magnitude', 'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc', 'bandpass')
-        phot_typs = ('U16', float, float, float, float, float, float, float, float, float, 'O')
+        phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc',
+                     'app_flux', 'app_flux_unc', 'abs_magnitude',
+                     'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc',
+                     'bandpass')
+        phot_typs = ('U16', float, float, float, float, float, float, float,
+                     float, float, 'O')
         self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
         self._photometry['eff'].unit = self._wave_units
         self._photometry['app_flux'].unit = self._flux_units
@@ -167,7 +196,7 @@ class SED(object):
         self._photometry['abs_flux_unc'].unit = self._flux_units
         self._photometry.add_index('band')
         self.reddening = 0
-        
+
         # Synthetic photometry
         self._synthetic_photometry = at.QTable(names=phot_cols, dtype=phot_typs)
         self._synthetic_photometry['eff'].unit = self._wave_units
@@ -176,15 +205,15 @@ class SED(object):
         self._synthetic_photometry['abs_flux'].unit = self._flux_units
         self._synthetic_photometry['abs_flux_unc'].unit = self._flux_units
         self._synthetic_photometry.add_index('band')
-        
+
         # Try to set attributes from kwargs
-        for k,v in kwargs.items():
+        for k, v in kwargs.items():
             setattr(self, k, v)
         self.name = name
-            
+
         # Make a plot
         self.fig = figure()
-        
+
         # Empty result attributes
         self.fbol = None
         self.mbol = None
@@ -192,21 +221,21 @@ class SED(object):
         self.Lbol = None
         self.Mbol = None
         self.Lbol_sun = None
-        
+
         # Default parameters
         self.age = 6*q.Gyr, 4*q.Gyr
         self.mass = None
         self.logg = None
-        
+
         # Fit
         self.Teff_bb = None
         self.bb_source = None
         self.blackbody = None
-    
-    
+
+
     def add_photometry(self, band, mag, mag_unc=None, **kwargs):
         """Add a photometric measurement to the photometry table
-        
+
         Parameters
         ----------
         band: name, SEDkit.synphot.Bandpass
@@ -219,50 +248,52 @@ class SED(object):
         # Make sure the magnitudes are floats
         if not isinstance(mag, float):
             raise TypeError("Magnitude must be a float.")
-            
+
         # Check the uncertainty
-        if not isinstance(mag, (float,None)):
+        if not isinstance(mag, (float, None)):
             raise TypeError("Magnitude must be a float, NaN, or None.")
-            
+
         # Make NaN if 0
         if isinstance(mag_unc, float) and mag_unc==0:
             mag_unc = np.nan
-            
+
         # Get the bandpass
         if isinstance(band, str):
             bp = s.Bandpass(band)
         elif isinstance(band, SEDkit.synphot.Bandpass):
             bp, band = band, band.name
         else:
-            print('Not a recognized bandpass:',band)
-            
+            print('Not a recognized bandpass:', band)
+
         # Convert bandpass to desired units
         bp.wave_units = self.wave_units
-        
+
         # Drop the current band if it exists
         if band in self.photometry['band']:
             self.drop_photometry(band)
-            
-        # Apply the dereddening by subtracting the (bandpass extinction vector)*(source dust column density)
+
+        # Apply the dereddening by subtracting the (bandpass
+        # extinction vector)*(source dust column density)
         mag -= bp.ext_vector*self.reddening
-        
+
         # Make a dict for the new point
-        new_photometry = {'band':band, 'eff':bp.eff, 'app_magnitude':mag, 'app_magnitude_unc':mag_unc, 'bandpass':bp}
-        
+        new_photometry = {'band':band, 'eff':bp.eff, 'app_magnitude':mag,
+                          'app_magnitude_unc':mag_unc, 'bandpass':bp}
+
         # Add the kwargs
         new_photometry.update(kwargs)
-            
+
         # Add it to the table
         self._photometry.add_row(new_photometry)
-        
+
         # Set SED as uncalculated
         self.calculated = False
-        
-        
+
+
     def add_photometry_file(self, file):
-        """Add a table of photometry from an ASCII file that 
+        """Add a table of photometry from an ASCII file that
         contains the columns 'band', 'magnitude', and 'uncertainty'
-        
+
         Parameters
         ----------
         file: str
@@ -270,26 +301,26 @@ class SED(object):
         """
         # Read the data
         table = ii.read(file)
-        
+
         # Test to see if columns are present
-        cols = ['band','magnitude','uncertainty']
+        cols = ['band', 'magnitude', 'uncertainty']
         if not all([i in table.colnames for i in cols]):
             raise TableError('File must contain columns', cols)
-        
+
         # Keep relevant cols
         table = table[cols]
-        
+
         # Add the data to the SED object
         for row in table:
-            
+
             # Convert masked values to NaN
             if isinstance(row[2], np.ma.core.MaskedConstant):
                 row[2] = np.nan
-            
+
             # Add the magnitude
             self.add_photometry(*row)
-        
-        
+
+
     def add_spectrum(self, wave, flux, unc=None, **kwargs):
         """Add a new Spectrum object to the SED
 
@@ -304,12 +335,6 @@ class SED(object):
         """
         # Create the Spectrum object
         spec = sp.Spectrum(wave, flux, unc, **kwargs)
-        
-        # Check to see if it is a duplicate spectrum
-        # if len(self.spectra)>0 and any([all([i==j for i,j in zip(spec.wave,k.wave)]) for k in self.spectra]):
-        #     del spec
-        #     print('Looks like you already added this spectrum. If you want to overwrite, run drop_spectrum() first.')
-        #     return
 
         # Convert to SED units
         spec.wave_units = self.wave_units
@@ -317,34 +342,35 @@ class SED(object):
 
         # Add the spectrum object to the list of spectra
         self._spectra.append(spec)
-        
+
         # Set SED as uncalculated
         self.calculated = False
-        
-        
+
+
     def add_SDSS_spectrum(self, file=None, plate=None, mjd=None, fiber=None):
-        
+
         # Get the local file
         if file is not None:
             spec = SDSSfits(file)
-        
+
         elif plate is not None and mjd is not None and fiber is not None:
             spec = fetch_sdss_spectrum(plate, mjd, fiber)
-            
+
         else:
             raise ValueError('Huh?')
-            
+
         wave = spec.wavelength()*q.AA
         flux = spec.spectrum*1E-17*q.erg/q.s/q.cm**2/q.AA
         unc = spec.error*1E-17*q.erg/q.s/q.cm**2/q.AA
-    
+
         # Add the data to the SED object
         self.add_spectrum(wave, flux, unc=unc)
-        
-        
-    def add_spectrum_file(self, file, wave_units=None, flux_units=None, ext=0, survey=None, **kwargs):
+
+
+    def add_spectrum_file(self, file, wave_units=None, flux_units=None, ext=0,
+                          survey=None, **kwargs):
         """Add a spectrum from an ASCII or FITS file
-        
+
         Parameters
         ----------
         file: str
@@ -360,32 +386,33 @@ class SED(object):
         """
         # Read the data
         if file.endswith('.fits'):
-            
+
             raw = fits.getdata(file, ext=ext)
-            
+
             if survey=='SDSS':
-                header = fits.getheader(file)
+                head = fits.getheader(file)
                 flux_units = 1E-17*q.erg/q.s/q.cm**2/q.AA
                 wave_units = q.AA
-                data = [10**(header['COEFF0']+header['COEFF1']*np.arange(len(raw.flux))), raw.flux, raw.ivar]
-        
+                log_w = head['COEFF0']+head['COEFF1']*np.arange(len(raw.flux))
+                data = [10**log_w, raw.flux, raw.ivar]
+
             # Check if it is a recarray
             elif isinstance(raw, fits.fitsrec.FITS_rec):
-            
+
                 # Check if it's an SDSS spectrum
                 raw = fits.getdata(file, ext=ext)
                 data = raw['WAVELENGTH'], raw['FLUX'], raw['ERROR']
-            
+
             # Otherwise just an array
             else:
                 data = raw
-        
+
         elif file.endswith('.txt'):
             data = np.genfromtxt(file, unpack=True)
-        
+
         else:
             raise FileError('The file needs to be ASCII or FITS.')
-    
+
         # Apply units
         wave = data[0]*wave_units
         flux = data[1]*flux_units
@@ -393,145 +420,152 @@ class SED(object):
             unc = data[2]*flux_units
         else:
             unc = None
-        
+
         # Add the data to the SED object
         self.add_spectrum(wave, flux, unc=unc, **kwargs)
-            
-            
+
+
     @property
     def age(self):
         """A property for age"""
         return self._age
-    
-    
+
+
     @age.setter
     def age(self, age):
         """A setter for age"""
         # Make sure it's a sequence
-        if not isinstance(age, (tuple, list, np.ndarray)) or len(age) not in [2,3]:
-            raise TypeError('Age must be a sequence of (value, error) or (value, lower_error, upper_error).')
-            
+        if not isinstance(age, (tuple, list, np.ndarray))\
+        or len(age) not in [2, 3]:
+            raise TypeError('Age must be a sequence of (value, error) or\
+                            (value, lower_error, upper_error).')
+
         # Make sure the values are in time units
         try:
             _ = [i.to(q.Myr) for i in age]
         except:
-            raise TypeError("Age values must be time units of astropy.units.quantity.Quantity, e.g. 'Myr'")
-        
+            raise TypeError("Age values must be time units of\
+                             astropy.units.quantity.Quantity, e.g. 'Myr'")
+
         # Set the age!
         self._age = age
-        
+
         if self.verbose:
-            print('Setting age to',self.age)
-            
+            print('Setting age to', self.age)
+
         # Set SED as uncalculated
         self.calculated = False
-        
-        
+
+
     def calculate_synthetic_mags(self):
         """Calculate synthetic magnitudes of all stitched spectra"""
         if len(self.stitched_spectra)>0:
-            
+
             # Iterate over spectra
             for spec in self.stitched_spectra:
-                
+
                 # and over bandpasses
                 for band in s.BANDPASSES:
-                    
+
                     # Get the bandpass
                     bp = s.Bandpass(band)
-                    
+
                     # Check for overlap before calculating
-                    if bp.check_overlap(spec) in ['full','partial']:
-                        
+                    if bp.check_overlap(spec) in ['full', 'partial']:
+
                         # Calculate the magnitiude
                         mag, mag_unc = spec.synthetic_mag(bp)
-                        
+
                         # Make a dict for the new point
-                        new_photometry = {'band':band, 'eff':bp.eff, 'bandpass':bp,
-                                          'app_magnitude':mag, 'app_magnitude_unc':mag_unc}
-                                      
+                        new_photometry = {'band':band, 'eff':bp.eff,
+                                          'bandpass':bp, 'app_magnitude':mag,
+                                          'app_magnitude_unc':mag_unc}
+
                         # Add it to the table
                         self._synthetic_photometry.add_row(new_photometry)
-                    
-        
+
+
     def _calibrate_photometry(self):
-        """Calculate the absolute magnitudes and flux values of all rows in the photometry table
+        """Calculate the absolute magnitudes and flux values of all rows in 
+        the photometry table
         """
         if self.photometry is not None and len(self.photometry)>0:
-            
+
             # Update the photometry
             self._photometry['eff'] = self._photometry['eff'].to(self.wave_units)
             self._photometry['app_flux'] = self._photometry['app_flux'].to(self.flux_units)
             self._photometry['app_flux_unc'] = self._photometry['app_flux_unc'].to(self.flux_units)
             self._photometry['abs_flux'] = self._photometry['abs_flux'].to(self.flux_units)
             self._photometry['abs_flux_unc'] = self._photometry['abs_flux_unc'].to(self.flux_units)
-        
+
             # Get the app_mags
             m = np.array(self._photometry)['app_magnitude']
             m_unc = np.array(self._photometry)['app_magnitude_unc']
-        
+
             # Calculate app_flux values
-            for n,row in enumerate(self._photometry):
+            for n, row in enumerate(self._photometry):
                 app_flux, app_flux_unc = u.mag2flux(row['bandpass'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
                 self._photometry['app_flux'][n] = app_flux.to(self.flux_units)
                 self._photometry['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
-            
+
             # Calculate absolute mags
             if self.distance is not None:
-            
+
                 # Calculate abs_mags
                 M, M_unc = u.flux_calibrate(m, self.distance[0], m_unc, self.distance[1])
                 self._photometry['abs_magnitude'] = M
                 self._photometry['abs_magnitude_unc'] = M_unc
-            
+
                 # Calculate abs_flux values
-                for n,row in enumerate(self._photometry):
+                for n, row in enumerate(self._photometry):
                     abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
                     self._photometry['abs_flux'][n] = abs_flux.to(self.flux_units)
                     self._photometry['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
 
             # Make apparent photometric SED with photometry
-            app_cols = ['eff','app_flux','app_flux_unc']
+            app_cols = ['eff', 'app_flux', 'app_flux_unc']
             phot_array = np.array(self.photometry[app_cols])
             phot_array = phot_array[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
-            self.app_phot_SED = sp.Spectrum(*[phot_array[i]*Q for i,Q in zip(app_cols,self.units)])
+            self.app_phot_SED = sp.Spectrum(*[phot_array[i]*Q for i, Q in zip(app_cols, self.units)])
 
             # Make absolute photometric SED with photometry
             if self.distance is not None:
                 self.abs_phot_SED = self.app_phot_SED.flux_calibrate(self.distance)
-                
+
         # Set SED as uncalculated
         self.calculated = False
-    
-    
+
+
     def _calibrate_spectra(self):
         """Create composite spectra and flux calibrate
         """
         if self.spectra is not None and len(self.spectra)>0:
-            
+
             # Update the spectra
             for spectrum in self.spectra:
                 spectrum.flux_units = self.flux_units
-            
+
             # Group overlapping spectra and stitch together where possible
             # to form peacewise spectrum for flux calibration
             self.stitched_spectra = []
             if len(self.spectra) > 1:
                 groups = self.group_spectra(self.spectra)
-                self.stitched_spectra = [np.sum(group) if len(group)>1 else group[0] for group in groups]
-                
+                self.stitched_spectra = [np.sum(group) if len(group)>1\
+                                         else group[0] for group in groups]
+
             # If one spectrum, no need to make composite
             elif len(self.spectra) == 1:
                 self.stitched_spectra = self.spectra
-            
+
             # If no spectra, forget it
             else:
                 self.stitched_spectra = []
                 print('No spectra available for SED.')
-            
+
             # Renormalize the stitched spectra
-            self.stitched_spectra = [i.norm_to_mags(self.photometry) for i in self.stitched_spectra]
-                
+            self.stitched_spectra = [i.norm_to_mags(self.photometry)\
+                                     for i in self.stitched_spectra]
+
             # Make apparent spectral SED
             if len(self.stitched_spectra) > 1:
                 self.app_spec_SED = np.sum(self.stitched_spectra)
@@ -539,65 +573,65 @@ class SED(object):
                 self.app_spec_SED = self.stitched_spectra[0]
             else:
                 self.app_spec_SED = None
-            
+
             # Make absolute spectral SED
             if self.app_spec_SED is not None and self.distance is not None:
                 self.abs_spec_SED = self.app_spec_SED.flux_calibrate(self.distance)
-                
+
         # Set SED as uncalculated
         self.calculated = False
-    
-    
+
+
     @property
     def distance(self):
         """A property for distance"""
         return self._distance
-    
-    
+
+
     @distance.setter
     def distance(self, distance):
         """A setter for distance
-        
+
         Parameters
         ----------
         distance: sequence
             The (distance, err) or (distance, lower_err, upper_err)
         """
         # Make sure it's a sequence
-        if not isinstance(distance, (tuple, list, np.ndarray)) or len(distance) not in [2,3]:
+        if not isinstance(distance, (tuple, list, np.ndarray)) or len(distance) not in [2, 3]:
             raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
-            
+
         # Make sure the values are in time units
         try:
             _ = [i.to(q.pc) for i in distance]
         except:
             raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
-        
+
         # Set the distance
         self._distance = distance
-        
+
         if self.verbose:
-            print('Setting distance to',self.distance)
-        
+            print('Setting distance to', self.distance)
+
         # Update the parallax
         self._parallax = u.pi2pc(*self.distance, pc2pi=True)
-        
+
         # Try to calculate reddening
         self.get_reddening()
-        
+
         # Update the absolute photometry
         self._calibrate_photometry()
 
         # Update the flux calibrated spectra
         self._calibrate_spectra()
-        
+
         # Set SED as uncalculated
         self.calculated = False
-        
-        
+
+
     def drop_photometry(self, band):
         """Drop a photometry by its index or name in the photometry list
-        
+
         Parameters
         ----------
         band: str, int
@@ -608,35 +642,35 @@ class SED(object):
 
         if isinstance(band, int) and band<=len(self._photometry):
             self._photometry.remove_row(band)
-            
+
         # Set SED as uncalculated
         self.calculated = False
-        
-        
+
+
     def drop_spectrum(self, idx):
         """Drop a spectrum by its index in the spectra list
-        
+
         Parameters
         ----------
         idx: int
             The index of the spectrum to drop
         """
-        self._spectra = [i for n,i in enumerate(self._spectra) if n!=idx]
-        
+        self._spectra = [i for n, i in enumerate(self._spectra) if n!=idx]
+
         # Set SED as uncalculated
         self.calculated = False
-        
-    
+
+
     @property
     def evo_model(self):
         """A getter for the evolutionary model"""
         return self._evo_model
-        
-        
+
+
     @evo_model.setter
     def evo_model(self, model):
         """A setter for the evolutionary model
-        
+
         Parameters
         ----------
         model: str
@@ -644,21 +678,81 @@ class SED(object):
         """
         if model not in EVO_MODELS:
             raise IOError("Please use an evolutionary model from the list: {}".format(EVO_MODELS))
-            
+
         self._evo_model = model
+
+
+    def export(self, parentdir='.', dirname=None, zipped=False):
+        """
+        Exports a file of photometry and a file of the composite spectra with minimal data headers
+
+        Parameters
+        ----------
+        parentdir: str
+            The parent directory for the folder or zip file
+        dirname: str (optional)
+            The name of the exported directory or zip file, default is SED name
+        zipped: bool
+            Zip the directory
+        """
+        # Check the parent directory
+        if not os.path.exists(parentdir):
+            raise IOError('No such target directory', parentdir)
+
+        # Check the target directory
+        name = self.name.replace(' ', '_')
+        dirname = dirname or name
+        dirpath = os.path.join(parentdir, dirname)
+        if not os.path.exists(dirpath):
+            os.system('mkdir {}'.format(dirpath))
+        else:
+            raise IOError('Directory already exists:', dirpath)
+
+        # Apparent spectral SED
+        if self.app_spec_SED is not None:
+            specpath = os.path.join(dirpath, '{}_apparent_SED.txt'.format(name))
+            header = '{} apparent spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(name)
+            spec_data = self.app_spec_SED.spectrum
+            np.savetxt(specpath, np.asarray(spec_data).T, header=header)
+
+        # Absolute spectral SED
+        if self.abs_spec_SED is not None:
+            specpath = os.path.join(dirpath, '{}_absolute_SED.txt'.format(name))
+            header = '{} absolute spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(name)
+            spec_data = self.abs_spec_SED.spectrum
+            np.savetxt(specpath, np.asarray(spec_data).T, header=header)
+
+        # All photometry
+        if self.photometry is not None:
+            photpath = os.path.join(dirpath,'{}_photometry.txt'.format(name))
+            self.photometry.write(photpath, format='ipac')
+
+        # All results
+        resultspath = os.path.join(dirpath,'{}_results.txt'.format(name))
+        self.results.write(resultspath, format='ipac')
         
-            
+        # The SED plot
+        if self.fig is not None:
+            pltopath = os.path.join(dirpath,'{}_plot.png'.format(name))
+            export_png(self.fig, filename=pltopath)
+
+        # zip if desired
+        if zipped:
+            shutil.make_archive(dirpath, 'zip', dirpath)
+            os.system('rm -R {}'.format(dirpath))
+
+
     def find_2MASS(self, **kwargs):
         """
         Search for 2MASS data
         """
-        self.find_photometry('2MASS', 'II/246/out', ['Jmag','Hmag','Kmag'], ['2MASS.J','2MASS.H','2MASS.Ks'], **kwargs)
-                    
-                    
+        self.find_photometry('2MASS', 'II/246/out', ['Jmag', 'Hmag', 'Kmag'], ['2MASS.J', '2MASS.H', '2MASS.Ks'], **kwargs)
+
+
     def find_Gaia(self, search_radius=15*q.arcsec, catalog='I/345/gaia2'):
         """
         Search for Gaia data
-        
+
         Parameters
         ----------
         search_radius: astropy.units.quantity.Quantity
@@ -669,32 +763,32 @@ class SED(object):
         # Make sure there are coordinates
         if not isinstance(self.sky_coords, SkyCoord):
             raise TypeError("Can't find Gaia data without coordinates!")
-        
+
         # Query the catalog
         parallaxes = Vizier.query_region(self.sky_coords, radius=search_radius or self.search_radius, catalog=[catalog])
-        
+
         # Parse the records
         if parallaxes:
-            
+
             # Grab the first record
-            parallax = list(parallaxes[0][0][['Plx','e_Plx']])
+            parallax = list(parallaxes[0][0][['Plx', 'e_Plx']])
             self.parallax = parallax[0]*q.mas, parallax[1]*q.mas
-        
+
             # Get Gband while we're here
             try:
-                mag, unc = list(parallaxes[0][0][['Gmag','e_Gmag']])
+                mag, unc = list(parallaxes[0][0][['Gmag', 'e_Gmag']])
                 self.add_photometry('Gaia.G', mag, unc)
             except:
                 pass
-                
-                
+
+
     def find_PanSTARRS(self, **kwargs):
         """
         Search for PanSTARRS data
         """
-        self.find_photometry('PanSTARRS', 'II/349/ps1', ['gmag','rmag','imag','zmag','ymag'], ['PS1.g','PS1.r','PS1.i','PS1.z','PS1.y'], **kwargs)
-                
-                
+        self.find_photometry('PanSTARRS', 'II/349/ps1', ['gmag', 'rmag', 'imag', 'zmag', 'ymag'], ['PS1.g', 'PS1.r', 'PS1.i', 'PS1.z', 'PS1.y'], **kwargs)
+
+
     def find_photometry(self, name, catalog, band_names, target_names, search_radius=None, idx=0, **kwargs):
         """
         Search Vizier for photometry in the given catalog
@@ -702,47 +796,47 @@ class SED(object):
         # Make sure there are coordinates
         if not isinstance(self.sky_coords, SkyCoord):
             raise TypeError("Can't find {} photometry without coordinates!".format(name))
-            
+
         # See if the designation was fetched by Simbad
         des = [name for name in self.all_names if name.startswith(name)]
-        
+
         # Get photometry using designation...
         if len(des)>0:
             viz_cat = Vizier.query_object(des[0], catalog=[catalog])
-            
+
         # ...or from the coordinates
         else:
             rad = search_radius or self.search_radius
             viz_cat = Vizier.query_region(self.sky_coords, radius=rad, catalog=[catalog])
-        
+
         # Parse the record
         if len(viz_cat)>0:
             if len(viz_cat)>1:
-                print('{} {} records found.'.format(len(viz_cat),name))
-            
+                print('{} {} records found.'.format(len(viz_cat), name))
+
             # Grab the record
             rec = viz_cat[0][idx]
-            
+
             # Pull out the photometry
-            for band,viz in zip(target_names,band_names):
+            for band, viz in zip(target_names, band_names):
                 try:
-                    mag, unc = list(rec[[viz,'e_'+viz]])
+                    mag, unc = list(rec[[viz, 'e_'+viz]])
                     self.add_photometry(band, float(mag), float(unc))
                 except IOError:
                     pass
-                
-                
+
+
     def find_SDSS(self, **kwargs):
         """
         Search for SDSS data
         """
-        self.find_photometry('SDSS', 'V/147', ['umag','gmag','rmag','imag','zmag'], ['SDSS.u','SDSS.g','SDSS.r','SDSS.i','SDSS.z'], **kwargs)
-                
-                
+        self.find_photometry('SDSS', 'V/147', ['umag', 'gmag', 'rmag', 'imag', 'zmag'], ['SDSS.u', 'SDSS.g', 'SDSS.r', 'SDSS.i', 'SDSS.z'], **kwargs)
+
+
     def find_SIMBAD(self, search_radius=10*q.arcsec):
         """
         Search for a SIMBAD record
-        
+
         Parameters
         ----------
         search_radius: astropy.units.quantity.Quantity
@@ -750,39 +844,39 @@ class SED(object):
         """
         # Check for coordinates
         if isinstance(self.sky_coords, SkyCoord):
-            
+
             # Search Simbad by sky coords
             viz_cat = Simbad.query_region(self.sky_coords, radius=search_radius or self.search_radius)
-                    
+
         elif self.name is not None:
-            
+
             viz_cat = Simbad.query_object(self.name)
-            
+
         else:
             return
-            
+
         # Parse the record and save the names
         if viz_cat is not None:
             main_ID = viz_cat[0]['MAIN_ID'].decode("utf-8")
             self.all_names += list(Simbad.query_objectids(main_ID)['ID'])
-            
+
             # Remove duplicates
             self.all_names = list(set(self.all_names))
-        
+
             if self.name is None:
                 self.name = main_ID
-                
+
             if self.sky_coords is None:
-                self.sky_coords = tuple(viz_cat[0][['RA','DEC']])
-        
-    
+                self.sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
+
+
     def find_WISE(self, **kwargs):
         """
         Search for WISE data
         """
-        self.find_photometry('WISE', 'II/328/allwise', ['W1mag','W2mag','W3mag','W4mag'], ['WISE.W1','WISE.W2','WISE.W3','WISE.W4'], **kwargs)
-        
-        
+        self.find_photometry('WISE', 'II/328/allwise', ['W1mag', 'W2mag', 'W3mag', 'W4mag'], ['WISE.W1', 'WISE.W2', 'WISE.W3', 'WISE.W4'], **kwargs)
+
+
     def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=3000, epsilon=0.1, acc=5.0, trim=[]):
         """
         Fit a blackbody curve to the data
@@ -790,7 +884,7 @@ class SED(object):
         Parameters
         ==========
         fit_to: str
-            The attribute name of the [W,F,E] to fit
+            The attribute name of the [W, F, E] to fit
         initial: int
             The initial guess
         epsilon: float
@@ -800,19 +894,19 @@ class SED(object):
         """
         if not self.calculated:
             self.make_sed()
-            
+
         # Get the data and remove NaNs
         data = u.scrub(getattr(self, fit_to).data)
-        
+
         # Trim manually
-        if isinstance(trim, (list,tuple)):
-            for mn,mx in trim:
+        if isinstance(trim, (list, tuple)):
+            for mn, mx in trim:
                 try:
                     idx, = np.where((data[0]<mn)|(data[0]>mx))
                     if any(idx):
                         data = [i[idx] for i in data]
                 except TypeError:
-                    print('Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]')
+                    print('Please provide a list of (lower, upper) bounds with units to trim, e.g. [(0*q.um, 0.8*q.um)]')
 
         # Initial guess
         if self.Teff is not None:
@@ -835,18 +929,85 @@ class SED(object):
         except:
             if self.verbose:
                 print('\nNo blackbody fit.')
-            
-            
+
+
+    def fit_modelgrid(self, modelgrid='btsettl08'):
+        """Fit a model grid to the composite spectra
+
+        Parameters
+        ----------
+        """
+        if not self.calculated:
+            self.make_sed()
+
+        if has_splat and self.app_spec_SED is not None:
+
+            # Make spectrum object in SPLAT
+            sp = splat.Spectrum(wave=self.app_spec_SED.wave, flux=self.app_spec_SED.flux)
+
+            # Fit the model grid
+            fit = spmod.modelFitGrid(sp, teff_range=[500, 3000], model=modelgrid, summary=False)
+
+            print(fit)
+
+        else:
+            print("Sorry, you need the 'splat' package and spectral data for this method.")
+
+
+    def fit_spectral_index(self, idx_set='burgasser'):
+        """Fit composite spectrum to spectral standards"""
+        if not self.calculated:
+            self.make_sed()
+
+        if has_splat and self.app_spec_SED is not None:
+
+            # Make spectrum object in SPLAT
+            sp = splat.Spectrum(wave=self.app_spec_SED.wave, flux=self.app_spec_SED.flux)
+
+            # Fit for SpT
+            spt = splat.classifyByIndex(sp, set=idx_set, round=True)[0]
+
+            if self.verbose:
+                print("SpT from spectral index:", spt)
+
+            self.spectral_type = spt
+
+        else:
+            print("Sorry, you need the 'splat' package and spectral data for this method.")
+
+
+    def fit_spectral_type(self):
+        """Fit composite spectrum to spectral standards"""
+        if not self.calculated:
+            self.make_sed()
+
+        if has_splat and self.app_spec_SED is not None:
+
+            # Make spectrum object in SPLAT
+            sp = splat.Spectrum(wave=self.app_spec_SED.wave, flux=self.app_spec_SED.flux)
+
+            # Fit for SpT
+            spt = splat.classifyByStandard(sp)[0]
+
+            if self.verbose:
+                print("SpT from spectral standards:", spt)
+
+            self.spectral_type = spt
+
+        else:
+            print("Sorry, you need the 'splat' package and spectral data for this method.")
+
+
     @property
     def flux_units(self):
         """A property for flux_units"""
         return self._flux_units
-    
-    
+
+
     @flux_units.setter
     def flux_units(self, flux_units):
         """A setter for flux_units
-        
+
         Parameters
         ----------
         flux_units: astropy.units.quantity.Quantity
@@ -855,107 +1016,107 @@ class SED(object):
         # Make sure it's a quantity
         if not isinstance(flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
             raise TypeError('flux_units must be astropy.units.quantity.Quantity')
-            
+
         # Make sure the values are in length units
         try:
             flux_units.to(q.erg/q.s/q.cm**2/q.AA)
         except:
             raise TypeError("flux_units must be a unit of length, e.g. 'um'")
-        
+
         # fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA)
-            
+
         # Set the flux_units!
         self._flux_units = flux_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
-        
+
         # Recalibrate the data
         self._calibrate_photometry()
         self._calibrate_spectra()
-        
-        
+
+
     def from_database(self, db, rename_bands=PHOT_ALIASES, **kwargs):
         """
         Load the data from an astrodbkit.astrodb.Database
-        
+
         Parameters
         ----------
         db: astrodbkit.astrodb.Database
             The database instance to query
         rename_bands: dict
             A lookup dictionary to map database bandpass
-            names to SEDkit required bandpass names, 
+            names to SEDkit required bandpass names,
             e.g. {'2MASS_J': '2MASS.J', 'WISE_W1': 'WISE.W1'}
         """
         # Check that astrodbkit is imported
         if not hasattr(db, 'query'):
             raise TypeError("Please provide an astrodbkit.astrodb.Database object to query.")
-            
+
         # Get the metadata
         if 'source_id' in kwargs:
-            source = db.query("SELECT * FROM sources WHERE id=?", (kwargs['source_id'],), fmt='dict', fetch='one')
-            
+            source = db.query("SELECT * FROM sources WHERE id=?", (kwargs['source_id'], ), fmt='dict', fetch='one')
+
             # Set the name
             self.name = source.get('designation', source.get('names', self.name))
-            
+
             # Set the coordinates
             ra = source.get('ra')*q.deg
             dec = source.get('dec')*q.deg
             self.sky_coords = SkyCoord(ra=ra, dec=dec, frame='icrs')
-        
+
         # Get the photometry
         if 'photometry' in kwargs:
             phot_ids = kwargs['photometry']
-            phot_q = "SELECT * FROM photometry WHERE id IN ({})".format(','.join(['?']*len(phot_ids)))
+            phot_q = "SELECT * FROM photometry WHERE id IN ({})".format(', '.join(['?']*len(phot_ids)))
             phot = db.query(phot_q, phot_ids, fmt='dict')
-        
+
             # Add the bands
             for row in phot:
-                
+
                 # Make sure the bandpass name is right
                 if row['band'] in rename_bands:
                     row['band'] = rename_bands.get(row['band'])
-                
+
                 self.add_photometry(row['band'], row['magnitude'], row['magnitude_unc'])
-            
+
         # Get the parallax
         if 'parallax' in kwargs and isinstance(kwargs['parallax'], int):
-            plx = db.query("SELECT * FROM parallaxes WHERE id=?", (kwargs['parallax'],), fmt='dict', fetch='one')
-        
+            plx = db.query("SELECT * FROM parallaxes WHERE id=?", (kwargs['parallax'], ), fmt='dict', fetch='one')
+
             # Add it to the object
-            self.parallax = plx['parallax']*q.mas, plx['parallax_unc']*q.mas 
-            
+            self.parallax = plx['parallax']*q.mas, plx['parallax_unc']*q.mas
+
         # Get the spectral type
         if 'spectral_type' in kwargs and isinstance(kwargs['spectral_type'], int):
             spt_id = kwargs['spectral_type']
-            spt = db.query("SELECT * FROM spectral_types WHERE id=?", (spt_id,), fmt='dict', fetch='one')
-        
+            spt = db.query("SELECT * FROM spectral_types WHERE id=?", (spt_id, ), fmt='dict', fetch='one')
+
             # Add it to the object
             spectral_type = spt.get('spectral_type')
             spectral_type_unc = spt.get('spectral_type_unc', 0.5)
             gravity = spt.get('gravity')
             lum_class = spt.get('lum_class', 'V')
             prefix = spt.get('prefix')
-            
+
             # Add it to the object
             self.spectral_type = spectral_type, spectral_type_unc, gravity, lum_class, prefix
-            
+
         # Get the spectra
         if 'spectra' in kwargs:
             spec_ids = kwargs['spectra']
-            spec_q = "SELECT * FROM spectra WHERE id IN ({})".format(','.join(['?']*len(spec_ids)))
+            spec_q = "SELECT * FROM spectra WHERE id IN ({})".format(', '.join(['?']*len(spec_ids)))
             spec = db.query(spec_q, spec_ids, fmt='dict')
-            
+
             # Add the spectra
             for row in spec:
-                
+
                 # Make the Spectrum object
                 wav, flx, unc = row['spectrum'].data
                 wave_unit = u.str2Q(row['wavelength_units'])
                 flux_unit = u.str2Q(row['flux_units'])
-                
+
                 # Add the spectrum to the object
                 self.add_spectrum(wav*wave_unit, flx*flux_unit, unc*flux_unit)
-                
+
 
     def fundamental_params(self, **kwargs):
         """
@@ -964,20 +1125,20 @@ class SED(object):
         # Calculate bolometric luminosity (dependent on fbol and distance)
         self.get_Lbol()
         self.get_Mbol()
-        
+
         # Interpolate surface gravity, mass and radius from isochrones
         if self.radius is None:
             self.radius_from_age()
         self.logg_from_age()
         self.mass_from_age()
-        
+
         # Calculate Teff (dependent on Lbol, distance, and radius)
         self.get_Teff()
-        
-        
+
+
     def get_fbol(self, units=q.erg/q.s/q.cm**2):
         """Calculate the bolometric flux of the SED
-        
+
         Parameters
         ----------
         units: astropy.units.quantity.Quantity
@@ -985,32 +1146,32 @@ class SED(object):
         """
         # Integrate the SED to get fbol
         self.fbol = self.app_SED.integral(units=units)
-        
-        
+
+
     def get_Lbol(self):
         """Calculate the bolometric luminosity of the SED
         """
         # Caluclate fbol if not present
         if self.fbol is None:
             self.get_fbol()
-            
+
         # Calculate Lbol
         if self.distance is not None:
             Lbol = (4*np.pi*self.fbol[0]*self.distance[0]**2).to(q.erg/q.s)
             Lbol_sun = round(np.log10((Lbol/ac.L_sun).decompose().value), 3)
-            
+
             # Calculate Lbol_unc
             Lbol_unc = Lbol*np.sqrt((self.fbol[1]/self.fbol[0]).value**2+(2*self.distance[1]/self.distance[0]).value**2)
             Lbol_sun_unc = round(abs(Lbol_unc/(Lbol*np.log(10))).value, 3)
-            
+
             # Update the attributes
             self.Lbol = Lbol, Lbol_unc
             self.Lbol_sun = Lbol_sun, Lbol_sun_unc
-            
-            
+
+
     def get_mbol(self, L_sun=3.86E26*q.W, Mbol_sun=4.74):
         """Calculate the apparent bolometric magnitude of the SED
-        
+
         Parameters
         ==========
         L_sun: astropy.units.quantity.Quantity
@@ -1021,57 +1182,57 @@ class SED(object):
         # Calculate fbol if not present
         if self.fbol is None:
             self.get_fbol()
-            
+
         # Calculate mbol
         mbol = round(-2.5*np.log10(self.fbol[0].value)-11.482, 3)
-            
+
         # Calculate mbol_unc
         mbol_unc = round((2.5/np.log(10))*(self.fbol[1]/self.fbol[0]).value, 3)
-        
+
         # Update the attribute
         self.mbol = mbol, mbol_unc
-        
-        
+
+
     def get_Mbol(self):
         """Calculate the absolute bolometric magnitude of the SED
         """
         # Calculate mbol if not present
         if self.mbol is None:
             self.get_mbol()
-           
+
         # Calculate Mbol
         if self.distance is not None:
             Mbol = round(self.mbol[0]-5*np.log10((self.distance[0]/10*q.pc).value), 3)
-            
+
             # Calculate Mbol_unc
             Mbol_unc = round(np.sqrt(self.mbol[1]**2+((2.5/np.log(10))*(self.distance[1]/self.distance[0]).value)**2), 3)
-            
+
             # Update the attribute
             self.Mbol = Mbol, Mbol_unc
-        
-        
+
+
     def get_reddening(self):
         """Calculate the reddening from the Bayestar17 dust map"""
         if self.distance is not None and self.sky_coords is not None:
             gal_coords = SkyCoord(self.sky_coords.galactic, frame='galactic', distance=self.distance[0])
             bayestar = BayestarWebQuery(version='bayestar2017')
             self.reddening = bayestar(gal_coords, mode='random_sample')
-            
-            
+
+
     def get_Teff(self):
         """Calculate the effective temperature
         """
         # Calculate Teff
         if self.distance is not None and self.radius is not None:
             Teff = np.sqrt(np.sqrt((self.Lbol[0]/(4*np.pi*ac.sigma_sb*self.radius[0]**2)).to(q.K**4))).astype(int)
-            
+
             # Calculate Teff_unc
             Teff_unc = (Teff*np.sqrt((self.Lbol[1]/self.Lbol[0]).value**2 + (2*self.radius[1]/self.radius[0]).value**2)/4.).astype(int)
-            
+
             # Update the attribute
             self.Teff = Teff, Teff_unc
-    
-    
+
+
     @staticmethod
     def group_spectra(spectra):
         """Puts a list of *spectra* into groups with overlapping wavelength arrays
@@ -1085,66 +1246,66 @@ class SED(object):
                         group.append(s), idx.append(n)
                 groups.append(group)
         return groups
-        
-        
+
+
     @property
     def info(self):
         """
         Print all the SED info
         """
         for attr in dir(self):
-            if not attr.startswith('_') and attr not in ['info','results'] and not callable(getattr(self, attr)):
+            if not attr.startswith('_') and attr not in ['info', 'results'] and not callable(getattr(self, attr)):
                 val = getattr(self, attr)
                 print('{0: <25}= {1}{2}'.format(attr, '\n' if isinstance(val, at.QTable) else '', val))
-        
-        
+
+
     def logg_from_age(self):
         """Estimate the surface gravity from model isochrones given an age and Lbol
         """
         if self.age is not None and self.Lbol is not None:
-            
+
             self.logg = tuple(iso.isochrone_interp(self.Lbol, self.age, yparam='logg', evo_model=self.evo_model))
-            
+
         else:
             if self.verbose:
                 print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
-        
-        
+
+
     def make_sed(self):
         """Construct the SED"""
         # Make sure the is data
         if len(self.spectra)==0 and len(self.photometry)==0:
             raise ValueError('Cannot make the SED without spectra or photometry!')
-        
+
         # Calculate flux and calibrate
         self._calibrate_photometry()
-        
+
         # Combine spectra and flux calibrate
         self._calibrate_spectra()
-        
+
         # Get synthetic mags
         # self.calculate_synthetic_mags()
-        
+
         # Make a Wein tail that goes to (almost) zero flux at (almost) zero wavelength
         self.wein = sp.Spectrum(np.array([0.00001])*self.wave_units, np.array([1E-30])*self.flux_units, np.array([1E-30])*self.flux_units)
-        
+
         # Create Rayleigh Jeans Tail
-        rj_wave = np.arange(np.min([self.app_phot_SED.wave[-1],12.]), 500, 0.1)*q.um
+        rj_wave = np.arange(np.min([self.app_phot_SED.wave[-1], 12.]), 500, 0.1)*q.um
         rj_flux, rj_unc = u.blackbody(rj_wave, 1500*q.K, 100*q.K)
 
         # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
         rj_flux = (rj_flux*self.app_phot_SED.flux[-1]/rj_flux[0])*self.flux_units
         self.rj = sp.Spectrum(rj_wave, rj_flux, rj_unc)
-        
+
         # Exclude photometric points with spectrum coverage
         if self.stitched_spectra is not None:
             covered = []
             for idx, i in enumerate(self.app_phot_SED.wave):
-                for N,spec in enumerate(self.stitched_spectra):
+                for N, spec in enumerate(self.stitched_spectra):
                     if i<spec.wave[-1] and i>spec.wave[0]:
                         covered.append(idx)
-            WP, FP, EP = [[i for n,i in enumerate(A) if n not in covered]*Q for A,Q in zip(self.app_phot_SED.spectrum, self.units)]
-            
+            WP, FP, EP = [[i for n, i in enumerate(A) if n not in covered]*Q for A, Q in zip(self.app_phot_SED.spectrum, self.units)]
+
             if len(WP)==0:
                 self.app_specphot_SED = None
             else:
@@ -1161,126 +1322,126 @@ class SED(object):
 
         # Calculate Fundamental Params
         self.fundamental_params()
-        
+
         # Set SED as calculated
         self.calculated = True
-        
-        
+
+
     def mass_from_age(self, mass_units=q.Msun):
         """Estimate the surface gravity from model isochrones given an age and Lbol
         """
         if self.age is not None and self.Lbol is not None:
-            
+
             mass = iso.isochrone_interp(self.Lbol, self.age, yparam='mass', evo_model=self.evo_model)
-            
+
             self.mass = (mass[0]*q.Mjup).to(mass_units), (mass[1]*q.Mjup).to(mass_units)
-            
+
         else:
             if self.verbose:
                 print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the mass.'.format(self))
-        
-        
+
+
     @property
     def membership(self):
         """A property for membership"""
         return self._membership
-    
-    
+
+
     @membership.setter
     def membership(self, membership):
         """A setter for membership"""
         if membership is None:
-            
+
             self._membership = None
-            
+
         elif membership in AGES:
-            
+
             # Set the membership!
             self._membership = membership
-            
+
             if self.verbose:
-                print('Setting membership to',self.membership)
-            
+                print('Setting membership to', self.membership)
+
             # Set the age
             self.age = AGES.get(membership)
-            
+
         else:
             print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(AGES.keys())))
-            
-            
+
+
     @property
     def name(self):
         """A property for name"""
         return self._name
-        
-        
+
+
     @name.setter
     def name(self, new_name):
         """A setter for the source name, which looks up metadata given a SIMBAD name
-        
+
         Parameters
         ----------
         new_name: str
             The name
         """
         self._name = new_name
-        
+
         # Check for sky coords
         self.find_SIMBAD()
-            
-            
+
+
     @property
     def parallax(self):
         """A property for parallax"""
         return self._parallax
-    
-    
+
+
     @parallax.setter
     def parallax(self, parallax, parallax_units=q.mas):
         """A setter for parallax
-        
+
         Parameters
         ----------
         parallax: sequence
             The (parallax, err) or (parallax, lower_err, upper_err)
         """
         # Make sure it's a sequence
-        if not isinstance(parallax, (tuple, list, np.ndarray)) or len(parallax) not in [2,3]:
+        if not isinstance(parallax, (tuple, list, np.ndarray)) or len(parallax) not in [2, 3]:
             raise TypeError('parallax must be a sequence of (value, error) or (value, lower_error, upper_error).')
-            
+
         # Make sure the values are in time units
         try:
             _ = [i.to(q.mas) for i in parallax]
         except:
             raise TypeError("parallax values must be parallax units of astropy.units.quantity.Quantity, e.g. 'mas'")
-        
+
         # Set the parallax
         self._parallax = parallax
-        
+
         # Update the distance
         self._distance = u.pi2pc(*self.parallax)
-        
+
         # Try to calculate reddening
         self.get_reddening()
-        
+
         # Update the absolute photometry
         self._calibrate_photometry()
-        
+
         # Update the flux calibrated spectra
         self._calibrate_spectra()
-        
+
         # Set SED as uncalculated
         self.calculated = False
-        
-        
+
+
     @property
     def photometry(self):
         """A property for photometry"""
         self._photometry.sort('eff')
         return self._photometry
-        
-        
-    def plot(self, app=True, photometry=True, spectra=True, integral=False, syn_photometry=True, blackbody=True, scale=['log','log'], output=False, **kwargs):
+
+
+    def plot(self, app=True, photometry=True, spectra=True, integral=False, syn_photometry=True, blackbody=True, scale=['log', 'log'], output=False, **kwargs):
         """
         Plot the SED
 
@@ -1299,7 +1460,7 @@ class SED(object):
         blackbody: bool
             Polot the blackbody fit
         scale: array-like
-            The (x,y) scales to plot, 'linear' or 'log'
+            The (x, y) scales to plot, 'linear' or 'log'
         bokeh: bool
             Plot in Bokeh
         output: bool
@@ -1316,7 +1477,7 @@ class SED(object):
         # Calculate reasonable axis limits
         full_SED = getattr(self, pre+'SED')
         spec_SED = getattr(self, pre+'spec_SED')
-        phot_SED = np.array([np.array([np.nanmean(self.photometry.loc[b][col].value) for b in list(set(self.photometry['band']))]) for col in ['eff',pre+'flux',pre+'flux_unc']])
+        phot_SED = np.array([np.array([np.nanmean(self.photometry.loc[b][col].value) for b in list(set(self.photometry['band']))]) for col in ['eff', pre+'flux', pre+'flux_unc']])
 
         # Check for min and max phot data
         try:
@@ -1331,40 +1492,40 @@ class SED(object):
         except:
             mn_xs, mx_xs, mn_ys, mx_ys = 0.3, 18, 999, -999
 
-        mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp,mn_xs]), np.nanmax([mx_xp,mx_xs]), np.nanmin([mn_yp,mn_ys]), np.nanmax([mx_yp,mx_ys])
+        mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp, mn_xs]), np.nanmax([mx_xp, mx_xs]), np.nanmin([mn_yp, mn_ys]), np.nanmax([mx_yp, mx_ys])
 
         # Make the plot
         TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
-        self.fig = figure(plot_width=800, plot_height=500, title=self.name, 
-                     y_axis_type=scale[1], x_axis_type=scale[0], 
-                     x_axis_label='Wavelength [{}]'.format(self.wave_units), 
-                     y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
-                     tools=TOOLS)
+        self.fig = figure(plot_width=800, plot_height=500, title=self.name,
+                          y_axis_type=scale[1], x_axis_type=scale[0],
+                          x_axis_label='Wavelength [{}]'.format(self.wave_units),
+                          y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
+                          tools=TOOLS)
 
         # Plot spectra
         if spectra is not False and len(self.spectra)>0:
-            
+
             if spectra == 'all':
-                for n,spec in enumerate(self.spectra):
+                for n, spec in enumerate(self.spectra):
                     self.fig.line(spec.wave, spec.flux, color=next(sp.COLORS), legend='Spectrum {}'.format(n))
             else:
                 self.fig.line(spec_SED.wave, spec_SED.flux, legend='Spectra')
 
         # Plot photometry
         if photometry and self.photometry is not None:
-            
+
             # Set up hover tool
             phot_tips = [( 'Band', '@desc'), ('Wave', '@x'), ( 'Flux', '@y'), ('Unc', '@z')]
-            hover = HoverTool(names=['photometry','nondetection'], tooltips=phot_tips, mode='vline')
+            hover = HoverTool(names=['photometry', 'nondetection'], tooltips=phot_tips, mode='vline')
             self.fig.add_tools(hover)
-            
+
             # Plot points with errors
-            pts = np.array([(bnd,wav,flx,err) for bnd,wav,flx,err in np.array(self.photometry['band','eff',pre+'flux',pre+'flux_unc']) if not any([np.isnan(i) for i in [wav,flx,err]])], dtype=[('desc','S20'),('x',float),('y',float),('z',float)])
+            pts = np.array([(bnd, wav, flx, err) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre+'flux', pre+'flux_unc']) if not any([np.isnan(i) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
             self.fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', fill_alpha=0.7, size=8)
-            
+
             # Plot points with errors
-            pts = np.array([(bnd,wav,flx,err) for bnd,wav,flx,err in np.array(self.photometry['band','eff',pre+'flux',pre+'flux_unc']) if np.isnan(err) and not np.isnan(flx)], dtype=[('desc','S20'),('x',float),('y',float),('z',float)])
+            pts = np.array([(bnd, wav, flx, err) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre+'flux', pre+'flux_unc']) if np.isnan(err) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
             self.fig.circle('x', 'y', source=source, legend='Nondetection', name='nondetection', fill_alpha=0, size=8)
 
@@ -1372,7 +1533,7 @@ class SED(object):
         # if syn_photometry and self.syn_photometry is not None:
         #
         #     # Plot points with errors
-        #     pts = np.array([(x,y,z) for x,y,z in np.array(self.syn_photometry['eff',pre+'flux',pre+'flux_unc']) if not np.isnan(z)]).T
+        #     pts = np.array([(x, y, z) for x, y, z in np.array(self.syn_photometry['eff', pre+'flux', pre+'flux_unc']) if not np.isnan(z)]).T
         #     try:
         #         errorbar(self.fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
         #     except:
@@ -1402,44 +1563,44 @@ class SED(object):
             show(self.fig)
 
         return self.fig
-        
-        
+
+
     @property
     def radius(self):
         """A property for radius"""
         return self._radius
-    
-    
+
+
     @radius.setter
     def radius(self, radius):
         """A setter for radius"""
         if radius is None:
             self._radius = None
-            
+
         else:
             # Make sure it's a sequence
-            if not isinstance(radius, (tuple, list, np.ndarray)) or len(radius) not in [2,3]:
+            if not isinstance(radius, (tuple, list, np.ndarray)) or len(radius) not in [2, 3]:
                 raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
-            
+
             # Make sure the values are in length units
             try:
                 _ = [i.to(q.m) for i in radius]
             except:
                 raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
-        
+
             # Set the radius!
             self._radius = radius
-        
+
             if self.verbose:
-                print('Setting radius to',self.radius)
-        
+                print('Setting radius to', self.radius)
+
         # Set SED as uncalculated
         self.calculated = False
-        
-        
+
+
     def radius_from_spectral_type(self, spt=None):
         """Estimate the radius from CMD plot
-        
+
         Parameters
         ----------
         spt: float
@@ -1448,45 +1609,45 @@ class SED(object):
         spt = spt or self.spectral_type[0]
         try:
             self.radius = rel.spt_radius_relation(spt)
-            
+
         except:
             print("Could not estimate radius from spectral type {}".format(spt))
-        
-        
+
+
     def radius_from_age(self, radius_units=q.Rsun):
         """Estimate the radius from model isochrones given an age and Lbol
         """
         if self.age is not None and self.Lbol is not None:
-            
+
             radius = iso.isochrone_interp(self.Lbol, self.age, evo_model=self.evo_model)
-            
+
             self.radius = (radius[0]*q.Rjup).to(radius_units), (radius[1]*q.Rjup).to(radius_units)
-            
+
         else:
             if self.verbose:
                 print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
-        
-        
+
+
     @property
     def results(self):
         """A property for displaying the results"""
         # Make the SED to get the most recent results
         if not self.calculated:
             self.make_sed()
-        
+
         # Get the results
         rows = []
-        for param in ['name', 'age', 'distance', 'parallax', 'radius', 'SpT',\
+        for param in ['name', 'age', 'distance', 'parallax', 'radius', 'SpT', \
                       'spectral_type', 'membership', 'reddening', 'fbol', 'mbol', \
                       'Lbol', 'Lbol_sun', 'Mbol', 'logg', 'mass', 'Teff', 'Teff_bb']:
-            
+
             # Get the values and format
             attr = getattr(self, param, None)
-            
+
             if attr is None:
                 attr = '--'
-            
-            if isinstance(attr, (tuple,list)):
+
+            if isinstance(attr, (tuple, list)):
                 val, unc = attr[:2]
                 unit = val.unit if hasattr(val, 'unit') else '--'
                 val = val.value if hasattr(val, 'unit') else val
@@ -1495,59 +1656,59 @@ class SED(object):
                     val = float('{:.2e}'.format(val))
                     unc = float('{:.2e}'.format(unc))
                 rows.append([param, val, unc, unit])
-                
+
             elif isinstance(attr, str):
                 rows.append([param, attr, '--', '--'])
-                
+
             else:
                 pass
-        
-        return at.Table(np.asarray(rows), names=('param','value','unc','units'))
-        
-        
+
+        return at.Table(np.asarray(rows), names=('param', 'value', 'unc', 'units'))
+
+
     @property
     def sky_coords(self):
         """A property for sky coordinates"""
         return self._sky_coords
-    
-    
+
+
     @sky_coords.setter
     def sky_coords(self, sky_coords):
         """A setter for sky coordinates"""
         # Make sure it's a sky coordinate
         if not isinstance(sky_coords, (SkyCoord, tuple)):
             raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
-        
+
         if isinstance(sky_coords, tuple) and len(sky_coords)==2:
-            
+
             if isinstance(sky_coords[0], str):
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.hour, q.degree), frame='icrs')
-                
+
             else:
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], frame='icrs')
-        
+
         # Set the sky coordinates
         self._sky_coords = sky_coords
-        
+
         # Try to calculate reddening
         self.get_reddening()
-        
+
         # Try to find the source in Simbad
         self.find_SIMBAD()
-    
-        
+
+
     @property
     def spectra(self):
         """A property for spectra"""
         return self._spectra
-        
-        
+
+
     @property
     def spectral_type(self):
         """A property for spectral_type"""
         return self._spectral_type
-    
-    
+
+
     @spectral_type.setter
     def spectral_type(self, spectral_type, spectral_type_unc=None, gravity=None, lum_class=None, prefix=None):
         """A setter for spectral_type"""
@@ -1556,7 +1717,7 @@ class SED(object):
             self.SpT = spectral_type
             spec_type = u.specType(spectral_type)
             spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type
-            
+
         elif isinstance(spectral_type, tuple):
             spectral_type, spectral_type_unc, *other = spectral_type
             gravity = lum_class = prefix = ''
@@ -1568,49 +1729,49 @@ class SED(object):
                 prefix = other[0]
 
             self.SpT = u.specType([spectral_type, spectral_type_unc, prefix, gravity, lum_class or 'V'])
-                
+
         else:
             raise TypeError('Please provide a string or tuple to set the spectral type.')
-            
+
         # Set the spectral_type!
         self._spectral_type = spectral_type, spectral_type_unc or 0.5
         self.luminosity_class = lum_class or 'V'
         self.gravity = gravity or None
         self.prefix = prefix or None
-        
+
         # Set the age if not explicitly set
         if self.age is None and self.gravity is not None:
-            if gravity in ['b','beta','g','gamma']:
+            if gravity in ['b', 'beta', 'g', 'gamma']:
                 self.age = 225*q.Myr, 75*q.Myr
-                
+
             else:
                 print("{} is an invalid gravity. Please use 'beta' or 'gamma' instead.".format(gravity))
-        
+
         # If radius not explicitly set, estimate it from spectral type
         if self.spectral_type is not None and self.radius is None:
             self.radius_from_spectral_type()
-            
+
         # Set SED as uncalculated
         self.calculated = False
-        
-        
+
+
     @property
     def synthetic_photometry(self):
         """A property for synthetic photometry"""
         self._synthetic_photometry.sort('eff')
         return self._synthetic_photometry
-    
-    
+
+
     @property
     def wave_units(self):
         """A property for wave_units"""
         return self._wave_units
-    
-    
+
+
     @wave_units.setter
     def wave_units(self, wave_units):
         """A setter for wave_units
-        
+
         Parameters
         ----------
         wave_units: astropy.units.quantity.Quantity
@@ -1619,71 +1780,26 @@ class SED(object):
         # Make sure it's a quantity
         if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
             raise TypeError('wave_units must be astropy.units.quantity.Quantity')
-            
+
         # Make sure the values are in length units
         try:
             wave_units.to(q.um)
         except:
             raise TypeError("wave_units must be a unit of length, e.g. 'um'")
-        
+
         # Set the wave_units!
         self._wave_units = wave_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
-        
+
         # Recalibrate the data
         self._calibrate_photometry()
         self._calibrate_spectra()
-    
-    
-    # def write(self, dirpath, app=False, spec=True, phot=False):
-    #     """
-    #     Exports a file of photometry and a file of the composite spectra with minimal data headers
-    #
-    #     Parameters
-    #     ----------
-    #     dirpath: str
-    #       The directory path to place the file
-    #     app: bool
-    #       Write apparent SED data
-    #     spec: bool
-    #       Write a file for the spectra with wavelength, flux and uncertainty columns
-    #     phot: bool
-    #       Write a file for the photometry with
-    #     """
-    #     if spec:
-    #         try:
-    #             spec_data = self.app_spec_SED.spectrum if app else self.abs_spec_SED.spectrum
-    #             if dirpath.endswith('.txt'):
-    #                 specpath = dirpath
-    #             else:
-    #                 specpath = dirpath + '{} SED.txt'.format(self.name)
-    #
-    #             header = '{} {} spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(self.name, 'apparent' if app else 'flux calibrated')
-    #
-    #             np.savetxt(specpath, np.asarray(spec_data).T, header=header)
-    #
-    #         except IOError:
-    #             print("Couldn't print spectra.")
-    #
-    #     if phot:
-    #         try:
-    #             phot = self.photometry
-    #
-    #             if dirpath.endswith('.txt'):
-    #                 photpath = dirpath
-    #             else:
-    #                 photpath = dirpath + '{} phot.txt'.format(self.name)
-    #
-    #             phot.write(photpath, format='ipac')
-    #
-    #         except IOError:
-    #             print("Couldn't print photometry.")
 
     # =========================================================================
     # =========================================================================
     # =========================================================================
-        
-        
+
+
     # def get_syn_photometry(self, bands=[], plot=False):
     #     """
     #     Calculate the synthetic magnitudes
@@ -1702,7 +1818,7 @@ class SED(object):
     #         # Only get mags in regions with spectral coverage
     #         syn_mags = []
     #         for spec in [i.as_void() for i in self.piecewise]:
-    #             spec = [Q*(i.value if hasattr(i,'unit') else i) for i,Q in zip(spec,[self.wave_units,self.flux_units,self.flux_units])]
+    #             spec = [Q*(i.value if hasattr(i, 'unit') else i) for i, Q in zip(spec, [self.wave_units, self.flux_units, self.flux_units])]
     #             syn_mags.append(s.all_mags(spec, bands=bands, plot=plot))
     #
     #         # Stack the tables
@@ -1710,13 +1826,13 @@ class SED(object):
     #
     #     except:
     #         print('No spectral coverage to calculate synthetic photometry.')
-        
-            
-        
+
+
+
 def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_kwargs={}, legend=''):
     """
     Hack to make errorbar plots in bokeh
-    
+
     Parameters
     ==========
     x: sequence
@@ -1759,14 +1875,14 @@ def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_
 def blackbody(wavelength, temperature=2000):
     """
     Generate a blackbody of the given temperature at the given wavelengths
-    
+
     Parameters
     ----------
     wavelength: array-like
         The wavelength array [um]
     temperature: float
         The temperature of the star [K]
-    
+
     Returns
     -------
     astropy.quantity.Quantity
@@ -1774,6 +1890,6 @@ def blackbody(wavelength, temperature=2000):
     """
     wavelength = q.Quantity(wavelength, "um")
     temperature = q.Quantity(temperature, "K")
-    max_val = blackbody_lambda((b_wien/temperature).to(q.um),temperature).value
-    
+    max_val = blackbody_lambda((b_wien/temperature).to(q.um), temperature).value
+
     return blackbody_lambda(wavelength, temperature).value/max_val
