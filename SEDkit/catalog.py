@@ -17,8 +17,13 @@ from .sed import SED
 
 class SEDCatalog:
     """An object to collect SED results for plotting and analysis"""
-    def __init__(self):
+    def __init__(self, name='SED Catalog', marker='circle', color='blue'):
         """Initialize the SEDCatalog object"""
+        # Metadata
+        self.name = name
+        self.marker = marker
+        self.color = color
+        
         # List all the results columns
         self.cols = ['name', 'age', 'age_unc', 'distance', 'distance_unc',
                      'parallax', 'parallax_unc', 'radius', 'radius_unc',
@@ -49,6 +54,31 @@ class SEDCatalog:
         self.results['mass_unc'].unit = q.M_sun
         self.results['Teff'].unit = q.K
         self.results['Teff_unc'].unit = q.K
+        
+        
+    def __add__(self, other):
+        """Add two catalogs together
+        
+        Parameters
+        ----------
+        other: SEDkit.catalog.SEDCatalog
+            The SEDCatalog to add
+        
+        Returns
+        -------
+        SEDkit.catalog.SEDCatalog
+            The combined catalog
+        """
+        if not type(other)==type(self):
+            raise TypeError('Cannot add object of type', type(other))
+            
+        # Make a new catalog
+        new_cat = SEDCatalog()
+        
+        # Combine results
+        new_cat.results = at.vstack([self.results, other.results])
+        
+        return new_cat
         
     
     def add_SED(self, sed):
@@ -248,6 +278,30 @@ class SEDCatalog:
             self.add_SED(s)
         
         
+    def get_data(self, *args):
+        """Fetch the data for the given columns
+        """
+        results = []
+        
+        for x in args:
+            
+            # Get the data
+            if '-' in x:
+                x1, x2 = x.split('-')
+                if self.results[x1].unit!=self.results[x2].unit:
+                    raise TypeError('Columns must be the same units.')
+            
+                xunit = self.results[x1].unit
+                xdata = self.results[x1]-self.results[x2]
+            else:
+                xunit = self.results[x].unit
+                xdata = self.results[x]
+                
+            results.append([xdata, xunit])
+            
+        return results
+        
+        
     def load(self, file):
         """Load a saved SEDCatalog"""
         if os.path.isfile(file):
@@ -263,8 +317,8 @@ class SEDCatalog:
             self.results = cat
         
     
-    def plot(self, x, y, scale=['linear','linear'], fig=None,
-             xlabel=None, ylabel=None):
+    def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
+             xlabel=None, ylabel=None, fig=None, **kwargs):
         """Plot parameter x versus parameter y
         
         Parameters
@@ -273,6 +327,18 @@ class SEDCatalog:
             The name of the x axis parameter, e.g. 'SpT'
         y: str
             The name of the y axis parameter, e.g. 'Teff'
+        marker: str (optional)
+            The name of the method for the desired marker
+        color: str (optional)
+            The color to use for the points
+        scale: sequence
+            The (x,y) scale for the plot
+        xlabel: str
+            The label for the x-axis
+        ylable : str
+            The label for the y-axis 
+        fig: bokeh.plotting.figure (optional)
+            The figure to plot on
         """
         # Make the figure
         if fig is None:
@@ -283,32 +349,15 @@ class SEDCatalog:
                          y_axis_type=scale[1], x_axis_type=scale[0], 
                          tools=TOOLS)
                          
+        # Make sure marker is legit
+        marker = getattr(fig, marker or self.marker)
+        color = color or self.color
+                         
         # Get the source names
         names = self.results['name'] 
                         
-        # Get the x data
-        if '-' in x:
-            x1, x2 = x.split('-')
-            if self.results[x1].unit!=self.results[x2].unit:
-                raise TypeError('x-axis columns must be the same units.')
-            
-            xunit = self.results[x1].unit
-            xdata = self.results[x1]-self.results[x2]
-        else:
-            xunit = self.results[x].unit
-            xdata = self.results[x]
-            
-        # Get the y data
-        if '-' in y:
-            y1, y2 = y.split('-')
-            if self.results[y1].unit!=self.results[y2].unit:
-                raise TypeError('y-axis columns must be the same units.')
-                
-            yunit = self.results[y1].unit
-            ydata = self.results[y1]-self.results[y2]
-        else:
-            yunit = self.results[y].unit
-            ydata = self.results[y]
+        # Get the data
+        (xdata, xunit), (ydata, yunit) = self.get_data(x, y)
             
         # Set axis labels
         fig.xaxis.axis_label = '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
@@ -321,7 +370,8 @@ class SEDCatalog:
 
         # Plot points with tips
         source = ColumnDataSource(data=dict(x=xdata, y=ydata, desc=names))
-        fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', fill_alpha=0.7, size=8)
+        marker('x', 'y', source=source, legend=self.name, color=color,
+               name='photometry', fill_alpha=0.7, size=8, **kwargs)
         
         # Formatting
         fig.legend.location = "top_right"
