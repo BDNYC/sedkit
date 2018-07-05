@@ -684,7 +684,8 @@ class SED(object):
 
     def export(self, parentdir='.', dirname=None, zipped=False):
         """
-        Exports a file of photometry and a file of the composite spectra with minimal data headers
+        Exports the photometry and results tables and a file of the
+        composite spectra
 
         Parameters
         ----------

@@ -145,6 +145,70 @@ class SEDCatalog:
             self.results = table
         else:
             self.results = at.vstack([self.results,table])
+            
+    
+    def export(self, parentdir='.', dirname=None, format='ipac',
+               sources=True, zipped=False):
+        """
+        Exports the results table and a directory of all SEDs
+
+        Parameters
+        ----------
+        parentdir: str
+            The parent directory for the folder or zip file
+        dirname: str (optional)
+            The name of the exported directory or zip file, default is SED name
+        format: str
+            The format of the output results table
+        sources: bool
+            Export a directory of all source SEDs too
+        zipped: bool
+            Zip the directory
+        """
+        # Check the parent directory
+        if not os.path.exists(parentdir):
+            raise IOError('No such target directory', parentdir)
+
+        # Check the target directory
+        name = self.name.replace(' ', '_')
+        dirname = dirname or name
+        dirpath = os.path.join(parentdir, dirname)
+        
+        # Remove '.' from column names
+        final = self.results.filled(np.nan)
+        for col in final.colnames:
+            final.rename_column(col, col.replace('.', '_'))
+
+        # Write a directory of results and all SEDs...
+        if sources:
+            
+            # Make a directory
+            if not os.path.exists(dirpath):
+                os.system('mkdir {}'.format(dirpath))
+            else:
+                raise IOError('Directory already exists:', dirpath)
+                
+            # Export the results table
+            resultspath = os.path.join(dirpath,'{}_results.txt'.format(name))
+            final.write(resultspath, format=format)
+            
+            # Make a sources directory
+            sourcedir = os.path.join(dirpath,'sources')
+            os.system('mkdir {}'.format(sourcedir))
+            
+            # Export all SEDs
+            for source in self.results['SED']:
+                source.export(sourcedir)
+                
+            # zip if desired
+            if zipped:
+                shutil.make_archive(dirpath, 'zip', dirpath)
+                os.system('rm -R {}'.format(dirpath))
+                
+        # ...or just write the results table
+        else:
+            resultspath = dirpath+'_results.txt'
+            final.write(resultspath, format=format)
         
         
     def get_SED(self, name_or_idx):
