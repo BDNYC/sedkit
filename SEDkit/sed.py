@@ -321,34 +321,21 @@ class SED(object):
             self.add_photometry(*row)
 
 
-    def add_spectrum(self, wave, flux, unc=None, **kwargs):
-        """Add a new Spectrum object to the SED
-
+    def add_SDSS_spectrum(self, file=None, plate=None, mjd=None, fiber=None):
+        """Add an SDSS spectrum to the SED from file or by
+        the plate, mjd, and fiber numbers
+        
         Parameters
         ----------
-        wave: astropy.units.quantity.Quantity
-            The wavelength array
-        flux: astropy.units.quantity.Quantity
-            The flux array
-        unc: astropy.units.quantity.Quantity (optional)
-            The uncertainty array
+        file: str
+            The path to the file
+        plate: int
+            The plate of the SDSS spectrum
+        mjd: int
+            The MJD of the SDSS spectrum
+        fiber: int
+            The fiber of the SDSS spectrum
         """
-        # Create the Spectrum object
-        spec = sp.Spectrum(wave, flux, unc, **kwargs)
-
-        # Convert to SED units
-        spec.wave_units = self.wave_units
-        spec.flux_units = self.flux_units
-
-        # Add the spectrum object to the list of spectra
-        self._spectra.append(spec)
-
-        # Set SED as uncalculated
-        self.calculated = False
-
-
-    def add_SDSS_spectrum(self, file=None, plate=None, mjd=None, fiber=None):
-
         # Get the local file
         if file is not None:
             spec = SDSSfits(file)
@@ -364,7 +351,42 @@ class SED(object):
         unc = spec.error*1E-17*q.erg/q.s/q.cm**2/q.AA
 
         # Add the data to the SED object
-        self.add_spectrum(wave, flux, unc=unc)
+        self.add_spectrum([wave, flux, unc])
+
+
+    def add_spectrum(self, spectrum, **kwargs):
+        """Add a new Spectrum object to the SED
+
+        Parameters
+        ----------
+        spectrum: sequence, SEDkit.spectrum.Spectrum
+            A sequence of [W,F] or [W,F,E] with astropy units
+            or a Spectrum object
+        """
+        if isinstance(spectrum, sp.Spectrum):
+            spec = spectrum
+            
+        elif isinstance(spectrum, (list, tuple)):
+            
+            # Create the Spectrum object
+            if len(spectrum) in [2, 3]:
+                spec = sp.Spectrum(*spectrum, **kwargs)
+                
+            else:
+                raise ValueError('Input spectrum must be [W,F] or [W,F,E].')
+                
+        else:
+            raise TypeError('Must enter [W,F], [W,F,E], or a Spectrum object')
+
+        # Convert to SED units
+        spec.wave_units = self.wave_units
+        spec.flux_units = self.flux_units
+
+        # Add the spectrum object to the list of spectra
+        self._spectra.append(spec)
+
+        # Set SED as uncalculated
+        self.calculated = False
 
 
     def add_spectrum_file(self, file, wave_units=None, flux_units=None, ext=0,
@@ -422,7 +444,7 @@ class SED(object):
             unc = None
 
         # Add the data to the SED object
-        self.add_spectrum(wave, flux, unc=unc, **kwargs)
+        self.add_spectrum([wave, flux, unc], **kwargs)
 
 
     @property
@@ -747,7 +769,10 @@ class SED(object):
         """
         Search for 2MASS data
         """
-        self.find_photometry('2MASS', 'II/246/out', ['Jmag', 'Hmag', 'Kmag'], ['2MASS.J', '2MASS.H', '2MASS.Ks'], **kwargs)
+        self.find_photometry('2MASS', 'II/246/out',
+                             ['Jmag', 'Hmag', 'Kmag'],
+                             ['2MASS.J', '2MASS.H', '2MASS.Ks'],
+                             **kwargs)
 
 
     def find_Gaia(self, search_radius=15*q.arcsec, catalog='I/345/gaia2'):
@@ -787,7 +812,10 @@ class SED(object):
         """
         Search for PanSTARRS data
         """
-        self.find_photometry('PanSTARRS', 'II/349/ps1', ['gmag', 'rmag', 'imag', 'zmag', 'ymag'], ['PS1.g', 'PS1.r', 'PS1.i', 'PS1.z', 'PS1.y'], **kwargs)
+        self.find_photometry('PanSTARRS', 'II/349/ps1',
+                             ['gmag', 'rmag', 'imag', 'zmag', 'ymag'],
+                             ['PS1.g', 'PS1.r', 'PS1.i', 'PS1.z', 'PS1.y'],
+                             **kwargs)
 
 
     def find_photometry(self, name, catalog, band_names, target_names, search_radius=None, idx=0, **kwargs):
@@ -831,7 +859,10 @@ class SED(object):
         """
         Search for SDSS data
         """
-        self.find_photometry('SDSS', 'V/147', ['umag', 'gmag', 'rmag', 'imag', 'zmag'], ['SDSS.u', 'SDSS.g', 'SDSS.r', 'SDSS.i', 'SDSS.z'], **kwargs)
+        self.find_photometry('SDSS', 'V/147',
+                             ['umag', 'gmag', 'rmag', 'imag', 'zmag'],
+                             ['SDSS.u', 'SDSS.g', 'SDSS.r', 'SDSS.i', 'SDSS.z'],
+                             **kwargs)
 
 
     def find_SIMBAD(self, search_radius=10*q.arcsec):
@@ -847,7 +878,8 @@ class SED(object):
         if isinstance(self.sky_coords, SkyCoord):
 
             # Search Simbad by sky coords
-            viz_cat = Simbad.query_region(self.sky_coords, radius=search_radius or self.search_radius)
+            rad = search_radius or self.search_radius
+            viz_cat = Simbad.query_region(self.sky_coords, radius=rad)
 
         elif self.name is not None:
 
@@ -875,10 +907,13 @@ class SED(object):
         """
         Search for WISE data
         """
-        self.find_photometry('WISE', 'II/328/allwise', ['W1mag', 'W2mag', 'W3mag', 'W4mag'], ['WISE.W1', 'WISE.W2', 'WISE.W3', 'WISE.W4'], **kwargs)
+        self.find_photometry('WISE', 'II/328/allwise',
+                             ['W1mag', 'W2mag', 'W3mag', 'W4mag'],
+                             ['WISE.W1', 'WISE.W2', 'WISE.W3', 'WISE.W4'],
+                             **kwargs)
 
 
-    def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=3000, epsilon=0.1, acc=5.0, trim=[]):
+    def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=3000, epsilon=None, acc=None, exclude=[]):
         """
         Fit a blackbody curve to the data
 
@@ -900,14 +935,14 @@ class SED(object):
         data = u.scrub(getattr(self, fit_to).data)
 
         # Trim manually
-        if isinstance(trim, (list, tuple)):
-            for mn, mx in trim:
+        if isinstance(exclude, (list, tuple)):
+            for mn, mx in exclude:
                 try:
                     idx, = np.where((data[0]<mn)|(data[0]>mx))
                     if any(idx):
                         data = [i[idx] for i in data]
                 except TypeError:
-                    print('Please provide a list of (lower, upper) bounds with units to trim, e.g. [(0*q.um, 0.8*q.um)]')
+                    print('Please provide a list of (lower, upper) bounds to exclude from the fit, e.g. [(0, 0.8)]')
 
         # Initial guess
         if self.Teff is not None:
@@ -918,7 +953,12 @@ class SED(object):
 
         # Fit the blackbody
         fit = fitting.LevMarLSQFitter()
-        bb = fit(init, data[0], data[1]/np.nanmax(data[1]), epsilon=epsilon, acc=acc)
+        norm = np.nanmax(data[1])
+        weight = norm/data[2]
+        if acc is None:
+            acc = np.nanmax(weight)
+        bb = fit(init, data[0], data[1]/norm, weights=weight,
+                 epsilon=epsilon, acc=acc, maxiter=300)
 
         # Store the results
         try:
@@ -944,10 +984,12 @@ class SED(object):
         if has_splat and self.app_spec_SED is not None:
 
             # Make spectrum object in SPLAT
-            sp = splat.Spectrum(wave=self.app_spec_SED.wave, flux=self.app_spec_SED.flux)
+            sp = splat.Spectrum(wave=self.app_spec_SED.wave,
+                                flux=self.app_spec_SED.flux)
 
             # Fit the model grid
-            fit = spmod.modelFitGrid(sp, teff_range=[500, 3000], model=modelgrid, summary=False)
+            fit = spmod.modelFitGrid(sp, teff_range=[500, 3000],
+                                     model=modelgrid, summary=False)
 
             print(fit)
 
@@ -963,7 +1005,8 @@ class SED(object):
         if has_splat and self.app_spec_SED is not None:
 
             # Make spectrum object in SPLAT
-            sp = splat.Spectrum(wave=self.app_spec_SED.wave, flux=self.app_spec_SED.flux)
+            sp = splat.Spectrum(wave=self.app_spec_SED.wave,
+                                flux=self.app_spec_SED.flux)
 
             # Fit for SpT
             spt = splat.classifyByIndex(sp, set=idx_set, round=True)[0]
@@ -985,7 +1028,8 @@ class SED(object):
         if has_splat and self.app_spec_SED is not None:
 
             # Make spectrum object in SPLAT
-            sp = splat.Spectrum(wave=self.app_spec_SED.wave, flux=self.app_spec_SED.flux)
+            sp = splat.Spectrum(wave=self.app_spec_SED.wave,
+                                flux=self.app_spec_SED.flux)
 
             # Fit for SpT
             spt = splat.classifyByStandard(sp)[0]
@@ -1022,7 +1066,7 @@ class SED(object):
         try:
             flux_units.to(q.erg/q.s/q.cm**2/q.AA)
         except:
-            raise TypeError("flux_units must be a unit of length, e.g. 'um'")
+            raise TypeError("flux_units must be a unit of flux density, e.g. 'erg/s/cm2/A'")
 
         # fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA)
 
@@ -1116,7 +1160,7 @@ class SED(object):
                 flux_unit = u.str2Q(row['flux_units'])
 
                 # Add the spectrum to the object
-                self.add_spectrum(wav*wave_unit, flx*flux_unit, unc*flux_unit)
+                self.add_spectrum([wav*wave_unit, flx*flux_unit, unc*flux_unit])
 
 
     def fundamental_params(self, **kwargs):
@@ -1335,7 +1379,7 @@ class SED(object):
 
             mass = iso.isochrone_interp(self.Lbol, self.age, yparam='mass', evo_model=self.evo_model)
 
-            self.mass = (mass[0]*q.Mjup).to(mass_units), (mass[1]*q.Mjup).to(mass_units)
+            self.mass = (mass[0]*q.Msun).to(mass_units), (mass[1]*q.Msun).to(mass_units)
 
         else:
             if self.verbose:
@@ -1442,7 +1486,7 @@ class SED(object):
         return self._photometry
 
 
-    def plot(self, app=True, photometry=True, spectra=True, integral=False, syn_photometry=True, blackbody=True, scale=['log', 'log'], output=False, **kwargs):
+    def plot(self, app=True, photometry=True, spectra=True, integral=False, syn_photometry=True, blackbody=True, scale=['log', 'log'], output=False, fig=None, color=None, **kwargs):
         """
         Plot the SED
 
@@ -1466,6 +1510,10 @@ class SED(object):
             Plot in Bokeh
         output: bool
             Just return figure, don't draw plot
+        fig: bokeh.plotting.figure (optional)
+            The Boheh plot to add the SED to
+        color: str
+            The color for the plot points and lines
 
         Returns
         =======
@@ -1496,12 +1544,20 @@ class SED(object):
         mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp, mn_xs]), np.nanmax([mx_xp, mx_xs]), np.nanmin([mn_yp, mn_ys]), np.nanmax([mx_yp, mx_ys])
 
         # Make the plot
-        TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
-        self.fig = figure(plot_width=800, plot_height=500, title=self.name,
-                          y_axis_type=scale[1], x_axis_type=scale[0],
-                          x_axis_label='Wavelength [{}]'.format(self.wave_units),
-                          y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
-                          tools=TOOLS)
+        if hasattr(fig, 'legend'):
+            self.fig = fig
+            
+        else:
+            TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
+            self.fig = figure(plot_width=800, plot_height=500, title=self.name,
+                              y_axis_type=scale[1], x_axis_type=scale[0],
+                              x_axis_label='Wavelength [{}]'.format(self.wave_units),
+                              y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
+                              tools=TOOLS)
+
+        # Set the color
+        if color is None:
+            color = '#1f77b4'
 
         # Plot spectra
         if spectra is not False and len(self.spectra)>0:
@@ -1510,7 +1566,7 @@ class SED(object):
                 for n, spec in enumerate(self.spectra):
                     self.fig.line(spec.wave, spec.flux, color=next(sp.COLORS), legend='Spectrum {}'.format(n))
             else:
-                self.fig.line(spec_SED.wave, spec_SED.flux, legend='Spectra')
+                self.fig.line(spec_SED.wave, spec_SED.flux, color=color, legend='Spectra')
 
         # Plot photometry
         if photometry and self.photometry is not None:
@@ -1523,12 +1579,12 @@ class SED(object):
             # Plot points with errors
             pts = np.array([(bnd, wav, flx, err) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre+'flux', pre+'flux_unc']) if not any([np.isnan(i) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
-            self.fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', fill_alpha=0.7, size=8)
+            self.fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', color=color, fill_alpha=0.7, size=8)
 
             # Plot points with errors
             pts = np.array([(bnd, wav, flx, err) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre+'flux', pre+'flux_unc']) if np.isnan(err) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
-            self.fig.circle('x', 'y', source=source, legend='Nondetection', name='nondetection', fill_alpha=0, size=8)
+            self.fig.circle('x', 'y', source=source, legend='Nondetection', name='nondetection', color=color, fill_alpha=0, size=8)
 
         # # Plot synthetic photometry
         # if syn_photometry and self.syn_photometry is not None:
@@ -1622,7 +1678,7 @@ class SED(object):
 
             radius = iso.isochrone_interp(self.Lbol, self.age, evo_model=self.evo_model)
 
-            self.radius = (radius[0]*q.Rjup).to(radius_units), (radius[1]*q.Rjup).to(radius_units)
+            self.radius = (radius[0]*q.Rsun).to(radius_units), (radius[1]*q.Rsun).to(radius_units)
 
         else:
             if self.verbose:

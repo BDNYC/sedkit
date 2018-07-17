@@ -11,9 +11,10 @@ import pickle
 import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
-from bokeh.plotting import figure
+from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, ColumnDataSource
 from .sed import SED
+from .spectrum import COLORS
 
 class SEDCatalog:
     """An object to collect SED results for plotting and analysis"""
@@ -23,6 +24,8 @@ class SEDCatalog:
         self.name = name
         self.marker = marker
         self.color = color
+        self.wave_units = q.um
+        self.flux_units = q.erg/q.s/q.cm**2/q.AA
         
         # List all the results columns
         self.cols = ['name', 'age', 'age_unc', 'distance', 'distance_unc',
@@ -91,6 +94,10 @@ class SEDCatalog:
         """
         # Turn off print statements
         sed.verbose = False
+        
+        # Check the units
+        sed.wave_units = self.wave_units
+        sed.flux_units = self.flux_units
         
         # Run the SED
         sed.make_sed()
@@ -209,24 +216,6 @@ class SEDCatalog:
         else:
             resultspath = dirpath+'_results.txt'
             final.write(resultspath, format=format)
-        
-        
-    def get_SED(self, name_or_idx):
-        """Retrieve the SED for the given object"""
-        # Add the index
-        self.results.add_index('name')
-        
-        # Get the rows
-        if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
-            return self.results.loc[name]['SED']
-            
-        elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
-            return self.results[name_or_idx]['SED']
-            
-        else:
-            print('Could not retrieve SED',name)
-            
-            return
         
         
     def filter(self, param, value):
@@ -366,6 +355,30 @@ class SEDCatalog:
         return results
         
         
+    def get_SED(self, name_or_idx):
+        """Retrieve the SED for the given object
+        
+        Parameters
+        ----------
+        idx_or_name: str, int
+            The name or index of the SED to get
+        """
+        # Add the index
+        self.results.add_index('name')
+        
+        # Get the rows
+        if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
+            return self.results.loc[name_or_idx]['SED']
+            
+        elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
+            return self.results[name_or_idx]['SED']
+            
+        else:
+            print('Could not retrieve SED', name_or_idx)
+            
+            return
+        
+        
     def load(self, file):
         """Load a saved SEDCatalog"""
         if os.path.isfile(file):
@@ -443,16 +456,62 @@ class SEDCatalog:
         
         return fig
         
+    
+    def plot_SEDs(self, name_or_idx, scale=['log', 'log'], **kwargs):
+        """Plot the SED for the given object or objects
         
-    def remove_SED(self, idx_or_name):
+        Parameters
+        ----------
+        idx_or_name: str, int, sequence
+            The name or index of the SED to get
+        """
+        # Plot all SEDS
+        if name_or_idx in ['all', '*']:
+            name_or_idx = [n for n, i in enumerate(self.results)]
+        
+        # Make it into a list
+        if isinstance(name_or_idx, (str, int)):
+            name_or_idx = [name_or_idx]
+        
+        # Make the plot
+        TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
+        title = self.name
+        fig = figure(plot_width=800, plot_height=500, title=title,
+                     y_axis_type=scale[1], x_axis_type=scale[0],
+                     x_axis_label='Wavelength [{}]'.format(self.wave_units),
+                     y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
+                     tools=TOOLS)
+        
+        # Plot each SED
+        for obj in name_or_idx:
+            c = next(COLORS)
+            fig = self.get_SED(obj).plot(fig=fig, color=c, output=True)
+            
+        show(fig)
+        
+        
+    def remove_SED(self, name_or_idx):
         """Remove an SED from the catalog
         
         Parameters
         ----------
-        idx_or_name: str, int
+        name_or_idx: str, int
             The name or index of the SED to remove
         """
-        pass
+        # Add the index
+        self.results.add_index('name')
+        
+        # Get the rows
+        if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
+            self.results = self.results[self.results['name'] != name_or_idx]
+            
+        elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
+            self.results.remove_row([name_or_idx])
+            
+        else:
+            print('Could not remove SED', name_or_idx)
+            
+            return
         
         
     def save(self, file):
