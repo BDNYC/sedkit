@@ -34,29 +34,32 @@ class SEDCatalog:
                      'fbol', 'fbol_unc', 'mbol', 'mbol_unc', 'Lbol', 'Lbol_unc',
                      'Lbol_sun', 'Lbol_sun_unc', 'Mbol', 'Mbol_unc',
                      'logg', 'logg_unc', 'mass', 'mass_unc', 'Teff', 'Teff_unc',
-                     'Teff_bb', 'SED']
+                     'Teff_evo', 'Teff_evo_unc', 'Teff_bb', 'SED']
                 
         # A master table of all SED results
         self.results = at.QTable(names=self.cols, dtype=['O']*len(self.cols))
         self.results.add_index('name')
         
         # Set the units
-        self.results['age'].unit = q.Myr
-        self.results['age_unc'].unit = q.Myr
+        self.results['age'].unit = q.Gyr
+        self.results['age_unc'].unit = q.Gyr
         self.results['distance'].unit = q.pc
         self.results['distance_unc'].unit = q.pc
         self.results['parallax'].unit = q.mas
         self.results['parallax_unc'].unit = q.mas
-        self.results['radius'].unit = ac.R_sun
-        self.results['radius'].unit = ac.R_sun
+        self.results['radius'].unit = q.Rsun
+        self.results['radius'].unit = q.Rsun
         self.results['fbol'].unit = q.erg/q.s/q.cm**2
         self.results['fbol_unc'].unit = q.erg/q.s/q.cm**2
         self.results['Lbol'].unit = q.erg/q.s
         self.results['Lbol_unc'].unit = q.erg/q.s
-        self.results['mass'].unit = q.M_sun
-        self.results['mass_unc'].unit = q.M_sun
+        self.results['mass'].unit = q.Msun
+        self.results['mass_unc'].unit = q.Msun
         self.results['Teff'].unit = q.K
         self.results['Teff_unc'].unit = q.K
+        self.results['Teff_bb'].unit = q.K
+        self.results['Teff_evo'].unit = q.K
+        self.results['Teff_evo_unc'].unit = q.K
         
         
     def __add__(self, other):

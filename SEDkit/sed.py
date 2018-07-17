@@ -218,6 +218,8 @@ class SED(object):
         self.fbol = None
         self.mbol = None
         self.Teff = None
+        self.Teff_bb = None
+        self.Teff_evo = None
         self.Lbol = None
         self.Mbol = None
         self.Lbol_sun = None
@@ -228,7 +230,6 @@ class SED(object):
         self.logg = None
 
         # Fit
-        self.Teff_bb = None
         self.bb_source = None
         self.blackbody = None
 
@@ -464,10 +465,10 @@ class SED(object):
 
         # Make sure the values are in time units
         try:
-            _ = [i.to(q.Myr) for i in age]
+            _ = [i.to(q.Gyr) for i in age]
         except:
             raise TypeError("Age values must be time units of\
-                             astropy.units.quantity.Quantity, e.g. 'Myr'")
+                             astropy.units.quantity.Quantity, e.g. 'Gyr'")
 
         # Set the age!
         self._age = age
@@ -960,11 +961,21 @@ class SED(object):
         bb = fit(init, data[0], data[1]/norm, weights=weight,
                  epsilon=epsilon, acc=acc, maxiter=300)
 
+        # # Flux calibrate the blackbody
+        # fit_sed = getattr(self, self.bb_source).data
+        # fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
+        # bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
+        # bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+        # bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
+        # bb_wav = np.linspace(0.2, 30, 1000)*q.um
+        # bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+
         # Store the results
         try:
             self.Teff_bb = int(bb.temperature.value)
             self.bb_source = fit_to
             self.blackbody = bb
+            self.bb_exclude = exclude
             if self.verbose:
                 print('\nBlackbody fit: {} K'.format(self.Teff_bb))
         except:
@@ -1213,6 +1224,9 @@ class SED(object):
             self.Lbol = Lbol, Lbol_unc
             self.Lbol_sun = Lbol_sun, Lbol_sun_unc
 
+            # Get the Teff from the age and Lbol
+            self.teff_from_age()
+
 
     def get_mbol(self, L_sun=3.86E26*q.W, Mbol_sun=4.74):
         """Calculate the apparent bolometric magnitude of the SED
@@ -1307,9 +1321,9 @@ class SED(object):
     def logg_from_age(self):
         """Estimate the surface gravity from model isochrones given an age and Lbol
         """
-        if self.age is not None and self.Lbol is not None:
+        if self.age is not None and self.Lbol_sun is not None:
 
-            self.logg = tuple(iso.isochrone_interp(self.Lbol, self.age, yparam='logg', evo_model=self.evo_model))
+            self.logg = tuple(iso.isochrone_interp(self.Lbol_sun, self.age, yparam='logg', evo_model=self.evo_model))
 
         else:
             if self.verbose:
@@ -1375,9 +1389,9 @@ class SED(object):
     def mass_from_age(self, mass_units=q.Msun):
         """Estimate the surface gravity from model isochrones given an age and Lbol
         """
-        if self.age is not None and self.Lbol is not None:
+        if self.age is not None and self.Lbol_sun is not None:
 
-            mass = iso.isochrone_interp(self.Lbol, self.age, yparam='mass', evo_model=self.evo_model)
+            mass = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='mass', evo_model=self.evo_model)
 
             self.mass = (mass[0]*q.Msun).to(mass_units), (mass[1]*q.Msun).to(mass_units)
 
@@ -1602,14 +1616,8 @@ class SED(object):
 
         # Plot the blackbody fit
         if blackbody and self.blackbody:
-            fit_sed = getattr(self, self.bb_source).data
-            fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
-            bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
-            bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-            bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
-            bb_wav = np.linspace(0.2, 30, 1000)*q.um
-            bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-            self.fig.line(bb_wav.value, bb_flx.value*bb_norm, line_color='red', legend='{} K'.format(self.Teff_bb))
+            bb_wav, bb_flx = self.blackbody
+            self.fig.line(bb_wav, bb_flx, line_color='red', legend='{} K'.format(self.Teff_bb))
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
@@ -1674,9 +1682,9 @@ class SED(object):
     def radius_from_age(self, radius_units=q.Rsun):
         """Estimate the radius from model isochrones given an age and Lbol
         """
-        if self.age is not None and self.Lbol is not None:
+        if self.age is not None and self.Lbol_sun is not None:
 
-            radius = iso.isochrone_interp(self.Lbol, self.age, evo_model=self.evo_model)
+            radius = iso.isochrone_interp(self.Lbol_sun, self.age, evo_model=self.evo_model)
 
             self.radius = (radius[0]*q.Rsun).to(radius_units), (radius[1]*q.Rsun).to(radius_units)
 
@@ -1695,8 +1703,9 @@ class SED(object):
         # Get the results
         rows = []
         for param in ['name', 'age', 'distance', 'parallax', 'radius', 'SpT', \
-                      'spectral_type', 'membership', 'reddening', 'fbol', 'mbol', \
-                      'Lbol', 'Lbol_sun', 'Mbol', 'logg', 'mass', 'Teff', 'Teff_bb']:
+                      'spectral_type', 'membership', 'reddening', 'fbol',
+                      'mbol', 'Lbol', 'Lbol_sun', 'Mbol', 'logg', 'mass',
+                      'Teff', 'Teff_bb', 'Teff_evo']:
 
             # Get the values and format
             attr = getattr(self, param, None)
@@ -1818,6 +1827,19 @@ class SED(object):
         self._synthetic_photometry.sort('eff')
         return self._synthetic_photometry
 
+
+    def teff_from_age(self):
+        """Estimate the radius from model isochrones given an age and Lbol
+        """
+        if self.age is not None and self.Lbol_sun is not None:
+
+            teff = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='teff', evo_model=self.evo_model)
+
+            self.Teff_evo = teff[0]*q.K, teff[1]*q.K
+
+        else:
+            if self.verbose:
+                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
 
     @property
     def wave_units(self):

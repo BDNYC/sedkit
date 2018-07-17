@@ -23,6 +23,58 @@ def color_gen():
 COLORS = color_gen()
 
 
+# def blackbody(lam, Teff, Teff_unc='', Flam=False, radius=1*ac.R_jup, dist=10*q.pc, plot=False):
+#     """
+#     Given a wavelength array and temperature, returns an array of Planck function values in [erg s-1 cm-2 A-1]
+#
+#     Parameters
+#     ----------
+#     lam: array-like
+#         The array of wavelength values to evaluate the Planck function
+#     Teff: astropy.unit.quantity.Quantity
+#         The effective temperature
+#     Teff_unc: astropy.unit.quantity.Quantity
+#         The effective temperature uncertainty
+#
+#     Returns
+#     -------
+#     np.array
+#         The array of intensities at the input wavelength values
+#     """
+#     # Check for radius and distance
+#     if isinstance(radius, q.quantity.Quantity) and isinstance(dist, q.quantity.Quantity):
+#         r_over_d =  (radius**2/dist**2).decompose()
+#     else:
+#         r_over_d = 1.
+#
+#     # Get constant
+#     const = np.pi*2*ac.h*ac.c**2*r_over_d/(lam**(4 if Flam else 5))
+#
+#     # Calculate intensity
+#     I = (const/(np.exp((ac.h*ac.c/(lam*ac.k_B*Teff)).decompose())-1)).to(q.erg/q.s/q.cm**2/(1 if Flam else q.AA))
+#
+#     # Calculate the uncertainty
+#     I_unc = ''
+#     try:
+#         ex = (1-np.exp(-1.*(ac.h*ac.c/(lam*ac.k_B*Teff)).decompose()))
+#         I_unc = 10*(Teff_unc*I/ac.h/ac.c*lam*ac.k_B/ex).to(q.erg/q.s/q.cm**2/(1 if Flam else q.AA))
+#     except IOError:
+#         pass
+#
+#     # Plot it
+#     if plot:
+#         plt.loglog(lam, I, label=Teff)
+#         try:
+#             plt.fill_between(lam.value, (I-I_unc).value, (I+I_unc).value, alpha=0.1)
+#         except IOError:
+#             pass
+#
+#         plt.legend(loc=0, frameon=False)
+#         plt.yscale('log', nonposy='clip')
+#
+#     return I, I_unc
+
+
 class Spectrum(ps.ArraySpectrum):
     """A spectrum object to add uncertainty handling and spectrum stitching to ps.ArraySpectrum
     """
@@ -563,6 +615,112 @@ class Spectrum(ps.ArraySpectrum):
         self.units = [self._wave_units, self._flux_units, self._flux_units]
 
 
+class Blackbody(Spectrum):
+    """A spectrum object specifically for blackbodies"""
+    def __init__(self, wavelength, Teff, radius=None, distance=None):
+        """
+        Given a wavelength array and temperature, returns an array of Planck function values in [erg s-1 cm-2 A-1]
+    
+        Parameters
+        ----------
+        lam: array-like
+            The array of wavelength values to evaluate the Planck function
+        Teff: astropy.unit.quantity.Quantity
+            The effective temperature
+        Teff_unc: astropy.unit.quantity.Quantity
+            The effective temperature uncertainty
+        """
+        try:
+            wavelength.to(q.um)
+        except:
+            raise TypeError("Wavelength must be in astropy units, e.g. 'um'")
+            
+        # Store parameters
+        if not isinstance(Teff, (q.quantity.Quantity, tuple, list)):
+            if not isinstance(Teff[0], q.quantity.Quantity):
+                raise TypeError("Teff must be an astropy quantity with temperature units.")
+
+        if isinstance(Teff, (tuple, list)):
+            self.Teff, self.Teff_unc = Teff
+        else:
+            self.Teff, self.Teff_unc = Teff, np.nan*Teff.unit
+
+        if isinstance(radius, (tuple, list)):
+            self.radius, self.radius_unc = radius
+        else:
+            self.radius, self.radius_unc = radius, np.nan*radius.unit
+
+        if isinstance(distance, (tuple, list)):
+            self.distance, self.distance_unc = distance
+        else:
+            self.distance, self.distance_unc = distance, np.nan*distance.unit
+
+        # Evaluate
+        I, I_unc = self.eval(wavelength)
+
+        # Inherit from Spectrum
+        super().__init__(wavelength, I, I_unc)
+
+        self.name = '{} Blackbody'.format(Teff)
+
+    def eval(self, wavelength, Flam=False):
+        """Evaluate the blackbody at the given wavelengths
+
+        Parameters
+        ----------
+        wavelength: sequence
+            The wavelength values
+
+        Returns
+        -------
+        list
+            The blackbody flux and uncertainty arrays
+        """
+        try:
+            wavelength.to(q.um)
+        except:
+            raise TypeError("Wavelength must be in astropy units, e.g. 'um'")
+
+        units = q.erg/q.s/q.cm**2/(1 if Flam else q.AA)
+
+        # Check for radius and distance
+        if self.radius is not None and self.distance is not None:
+            scale = (self.radius**2/self.distance**2).decompose()
+        else:
+            scale = 1.
+
+        # Get numerator and denominator
+        const = ac.h*ac.c/(wavelength*ac.k_B)
+        numer = 2*np.pi*ac.h*ac.c**2*scale/(wavelength**(4 if Flam else 5))
+        denom = np.exp((const/self.Teff)).decompose()
+
+        # Calculate intensity
+        I = (numer/(denom-1.)).to(units)
+
+        # Calculate dI/dr
+        if self.radius is not None and self.radius_unc is not None:
+            dIdr = (self.radius_unc*2*I/self.radius).to(units)
+        else:
+            dIdr = 0.*units
+
+        # Calculate dI/dd
+        if self.distance is not None and self.distance_unc is not None:
+            dIdd = (self.distance_unc*2*I/self.distance).to(units)
+        else:
+            dIdd = 0.*units
+
+        # Calculate dI/dT
+        if self.Teff is not None and self.Teff_unc is not None:
+            dIdT = (self.Teff_unc*I*ac.h*ac.c/wavelength/ac.k_B/self.Teff**2).to(units)
+        else:
+            dIdT = 0.*units
+
+        # Calculate sigma_I from derivative terms
+        I_unc = np.sqrt(dIdT**2 + dIdr**2 + dIdd**2)
+
+        return I, I_unc
+
+
 class Vega(Spectrum):
     """A Spectrum object of Vega"""
     def __init__(self, wave_units=q.AA, flux_units=q.erg/q.s/q.cm**2/q.AA):
@@ -579,11 +737,13 @@ class Vega(Spectrum):
         wave, flux = np.genfromtxt(resource_filename('SEDkit', 'data/STScI_Vega.txt'), unpack=True)
         wave *= q.AA
         flux *= q.erg/q.s/q.cm**2/q.AA
-        
+
         # Convert to target units
         wave = wave.to(wave_units)
         flux = flux.to(flux_units)
-        
+
         # Make the Spectrum object
         super().__init__(wave, flux)
+
+        self.name = 'Vega'
         

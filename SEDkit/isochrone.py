@@ -127,8 +127,8 @@ def DMEstar(ages, xparam='Lbol', yparam='radius', jupiter=False):
                 mass *= 1047.2
 
             # Add to the list
-            xp = mass if xparam == 'mass' else logg if xparam == 'logg' else radius if xparam == 'radius' else Lbol
-            yp = mass if yparam == 'mass' else logg if yparam == 'logg' else radius if yparam == 'radius' else Lbol
+            xp = mass if xparam == 'mass' else logg if xparam == 'logg' else radius if xparam == 'radius' else teff if xparam == 'teff' else Lbol
+            yp = mass if yparam == 'mass' else logg if yparam == 'logg' else radius if yparam == 'radius' else teff if yparam == 'teff' else Lbol
             D.append([age, xp, yp])
 
     return D
@@ -285,8 +285,8 @@ def isochrones(evo_model='hybrid_solar_age', xparam='Lbol', yparam='radius',
             radius *= 9.72847
 
         # Get the data for the chosen parameters
-        x = mass if xparam == 'mass' else logg if xparam == 'logg' else radius if xparam == 'radius' else Lbol
-        y = mass if yparam == 'mass' else logg if yparam == 'logg' else radius if yparam == 'radius' else Lbol
+        x = mass if xparam == 'mass' else logg if xparam == 'logg' else radius if xparam == 'radius' else teff if xparam == 'teff' else Lbol
+        y = mass if yparam == 'mass' else logg if yparam == 'logg' else radius if yparam == 'radius' else teff if yparam == 'teff' else Lbol
 
         # Stitch together isochrones
         for idx, m in zip([15, 25, 0, 30, 28, 20, 20, 20], DME):

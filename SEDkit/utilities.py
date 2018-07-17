@@ -15,56 +15,6 @@ import pylab as plt
 import scipy.optimize as opt
 from astropy.utils.data_info import ParentDtypeInfo
 
-def blackbody(lam, Teff, Teff_unc='', Flam=False, radius=1*ac.R_jup, dist=10*q.pc, plot=False):
-    """
-    Given a wavelength array and temperature, returns an array of Planck function values in [erg s-1 cm-2 A-1]
-    
-    Parameters
-    ----------
-    lam: array-like
-        The array of wavelength values to evaluate the Planck function
-    Teff: astropy.unit.quantity.Quantity
-        The effective temperature
-    Teff_unc: astropy.unit.quantity.Quantity
-        The effective temperature uncertainty
-    
-    Returns
-    -------
-    np.array
-        The array of intensities at the input wavelength values
-    """
-    # Check for radius and distance
-    if isinstance(radius, q.quantity.Quantity) and isinstance(dist, q.quantity.Quantity):
-        r_over_d =  (radius**2/dist**2).decompose()
-    else:
-        r_over_d = 1.
-        
-    # Get constant
-    const = np.pi*2*ac.h*ac.c**2*r_over_d/(lam**(4 if Flam else 5))
-    
-    # Calculate intensity
-    I = (const/(np.exp((ac.h*ac.c/(lam*ac.k_B*Teff)).decompose())-1)).to(q.erg/q.s/q.cm**2/(1 if Flam else q.AA))
-    
-    # Calculate the uncertainty
-    I_unc = ''
-    try:
-        ex = (1-np.exp(-1.*(ac.h*ac.c/(lam*ac.k_B*Teff)).decompose()))
-        I_unc = 10*(Teff_unc*I/ac.h/ac.c*lam*ac.k_B/ex).to(q.erg/q.s/q.cm**2/(1 if Flam else q.AA))
-    except IOError:
-        pass
-        
-    # Plot it
-    if plot:
-        plt.loglog(lam, I, label=Teff)
-        try:
-            plt.fill_between(lam.value, (I-I_unc).value, (I+I_unc).value, alpha=0.1)
-        except IOError:
-            pass
-            
-        plt.legend(loc=0, frameon=False)
-        plt.yscale('log', nonposy='clip')
-        
-    return I, I_unc
 
 def isnumber(s):
     """
