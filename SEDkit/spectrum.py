@@ -369,57 +369,79 @@ class Spectrum(ps.ArraySpectrum):
         return val.to(units), unc.to(units)
     
     
-    def norm_to_mags(self, photometry, force=False, exclude=[]):
+    def norm_to_mags(self, photometry, force=False, exclude=[], include=[]):
         """
         Normalize the spectrum to the given bandpasses
-    
+
         Parameters
         ----------
         photometry: astropy.table.QTable
             A table of the photometry
         exclude: sequence
-            A list of bands to exclude from normalization
-    
+            A list of bands to exclude from the normalization
+        include: sequence
+            A list of bands to include in the normalization
+
         Returns
         -------
         pysynphot.spectrum.ArraySpectralElement
             The normalized spectrum object
         """
+        # Default norm
         norm = 1
-        if len(photometry)==0:
+
+        # Compile list of photometry to include
+        keep = []
+        for band in photometry['band']:
+
+            # Keep only explicitly included bands...
+            if include:
+                if band in include:
+                    keep.append(band)
+
+            # ...or just keep non excluded bands
+            else:
+                if band not in exclude:
+                    keep.append(band)
+
+        # Trim the table
+        idx = np.sum([photometry['band'] == k for k in keep], axis=0)
+        photometry = photometry[np.where(idx)]
+
+        if len(photometry) == 0:
             if self.verbose:
                 print('No photometry to normalize this spectrum.')
-            
+
         else:
             # Calculate all the synthetic magnitudes
             data = []
             for row in photometry:
-                if row['band'] not in exclude:
-                    try:
-                        bp = row['bandpass']
-                        syn_flx, syn_unc = self.synthetic_flux(bp, force=force)
-                        if syn_flx is not None:
-                            flx, unc = list(row['app_flux','app_flux_unc'])
-                            weight = 1#bp.FWHM#max(bp.wave)-min(bp.wave)
-                            data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
-                    except IOError:
-                        pass
-                
+
+                try:
+                    bp = row['bandpass']
+                    syn_flx, syn_unc = self.synthetic_flux(bp, force=force)
+                    if syn_flx is not None:
+                        flx, unc = list(row['app_flux','app_flux_unc'])
+                        weight = bp.FWHM
+                        data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
+                except IOError:
+                    pass
+
             # Check if there is overlap
-            if len(data)==0:
+            if len(data) == 0:
                 if self.verbose:
                     print('No photometry in the range {} to normalize this spectrum.'.format([self.min, self.max]))
-                
+
             # Calculate the weighted normalization
             else:
                 f1, e1, f2, e2, weights = np.array(data).T
                 numerator = np.nansum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2))
                 denominator = np.nansum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
                 norm = numerator/denominator
-        
+
         return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
-        
-        
+
+
     @property
     def plot(self, fig=None, components=False, **kwargs):
         """Plot the spectrum"""
@@ -638,22 +660,22 @@ class Blackbody(Spectrum):
         # Store parameters
         if not isinstance(Teff, (q.quantity.Quantity, tuple, list)):
             if not isinstance(Teff[0], q.quantity.Quantity):
-                raise TypeError("Teff must be an astropy quantity with temperature units.")
+                raise TypeError("Teff must be in astropy units, eg. 'K'")
 
         if isinstance(Teff, (tuple, list)):
             self.Teff, self.Teff_unc = Teff
         else:
-            self.Teff, self.Teff_unc = Teff, np.nan*Teff.unit
+            self.Teff, self.Teff_unc = Teff, None
 
         if isinstance(radius, (tuple, list)):
             self.radius, self.radius_unc = radius
         else:
-            self.radius, self.radius_unc = radius, np.nan*radius.unit
+            self.radius, self.radius_unc = radius, None
 
         if isinstance(distance, (tuple, list)):
-            self.distance, self.distance_unc = distance
+            self.distance, self.distance_unc, *_ = distance
         else:
-            self.distance, self.distance_unc = distance, np.nan*distance.unit
+            self.distance, self.distance_unc = distance, None
 
         # Evaluate
         I, I_unc = self.eval(wavelength)
@@ -717,6 +739,8 @@ class Blackbody(Spectrum):
 
         # Calculate sigma_I from derivative terms
         I_unc = np.sqrt(dIdT**2 + dIdr**2 + dIdd**2)
+        if isinstance(I_unc.value, float):
+            I_unc = None
 
         return I, I_unc
 

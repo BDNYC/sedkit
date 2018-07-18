@@ -958,27 +958,26 @@ class SED(object):
         weight = norm/data[2]
         if acc is None:
             acc = np.nanmax(weight)
-        bb = fit(init, data[0], data[1]/norm, weights=weight,
-                 epsilon=epsilon, acc=acc, maxiter=300)
-
-        # # Flux calibrate the blackbody
-        # fit_sed = getattr(self, self.bb_source).data
-        # fit_sed = [i[fit_sed[0]<10] for i in fit_sed]
-        # bb_wav = np.linspace(np.nanmin(fit_sed[0]), np.nanmax(fit_sed[0]), 500)*q.um
-        # bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
-        # bb_norm = np.trapz(fit_sed[1], x=fit_sed[0])/np.trapz(bb_flx.value, x=bb_wav.value)
-        # bb_wav = np.linspace(0.2, 30, 1000)*q.um
-        # bb_flx, bb_unc = u.blackbody(bb_wav, self.Teff_bb*q.K, 100*q.K)
+        bb_fit = fit(init, data[0], data[1]/norm, weights=weight,
+                     epsilon=epsilon, acc=acc, maxiter=300)
 
         # Store the results
         try:
-            self.Teff_bb = int(bb.temperature.value)
+            self.Teff_bb = int(bb_fit.temperature.value)
             self.bb_source = fit_to
-            self.blackbody = bb
             self.bb_exclude = exclude
+
+            # Make the blackbody spectrum
+            wav = np.linspace(0.2, 22., 200)*self.wave_units
+            bb = sp.Blackbody(wav, self.Teff_bb*q.K, radius=self.radius,
+                              distance=self.distance)
+
+            # Normalize to the SED
+            self.blackbody = bb
+
             if self.verbose:
                 print('\nBlackbody fit: {} K'.format(self.Teff_bb))
-        except:
+        except IOError:
             if self.verbose:
                 print('\nNo blackbody fit.')
 
@@ -1350,7 +1349,8 @@ class SED(object):
 
         # Create Rayleigh Jeans Tail
         rj_wave = np.arange(np.min([self.app_phot_SED.wave[-1], 12.]), 500, 0.1)*q.um
-        rj_flux, rj_unc = u.blackbody(rj_wave, 1500*q.K, 100*q.K)
+        bb = sp.Blackbody(rj_wave, (1500*q.K, 100*q.K))
+        rj_flux, rj_unc = bb.spectrum[1:]
 
         # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
         rj_flux = (rj_flux*self.app_phot_SED.flux[-1]/rj_flux[0])*self.flux_units
@@ -1616,7 +1616,7 @@ class SED(object):
 
         # Plot the blackbody fit
         if blackbody and self.blackbody:
-            bb_wav, bb_flx = self.blackbody
+            bb_wav, bb_flx = self.blackbody.data[:2]
             self.fig.line(bb_wav, bb_flx, line_color='red', legend='{} K'.format(self.Teff_bb))
 
         self.fig.legend.location = "top_right"
