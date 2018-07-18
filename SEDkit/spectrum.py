@@ -616,8 +616,9 @@ class Spectrum(ps.ArraySpectrum):
             The astropy units of the SED wavelength
         """
         # Make sure it's a quantity
-        if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
-            raise TypeError('wave_units must be astropy.units.quantity.Quantity')
+        good_units = q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit
+        if not isinstance(wave_units, good_units):
+            raise TypeError('wave_units must be in astropy units')
             
         # Make sure the values are in length units
         try:
@@ -641,7 +642,8 @@ class Blackbody(Spectrum):
     """A spectrum object specifically for blackbodies"""
     def __init__(self, wavelength, Teff, radius=None, distance=None):
         """
-        Given a wavelength array and temperature, returns an array of Planck function values in [erg s-1 cm-2 A-1]
+        Given a wavelength array and temperature, returns an array of Planck
+        function values in [erg s-1 cm-2 A-1]
     
         Parameters
         ----------
