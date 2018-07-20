@@ -407,45 +407,13 @@ class SED(object):
         survey: str (optional)
             The name of the survey
         """
-        # Read the data
-        if file.endswith('.fits'):
-
-            raw = fits.getdata(file, ext=ext)
-
-            if survey=='SDSS':
-                head = fits.getheader(file)
-                flux_units = 1E-17*q.erg/q.s/q.cm**2/q.AA
-                wave_units = q.AA
-                log_w = head['COEFF0']+head['COEFF1']*np.arange(len(raw.flux))
-                data = [10**log_w, raw.flux, raw.ivar]
-
-            # Check if it is a recarray
-            elif isinstance(raw, fits.fitsrec.FITS_rec):
-
-                # Check if it's an SDSS spectrum
-                raw = fits.getdata(file, ext=ext)
-                data = raw['WAVELENGTH'], raw['FLUX'], raw['ERROR']
-
-            # Otherwise just an array
-            else:
-                data = raw
-
-        elif file.endswith('.txt'):
-            data = np.genfromtxt(file, unpack=True)
-
-        else:
-            raise FileError('The file needs to be ASCII or FITS.')
-
-        # Apply units
-        wave = data[0]*wave_units
-        flux = data[1]*flux_units
-        if len(data)>2:
-            unc = data[2]*flux_units
-        else:
-            unc = None
+        # Denerate a FileSpectrum
+        spectrum = sp.FileSpectrum(file, wave_units=wave_units,
+                                   flux_units=flux_units,
+                                   ext=ext, survey=survey, **kwargs)
 
         # Add the data to the SED object
-        self.add_spectrum([wave, flux, unc], **kwargs)
+        self.add_spectrum(spectrum)
 
 
     @property
@@ -914,7 +882,7 @@ class SED(object):
                              **kwargs)
 
 
-    def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=3000, epsilon=None, acc=None, exclude=[]):
+    def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=4000, epsilon=0.0001, acc=0.05, trim=[], norm_to=[]):
         """
         Fit a blackbody curve to the data
 
@@ -936,8 +904,8 @@ class SED(object):
         data = u.scrub(getattr(self, fit_to).data)
 
         # Trim manually
-        if isinstance(exclude, (list, tuple)):
-            for mn, mx in exclude:
+        if isinstance(trim, (list, tuple)):
+            for mn, mx in trim:
                 try:
                     idx, = np.where((data[0]<mn)|(data[0]>mx))
                     if any(idx):
@@ -959,20 +927,19 @@ class SED(object):
         if acc is None:
             acc = np.nanmax(weight)
         bb_fit = fit(init, data[0], data[1]/norm, weights=weight,
-                     epsilon=epsilon, acc=acc, maxiter=300)
+                     epsilon=epsilon, acc=acc, maxiter=500)
 
         # Store the results
         try:
             self.Teff_bb = int(bb_fit.temperature.value)
             self.bb_source = fit_to
-            self.bb_exclude = exclude
+            self.bb_norm_to = norm_to
 
             # Make the blackbody spectrum
-            wav = np.linspace(0.2, 22., 200)*self.wave_units
+            wav = np.linspace(0.2, 22., 400)*self.wave_units
             bb = sp.Blackbody(wav, self.Teff_bb*q.K, radius=self.radius,
                               distance=self.distance)
-
-            # Normalize to the SED
+            bb = bb.norm_to_mags(self.photometry, include=norm_to)
             self.blackbody = bb
 
             if self.verbose:
@@ -1101,6 +1068,17 @@ class SED(object):
             A lookup dictionary to map database bandpass
             names to SEDkit required bandpass names,
             e.g. {'2MASS_J': '2MASS.J', 'WISE_W1': 'WISE.W1'}
+
+        Example
+        -------
+        from SEDkit import SED
+        from astrodbkit.astrodb import Database
+        db = Database('/Users/jfilippazzo/Documents/Modules/BDNYCdb/bdnyc_database.db')
+        s = SED()
+        s.from_database(db, source_id=710, photometry='*', spectra=[1639], parallax=49)
+        s.spectral_type = 'M9'
+        print(s.results)
+        s.plot()
         """
         # Check that astrodbkit is imported
         if not hasattr(db, 'query'):
@@ -1108,7 +1086,13 @@ class SED(object):
 
         # Get the metadata
         if 'source_id' in kwargs:
-            source = db.query("SELECT * FROM sources WHERE id=?", (kwargs['source_id'], ), fmt='dict', fetch='one')
+
+            if not isinstance(kwargs['source_id'], int):
+                raise TypeError("'source_id' must be an integer")
+
+            self.source_id = kwargs['source_id']
+            source = db.query("SELECT * FROM sources WHERE id=?",
+                              (self.source_id, ), fmt='dict', fetch='one')
 
             # Set the name
             self.name = source.get('designation', source.get('names', self.name))
@@ -1120,9 +1104,18 @@ class SED(object):
 
         # Get the photometry
         if 'photometry' in kwargs:
-            phot_ids = kwargs['photometry']
-            phot_q = "SELECT * FROM photometry WHERE id IN ({})".format(', '.join(['?']*len(phot_ids)))
-            phot = db.query(phot_q, phot_ids, fmt='dict')
+
+            if kwargs['photometry'] == '*':
+                phot_q = "SELECT * FROM photometry WHERE source_id={}".format(self.source_id)
+                phot = db.query(phot_q, fmt='dict')
+
+            elif isinstance(kwargs['photometry'], (list, tuple)):
+                phot_ids = tuple(kwargs['photometry'])
+                phot_q = "SELECT * FROM photometry WHERE id IN ({})".format(', '.join(['?']*len(phot_ids)))
+                phot = db.query(phot_q, phot_ids, fmt='dict')
+
+            else:
+                raise TypeError("'photometry' must be a list of integers or '*'")
 
             # Add the bands
             for row in phot:
@@ -1131,19 +1124,30 @@ class SED(object):
                 if row['band'] in rename_bands:
                     row['band'] = rename_bands.get(row['band'])
 
-                self.add_photometry(row['band'], row['magnitude'], row['magnitude_unc'])
+                self.add_photometry(row['band'], row['magnitude'],
+                                    row['magnitude_unc'])
 
         # Get the parallax
-        if 'parallax' in kwargs and isinstance(kwargs['parallax'], int):
-            plx = db.query("SELECT * FROM parallaxes WHERE id=?", (kwargs['parallax'], ), fmt='dict', fetch='one')
+        if 'parallax' in kwargs:
+
+            if not isinstance(kwargs['parallax'], int):
+                raise TypeError("'parallax' must be an integer")
+
+            plx = db.query("SELECT * FROM parallaxes WHERE id=?",
+                           (kwargs['parallax'], ), fmt='dict', fetch='one')
 
             # Add it to the object
             self.parallax = plx['parallax']*q.mas, plx['parallax_unc']*q.mas
 
         # Get the spectral type
-        if 'spectral_type' in kwargs and isinstance(kwargs['spectral_type'], int):
+        if 'spectral_type' in kwargs:
+
+            if not isinstance(kwargs['spectral_type'], int):
+                raise TypeError("'spectral_type' must be an integer")
+
             spt_id = kwargs['spectral_type']
-            spt = db.query("SELECT * FROM spectral_types WHERE id=?", (spt_id, ), fmt='dict', fetch='one')
+            spt = db.query("SELECT * FROM spectral_types WHERE id=?",
+                           (spt_id, ), fmt='dict', fetch='one')
 
             # Add it to the object
             spectral_type = spt.get('spectral_type')
@@ -1157,9 +1161,18 @@ class SED(object):
 
         # Get the spectra
         if 'spectra' in kwargs:
-            spec_ids = kwargs['spectra']
-            spec_q = "SELECT * FROM spectra WHERE id IN ({})".format(', '.join(['?']*len(spec_ids)))
-            spec = db.query(spec_q, spec_ids, fmt='dict')
+
+            if kwargs['spectra'] == '*':
+                spec_q = "SELECT * FROM spectra WHERE source_id={}".format(self.source_id)
+                spec = db.query(spec_q, fmt='dict')
+
+            elif isinstance(kwargs['spectra'], (list, tuple)):
+                spec_ids = tuple(kwargs['spectra'])
+                spec_q = "SELECT * FROM spectra WHERE id IN ({})".format(', '.join(['?']*len(spec_ids)))
+                spec = db.query(spec_q, spec_ids, fmt='dict')
+
+            else:
+                raise TypeError("'spectra' must be a list of integers or '*'")
 
             # Add the spectra
             for row in spec:
@@ -1167,7 +1180,10 @@ class SED(object):
                 # Make the Spectrum object
                 wav, flx, unc = row['spectrum'].data
                 wave_unit = u.str2Q(row['wavelength_units'])
-                flux_unit = u.str2Q(row['flux_units'])
+                if row['flux_units'].startswith('norm'):
+                    flux_unit = self.flux_units
+                else:
+                    flux_unit = u.str2Q(row['flux_units'])
 
                 # Add the spectrum to the object
                 self.add_spectrum([wav*wave_unit, flx*flux_unit, unc*flux_unit])
@@ -1534,6 +1550,9 @@ class SED(object):
         bokeh.models.figure
             The SED plot
         """
+        if not self.calculated:
+            self.make_sed()
+
         # Distinguish between apparent and absolute magnitude
         pre = 'app_' if app else 'abs_'
 

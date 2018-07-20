@@ -13,6 +13,7 @@ import itertools
 from . import synphot as syn
 from . import utilities as u
 import astropy.constants as ac
+from astropy.io import fits
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.palettes import Category10
 from pkg_resources import resource_filename
@@ -21,58 +22,6 @@ def color_gen():
     """Color generator for Bokeh plots"""
     yield from itertools.cycle(Category10[10])
 COLORS = color_gen()
-
-
-# def blackbody(lam, Teff, Teff_unc='', Flam=False, radius=1*ac.R_jup, dist=10*q.pc, plot=False):
-#     """
-#     Given a wavelength array and temperature, returns an array of Planck function values in [erg s-1 cm-2 A-1]
-#
-#     Parameters
-#     ----------
-#     lam: array-like
-#         The array of wavelength values to evaluate the Planck function
-#     Teff: astropy.unit.quantity.Quantity
-#         The effective temperature
-#     Teff_unc: astropy.unit.quantity.Quantity
-#         The effective temperature uncertainty
-#
-#     Returns
-#     -------
-#     np.array
-#         The array of intensities at the input wavelength values
-#     """
-#     # Check for radius and distance
-#     if isinstance(radius, q.quantity.Quantity) and isinstance(dist, q.quantity.Quantity):
-#         r_over_d =  (radius**2/dist**2).decompose()
-#     else:
-#         r_over_d = 1.
-#
-#     # Get constant
-#     const = np.pi*2*ac.h*ac.c**2*r_over_d/(lam**(4 if Flam else 5))
-#
-#     # Calculate intensity
-#     I = (const/(np.exp((ac.h*ac.c/(lam*ac.k_B*Teff)).decompose())-1)).to(q.erg/q.s/q.cm**2/(1 if Flam else q.AA))
-#
-#     # Calculate the uncertainty
-#     I_unc = ''
-#     try:
-#         ex = (1-np.exp(-1.*(ac.h*ac.c/(lam*ac.k_B*Teff)).decompose()))
-#         I_unc = 10*(Teff_unc*I/ac.h/ac.c*lam*ac.k_B/ex).to(q.erg/q.s/q.cm**2/(1 if Flam else q.AA))
-#     except IOError:
-#         pass
-#
-#     # Plot it
-#     if plot:
-#         plt.loglog(lam, I, label=Teff)
-#         try:
-#             plt.fill_between(lam.value, (I-I_unc).value, (I+I_unc).value, alpha=0.1)
-#         except IOError:
-#             pass
-#
-#         plt.legend(loc=0, frameon=False)
-#         plt.yscale('log', nonposy='clip')
-#
-#     return I, I_unc
 
 
 class Spectrum(ps.ArraySpectrum):
@@ -377,9 +326,9 @@ class Spectrum(ps.ArraySpectrum):
         ----------
         photometry: astropy.table.QTable
             A table of the photometry
-        exclude: sequence
+        exclude: sequence (optional)
             A list of bands to exclude from the normalization
-        include: sequence
+        include: sequence (optional)
             A list of bands to include in the normalization
 
         Returns
@@ -442,8 +391,51 @@ class Spectrum(ps.ArraySpectrum):
         return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
 
 
-    @property
-    def plot(self, fig=None, components=False, **kwargs):
+    def norm_to_spec(self, spectrum, exclude=[], include=[]):
+        """Normalize the spectrum to another spectrum
+        
+        Parameters
+        ----------
+        spectrum: SEDkit.spectrum.Spectrum
+            The spectrum to normalize to
+        exclude: sequence (optional)
+            A list of wavelength ranges to exclude from the normalization
+        include: sequence (optional)
+            A list of wavelength ranges to include in the normalization
+
+        Returns
+        -------
+        SEDkit.spectrum.Spectrum
+          The normalized spectrum
+        """
+        spec = self.spectrum
+        
+        # Make into the same units
+        spectrum.wave_units = self.wave_units
+        spectrum.flux_units = self.flux_units
+        temp = spectrum.spectrum
+        
+        # Find wavelength range of overlap for array masking
+        spec_mask = np.logical_and(spec[0] > temp[0][0], spec[0] < temp[0][-1])
+        temp_mask = np.logical_and(temp[0] > spec[0][0], temp[0] < spec[0][-1])
+        spectrum = [i[spec_mask] for i in spec]
+        temp = [i[temp_mask] for i in temp]
+
+        # Also mask arrays in wavelength ranges specified in *exclude*
+        for r in exclude:
+            spec_mask = np.logical_and(spec[0] > r[0], spec[0] < r[-1])
+            temp_mask = np.logical_and(temp[0] > r[0], temp[0] < r[-1])
+            spec = [i[~spec_mask] for i in spec]
+            temp = [i[~temp_mask] for i in temp]
+
+        # Normalize the spectrum to the temp based on equal integrated flux inincluded wavelength ranges
+        norm = np.trapz(temp[1], x=temp[0]) / np.trapz(spec[1], x=spec[0])
+
+        return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
+
+
+    # @property
+    def plot(self, fig=None, components=False, draw=False, **kwargs):
         """Plot the spectrum"""
         # Make the figure
         if fig is None:
@@ -465,7 +457,10 @@ class Spectrum(ps.ArraySpectrum):
             for spec in self.components:
                 fig.line(spec.wave, spec.flux, color=next(COLORS))
             
-        return fig
+        if draw:
+            show(fig)
+        else:
+            return fig
         
         
     def renormalize(self, mag, bandpass, system='vegamag', force=False, no_spec=False):
@@ -506,8 +501,33 @@ class Spectrum(ps.ArraySpectrum):
         data = [self.wave, self.flux*norm, self.unc*norm]
     
         return Spectrum(*[i*Q for i,Q in zip(data, self.units)])
-    
-    
+
+
+    def smooth(self, beta, window=11):
+        """
+        Smooths the spectrum using a Kaiser-Bessel smoothing window of
+        narrowness *beta* (~1 => very smooth, ~100 => not smooth)
+        
+        Parameters
+        ----------
+        beta: float, int
+            The narrowness of the window
+        window: int
+            The length of the window
+        
+        Returns
+        -------
+        SEDkit.spectrum.Spectrum
+            The smoothed spectrum
+        """
+        s = np.r_[self.flux[window - 1:0:-1], self.flux, self.flux[-1:-window:-1]]
+        w = np.kaiser(window, beta)
+        y = np.convolve(w / w.sum(), s, mode='valid')
+        smoothed = y[5:len(y) - 5]
+
+        return Spectrum(self.spectrum[0], smoothed*self.flux_units, self.spectrum[2])
+
+
     @property
     def spectrum(self):
         """Store the spectrum with units
@@ -745,6 +765,64 @@ class Blackbody(Spectrum):
             I_unc = None
 
         return I, I_unc
+
+
+class FileSpectrum(Spectrum):
+    def __init__(self, file, wave_units=None, flux_units=None, ext=0,
+                 survey=None, **kwargs):
+        """Create a spectrum from an ASCII or FITS file
+
+        Parameters
+        ----------
+        file: str
+            The path to the ascii file
+        wave_units: astropy.units.quantity.Quantity
+            The wavelength units
+        flux_units: astropy.units.quantity.Quantity
+            The flux units
+        ext: int, str
+            The FITS extension name or index
+        survey: str (optional)
+            The name of the survey
+        """
+        # Read the data
+        if file.endswith('.fits'):
+
+            raw = fits.getdata(file, ext=ext)
+
+            if survey=='SDSS':
+                head = fits.getheader(file)
+                flux_units = 1E-17*q.erg/q.s/q.cm**2/q.AA
+                wave_units = q.AA
+                log_w = head['COEFF0']+head['COEFF1']*np.arange(len(raw.flux))
+                data = [10**log_w, raw.flux, raw.ivar]
+
+            # Check if it is a recarray
+            elif isinstance(raw, fits.fitsrec.FITS_rec):
+
+                # Check if it's an SDSS spectrum
+                raw = fits.getdata(file, ext=ext)
+                data = raw['WAVELENGTH'], raw['FLUX'], raw['ERROR']
+
+            # Otherwise just an array
+            else:
+                data = raw
+
+        elif file.endswith('.txt'):
+            data = np.genfromtxt(file, unpack=True)
+
+        else:
+            raise FileError('The file needs to be ASCII or FITS.')
+
+        # Apply units
+        wave = data[0]*wave_units
+        flux = data[1]*flux_units
+        if len(data)>2:
+            unc = data[2]*flux_units
+        else:
+            unc = None
+            
+        super().__init__(wave, flux, unc, **kwargs)
 
 
 class Vega(Spectrum):
