@@ -27,7 +27,7 @@ COLORS = color_gen()
 class Spectrum(ps.ArraySpectrum):
     """A spectrum object to add uncertainty handling and spectrum stitching to ps.ArraySpectrum
     """
-    def __init__(self, wave, flux, unc=None, snr=10, snr_trim=5, trim=[], name=None, verbose=False):
+    def __init__(self, wave, flux, unc=None, snr=10, snr_trim=5, trim=None, name=None, verbose=False):
         """Store the spectrum and units separately
         
         Parameters
@@ -87,22 +87,6 @@ class Spectrum(ps.ArraySpectrum):
         
         # Remove nans, negatives, zeros, and infs
         wave, flux, unc = u.scrub([wave, flux, unc])
-        
-        # Trim spectrum edges by SNR value
-        if isinstance(snr_trim, (float, int)):
-            idx, = np.where(flux/unc>=snr_trim)
-            if any(idx):
-                wave, flux, unc = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in [wave, flux, unc]]
-        
-        # Trim manually
-        if isinstance(trim, (list,tuple)):
-            for mn,mx in trim:
-                try:
-                    idx, = np.where((wave<mn)|(wave>mx))
-                    if any(idx):
-                        wave, flux, unc = [i[idx] for i in [wave, flux, unc]]
-                except TypeError:
-                    print('Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]')
             
         # Strip and store units
         self._wave_units = q.AA
@@ -126,6 +110,45 @@ class Spectrum(ps.ArraySpectrum):
         # Convert back to input units
         self.wave_units = wave_units
         
+        # Trim spectrum edges by SNR value
+        if isinstance(snr_trim, (float, int)):
+            idx, = np.where(flux/unc>=snr_trim)
+            if any(idx):
+                wave, flux, unc = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in [wave, flux, unc]]
+        
+        # Trim manually
+        if trim is not None:
+            self.trim(trim)
+            
+    def trim(self, ranges):
+        """Trim the spectrum in the given wavelength ranges
+        
+        Parameters
+        ----------
+        ranges: sequence
+            The (min_wave, max_wave) ranges to trim from the spectrum
+        """
+        if isinstance(ranges, (list,tuple)):
+            for mn,mx in ranges:
+                try:
+                    idx, = np.where((self.spectrum[0] < mn) | 
+                                    (self.spectrum[0] > mx))
+                    
+                    if len(idx) > 0:
+                        wave, flux, unc = [i[idx] for i in self.spectrum]
+                        
+                        # Update the object
+                        spec = Spectrum(wave, flux, unc)
+                        self.__dict__ = spec.__dict__
+                        del spec
+                
+                except TypeError:
+                    print("""Please provide a list of (lower,upper) bounds\
+                             with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
+        
+        else:
+            raise TypeError("""Please provide a list of (lower,upper) bounds\
+                             with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
         
     def __add__(self, spec2):
         """Add the spectra of this and another Spectrum object
@@ -444,7 +467,7 @@ class Spectrum(ps.ArraySpectrum):
             fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
         
         # Plot the spectrum
-        c = next(COLORS)
+        c = kwargs.get('color', next(COLORS))
         fig.line(self.wave, self.flux, color=c)
         
         # Plot the uncertainties
@@ -660,7 +683,7 @@ class Spectrum(ps.ArraySpectrum):
 
 class Blackbody(Spectrum):
     """A spectrum object specifically for blackbodies"""
-    def __init__(self, wavelength, Teff, radius=None, distance=None):
+    def __init__(self, wavelength, Teff, radius=None, distance=None, **kwargs):
         """
         Given a wavelength array and temperature, returns an array of Planck
         function values in [erg s-1 cm-2 A-1]
@@ -703,7 +726,7 @@ class Blackbody(Spectrum):
         I, I_unc = self.eval(wavelength)
 
         # Inherit from Spectrum
-        super().__init__(wavelength, I, I_unc)
+        super().__init__(wavelength, I, I_unc, **kwargs)
 
         self.name = '{} Blackbody'.format(Teff)
 
@@ -827,7 +850,8 @@ class FileSpectrum(Spectrum):
 
 class Vega(Spectrum):
     """A Spectrum object of Vega"""
-    def __init__(self, wave_units=q.AA, flux_units=q.erg/q.s/q.cm**2/q.AA):
+    def __init__(self, wave_units=q.AA, flux_units=q.erg/q.s/q.cm**2/q.AA,
+                 **kwargs):
         """Initialize the Spectrum object
         
         Parameters
@@ -838,7 +862,8 @@ class Vega(Spectrum):
             The desired flux units
         """
         # Get the data and apply units
-        wave, flux = np.genfromtxt(resource_filename('SEDkit', 'data/STScI_Vega.txt'), unpack=True)
+        vega_file = resource_filename('SEDkit', 'data/STScI_Vega.txt')
+        wave, flux = np.genfromtxt(vega_file, unpack=True)
         wave *= q.AA
         flux *= q.erg/q.s/q.cm**2/q.AA
 
@@ -847,7 +872,7 @@ class Vega(Spectrum):
         flux = flux.to(flux_units)
 
         # Make the Spectrum object
-        super().__init__(wave, flux)
+        super().__init__(wave, flux, **kwargs)
 
         self.name = 'Vega'
         

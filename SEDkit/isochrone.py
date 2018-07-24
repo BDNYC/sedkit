@@ -134,7 +134,7 @@ def DMEstar(ages, xparam='Lbol', yparam='radius', jupiter=False):
     return D
 
 
-def isochrone_interp(xval, age, xparam='Lbol', yparam='radius',
+def isochrone_interp(xval, age, xparam='Lbol', yparam='radius', jupiter=False,
                      ages=[0.01, 0.03, 0.05, 0.1, 0.2, 0.5, 1, 10],
                      xlabel=None, ylabel=None, xlims=None, ylims=None,
                      evo_model='hybrid_solar_age', title=None, plot=False):
@@ -177,7 +177,7 @@ def isochrone_interp(xval, age, xparam='Lbol', yparam='radius',
     min_age = (age[0]-age[1]).to(q.Gyr).value
     max_age = (age[0]+age[1]).to(q.Gyr).value
 
-    if max_age>10 or min_age<0.01:
+    if max_age > 10 or min_age < 0.01:
         raise ValueError('Please provide an age range within 0.01-10 Gyr')
 
     # Get xval floats
@@ -189,7 +189,8 @@ def isochrone_interp(xval, age, xparam='Lbol', yparam='radius',
         xval, xval_unc = xval
 
     # Grab and plot the desired isochrones
-    D, fig = isochrones(evo_model=evo_model, xparam=xparam, yparam=yparam, ages=ages, plot=plot)
+    D, fig = isochrones(evo_model=evo_model, xparam=xparam, yparam=yparam,
+                        ages=ages, jupiter=jupiter, plot=plot)
     Q = {d[0]: {'x': d[1], 'y': d[2]} for d in D}
 
     # Pull out isochrones which lie just above and below min_age and max_age
@@ -227,8 +228,18 @@ def isochrone_interp(xval, age, xparam='Lbol', yparam='radius',
     # Round the values
     val = round(np.mean([y_min, y_max]), 2)
     unc = round(abs(y_min - np.mean([y_min, y_max])), 2)
+        
+    # Set the units of the output
+    if yparam == 'radius':
+        units = q.Rjup if jupiter else q.Rsun
+    elif yparam == 'teff':
+        units = q.K
+    elif yparam == 'mass':
+        units = q.Mjup if jupiter else q.Msun
+    else:
+        units = 1.
 
-    return val, unc
+    return np.array([val, unc])*units
 
 
 def isochrones(evo_model='hybrid_solar_age', xparam='Lbol', yparam='radius',

@@ -71,7 +71,7 @@ class SED(object):
     fundamental paramaters of stars
 
     Attributes
-    ==========
+     ==  ==  ==  ==  == 
     Lbol: astropy.units.quantity.Quantity
         The bolometric luminosity [erg/s]
     Lbol_sun: astropy.units.quantity.Quantity
@@ -167,6 +167,7 @@ class SED(object):
 
         # Keep track of the calculation status
         self.calculated = False
+        self.isochrone_radius = False
 
         # Set the default wavelength and flux units
         self._wave_units = q.um
@@ -255,7 +256,7 @@ class SED(object):
             raise TypeError("Magnitude must be a float, NaN, or None.")
 
         # Make NaN if 0
-        if isinstance(mag_unc, float) and mag_unc==0:
+        if isinstance(mag_unc, float) and mag_unc == 0:
             mag_unc = np.nan
 
         # Get the bandpass
@@ -446,6 +447,21 @@ class SED(object):
 
         # Set SED as uncalculated
         self.calculated = False
+        
+        
+    def _calculate_sed(self):
+        """Stitch the components together and flux calibrate if possible
+        """
+        # Construct full app_SED
+        self.app_SED = np.sum([self.wein, self.app_specphot_SED,
+                               self.rj]+self.stitched_spectra)
+
+        # Flux calibrate SEDs
+        if self.distance is not None:
+            self.abs_SED = self.app_SED.flux_calibrate(self.distance)
+
+        # Calculate Fundamental Params
+        self.fundamental_params()
 
 
     def calculate_synthetic_mags(self):
@@ -480,6 +496,13 @@ class SED(object):
         """Calculate the absolute magnitudes and flux values of all rows in 
         the photometry table
         """
+        # Reset absolute photometry
+        self._photometry['abs_flux'] = np.nan
+        self._photometry['abs_flux_unc'] = np.nan
+        self._photometry['abs_magnitude'] = np.nan
+        self._photometry['abs_magnitude_unc'] = np.nan
+        self.abs_phot_SED = None
+        
         if self.photometry is not None and len(self.photometry)>0:
 
             # Update the photometry
@@ -530,6 +553,9 @@ class SED(object):
     def _calibrate_spectra(self):
         """Create composite spectra and flux calibrate
         """
+        # Reset absolute spectra
+        self.abs_spec_SED = None
+        
         if self.spectra is not None and len(self.spectra)>0:
 
             # Update the spectra
@@ -588,24 +614,35 @@ class SED(object):
         distance: sequence
             The (distance, err) or (distance, lower_err, upper_err)
         """
-        # Make sure it's a sequence
-        if not isinstance(distance, (tuple, list, np.ndarray)) or len(distance) not in [2, 3]:
-            raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
+        if distance is None:
+            
+            self._distance = None
+            self._parallax = None
+            
+            if self.isochrone_radius:
+                self.radius = None
+                self.isochrone_radius = False
+            
+        else:
+            # Make sure it's a sequence
+            typs = (tuple, list, np.ndarray)
+            if not isinstance(distance, typs) or len(distance) not in [2, 3]:
+                raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
 
-        # Make sure the values are in time units
-        try:
-            _ = [i.to(q.pc) for i in distance]
-        except:
-            raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
+            # Make sure the values are in time units
+            try:
+                _ = [i.to(q.pc) for i in distance]
+            except:
+                raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
 
-        # Set the distance
-        self._distance = distance
+            # Set the distance
+            self._distance = distance
 
-        if self.verbose:
-            print('Setting distance to', self.distance)
+            if self.verbose:
+                print('Setting distance to', self.distance)
 
-        # Update the parallax
-        self._parallax = u.pi2pc(*self.distance, pc2pi=True)
+            # Update the parallax
+            self._parallax = u.pi2pc(*self.distance, pc2pi=True)
 
         # Try to calculate reddening
         self.get_reddening()
@@ -629,7 +666,7 @@ class SED(object):
             The bandpass name or index to drop
         """
         if isinstance(band, str) and band in self.photometry['band']:
-            band = self._photometry.remove_row(np.where(self._photometry['band']==band)[0][0])
+            band = self._photometry.remove_row(np.where(self._photometry['band'] == band)[0][0])
 
         if isinstance(band, int) and band<=len(self._photometry):
             self._photometry.remove_row(band)
@@ -887,7 +924,7 @@ class SED(object):
         Fit a blackbody curve to the data
 
         Parameters
-        ==========
+         ==  ==  ==  ==  == 
         fit_to: str
             The attribute name of the [W, F, E] to fit
         initial: int
@@ -939,7 +976,7 @@ class SED(object):
             wav = np.linspace(0.2, 22., 400)*self.wave_units
             bb = sp.Blackbody(wav, self.Teff_bb*q.K, radius=self.radius,
                               distance=self.distance)
-            bb = bb.norm_to_mags(self.photometry, include=norm_to)
+            bb = bb.norm_to_mags(self.photometry[-3:], include=norm_to)
             self.blackbody = bb
 
             if self.verbose:
@@ -1247,7 +1284,7 @@ class SED(object):
         """Calculate the apparent bolometric magnitude of the SED
 
         Parameters
-        ==========
+         ==  ==  ==  ==  == 
         L_sun: astropy.units.quantity.Quantity
             The bolometric luminosity of the Sun
         Mbol_sun: float
@@ -1343,12 +1380,38 @@ class SED(object):
         else:
             if self.verbose:
                 print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
-
-
+        
+        
+    def make_rj_tail(self, teff=3000*q.K):
+        """Generate a Rayleigh Jeans tail for the SED
+        
+        Parameters
+        ----------
+        teff: astropy.units.quantity.Quantity
+            The effective temperature of the source
+        """
+        # Make the blackbody from 2 to 1000um
+        rj_wave = np.linspace(2., 1000, 2000)*q.um
+        rj = sp.Blackbody(rj_wave, (teff, 100*q.K))
+        
+        # Convert to native units
+        rj.wave_units = self.wave_units
+        rj.flux_units = self.flux_units
+        
+        # Normalize to longest wavelength photometric point
+        rj = rj.norm_to_mags(self.photometry)
+        
+        # Trim so there is no data overlap
+        max_wave = max(self.app_specphot_SED.spectrum[0])
+        rj.trim([(0*q.um, max_wave)])
+        
+        self.rj = rj
+        
+        
     def make_sed(self):
         """Construct the SED"""
         # Make sure the is data
-        if len(self.spectra)==0 and len(self.photometry)==0:
+        if len(self.spectra) == 0 and len(self.photometry) == 0:
             raise ValueError('Cannot make the SED without spectra or photometry!')
 
         # Calculate flux and calibrate
@@ -1360,56 +1423,84 @@ class SED(object):
         # Get synthetic mags
         # self.calculate_synthetic_mags()
 
-        # Make a Wein tail that goes to (almost) zero flux at (almost) zero wavelength
-        self.wein = sp.Spectrum(np.array([0.00001])*self.wave_units, np.array([1E-30])*self.flux_units, np.array([1E-30])*self.flux_units)
-
-        # Create Rayleigh Jeans Tail
-        rj_wave = np.arange(np.min([self.app_phot_SED.wave[-1], 12.]), 500, 0.1)*q.um
-        bb = sp.Blackbody(rj_wave, (1500*q.K, 100*q.K))
-        rj_flux, rj_unc = bb.spectrum[1:]
-
-        # Normalize Rayleigh-Jeans tail to the longest wavelength photometric point
-        rj_flux = (rj_flux*self.app_phot_SED.flux[-1]/rj_flux[0])*self.flux_units
-        self.rj = sp.Spectrum(rj_wave, rj_flux, rj_unc)
-
         # Exclude photometric points with spectrum coverage
         if self.stitched_spectra is not None:
             covered = []
             for idx, i in enumerate(self.app_phot_SED.wave):
                 for N, spec in enumerate(self.stitched_spectra):
-                    if i<spec.wave[-1] and i>spec.wave[0]:
+                    if i < spec.wave[-1] and i > spec.wave[0]:
                         covered.append(idx)
             WP, FP, EP = [[i for n, i in enumerate(A) if n not in covered]*Q for A, Q in zip(self.app_phot_SED.spectrum, self.units)]
 
-            if len(WP)==0:
+            if len(WP) == 0:
                 self.app_specphot_SED = None
             else:
                 self.app_specphot_SED = sp.Spectrum(WP, FP, EP)
         else:
             self.app_specphot_SED = self.app_phot_SED
-
-        # Construct full app_SED
-        self.app_SED = np.sum([self.wein, self.app_specphot_SED, self.rj]+self.stitched_spectra)
-
-        # Flux calibrate SEDs
-        if self.distance is not None:
-            self.abs_SED = self.app_SED.flux_calibrate(self.distance)
-
-        # Calculate Fundamental Params
-        self.fundamental_params()
+            
+        # Make Wein and Rayleigh Jeans tails
+        self.make_wein_tail()
+        self.make_rj_tail()
+        
+        # Run the calculation
+        self._calculate_sed()
+        
+        # If Teff and Lbol have been caluclated, recalculate with 
+        # better Blackbody
+        if self.Teff_evo is not None:
+            self.make_wein_tail(teff=self.Teff_evo[0])
+            self.make_rj_tail(teff=self.Teff_evo[0])
+            self._calculate_sed()
 
         # Set SED as calculated
         self.calculated = True
-
+        
+        
+    def make_wein_tail(self, teff=None, trim=None):
+        """Generate a Wein tail for the SED
+        
+        Parameters
+        ----------
+        teff: astropy.units.quantity.Quantity (optional)
+            The effective temperature of the source
+        """
+        if teff is not None:
+            
+            # Make the blackbody from ~0 to 1um
+            wein_wave = np.linspace(0.0001, 1., 500)*q.um
+            wein = sp.Blackbody(wein_wave, (teff, 100*q.K))
+            
+            # Convert to native units
+            wein.wave_units = self.wave_units
+            wein.flux_units = self.flux_units
+            
+            # Normalize to shortest wavelength photometric point
+            wein = wein.norm_to_mags(self.photometry)
+            
+        else:
+            
+            # Otherwise just use ~0 flux at ~0 wavelength
+            wein = sp.Spectrum(np.array([0.0001])*self.wave_units,
+                               np.array([1E-30])*self.flux_units,
+                               np.array([1E-30])*self.flux_units)
+        
+        # Trim so there is no data overlap
+        min_wave = min(self.app_specphot_SED.spectrum[0])
+        wein.trim([(min_wave, 1E30*q.um)])
+        
+        self.wein = wein
+        
 
     def mass_from_age(self, mass_units=q.Msun):
         """Estimate the surface gravity from model isochrones given an age and Lbol
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            mass = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='mass', evo_model=self.evo_model)
+            mass = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='mass',
+                                        evo_model=self.evo_model)
 
-            self.mass = (mass[0]*q.Msun).to(mass_units), (mass[1]*q.Msun).to(mass_units)
+            self.mass = mass[0].to(mass_units), mass[1].to(mass_units)
 
         else:
             if self.verbose:
@@ -1480,21 +1571,35 @@ class SED(object):
         parallax: sequence
             The (parallax, err) or (parallax, lower_err, upper_err)
         """
-        # Make sure it's a sequence
-        if not isinstance(parallax, (tuple, list, np.ndarray)) or len(parallax) not in [2, 3]:
-            raise TypeError('parallax must be a sequence of (value, error) or (value, lower_error, upper_error).')
+        if parallax is None:
+            
+            self._parallax = None
+            self._distance = None
+            
+            if self.isochrone_radius:
+                self.radius = None
+                self.isochrone_radius = False
+            
+        else:
 
-        # Make sure the values are in time units
-        try:
-            _ = [i.to(q.mas) for i in parallax]
-        except:
-            raise TypeError("parallax values must be parallax units of astropy.units.quantity.Quantity, e.g. 'mas'")
+            # Make sure it's a sequence
+            typs = (tuple, list, np.ndarray)
+            if not isinstance(parallax, typs) or len(parallax) not in [2, 3]:
+                raise TypeError("""'parallax' must be a sequence of (value, error) \
+                                   or (value, lower_error, upper_error).""")
 
-        # Set the parallax
-        self._parallax = parallax
+            # Make sure the values are in time units
+            try:
+                _ = [i.to(q.mas) for i in parallax]
+            except:
+                raise TypeError("""'parallax' values must be parallax units of \
+                                   astropy.units.quantity.Quantity, e.g. 'mas'""")
 
-        # Update the distance
-        self._distance = u.pi2pc(*self.parallax)
+            # Set the parallax
+            self._parallax = parallax
+
+            # Update the distance
+            self._distance = u.pi2pc(*self.parallax)
 
         # Try to calculate reddening
         self.get_reddening()
@@ -1546,7 +1651,7 @@ class SED(object):
             The color for the plot points and lines
 
         Returns
-        =======
+         ==  ==  == =
         bokeh.models.figure
             The SED plot
         """
@@ -1559,33 +1664,43 @@ class SED(object):
         # Calculate reasonable axis limits
         full_SED = getattr(self, pre+'SED')
         spec_SED = getattr(self, pre+'spec_SED')
-        phot_SED = np.array([np.array([np.nanmean(self.photometry.loc[b][col].value) for b in list(set(self.photometry['band']))]) for col in ['eff', pre+'flux', pre+'flux_unc']])
+        phot_cols = ['eff', pre+'flux', pre+'flux_unc']
+        phot_SED = np.array([np.array([np.nanmean(self.photometry.loc[b][col].value) for b in list(set(self.photometry['band']))]) for col in phot_cols])
 
         # Check for min and max phot data
         try:
-            mn_xp, mx_xp, mn_yp, mx_yp = np.nanmin(phot_SED[0]), np.nanmax(phot_SED[0]), np.nanmin(phot_SED[1]), np.nanmax(phot_SED[1])
+            mn_xp = np.nanmin(phot_SED[0])
+            mx_xp = np.nanmax(phot_SED[0])
+            mn_yp = np.nanmin(phot_SED[1])
+            mx_yp = np.nanmax(phot_SED[1])
         except:
             mn_xp, mx_xp, mn_yp, mx_yp = 0.3, 18, 0, 1
 
         # Check for min and max spec data
         try:
-            mn_xs, mx_xs = np.nanmin(spec_SED.wave), np.nanmax(spec_SED.wave)
-            mn_ys, mx_ys = np.nanmin(spec_SED.flux[spec_SED.flux>0]), np.nanmax(spec_SED.flux[spec_SED.flux>0])
+            mn_xs = np.nanmin(spec_SED.wave)
+            mx_xs = np.nanmax(spec_SED.wave)
+            mn_ys = np.nanmin(spec_SED.flux[spec_SED.flux>0])
+            mx_ys = np.nanmax(spec_SED.flux[spec_SED.flux>0])
         except:
             mn_xs, mx_xs, mn_ys, mx_ys = 0.3, 18, 999, -999
 
-        mn_x, mx_x, mn_y, mx_y = np.nanmin([mn_xp, mn_xs]), np.nanmax([mx_xp, mx_xs]), np.nanmin([mn_yp, mn_ys]), np.nanmax([mx_yp, mx_ys])
+        mn_x = np.nanmin([mn_xp, mn_xs])
+        mx_x = np.nanmax([mx_xp, mx_xs])
+        mn_y = np.nanmin([mn_yp, mn_ys])
+        mx_y = np.nanmax([mx_yp, mx_ys])
 
         # Make the plot
         if hasattr(fig, 'legend'):
             self.fig = fig
             
         else:
-            TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
+            TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'wheel_zoom', 'save']
+            xlab = 'Wavelength [{}]'.format(self.wave_units)
+            ylab = 'Flux Density [{}]'.format(str(self.flux_units))
             self.fig = figure(plot_width=800, plot_height=500, title=self.name,
                               y_axis_type=scale[1], x_axis_type=scale[0],
-                              x_axis_label='Wavelength [{}]'.format(self.wave_units),
-                              y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
+                              x_axis_label=xlab, y_axis_label=ylab,
                               tools=TOOLS)
 
         # Set the color
@@ -1631,12 +1746,14 @@ class SED(object):
 
         # Plot the SED with linear interpolation completion
         if integral:
-            self.fig.line(full_SED.wave, full_SED.flux, line_color='black', alpha=0.3, legend='Integral Surface')
+            self.fig.line(full_SED.wave, full_SED.flux, line_color='black',
+                          alpha=0.3, legend=str(self.Teff[0]))
 
         # Plot the blackbody fit
         if blackbody and self.blackbody:
             bb_wav, bb_flx = self.blackbody.data[:2]
-            self.fig.line(bb_wav, bb_flx, line_color='red', legend='{} K'.format(self.Teff_bb))
+            self.fig.line(bb_wav, bb_flx, line_color='red',
+                          legend='{} K'.format(self.Teff_bb))
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
@@ -1705,7 +1822,9 @@ class SED(object):
 
             radius = iso.isochrone_interp(self.Lbol_sun, self.age, evo_model=self.evo_model)
 
-            self.radius = (radius[0]*q.Rsun).to(radius_units), (radius[1]*q.Rsun).to(radius_units)
+            self.radius = radius[0].to(radius_units), radius[1].to(radius_units)
+            
+            self.isochrone_radius = True
 
         else:
             if self.verbose:
@@ -1737,7 +1856,7 @@ class SED(object):
                 unit = val.unit if hasattr(val, 'unit') else '--'
                 val = val.value if hasattr(val, 'unit') else val
                 unc = unc.value if hasattr(unc, 'unit') else unc
-                if val<1E-3 or val>1e5:
+                if val < 1E-3 or val > 1e5:
                     val = float('{:.2e}'.format(val))
                     unc = float('{:.2e}'.format(unc))
                 rows.append([param, val, unc, unit])
@@ -1764,7 +1883,7 @@ class SED(object):
         if not isinstance(sky_coords, (SkyCoord, tuple)):
             raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
 
-        if isinstance(sky_coords, tuple) and len(sky_coords)==2:
+        if isinstance(sky_coords, tuple) and len(sky_coords) == 2:
 
             if isinstance(sky_coords[0], str):
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.hour, q.degree), frame='icrs')
@@ -1853,6 +1972,7 @@ class SED(object):
         if self.age is not None and self.Lbol_sun is not None:
 
             teff = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='teff', evo_model=self.evo_model)
+            teff = np.array(teff).astype(int)
 
             self.Teff_evo = teff[0]*q.K, teff[1]*q.K
 
@@ -1893,9 +2013,9 @@ class SED(object):
         self._calibrate_photometry()
         self._calibrate_spectra()
 
-    # =========================================================================
-    # =========================================================================
-    # =========================================================================
+    #  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  == =
+    #  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  == =
+    #  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  == =
 
 
     # def get_syn_photometry(self, bands=[], plot=False):
@@ -1932,7 +2052,7 @@ def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_
     Hack to make errorbar plots in bokeh
 
     Parameters
-    ==========
+     ==  ==  ==  ==  == 
     x: sequence
         The x axis data
     y: sequence
