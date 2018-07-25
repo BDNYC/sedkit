@@ -9,19 +9,15 @@ import numpy as np
 import astropy.units as q
 import pysynphot as ps
 import copy
-import itertools
 from . import synphot as syn
 from . import utilities as u
 import astropy.constants as ac
 from astropy.io import fits
 from bokeh.plotting import figure, output_file, show, save
-from bokeh.palettes import Category10
 from pkg_resources import resource_filename
 
-def color_gen():
-    """Color generator for Bokeh plots"""
-    yield from itertools.cycle(Category10[10])
-COLORS = color_gen()
+
+COLORS = u.color_gen('Category10')
 
 
 class Spectrum(ps.ArraySpectrum):
@@ -54,7 +50,7 @@ class Spectrum(ps.ArraySpectrum):
         self.verbose = verbose
         
         # Make sure the arrays are the same shape
-        if not wave.shape==flux.shape and ((unc is None) or not (unc.shape==flux.shape)):
+        if not wave.shape == flux.shape and ((unc is None) or not (unc.shape==flux.shape)):
             raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
             
         # Check wave units and convert to Angstroms if necessary to work with pysynphot
@@ -119,36 +115,6 @@ class Spectrum(ps.ArraySpectrum):
         # Trim manually
         if trim is not None:
             self.trim(trim)
-            
-    def trim(self, ranges):
-        """Trim the spectrum in the given wavelength ranges
-        
-        Parameters
-        ----------
-        ranges: sequence
-            The (min_wave, max_wave) ranges to trim from the spectrum
-        """
-        if isinstance(ranges, (list,tuple)):
-            for mn,mx in ranges:
-                try:
-                    idx, = np.where((self.spectrum[0] < mn) | 
-                                    (self.spectrum[0] > mx))
-                    
-                    if len(idx) > 0:
-                        wave, flux, unc = [i[idx] for i in self.spectrum]
-                        
-                        # Update the object
-                        spec = Spectrum(wave, flux, unc)
-                        self.__dict__ = spec.__dict__
-                        del spec
-                
-                except TypeError:
-                    print("""Please provide a list of (lower,upper) bounds\
-                             with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
-        
-        else:
-            raise TypeError("""Please provide a list of (lower,upper) bounds\
-                             with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
         
     def __add__(self, spec2):
         """Add the spectra of this and another Spectrum object
@@ -179,7 +145,7 @@ class Spectrum(ps.ArraySpectrum):
             
             # Determine if overlapping
             overlap = True
-            if s1[0][-1]>s1[0][0]>s2[0][-1] or s2[0][-1]>s2[0][0]>s1[0][-1]:
+            if s1[0][-1] > s1[0][0] > s2[0][-1] or s2[0][-1] > s2[0][0] > s1[0][-1]:
                 overlap = False
             
             # Concatenate and order two segments if no overlap
@@ -193,25 +159,25 @@ class Spectrum(ps.ArraySpectrum):
             else:
             
                 # Get the left segemnt
-                left = s1[:, s1[0]<=s2[0][0]]
+                left = s1[:, s1[0] <= s2[0][0]]
                 if not np.any(left):
-                    left = s2[:, s2[0]<=s1[0][0]]
+                    left = s2[:, s2[0] <= s1[0][0]]
                 
                 # Get the right segment
-                right = s1[:, s1[0]>=s2[0][-1]]
+                right = s1[:, s1[0] >= s2[0][-1]]
                 if not np.any(right):
-                    right = s2[:, s2[0]>=s1[0][-1]]
+                    right = s2[:, s2[0] >= s1[0][-1]]
                 
                 # Get the overlapping segements
-                o1 = s1[:, np.where((s1[0]<right[0][0])&(s1[0]>left[0][-1]))].squeeze()
-                o2 = s2[:, np.where((s2[0]<right[0][0])&(s2[0]>left[0][-1]))].squeeze()
+                o1 = s1[:, np.where((s1[0] < right[0][0]) & (s1[0] > left[0][-1]))].squeeze()
+                o2 = s2[:, np.where((s2[0] < right[0][0]) & (s2[0] > left[0][-1]))].squeeze()
                 
                 # Get the resolutions
                 r1 = s1.shape[1]/(max(s1[0])-min(s1[0]))
                 r2 = s2.shape[1]/(max(s2[0])-min(s2[0]))
                 
                 # Make higher resolution s1
-                if r1<r2:
+                if r1 < r2:
                     o1, o2 = o2, o1
                     
                 # Interpolate s2 to s1
@@ -224,7 +190,7 @@ class Spectrum(ps.ArraySpectrum):
                 overlap = np.array([o1[0], o_flux, o_unc])
                 
                 # Make sure it is 2D
-                if overlap.shape==(3,):
+                if overlap.shape == (3,):
                     overlap.shape = 3, 1
                     
                 # Concatenate the segments
@@ -244,13 +210,11 @@ class Spectrum(ps.ArraySpectrum):
         except IOError:
             raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
             
-            
     @property
     def data(self):
         """Store the spectrum without units
         """
         return np.array([self.wave, self.flux, self.unc])
-        
         
     def flux_calibrate(self, distance, target_distance=10*q.pc, flux_units=None):
         """Flux calibrate the spectrum from the given distance to the target distance
@@ -277,13 +241,11 @@ class Spectrum(ps.ArraySpectrum):
         unc = np.sqrt(term1**2 + term2**2)
         
         return Spectrum(self.spectrum[0], flux, unc)
-        
             
     @property
     def flux_units(self):
         """A property for flux_units"""
         return self._flux_units
-    
     
     @flux_units.setter
     def flux_units(self, flux_units):
@@ -312,7 +274,6 @@ class Spectrum(ps.ArraySpectrum):
         self._flux_units = flux_units
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         
-        
     def integral(self, units=q.erg/q.s/q.cm**2):
         """Include uncertainties in integrate() method
         
@@ -339,7 +300,6 @@ class Spectrum(ps.ArraySpectrum):
         unc = np.sqrt(np.sum((self.unc*np.gradient(self.wave)*m)**2))
     
         return val.to(units), unc.to(units)
-    
     
     def norm_to_mags(self, photometry, force=False, exclude=[], include=[]):
         """
@@ -413,7 +373,6 @@ class Spectrum(ps.ArraySpectrum):
 
         return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
 
-
     def norm_to_spec(self, spectrum, exclude=[], include=[]):
         """Normalize the spectrum to another spectrum
         
@@ -456,8 +415,6 @@ class Spectrum(ps.ArraySpectrum):
 
         return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
 
-
-    # @property
     def plot(self, fig=None, components=False, draw=False, **kwargs):
         """Plot the spectrum"""
         # Make the figure
@@ -476,7 +433,7 @@ class Spectrum(ps.ArraySpectrum):
         fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
         
         # Plot the components
-        if self.components is not None:
+        if components and self.components is not None:
             for spec in self.components:
                 fig.line(spec.wave, spec.flux, color=next(COLORS))
             
@@ -484,7 +441,6 @@ class Spectrum(ps.ArraySpectrum):
             show(fig)
         else:
             return fig
-        
         
     def renormalize(self, mag, bandpass, system='vegamag', force=False, no_spec=False):
         """Include uncertainties in renorm() method
@@ -525,7 +481,6 @@ class Spectrum(ps.ArraySpectrum):
     
         return Spectrum(*[i*Q for i,Q in zip(data, self.units)])
 
-
     def smooth(self, beta, window=11):
         """
         Smooths the spectrum using a Kaiser-Bessel smoothing window of
@@ -550,13 +505,11 @@ class Spectrum(ps.ArraySpectrum):
 
         return Spectrum(self.spectrum[0], smoothed*self.flux_units, self.spectrum[2])
 
-
     @property
     def spectrum(self):
         """Store the spectrum with units
         """
         return [i*Q for i,Q in zip(self.data, self.units)]
-
 
     def synthetic_flux(self, bandpass, force=False, plot=False):
         """
@@ -611,7 +564,6 @@ class Spectrum(ps.ArraySpectrum):
     
         return flx, unc
         
-        
     def synthetic_magnitude(self, bandpass, force=False):
         """
         Calculate the synthetic magnitude in the given bandpass
@@ -635,19 +587,46 @@ class Spectrum(ps.ArraySpectrum):
         mag = syn.flux2mag(flx, bandpass)
         
         return mag
+            
+    def trim(self, ranges):
+        """Trim the spectrum in the given wavelength ranges
         
+        Parameters
+        ----------
+        ranges: sequence
+            The (min_wave, max_wave) ranges to trim from the spectrum
+        """
+        if isinstance(ranges, (list,tuple)):
+            for mn,mx in ranges:
+                try:
+                    idx, = np.where((self.spectrum[0] < mn) | 
+                                    (self.spectrum[0] > mx))
+                    
+                    if len(idx) > 0:
+                        wave, flux, unc = [i[idx] for i in self.spectrum]
+                        
+                        # Update the object
+                        spec = Spectrum(wave, flux, unc)
+                        self.__dict__ = spec.__dict__
+                        del spec
+                
+                except TypeError:
+                    print("""Please provide a list of (lower,upper) bounds\
+                             with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
+        
+        else:
+            raise TypeError("""Please provide a list of (lower,upper) bounds\
+                             with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
         
     @property
     def unc(self):
         """A property for auncertainty"""
         return self._unctable
         
-        
     @property
     def wave_units(self):
         """A property for wave_units"""
         return self._wave_units
-    
     
     @wave_units.setter
     def wave_units(self, wave_units):

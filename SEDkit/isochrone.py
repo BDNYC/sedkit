@@ -17,6 +17,13 @@ from bokeh.models import Range1d
 from .spectrum import COLORS
 
 
+# A dictionary of all supported moving group ages
+NYMG_AGES = {'TW Hya': (14*q.Myr, 6*q.Myr), 'beta Pic': (17*q.Myr, 5*q.Myr),
+             'Tuc-Hor': (25*q.Myr, 15*q.Myr), 'Columba': (25*q.Myr, 15*q.Myr),
+             'Carina': (25*q.Myr, 15*q.Myr), 'Argus': (40*q.Myr, 10*q.Myr),
+             'AB Dor': (85*q.Myr, 35*q.Myr), 'Pleiades': (120*q.Myr, 10*q.Myr)}
+
+
 def avg_param(yparam, z, z_unc, min_age, max_age, spt, xparam='Lbol', plot=False):
     """
     Get the average parameter value across multiple evolutionary models

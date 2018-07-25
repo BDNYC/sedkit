@@ -7,14 +7,76 @@ Some utilities to accompany SEDkit
 """
 import re
 import numpy as np
+import itertools
 import astropy.units as q
 import astropy.constants as ac
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
 import scipy.optimize as opt
-from astropy.utils.data_info import ParentDtypeInfo
+import bokeh.palettes as bpal
+from astropy.modeling.blackbody import blackbody_lambda
+from astropy.modeling import models
 
+
+@models.custom_model
+def blackbody(wavelength, temperature=2000):
+    """
+    Generate a blackbody of the given temperature at the given wavelengths
+
+    Parameters
+    ----------
+    wavelength: array-like
+        The wavelength array [um]
+    temperature: float
+        The temperature of the star [K]
+
+    Returns
+    -------
+    astropy.quantity.Quantity
+        The blackbody curve
+    """
+    wavelength = q.Quantity(wavelength, "um")
+    temperature = q.Quantity(temperature, "K")
+    max_val = blackbody_lambda((ac.b_wien/temperature).to(q.um), temperature).value
+
+    return blackbody_lambda(wavelength, temperature).value/max_val
+
+
+def color_gen(colormap='viridis', key=None, n=10):
+    """Color generator for Bokeh plots
+    
+    Parameters
+    ----------
+    colormap: str, sequence
+        The name of the color map
+    
+    Returns
+    -------
+    generator
+        A generator for the color palette
+    """
+    if colormap in dir(bpal):
+        palette = getattr(bpal, colormap)
+        
+        if isinstance(palette, dict):
+            if key is None:
+                key = list(palette.keys())[0]
+            palette = palette[key]
+        
+        elif callable(palette):
+            palette = palette(n)
+        
+        else:
+            raise TypeError("pallette must be a bokeh palette name or a sequence of color hex values.")
+        
+    elif isinstance(colormap, (list, tuple)):
+        palette = colormap
+        
+    else:
+        raise TypeError("pallette must be a bokeh palette name or a sequence of color hex values.")
+        
+    yield from itertools.cycle(palette)
 
 def isnumber(s):
     """
@@ -97,6 +159,47 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
         
         print('Could not flux calibrate that input to distance {}.'.format(dist))
         return [np.nan, np.nan]
+        
+def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_kwargs={}, legend=''):
+    """
+    Hack to make errorbar plots in bokeh
+
+    Parameters
+    ----------
+    x: sequence
+        The x axis data
+    y: sequence
+        The y axis data
+    xerr: sequence (optional)
+        The x axis errors
+    yerr: sequence (optional)
+        The y axis errors
+    color: str
+        The marker and error bar color
+    point_kwargs: dict
+        kwargs for the point styling
+    error_kwargs: dict
+        kwargs for the error bar styling
+    legend: str
+        The text for the legend
+    """
+    fig.circle(x, y, color=color, legend=legend, **point_kwargs)
+
+    if xerr!='':
+        x_err_x = []
+        x_err_y = []
+        for px, py, err in zip(x, y, xerr):
+            x_err_x.append((px - err, px + err))
+            x_err_y.append((py, py))
+        fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
+
+    if yerr!='':
+        y_err_x = []
+        y_err_y = []
+        for px, py, err in zip(x, y, yerr):
+            y_err_x.append((px, px))
+            y_err_y.append((py - err, py + err))
+        fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
         
 
 def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):

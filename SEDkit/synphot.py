@@ -30,6 +30,23 @@ warnings.simplefilter('ignore')
 EXTINCTION = {'PS1.g':3.384, 'PS1.r':2.483, 'PS1.i':1.838, 'PS1.z':1.414, 'PS1.y':1.126,
               'SDSS.u':4.0, 'SDSS.g':3.384, 'SDSS.r':2.483, 'SDSS.i':1.838, 'SDSS.z':1.414,
               '2MASS.J':0.650, '2MASS.H':0.327, '2MASS.Ks':0.161}
+              
+# A dict of BDNYCdb band names to work with SEDkit
+PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
+                '2MASS_Ks': '2MASS.Ks', 'WISE_W1': 'WISE.W1',
+                'WISE_W2': 'WISE.W2', 'WISE_W3': 'WISE.W3',
+                'WISE_W4': 'WISE.W4', 'IRAC_ch1': 'IRAC.I1',
+                'IRAC_ch2': 'IRAC.I2', 'IRAC_ch3': 'IRAC.I3',
+                'IRAC_ch4': 'IRAC.I4', 'SDSS_u': 'SDSS.u',
+                'SDSS_g': 'SDSS.g', 'SDSS_r': 'SDSS.r',
+                'SDSS_i': 'SDSS.i', 'SDSS_z': 'SDSS.z',
+                'MKO_J': 'NSFCam.J', 'MKO_Y': 'Wircam.Y',
+                'MKO_H': 'NSFCam.H', 'MKO_K': 'NSFCam.K',
+                "MKO_L'": 'NSFCam.Lp', "MKO_M'": 'NSFCam.Mp',
+                'Johnson_V': 'Johnson.V', 'Cousins_R': 'Cousins.R',
+                'Cousins_I': 'Cousins.I', 'FourStar_J': 'FourStar.J',
+                'FourStar_J1': 'FourStar.J1', 'FourStar_J2': 'FourStar.J2',
+                'FourStar_J3': 'FourStar.J3', 'HST_F125W': 'WFC3_IR.F125W'}
 
 
 class Bandpass(ps.ArrayBandpass):

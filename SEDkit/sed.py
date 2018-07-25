@@ -12,23 +12,27 @@ import astropy.table as at
 import astropy.units as q
 import astropy.io.ascii as ii
 import astropy.constants as ac
-from astropy.modeling import models, fitting
-from astropy.modeling.blackbody import blackbody_lambda
-from astropy.constants import b_wien
-from astropy.io import fits
-from astropy.coordinates import SkyCoord
-from astroquery.vizier import Vizier
-from astroquery.simbad import Simbad
-from pkg_resources import resource_filename
+
 from . import utilities as u
 from . import synphot as s
 from . import spectrum as sp
 from . import isochrone as iso
 from . import relations as rel
+from . import modelgrid as mg
+
+from astropy.modeling import fitting
+from astropy.io import fits
+from astropy.coordinates import SkyCoord
+from astroquery.vizier import Vizier
+from astroquery.simbad import Simbad
+from pkg_resources import resource_filename
 from bokeh.io import export_png
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 from dustmaps.bayestar import BayestarWebQuery
+from .modelgrid import EVO_MODELS
+from .synphot import PHOT_ALIASES
+from .isochrone import NYMG_AGES
 try:
     import splat
     import splat.model as spmod
@@ -38,40 +42,14 @@ except ImportError:
 
 Vizier.columns = ["**", "+_r"]
 
-# A dictionary of all supported moving group ages
-AGES = {'TW Hya': (14*q.Myr, 6*q.Myr), 'beta Pic': (17*q.Myr, 5*q.Myr),
-        'Tuc-Hor': (25*q.Myr, 15*q.Myr), 'Columba': (25*q.Myr, 15*q.Myr),
-        'Carina': (25*q.Myr, 15*q.Myr), 'Argus': (40*q.Myr, 10*q.Myr),
-        'AB Dor': (85*q.Myr, 35*q.Myr), 'Pleiades': (120*q.Myr, 10*q.Myr)}
 
-# A list of all supported evolutionary models
-EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]
-
-# A dict of BDNYCdb band names to work with SEDkit
-PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
-                '2MASS_Ks': '2MASS.Ks', 'WISE_W1': 'WISE.W1',
-                'WISE_W2': 'WISE.W2', 'WISE_W3': 'WISE.W3',
-                'WISE_W4': 'WISE.W4', 'IRAC_ch1': 'IRAC.I1',
-                'IRAC_ch2': 'IRAC.I2', 'IRAC_ch3': 'IRAC.I3',
-                'IRAC_ch4': 'IRAC.I4', 'SDSS_u': 'SDSS.u',
-                'SDSS_g': 'SDSS.g', 'SDSS_r': 'SDSS.r',
-                'SDSS_i': 'SDSS.i', 'SDSS_z': 'SDSS.z',
-                'MKO_J': 'NSFCam.J', 'MKO_Y': 'Wircam.Y',
-                'MKO_H': 'NSFCam.H', 'MKO_K': 'NSFCam.K',
-                "MKO_L'": 'NSFCam.Lp', "MKO_M'": 'NSFCam.Mp',
-                'Johnson_V': 'Johnson.V', 'Cousins_R': 'Cousins.R',
-                'Cousins_I': 'Cousins.I', 'FourStar_J': 'FourStar.J',
-                'FourStar_J1': 'FourStar.J1', 'FourStar_J2': 'FourStar.J2',
-                'FourStar_J3': 'FourStar.J3', 'HST_F125W': 'WFC3_IR.F125W'}
-
-
-class SED(object):
+class SED:
     """
     A class to construct spectral energy distributions and calculate
     fundamental paramaters of stars
 
     Attributes
-     ==  ==  ==  ==  == 
+    ----------
     Lbol: astropy.units.quantity.Quantity
         The bolometric luminosity [erg/s]
     Lbol_sun: astropy.units.quantity.Quantity
@@ -408,7 +386,7 @@ class SED(object):
         survey: str (optional)
             The name of the survey
         """
-        # Denerate a FileSpectrum
+        # Generate a FileSpectrum
         spectrum = sp.FileSpectrum(file, wave_units=wave_units,
                                    flux_units=flux_units,
                                    ext=ext, survey=survey, **kwargs)
@@ -556,7 +534,7 @@ class SED(object):
         # Reset absolute spectra
         self.abs_spec_SED = None
         
-        if self.spectra is not None and len(self.spectra)>0:
+        if self.spectra is not None and len(self.spectra) > 0:
 
             # Update the spectra
             for spectrum in self.spectra:
@@ -567,7 +545,7 @@ class SED(object):
             self.stitched_spectra = []
             if len(self.spectra) > 1:
                 groups = self.group_spectra(self.spectra)
-                self.stitched_spectra = [np.sum(group) if len(group)>1\
+                self.stitched_spectra = [np.sum(group) if len(group) > 1\
                                          else group[0] for group in groups]
 
             # If one spectrum, no need to make composite
@@ -578,7 +556,7 @@ class SED(object):
             else:
                 self.stitched_spectra = []
                 print('No spectra available for SED.')
-
+            
             # Renormalize the stitched spectra
             self.stitched_spectra = [i.norm_to_mags(self.photometry)\
                                      for i in self.stitched_spectra]
@@ -924,7 +902,7 @@ class SED(object):
         Fit a blackbody curve to the data
 
         Parameters
-         ==  ==  ==  ==  == 
+        ----------
         fit_to: str
             The attribute name of the [W, F, E] to fit
         initial: int
@@ -955,7 +933,7 @@ class SED(object):
             teff = self.Teff[0].value
         else:
             teff = Teff_init
-        init = blackbody(temperature=teff)
+        init = u.blackbody(temperature=teff)
 
         # Fit the blackbody
         fit = fitting.LevMarLSQFitter()
@@ -1284,7 +1262,7 @@ class SED(object):
         """Calculate the apparent bolometric magnitude of the SED
 
         Parameters
-         ==  ==  ==  ==  == 
+        ----------
         L_sun: astropy.units.quantity.Quantity
             The bolometric luminosity of the Sun
         Mbol_sun: float
@@ -1398,12 +1376,16 @@ class SED(object):
         rj.wave_units = self.wave_units
         rj.flux_units = self.flux_units
         
-        # Normalize to longest wavelength photometric point
-        rj = rj.norm_to_mags(self.photometry)
+        # Normalize to longest wavelength data
+        if np.nanmax(self.app_spec_SED.wave) > np.nanmax(self.app_phot_SED.wave):
+            rj = rj.norm_to_spec(self.app_spec_SED, exclude=[(0.*q.um, 2.5*q.um)])
+        else:
+            rj = rj.norm_to_mags(self.photometry)
         
         # Trim so there is no data overlap
-        max_wave = max(self.app_specphot_SED.spectrum[0])
-        rj.trim([(0*q.um, max_wave)])
+        max_wave = np.nanmax([np.nanmax(self.app_spec_SED.wave),
+                              np.nanmax(self.app_phot_SED.wave)])
+        rj.trim([(0*q.um, max_wave*self.wave_units)])
         
         self.rj = rj
         
@@ -1431,7 +1413,7 @@ class SED(object):
                     if i < spec.wave[-1] and i > spec.wave[0]:
                         covered.append(idx)
             WP, FP, EP = [[i for n, i in enumerate(A) if n not in covered]*Q for A, Q in zip(self.app_phot_SED.spectrum, self.units)]
-
+            
             if len(WP) == 0:
                 self.app_specphot_SED = None
             else:
@@ -1475,8 +1457,11 @@ class SED(object):
             wein.wave_units = self.wave_units
             wein.flux_units = self.flux_units
             
-            # Normalize to shortest wavelength photometric point
-            wein = wein.norm_to_mags(self.photometry)
+            # Normalize to shortest wavelength data
+            if np.nanmin(self.app_spec_SED.wave) < np.nanmin(self.app_phot_SED.wave):
+                wein = wein.norm_to_spec(self.app_spec_SED, exclude=[(1.*q.um, 1E30*q.um)])
+            else:
+                wein = wein.norm_to_mags(self.photometry)
             
         else:
             
@@ -1486,8 +1471,9 @@ class SED(object):
                                np.array([1E-30])*self.flux_units)
         
         # Trim so there is no data overlap
-        min_wave = min(self.app_specphot_SED.spectrum[0])
-        wein.trim([(min_wave, 1E30*q.um)])
+        min_wave = np.nanmin([np.nanmin(self.app_spec_SED.wave),
+                              np.nanmin(self.app_phot_SED.wave)])
+        wein.trim([(min_wave*self.wave_units, 1E30*q.um)])
         
         self.wein = wein
         
@@ -1520,7 +1506,7 @@ class SED(object):
 
             self._membership = None
 
-        elif membership in AGES:
+        elif membership in NYMG_AGES:
 
             # Set the membership!
             self._membership = membership
@@ -1529,10 +1515,10 @@ class SED(object):
                 print('Setting membership to', self.membership)
 
             # Set the age
-            self.age = AGES.get(membership)
+            self.age = NYMG_AGES.get(membership)
 
         else:
-            print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(AGES.keys())))
+            print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(NYMG_AGES.keys())))
 
 
     @property
@@ -1740,7 +1726,7 @@ class SED(object):
         #     # Plot points with errors
         #     pts = np.array([(x, y, z) for x, y, z in np.array(self.syn_photometry['eff', pre+'flux', pre+'flux_unc']) if not np.isnan(z)]).T
         #     try:
-        #         errorbar(self.fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
+        #         u.errorbar(self.fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
         #     except:
         #         pass
 
@@ -2013,10 +1999,6 @@ class SED(object):
         self._calibrate_photometry()
         self._calibrate_spectra()
 
-    #  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  == =
-    #  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  == =
-    #  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  ==  == =
-
 
     # def get_syn_photometry(self, bands=[], plot=False):
     #     """
@@ -2044,70 +2026,25 @@ class SED(object):
     #
     #     except:
     #         print('No spectral coverage to calculate synthetic photometry.')
-
-
-
-def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_kwargs={}, legend=''):
+    
+class VegaSED(SED):
+    """A precomputed SED of Vega
     """
-    Hack to make errorbar plots in bokeh
+    def __init__(self, **kwargs):
+        """Initialize the SED of Vega"""
+        # Make the Spectrum object
+        super().__init__(**kwargs)
 
-    Parameters
-     ==  ==  ==  ==  == 
-    x: sequence
-        The x axis data
-    y: sequence
-        The y axis data
-    xerr: sequence (optional)
-        The x axis errors
-    yerr: sequence (optional)
-        The y axis errors
-    color: str
-        The marker and error bar color
-    point_kwargs: dict
-        kwargs for the point styling
-    error_kwargs: dict
-        kwargs for the error bar styling
-    legend: str
-        The text for the legend
-    """
-    fig.circle(x, y, color=color, legend=legend, **point_kwargs)
-
-    if xerr!='':
-        x_err_x = []
-        x_err_y = []
-        for px, py, err in zip(x, y, xerr):
-            x_err_x.append((px - err, px + err))
-            x_err_y.append((py, py))
-        fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
-
-    if yerr!='':
-        y_err_x = []
-        y_err_y = []
-        for px, py, err in zip(x, y, yerr):
-            y_err_x.append((px, px))
-            y_err_y.append((py - err, py + err))
-        fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
-
-
-@models.custom_model
-def blackbody(wavelength, temperature=2000):
-    """
-    Generate a blackbody of the given temperature at the given wavelengths
-
-    Parameters
-    ----------
-    wavelength: array-like
-        The wavelength array [um]
-    temperature: float
-        The temperature of the star [K]
-
-    Returns
-    -------
-    astropy.quantity.Quantity
-        The blackbody curve
-    """
-    wavelength = q.Quantity(wavelength, "um")
-    temperature = q.Quantity(temperature, "K")
-    max_val = blackbody_lambda((b_wien/temperature).to(q.um), temperature).value
-
-    return blackbody_lambda(wavelength, temperature).value/max_val
+        self.name = 'Vega'
+        self.find_SDSS()
+        self.find_2MASS()
+        self.find_WISE()
+        self.parallax = 130.23*q.mas, 0.36*q.mas
+        self.radius = 2.818*q.Rsun, 0.008*q.Rsun
+        self.spectral_type = 'A0'
+        
+        # Get the spectrum
+        self.add_spectrum(sp.Vega())
+        
+        # Calculate
+        self.make_sed()

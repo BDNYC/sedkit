@@ -11,16 +11,25 @@ import astropy.table as at
 import astropy.io.votable as vo
 from pkg_resources import resource_filename
 
+# A list of all supported evolutionary models
+EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]
+
 
 class ModelGrid:
     """A class to store a model grid"""
     def __init__(self, name):
-        """Initialize the model grid from a directory of VOT files"""
+        """Initialize the model grid from a directory of VOT files
+        
+        Parameters
+        ----------
+        name: str
+            The name of the model grid"""
         # Store the path and name
         self.name = name
 
         # Make the path
-        root = resource_filename('SEDkit', 'data/models/atmospheric/{}'.format(name))
+        model_path = 'data/models/atmospheric/{}'.format(name)
+        root = resource_filename('SEDkit', model_path)
         if not os.path.exists(root):
             raise IOError(root, ": No such directory")
 
@@ -63,7 +72,6 @@ class ModelGrid:
                 # Parse the SVO filter metadata
                 all_params = [str(p).split() for p in vot.params]
                 params = parameters or all_params
-                return all_params
                                     
                 meta = {}
                 for p in params:
@@ -73,7 +81,7 @@ class ModelGrid:
                     val = p[-1].split('"')[1]
 
                     # Do some formatting
-                    if p[2].split('"')[1]=='float' or p[3].split('"')[1]=='float':
+                    if p[2].split('"')[1] == 'float' or p[3].split('"')[1] == 'float':
                         val = float(val)
 
                     else:
@@ -92,7 +100,7 @@ class ModelGrid:
 
         # Make the index table
         index = at.Table(all_meta)
-        index.write(self.index_path, format='ascii.tab')
+        index.write(self.index_path, format='ascii.tab', overwrite=True)
 
     # def get_model(self, **kwargs):
     #     """Retrieve the model with the specified parameters"""
