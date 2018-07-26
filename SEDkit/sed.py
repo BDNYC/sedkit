@@ -22,7 +22,7 @@ from . import modelgrid as mg
 
 from astropy.modeling import fitting
 from astropy.io import fits
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import Angle, SkyCoord
 from astroquery.vizier import Vizier
 from astroquery.simbad import Simbad
 from pkg_resources import resource_filename
@@ -133,6 +133,8 @@ class SED:
         self._name = None
         self.all_names = []
         self.verbose = verbose
+        self._ra = None
+        self._dec = None
         self._age = None
         self._distance = None
         self._parallax = None
@@ -578,6 +580,32 @@ class SED:
 
         # Set SED as uncalculated
         self.calculated = False
+        
+    @property
+    def dec(self):
+        """A property for declination"""
+        return self._dec
+        
+    @dec.setter
+    def dec(self, dec, dec_unc=None, frame='icrs'):
+        """Set the declination of the source
+        
+        Padecmeters
+        ----------
+        dec: astropy.units.quantity.Quantity
+            The declination
+        dec_unc: astropy.units.quantity.Quantity (optional)
+            The uncertainty
+        frame: str
+            The reference frame
+        """
+        if not isinstance(dec, (q.quantity.Quantity, str)):
+            raise TypeError("Cannot interpret dec :", dec)
+            
+        # Make sure it's raimal degrees
+        self._dec = Angle(dec)
+        if self.ra is not None:
+            self.sky_coords = self.dec, self.ra
 
     @property
     def distance(self):
@@ -598,6 +626,8 @@ class SED:
             self._distance = None
             self._parallax = None
             
+            # Only clear radius if determined from isochrones,
+            # otherwise keep it if manually set
             if self.isochrone_radius:
                 self.radius = None
                 self.isochrone_radius = False
@@ -1352,6 +1382,7 @@ class SED:
         # Normalize to longest wavelength data
         if self.max_spec > self.max_phot:
             rj = rj.norm_to_spec(self.app_spec_SED, exclude=[(0.*q.um, 2.5*q.um)])
+            print(rj.data)
         else:
             rj = rj.norm_to_mags(self.photometry)
         
@@ -1713,6 +1744,32 @@ class SED:
             show(self.fig)
 
         return self.fig
+        
+    @property
+    def ra(self):
+        """A property for right ascension"""
+        return self._ra
+        
+    @ra.setter
+    def ra(self, ra, ra_unc=None, frame='icrs'):
+        """Set the right ascension of the source
+        
+        Parameters
+        ----------
+        ra: astropy.units.quantity.Quantity
+            The right ascension
+        ra_unc: astropy.units.quantity.Quantity (optional)
+            The uncertainty
+        frame: str
+            The reference frame
+        """
+        if not isinstance(ra, (q.quantity.Quantity, str)):
+            raise TypeError("Cannot interpret ra :", ra)
+            
+        # Make sure it's decimal degrees
+        self._ra = Angle(ra)
+        if self.dec is not None:
+            self.sky_coords = self.ra, self.dec
 
     @property
     def radius(self):
@@ -1819,8 +1876,14 @@ class SED:
         return self._sky_coords
 
     @sky_coords.setter
-    def sky_coords(self, sky_coords):
-        """A setter for sky coordinates"""
+    def sky_coords(self, sky_coords, frame='icrs'):
+        """A setter for sky coordinates
+        
+        Parameters
+        ----------
+        sky_coords: astropy.coordinates.SkyCoord, tuple
+            The sky coordinates to use
+        """
         # Make sure it's a sky coordinate
         if not isinstance(sky_coords, (SkyCoord, tuple)):
             raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
@@ -1828,13 +1891,17 @@ class SED:
         if isinstance(sky_coords, tuple) and len(sky_coords) == 2:
 
             if isinstance(sky_coords[0], str):
-                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.hour, q.degree), frame='icrs')
+                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
+                                      unit=(q.hour, q.degree), frame=frame)
 
             else:
-                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], frame='icrs')
+                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
+                                      frame=frame)
 
         # Set the sky coordinates
         self._sky_coords = sky_coords
+        self._ra = sky_coords.ra.degree
+        self._dec = sky_coords.dec.degree
 
         # Try to calculate reddening
         self.get_reddening()

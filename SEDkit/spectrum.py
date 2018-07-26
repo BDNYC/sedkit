@@ -92,7 +92,7 @@ class Spectrum(ps.ArraySpectrum):
         wave, flux, unc = [i.value for i in [wave,flux,unc]]
         
         # Make negatives and zeros into nans
-        idx, = np.where(flux[flux>0])
+        idx, = np.where(flux[flux > 0])
         wave, flux, unc = [i[idx] for i in [wave, flux, unc]]
         
         # Inherit from ArraySpectrum
@@ -109,7 +109,7 @@ class Spectrum(ps.ArraySpectrum):
         
         # Trim spectrum edges by SNR value
         if isinstance(snr_trim, (float, int)):
-            idx, = np.where(flux/unc>=snr_trim)
+            idx, = np.where(flux/unc >= snr_trim)
             if any(idx):
                 wave, flux, unc = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in [wave, flux, unc]]
         
