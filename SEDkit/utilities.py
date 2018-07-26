@@ -19,6 +19,99 @@ from astropy.modeling.blackbody import blackbody_lambda
 from astropy.modeling import models
 
 
+def filter_table(table, **kwargs):
+    """Retrieve the filtered rows
+    
+    Parameters
+    ----------
+    table: astropy.table.Table
+        The table to filter
+    param: str
+        The parameter to filter by, e.g. 'Teff'
+    value: str, float, int, sequence
+        The criteria to filter by, 
+        which can be single valued like 1400
+        or a range with operators [<,<=,>,>=],
+        e.g. (>1200,<1400), ()
+    
+    Returns
+    -------
+    astropy.table.Table
+        The filtered table
+    """
+    for param, value in kwargs.items():
+        
+        # Check it is a valid column
+        if param not in table.colnames:
+            raise KeyError("No column named {}".format(param))
+        
+        # Wildcard case
+        if isinstance(value, str) and '*' in value:
+        
+            # Strip souble quotes
+            value = value.replace("'", '').replace('"', '')
+        
+            # Split the wildcard
+            start, end = value.split('*')
+        
+            # Get indexes
+            data = np.array(table[param])
+            idx = np.where([np.logical_and(i.startswith(start), i.endswith(end)) for i in data])
+        
+            # Filter table
+            table = table[idx]
+        
+        else:
+        
+            # Make single value string into conditions
+            if isinstance(value, str):
+            
+                # Check for operator
+                if any([value.startswith(o) for o in ['<','>','=']]):
+                    value = [value]
+                
+                # Assume eqality if no operator
+                else:
+                    value = ['=='+value]
+            
+            # Turn numbers into strings
+            if isinstance(value, (int,float)):
+                value = ["=={}".format(value)]
+        
+            # Iterate through multiple conditions
+            for cond in value:
+            
+                # Equality
+                if cond.startswith('='):
+                    v = cond.replace('=','')
+                    table = table[table[param]==eval(v)]
+            
+                # Less than or equal
+                elif cond.startswith('<='):
+                    v = cond.replace('<=','')
+                    table = table[table[param]<=eval(v)]
+            
+                # Less than
+                elif cond.startswith('<'):
+                    v = cond.replace('<','')
+                    table = table[table[param]<eval(v)]
+        
+                # Greater than or equal
+                elif cond.startswith('>='):
+                    v = cond.replace('>=','')
+                    table = table[table[param]>=eval(v)]
+            
+                # Greater than
+                elif cond.startswith('>'):
+                    v = cond.replace('>','')
+                    table = table[table[param]>eval(v)]
+            
+                else:
+                    raise ValueError("'{}' operator not understood.".format(cond))
+    
+    return table
+
+
 @models.custom_model
 def blackbody(wavelength, temperature=2000):
     """

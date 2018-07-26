@@ -8,8 +8,11 @@ import glob
 import numpy as np
 import astropy.io.ascii as ii
 import astropy.table as at
+import astropy.units as q
 import astropy.io.votable as vo
 from pkg_resources import resource_filename
+from . import utilities as u
+from .spectrum import FileSpectrum
 
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]
@@ -17,13 +20,18 @@ EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resourc
 
 class ModelGrid:
     """A class to store a model grid"""
-    def __init__(self, name):
-        """Initialize the model grid from a directory of VOT files
+    def __init__(self, name, wave_units=None, flux_units=None):
+        """Initialize the model grid from a directory of VO table files
         
         Parameters
         ----------
         name: str
-            The name of the model grid"""
+            The name of the model grid
+        wave_units: astropy.units.quantity.Quantity
+            The wavelength units
+        flux_units: astropy.units.quantity.Quantity
+            The flux units
+        """
         # Store the path and name
         self.name = name
 
@@ -46,6 +54,8 @@ class ModelGrid:
         self.index = ii.read(self.index_path)
 
         # Store the parameters
+        self.wave_units = wave_units
+        self.flux_units = flux_units
         self.parameters = [col for col in self.index.colnames if col != 'filepath']
 
     def index_models(self, parameters=None):
@@ -71,24 +81,25 @@ class ModelGrid:
 
                 # Parse the SVO filter metadata
                 all_params = [str(p).split() for p in vot.params]
-                params = parameters or all_params
                                     
                 meta = {}
-                for p in params:
-                    
+                for p in all_params:
+
                     # Extract the key/value pairs
                     key = p[1].split('"')[1]
                     val = p[-1].split('"')[1]
+                    
+                    if (parameters and key in parameters) or not parameters:
 
-                    # Do some formatting
-                    if p[2].split('"')[1] == 'float' or p[3].split('"')[1] == 'float':
-                        val = float(val)
+                        # Do some formatting
+                        if p[2].split('"')[1] == 'float' or p[3].split('"')[1] == 'float':
+                            val = float(val)
 
-                    else:
-                        val = val.replace('b&apos;','').replace('&apos','').replace('&amp;','&').strip(';')
+                        else:
+                            val = val.replace('b&apos;','').replace('&apos','').replace('&amp;','&').strip(';')
 
-                    # Add it to the dictionary
-                    meta[key] = val
+                        # Add it to the dictionary
+                        meta[key] = val
 
                 # Add the filename
                 meta['filepath'] = file
@@ -101,9 +112,35 @@ class ModelGrid:
         # Make the index table
         index = at.Table(all_meta)
         index.write(self.index_path, format='ascii.tab', overwrite=True)
+        
+        # Update attributes
+        if parameters is None:
+            parameters = [col for col in index.colnames if col != 'filepath']
+        self.parameters = parameters
+        self.index = index
 
-    # def get_model(self, **kwargs):
-    #     """Retrieve the model with the specified parameters"""
+    def get_models(self, **kwargs):
+        """Retrieve all models with the specified parameters
+        
+        Returns
+        -------
+        list
+            A list of the spectra as SEDkit.spectrum.Spectrum objects
+        """
+        # Get the relevant table rows
+        table = u.filter_table(self.index, **kwargs) 
+        
+        # Collect the spectra
+        spectra = []
+        for row in table:
+            spec = FileSpectrum(row['filepath'], wave_units=self.wave_units,
+                                flux_units=self.flux_units)
+            for col in table.colnames:
+                setattr(spec, col, row[col])
+                
+            spectra.append(spec)
+        
+        return spectra
         
 
 class BTSettl(ModelGrid):
@@ -111,9 +148,6 @@ class BTSettl(ModelGrid):
     def __init__(self):
         """Loat the model object"""
         # Inherit from base class
-        super().__init__('btsettl')
-        
-        # Specifiy which parameters to use
-        self.index_models(['teff', 'logg',' meta', 'alpha'])
+        super().__init__('btsettl', q.AA, q.erg/q.s/q.cm**2/q.AA)
         
         

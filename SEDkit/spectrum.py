@@ -7,6 +7,7 @@ Make nicer spectrum objects to pass around SED class
 """
 import numpy as np
 import astropy.units as q
+import astropy.io.votable as vo
 import pysynphot as ps
 import copy
 from . import synphot as syn
@@ -787,12 +788,12 @@ class FileSpectrum(Spectrum):
         survey: str (optional)
             The name of the survey
         """
-        # Read the data
+        # Read the fits data...
         if file.endswith('.fits'):
 
             raw = fits.getdata(file, ext=ext)
 
-            if survey=='SDSS':
+            if survey == 'SDSS':
                 head = fits.getheader(file)
                 flux_units = 1E-17*q.erg/q.s/q.cm**2/q.AA
                 wave_units = q.AA
@@ -810,16 +811,22 @@ class FileSpectrum(Spectrum):
             else:
                 data = raw
 
+        # ...or the ascii data...
         elif file.endswith('.txt'):
             data = np.genfromtxt(file, unpack=True)
+            
+        # ...or the VO Table
+        elif file.endswith('.xml'):
+            vot = vo.parse_single_table(file)
+            data = np.array([list(i) for i in vot.array]).T
 
         else:
-            raise FileError('The file needs to be ASCII or FITS.')
+            raise IOError('The file needs to be ASCII, XML, or FITS.')
 
         # Apply units
         wave = data[0]*wave_units
         flux = data[1]*flux_units
-        if len(data)>2:
+        if len(data) > 2:
             unc = data[2]*flux_units
         else:
             unc = None

@@ -241,70 +241,7 @@ class SEDCatalog:
         """
         # Make a new catalog
         cat = SEDCatalog()
-        
-        # Wildcard case
-        if isinstance(value, str) and '*' in value:
-            
-            # Strip souble quotes
-            value = value.replace("'",'').replace('"','')
-            
-            # Split the wildcard
-            start, end = value.split('*')
-            
-            # Get indexes
-            data = np.array(self.results[param])
-            idx = np.where([np.logical_and(i.startswith(start),i.endswith(end)) for i in data])
-            
-            # Filter results
-            cat.results = self.results[idx]
-            
-        else:
-            
-            # Make single value string into conditions
-            if isinstance(value, str):
-                
-                # Check for operator
-                if any([value.startswith(o) for o in ['<','>','=']]):
-                    value = [value]
-                    
-                # Assume eqality if no operator
-                else:
-                    value = ['=='+value]
-                
-            # Turn numbers into strings
-            if isinstance(value, (int,float)):
-                value = ["=={}".format(value)]
-            
-            # Iterate through multiple conditions
-            for cond in value:
-                
-                # Equality
-                if cond.startswith('='):
-                    v = cond.replace('=','')
-                    cat.results = self.results[self.results[param]==eval(v)]
-                
-                # Less than or equal
-                elif cond.startswith('<='):
-                    v = cond.replace('<=','')
-                    cat.results = self.results[self.results[param]<=eval(v)]
-                
-                # Less than
-                elif cond.startswith('<'):
-                    v = cond.replace('<','')
-                    cat.results = self.results[self.results[param]<eval(v)]
-            
-                # Greater than or equal
-                elif cond.startswith('>='):
-                    v = cond.replace('>=','')
-                    cat.results = self.results[self.results[param]>=eval(v)]
-                
-                # Greater than
-                elif cond.startswith('>'):
-                    v = cond.replace('>','')
-                    cat.results = self.results[self.results[param]>eval(v)]
-                
-                else:
-                    raise ValueError("'{}' operator not understood.".format(cond))
+        cat.results = u.filter_table(self.results, **{param: value})
         
         return cat
         
