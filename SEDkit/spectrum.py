@@ -481,6 +481,45 @@ class Spectrum(ps.ArraySpectrum):
         data = [self.wave, self.flux*norm, self.unc*norm]
     
         return Spectrum(*[i*Q for i,Q in zip(data, self.units)])
+        
+        
+    def resamp(self, wave=None, resolution=None):
+        """Resample the spectrum onto a new wavelength array or to a new
+        resolution
+        
+        Parameters
+        ----------
+        wave: astropy.units.quantity.Quantity (optional)
+            The wavelength array to resample onto
+        resolution: int (optional)
+            The new resolution to resample to, keeping the same
+            wavelength range
+        """
+        mn = np.nanmin(self.wave)
+        mx = np.nanmax(self.wave)
+        
+        if resolution is not None:
+            
+            # Make the wavelength array
+            d_lam = (mx-mn)/resolution
+            wave = np.arange(mn, mx, d_lam)
+            
+        elif wave is not None:
+            wave = wave.to(self.wave_units).value
+            
+        else:
+            return
+            
+        # Trim the wavelength
+        wave = wave[np.logical_and(wave > mn, wave <= mx)]
+
+        # Calculate the new spectrum
+        binned = u.spectres(wave, self.wave, self.flux, self.unc)
+        
+        # Update the spectrum
+        spectrum = [i*Q for i, Q in zip(binned, self.units)]
+        
+        return Spectrum(*spectrum)
 
     def smooth(self, beta, window=11):
         """

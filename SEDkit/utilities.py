@@ -481,8 +481,6 @@ def rebin_spec(spec, wavnew, oversamp=100, plot=False):
         
     return [wavnew,specnew,errnew]
     
-import numpy as np 
-
 def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     """
     Function for resampling spectra (and optionally associated uncertainties) onto a new wavelength basis.
@@ -584,9 +582,10 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
 
     # If errors were supplied return the resampled_fluxes spectrum and error arrays
     if spec_errs is None:
-        resampled_fluxes_errs = None
-
-    return [new_spec_wavs, resampled_fluxes, resampled_fluxes_errs]
+        return [new_spec_wavs, resampled_fluxes]
+         
+    else:
+        return [new_spec_wavs, resampled_fluxes, resampled_fluxes_errs]
     
 def scrub(data):
     """
