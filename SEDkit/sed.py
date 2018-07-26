@@ -1381,8 +1381,7 @@ class SED:
         
         # Normalize to longest wavelength data
         if self.max_spec > self.max_phot:
-            rj = rj.norm_to_spec(self.app_spec_SED, exclude=[(0.*q.um, 2.5*q.um)])
-            print(rj.data)
+            rj = rj.norm_to_spec(self.app_spec_SED)
         else:
             rj = rj.norm_to_mags(self.photometry)
         
