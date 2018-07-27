@@ -314,6 +314,39 @@ def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):
     f_lam = (f_nu*ac.c/lam**2).to(units)
     
     return f_lam
+    
+def goodness(f1, f2, e1=None, e2=None, weights=None):
+    """Calculate the goodness of fit statistic and normalization constant between two spectra
+    
+    Parameters
+    ----------
+    f1: sequence
+        The flux of the first spectrum
+    f2: sequence
+        The flux of the second spectrum
+    e1: sequence(optional)
+        The uncertainty of the first spectrum
+    e2: sequence (optional)
+        The uncertainty of the second spectrum
+    weights: sequence, float (optional)
+        The weights of each point
+    """
+    # Fill in missing arrays
+    if e1 is None:
+        e1 = np.ones(len(f1))
+    if e2 is None:
+        e2 = np.ones(len(f2))
+    if weights is None:
+        weights = 1.
+        
+    # Calculate the goodness-of-fit statistic and normalization constant
+    errsq = e1**2 + e2**2
+    numerator = np.nansum(weights * f1 * f2 / errsq)
+    denominator = np.nansum(weights * f2 ** 2 / errsq)
+    norm = numerator/denominator
+    gstat = np.nansum(weights*(f1-f2*norm)**2/errsq)
+    
+    return gstat, norm
 
 def group_spectra(spectra):
     """
@@ -428,7 +461,7 @@ def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, p
     else:
         return val, low
         
-def rebin_spec(spec, wavnew, oversamp=100, plot=False):
+def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
     """
     Rebin a spectrum to a new wavelength array while preserving 
     the total flux
@@ -446,13 +479,13 @@ def rebin_spec(spec, wavnew, oversamp=100, plot=False):
         The rebinned flux
     
     """
-    nlam = len(spec[0])
+    nlam = len(wave)
     x0 = np.arange(nlam, dtype=float)
     x0int = np.arange((nlam-1.)*oversamp + 1., dtype=float)/oversamp
-    w0int = np.interp(x0int, x0, spec[0])
-    spec0int = np.interp(w0int, spec[0], spec[1])/oversamp
+    w0int = np.interp(x0int, x0, wave)
+    spec0int = np.interp(w0int, wave, flux)/oversamp
     try:
-        err0int = np.interp(w0int, spec[0], spec[2])/oversamp
+        err0int = np.interp(w0int, wave, err)/oversamp
     except:
         err0int = ''
         
@@ -465,21 +498,20 @@ def rebin_spec(spec, wavnew, oversamp=100, plot=False):
     nbins = len(w1bins)-1
     specnew = np.zeros(nbins)
     errnew = np.zeros(nbins)
-    inds2 = [[w0int.searchsorted(w1bins[ii], side='left'), w0int.searchsorted(w1bins[ii+1], side='left')] for ii in range(nbins)]
+    inds2 = [[w0int.searchsorted(w1bins[ii], side='left'),
+              w0int.searchsorted(w1bins[ii+1], side='left')] 
+              for ii in range(nbins)]
 
     for ii in range(nbins):
         specnew[ii] = np.sum(spec0int[inds2[ii][0]:inds2[ii][1]])
-        try:
+        if err is not None:
             errnew[ii] = np.sum(err0int[inds2[ii][0]:inds2[ii][1]])
-        except:
-            pass
             
-    if plot:
-        plt.figure()
-        plt.loglog(spec[0], spec[1], c='b')    
-        plt.loglog(wavnew, specnew, c='r')
+    # Fix edges
+    specnew[0] = flux[0]
+    specnew[-1] = flux[-1]
         
-    return [wavnew,specnew,errnew]
+    return [wavenew, specnew] if not any(errnew) else [wavnew, specnew, errnew]
     
 def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     """

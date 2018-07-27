@@ -217,6 +217,33 @@ class Spectrum(ps.ArraySpectrum):
         """
         return np.array([self.wave, self.flux, self.unc])
         
+    def fit(self, spec, weights=None):
+        """Determine the goodness of fit between this and another spectrum
+        
+        Parameters
+        ----------
+        spec: SEDkit.spectrum.Spectrum
+            The spectrum object to fit
+        """
+        # Resample spec onto self wavelength
+        spec = spec.resamp(self.spectrum[0])
+        
+        # Get the data
+        flx1 = self.flux
+        flx2 = spec.flux
+        err1 = self.unc
+        err2 = spec.unc
+        
+        # Make default weights the bin widths, excluding gaps in spectra
+        if weights is None:
+            weights = np.gradient(self.wave)
+            weights[weights > np.std(weights)] = 1E-6
+        
+        # Run the fitting
+        gstat, norm = u.goodness(flx1, flx2, err1, err2, weights)
+        
+        return gstat, norm
+        
     def flux_calibrate(self, distance, target_distance=10*q.pc, flux_units=None):
         """Flux calibrate the spectrum from the given distance to the target distance
         
@@ -461,7 +488,7 @@ class Spectrum(ps.ArraySpectrum):
         
         Returns
         -------
-        float, pysynphot.spectrum.ArraySpectralElement
+        float, SEDkit.spectrum.Spectrum
             The normalization constant or normalized spectrum object
         """
         # # Caluclate the remornalized flux
@@ -494,6 +521,11 @@ class Spectrum(ps.ArraySpectrum):
         resolution: int (optional)
             The new resolution to resample to, keeping the same
             wavelength range
+        
+        Returns
+        -------
+        SEDkit.spectrum.Spectrum
+            The resampled spectrum
         """
         mn = np.nanmin(self.wave)
         mx = np.nanmax(self.wave)
@@ -509,13 +541,15 @@ class Spectrum(ps.ArraySpectrum):
             
         else:
             return
-            
+
         # Trim the wavelength
-        wave = wave[np.logical_and(wave > mn, wave <= mx)]
+        dmn = (self.wave[1]-self.wave[0])/2.
+        dmx = (self.wave[-1]-self.wave[-2])/2.
+        wave = wave[np.logical_and(wave >= mn+dmn, wave <= mx-dmx)]
 
         # Calculate the new spectrum
         binned = u.spectres(wave, self.wave, self.flux, self.unc)
-        
+
         # Update the spectrum
         spectrum = [i*Q for i, Q in zip(binned, self.units)]
         
