@@ -602,10 +602,10 @@ class SED:
         if not isinstance(dec, (q.quantity.Quantity, str)):
             raise TypeError("Cannot interpret dec :", dec)
             
-        # Make sure it's raimal degrees
+        # Make sure it's decimal degrees
         self._dec = Angle(dec)
         if self.ra is not None:
-            self.sky_coords = self.dec, self.ra
+            self.sky_coords = self.ra, self.dec
 
     @property
     def distance(self):
@@ -1893,9 +1893,12 @@ class SED:
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
                                       unit=(q.hour, q.degree), frame=frame)
 
-            else:
+            elif isinstance(sky_coords[0], (float, Angle)):
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
-                                      frame=frame)
+                                      unit=q.degree, frame=frame)
+
+            else:
+                raise TypeError("Cannot convert type {} to coordinates.".format(type(sky_coords[0])))
 
         # Set the sky coordinates
         self._sky_coords = sky_coords

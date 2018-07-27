@@ -72,7 +72,7 @@ class Spectrum(ps.ArraySpectrum):
         if unc is None:
             try:
                 unc = flux/snr
-                print("No uncertainty array for this spectrum. Using SNR=",snr)
+                print("No uncertainty array for this spectrum. Using SNR =",snr)
             except:
                 raise TypeError("Not a valid SNR: ",snr)
         
