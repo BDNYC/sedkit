@@ -13,6 +13,8 @@ import astropy.io.votable as vo
 from pkg_resources import resource_filename
 from . import utilities as u
 from .spectrum import FileSpectrum
+from multiprocessing.dummy import Pool as ThreadPool
+from functools import partial
 
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]
@@ -124,7 +126,7 @@ class ModelGrid:
             parameters = [col for col in index.colnames if col != 'filepath']
         self.parameters = parameters
         self.index = index
-
+        
     def get_models(self, **kwargs):
         """Retrieve all models with the specified parameters
         
@@ -137,174 +139,149 @@ class ModelGrid:
         table = u.filter_table(self.index, **kwargs)
         
         # Collect the spectra
-        spectra = []
-        for row in table:
+        pool = ThreadPool(8) 
+        func = partial(FileSpectrum, wave_units=self.wave_units,
+                       flux_units=self.flux_units)
+        spectra = pool.map(func, table['filepath'])
+        pool.close()
+        pool.join()
+        
+        # Add the metadata
+        for n, (row, spec) in enumerate(zip(table, spectra)):
             
-            # ===========================================================
-            # ===========================================================
-            # Make this a generic `get` for a row and then call it in this loop
-            # ===========================================================
-            # ===========================================================
-            spec = FileSpectrum(row['filepath'], wave_units=self.wave_units,
-                                flux_units=self.flux_units)
             for col in table.colnames:
-                setattr(spec, col, row[col])
-                
-            spectra.append(spec)
+                setattr(spectra[n], col, row[col])
+        
+        if len(spectra) == 1:
+            spectra = spectra.pop()
         
         return spectra
         
-    # def get(self, resolution=None, interp=True, **kwargs):
-    #     """
-    #     Retrieve the wavelength, flux, and effective radius
-    #     for the spectrum of the given parameters
-    #
-    #     Parameters
-    #     ----------
-    #     resolution: int (optional)
-    #         The desired wavelength resolution (lambda/d_lambda)
-    #     interp: bool
-    #         Interpolate the model if possible
-    #
-    #     Returns
-    #     -------
-    #     dict
-    #         A dictionary of arrays of the wavelength, flux, and
-    #         mu values and the effective radius for the given model
-    #
-    #     """
-    #     # See if the model with the desired parameters is witin the grid
-    #     in_grid = all([(Teff >= min(self.Teff_vals)) &
-    #                    (Teff <= max(self.Teff_vals)) &
-    #                    (logg >= min(self.logg_vals)) &
-    #                    (logg <= max(self.logg_vals)) &
-    #                    (FeH >= min(self.FeH_vals)) &
-    #                    (FeH <= max(self.FeH_vals))])
-    #
-    #     if in_grid:
-    #
-    #         # See if the model with the desired parameters is a true grid point
-    #         on_grid = self.data[[(self.data['Teff'] == Teff) &
-    #                              (self.data['logg'] == logg) &
-    #                              (self.data['FeH'] == FeH)]]\
-    #                              in self.data
-    #
-    #         # Grab the data if the point is on the grid
-    #         if on_grid:
-    #
-    #             # Get the row index and filepath
-    #             row = u.filter_table(self.index, **kwargs)
-    #
-    #             # Make a dictionary of parameters
-    #             spec = FileSpectrum(row['filepath'],
-    #                                 wave_units=self.wave_units,
-    #                                 flux_units=self.flux_units)
-    #             for col in table.colnames:
-    #                 setattr(spec, col, row[col])
-    #
-    #             # Bin the spectrum if necessary
-    #             if resolution is not None or self.resolution is not None:
-    #
-    #                 # Calculate zoom
-    #                 z = u.calc_zoom(resolution or self.resolution, wave)
-    #                 wave = zoom(wave, z)
-    #                 flux = zoom(flux, (1, z))
-    #
-    #                 spec
-    #
-    #         # If not on the grid, interpolate to it
-    #         else:
-    #             # Call grid_interp method
-    #             if interp:
-    #                 spec_dict = self.grid_interp(**kwargs)
-    #             else:
-    #                 return
-    #
-    #         return spec_dict
-    #
-    #     else:
-    #         print('Teff: ', Teff, ' logg: ', logg, ' FeH: ', FeH,
-    #               ' model not in grid.')
-    #         return
+    def get(self, resolution=None, interp=True, **kwargs):
+        """
+        Retrieve the wavelength, flux, and effective radius
+        for the spectrum of the given parameters
 
-    # def grid_interp(self, Teff, logg, FeH, plot=False):
-    #     """
-    #     Interpolate the grid to the desired parameters
-    #
-    #     Parameters
-    #     ----------
-    #     Teff: int
-    #         The effective temperature (K)
-    #     logg: float
-    #         The logarithm of the surface gravity (dex)
-    #     FeH: float
-    #         The logarithm of the ratio of the metallicity
-    #         and solar metallicity (dex)
-    #     plot: bool
-    #         Plot the interpolated spectrum along
-    #         with the 8 neighboring grid spectra
-    #
-    #     Returns
-    #     -------
-    #     dict
-    #         A dictionary of arrays of the wavelength, flux, and
-    #         mu values and the effective radius for the given model
-    #     """
-    #     # Load the fluxes
-    #     if isinstance(self.flux, str):
-    #         self.load_flux()
-    #
-    #     # Get the flux array
-    #     flux = self.flux.copy()
-    #
-    #     # Get the interpolable parameters
-    #     params, values = [], []
-    #     for p, v in zip([self.Teff_vals, self.logg_vals, self.FeH_vals],
-    #                     [Teff, logg, FeH]):
-    #         if len(p) > 1:
-    #             params.append(p)
-    #             values.append(v)
-    #     values = np.asarray(values)
-    #     label = '{}/{}/{}'.format(Teff, logg, FeH)
-    #
-    #     try:
-    #         # Interpolate flux values at each wavelength
-    #         # using a pool for multiple processes
-    #         print('Interpolating grid point [{}]...'.format(label))
-    #         processes = 4
-    #         mu_index = range(flux.shape[-2])
-    #         start = time.time()
-    #         pool = multiprocessing.Pool(processes)
-    #         func = partial(utils.interp_flux, flux=flux, params=params,
-    #                        values=values)
-    #         new_flux, generators = zip(*pool.map(func, mu_index))
-    #         pool.close()
-    #         pool.join()
-    #
-    #         # Clean up and time of execution
-    #         new_flux = np.asarray(new_flux)
-    #         generators = np.asarray(generators)
-    #         print('Run time in seconds: ', time.time()-start)
-    #
-    #         # Interpolate mu value
-    #         interp_mu = RegularGridInterpolator(params, self.mu)
-    #         mu = interp_mu(np.array(values)).squeeze()
-    #
-    #         # Interpolate r_eff value
-    #         interp_r = RegularGridInterpolator(params, self.r_eff)
-    #         r_eff = interp_r(np.array(values)).squeeze()
-    #
-    #         # Make a dictionary to return
-    #         grid_point = {'Teff': Teff, 'logg': logg, 'FeH': FeH,
-    #                       'mu': mu, 'r_eff': r_eff,
-    #                       'flux': new_flux, 'wave': self.wavelength,
-    #                       'generators': generators}
-    #
-    #         return grid_point
-    #
-    #     except IOError:
-    #         print('Grid too sparse. Could not interpolate.')
-    #         return
+        Parameters
+        ----------
+        resolution: int (optional)
+            The desired wavelength resolution (lambda/d_lambda)
+        interp: bool
+            Interpolate the model if possible
+
+        Returns
+        -------
+        SEDkit.spectrum.Spectrum, list
+            A Spectrum object or list of Spectrum objects
+        """
+        # See if the model with the desired parameters is witin the grid
+        in_grid = []
+        for param, value in kwargs.items():
+            
+            # Get the value range
+            vals = getattr(self, param+'_vals')
+            if min(vals) <= value <= max(vals):
+                in_grid.append(True)
+                
+            else:
+                in_grid.append(False)
+
+        if all(in_grid):
+
+            # See if the model with the desired parameters is a true grid point
+            on_grid = []
+            for param, value in kwargs.items():
+            
+                # Get the value range
+                vals = getattr(self, param+'_vals')
+                if value in vals:
+                    on_grid.append(True)
+                
+                else:
+                    on_grid.append(False)
+
+            # Grab the data if the point is on the grid
+            if all(on_grid):
+                return self.get_models(**kwargs)
+
+            # If not on the grid, interpolate to it
+            else:
+                # Call grid_interp method
+                if interp:
+                    spec_dict = self.grid_interp(**kwargs)
+                else:
+                    return
+
+        else:
+            param_str = ['{}={}'.format(k, v) for k, v in kwargs.items()]
+            print(', '.join(param_str)+' model not in grid.')
+            return
+
+    def grid_interp(self, **kwargs):
+        """
+        Interpolate the grid to the desired parameters
+
+        Returns
+        -------
+        SEDkit.spectrum.Spectrum
+            The interpolated Spectrum object
+        """
+        return True
+        # # Load the fluxes
+        # if isinstance(self.flux, str):
+        #     self.load_flux()
+        #
+        # # Get the flux array
+        # flux = self.flux.copy()
+        #
+        # # Get the interpolable parameters
+        # params, values = [], []
+        # for p, v in zip([self.Teff_vals, self.logg_vals, self.FeH_vals],
+        #                 [Teff, logg, FeH]):
+        #     if len(p) > 1:
+        #         params.append(p)
+        #         values.append(v)
+        # values = np.asarray(values)
+        # label = '{}/{}/{}'.format(Teff, logg, FeH)
+        #
+        # try:
+        #     # Interpolate flux values at each wavelength
+        #     # using a pool for multiple processes
+        #     print('Interpolating grid point [{}]...'.format(label))
+        #     processes = 4
+        #     mu_index = range(flux.shape[-2])
+        #     start = time.time()
+        #     pool = multiprocessing.Pool(processes)
+        #     func = partial(utils.interp_flux, flux=flux, params=params,
+        #                    values=values)
+        #     new_flux, generators = zip(*pool.map(func, mu_index))
+        #     pool.close()
+        #     pool.join()
+        #
+        #     # Clean up and time of execution
+        #     new_flux = np.asarray(new_flux)
+        #     generators = np.asarray(generators)
+        #     print('Run time in seconds: ', time.time()-start)
+        #
+        #     # Interpolate mu value
+        #     interp_mu = RegularGridInterpolator(params, self.mu)
+        #     mu = interp_mu(np.array(values)).squeeze()
+        #
+        #     # Interpolate r_eff value
+        #     interp_r = RegularGridInterpolator(params, self.r_eff)
+        #     r_eff = interp_r(np.array(values)).squeeze()
+        #
+        #     # Make a dictionary to return
+        #     grid_point = {'Teff': Teff, 'logg': logg, 'FeH': FeH,
+        #                   'mu': mu, 'r_eff': r_eff,
+        #                   'flux': new_flux, 'wave': self.wavelength,
+        #                   'generators': generators}
+        #
+        #     return grid_point
+        #
+        # except IOError:
+        #     print('Grid too sparse. Could not interpolate.')
+        #     return
         
 
 class BTSettl(ModelGrid):
