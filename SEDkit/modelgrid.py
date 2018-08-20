@@ -283,6 +283,98 @@ class ModelGrid:
         #     print('Grid too sparse. Could not interpolate.')
         #     return
         
+    def load_spectra(self, reload=False):
+        """
+        Retrieve the spectra for all models and load into the
+        ModelGrid.array attribute
+        
+        Parameters
+        ----------
+        reload: bool
+            Relod the data even if it already exists
+        """
+        if reload:
+
+            # Delete the old file and clear the flux attribute
+            self.flux = None
+            self.wave = None
+
+        if self.flux is None:
+
+            print('Loading flux into table...')
+
+            if os.path.isfile(self.flux_file):
+
+                # Load the flux from the HDF5 file
+                f = h5py.File(self.flux_file, "r")
+                self.flux = f['flux'][:]
+                f.close()
+
+            else:
+
+                # Get array dimensions
+                T, G, M = self.Teff_vals, self.logg_vals, self.FeH_vals
+                shp = [len(T), len(G), len(M)]
+                n, N = 1, np.prod(shp)
+
+                # Iterate through rows
+                for nt, teff in enumerate(T):
+                    for ng, logg in enumerate(G):
+                        for nm, feh in enumerate(M):
+
+                            try:
+
+                                # Retrieve flux using the `get()` method
+                                d = self.get(teff, logg, feh, interp=False)
+
+                                if d:
+
+                                    # Make sure arrays exist
+                                    if isinstance(self.flux, str):
+                                        new_shp = shp+list(d['flux'].shape)
+                                        self.flux = np.zeros(new_shp)
+                                    if isinstance(self.r_eff, str):
+                                        self.r_eff = np.zeros(shp)
+                                    if isinstance(self.mu, str):
+                                        new_shp = shp+list(d['mu'].shape)
+                                        self.mu = np.zeros(new_shp)
+
+                                    # Add data to respective arrays
+                                    self.flux[nt, ng, nm] = d['flux']
+                                    if d['r_eff'] is None:
+                                        self.r_eff[nt, ng, nm] = np.nan
+                                    else:
+                                        self.r_eff[nt, ng, nm] = d['r_eff']
+                                    self.mu[nt, ng, nm] = d['mu'].squeeze()
+
+                                    # Get the wavelength array
+                                    if isinstance(self.wavelength, str):
+                                        self.wavelength = d['wave']
+
+                                    # Garbage collection
+                                    del d
+
+                                    # Print update
+                                    n += 1
+                                    msg = "{: .2f}% complete.".format(n*100./N)
+                                    print(msg, end='\r')
+
+                            except IOError:
+                                # No model computed so reduce total
+                                N -= 1
+
+                # Load the flux into an HDF5 file
+                f = h5py.File(self.flux_file, "w")
+                # dset = f.create_dataset('flux', data=self.flux)
+                f.create_dataset('flux', data=self.flux)
+                f.close()
+                # del dset
+                print("100.00 percent complete!", end='\n')
+
+        else:
+            print('Data already loaded.')
+    
+        
 
 class BTSettl(ModelGrid):
     """Child class for the BT-Settl model grid"""

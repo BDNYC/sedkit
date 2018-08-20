@@ -24,7 +24,7 @@ COLORS = u.color_gen('Category10')
 class Spectrum(ps.ArraySpectrum):
     """A spectrum object to add uncertainty handling and spectrum stitching to ps.ArraySpectrum
     """
-    def __init__(self, wave, flux, unc=None, snr=10, snr_trim=5, trim=None, name=None, verbose=False):
+    def __init__(self, wave, flux, unc=None, snr=None, snr_trim=5, trim=None, name=None, verbose=False):
         """Store the spectrum and units separately
         
         Parameters
@@ -51,10 +51,11 @@ class Spectrum(ps.ArraySpectrum):
         self.verbose = verbose
         
         # Make sure the arrays are the same shape
-        if not wave.shape == flux.shape and ((unc is None) or not (unc.shape==flux.shape)):
+        if not wave.shape == flux.shape and ((unc is None) or not (unc.shape == flux.shape)):
             raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
             
-        # Check wave units and convert to Angstroms if necessary to work with pysynphot
+        # Check wave units and convert to Angstroms if necessary to work
+        # with pysynphot
         try:
             # Store original units
             wave_units = wave.unit
@@ -68,51 +69,51 @@ class Spectrum(ps.ArraySpectrum):
         except:
             raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
         
-        # Check uncertainty units
-        if unc is None:
-            try:
-                unc = flux/snr
-                print("No uncertainty array for this spectrum. Using SNR =",snr)
-            except:
-                raise TypeError("Not a valid SNR: ",snr)
+        # Generate uncertainty array
+        if unc is None and isinstance(snr, (int, float)):
+            unc = flux/snr
         
         # Make sure the uncertainty array is in the correct units
-        try:
-            _ = unc.to(q.erg/q.s/q.cm**2/q.AA)
-        except:
-            raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
+        if unc is not None:
+            try:
+                _ = unc.to(q.erg/q.s/q.cm**2/q.AA)
+            except:
+                raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
         
         # Remove nans, negatives, zeros, and infs
-        wave, flux, unc = u.scrub([wave, flux, unc])
+        spectrum = [wave, flux]
+        spectrum += [unc] if unc is not None else []
+        spectrum = u.scrub(spectrum)
             
         # Strip and store units
         self._wave_units = q.AA
         self._flux_units = flux.unit
-        self.units = [self._wave_units, self._flux_units, self._flux_units]
-        wave, flux, unc = [i.value for i in [wave,flux,unc]]
+        self.units = [self._wave_units, self._flux_units]
+        self.units += [self._flux_units] if unc is not None else []
+        spectrum = [i.value for i in spectrum]
         
         # Make negatives and zeros into nans
-        idx, = np.where(flux[flux > 0])
-        wave, flux, unc = [i[idx] for i in [wave, flux, unc]]
+        idx, = np.where(spectrum[1][spectrum[1] > 0])
+        spectrum = [i[idx] for i in spectrum]
+        
+        # Trim spectrum edges by SNR value
+        if isinstance(snr_trim, (float, int)) and unc is not None:
+            idx, = np.where(spectrum[1]/spectrum[2] >= snr_trim)
+            if any(idx):
+                spectrum = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in spectrum]
         
         # Inherit from ArraySpectrum
-        super().__init__(wave, flux)
+        super().__init__(*spectrum[:2])
         
         # Add the uncertainty
-        self._unctable = unc
+        self._unctable = None if unc is None else spectrum[2]
         
         # Store components is added
         self.components = None
         
         # Convert back to input units
         self.wave_units = wave_units
-        
-        # Trim spectrum edges by SNR value
-        if isinstance(snr_trim, (float, int)):
-            idx, = np.where(flux/unc >= snr_trim)
-            if any(idx):
-                wave, flux, unc = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in [wave, flux, unc]]
-        
+
         # Trim manually
         if trim is not None:
             self.trim(trim)
@@ -151,9 +152,14 @@ class Spectrum(ps.ArraySpectrum):
             
             # Concatenate and order two segments if no overlap
             if not overlap:
-            
+                
+                # Drop uncertainties on both spectra if one is missing
+                if self.unc is None or spec2.unc is None:
+                    s1 = [self.wave, self.flux]
+                    s2 = [spec2.wave, spec2.flux]
+                    
                 # Concatenate arrays and sort by wavelength
-                spec = np.concatenate([s1,s2], axis=1).T
+                spec = np.concatenate([s1, s2], axis=1).T
                 spec = spec[np.argsort(spec[:, 0])].T
                 
             # Otherwise there are three segments, (left, overlap, right)
@@ -183,17 +189,24 @@ class Spectrum(ps.ArraySpectrum):
                     
                 # Interpolate s2 to s1
                 o2_flux = np.interp(o1[0], s2[0], s2[1])
-                o2_unc = np.interp(o1[0], s2[2], s2[2])
                 
                 # Get the average
                 o_flux = np.nanmean([o1[1], o2_flux], axis=0)
-                o_unc = np.sqrt(o1[2]**2 + o2_unc**2)
-                overlap = np.array([o1[0], o_flux, o_unc])
+                
+                # Calculate uncertainties if possible
+                if len(s2) == 3:
+                    o2_unc = np.interp(o1[0], s2[0], s2[2])
+                    o_unc = np.sqrt(o1[2]**2 + o2_unc**2)
+                    overlap = np.array([o1[0], o_flux, o_unc])
+                else:
+                    overlap = np.array([o1[0], o_flux])
                 
                 # Make sure it is 2D
                 if overlap.shape == (3,):
                     overlap.shape = 3, 1
-                    
+                if overlap.shape == (2,):
+                    overlap.shape = 2, 1
+
                 # Concatenate the segments
                 spec = np.concatenate([left, overlap, right], axis=1)
                 
@@ -215,7 +228,10 @@ class Spectrum(ps.ArraySpectrum):
     def data(self):
         """Store the spectrum without units
         """
-        return np.array([self.wave, self.flux, self.unc])
+        data = np.array([self.wave, self.flux, self.unc])
+        if self.unc is None:
+            data = data[:2]
+        return data
         
     def fit(self, spec, weights=None):
         """Determine the goodness of fit between this and another spectrum
@@ -231,8 +247,8 @@ class Spectrum(ps.ArraySpectrum):
         # Get the data
         flx1 = self.flux
         flx2 = spec.flux
-        err1 = self.unc
-        err2 = spec.unc
+        err1 = np.ones_like(self.flux) if self.unc is None else self.unc
+        err2 = np.ones_like(spec.flux) if spec.unc is None else spec.unc
         
         # Make default weights the bin widths, excluding gaps in spectra
         if weights is None:
@@ -264,9 +280,12 @@ class Spectrum(ps.ArraySpectrum):
         flux = (self.spectrum[1]*(distance[0]/target_distance)**2).to(flux_units)
         
         # Calculate the scaled uncertainty
-        term1 = (self.spectrum[2]*distance[0]/target_distance).to(flux_units)
-        term2 = (2*self.spectrum[1]*(distance[1]*distance[0]/target_distance**2)).to(flux_units)
-        unc = np.sqrt(term1**2 + term2**2)
+        if self.unc is None:
+            unc = None
+        else:
+            term1 = (self.spectrum[2]*distance[0]/target_distance).to(flux_units)
+            term2 = (2*self.spectrum[1]*(distance[1]*distance[0]/target_distance**2)).to(flux_units)
+            unc = np.sqrt(term1**2 + term2**2)
         
         return Spectrum(self.spectrum[0], flux, unc)
             
@@ -296,11 +315,17 @@ class Spectrum(ps.ArraySpectrum):
         
         # Update the flux and unc arrays
         self._fluxtable = self.flux*self.flux_units.to(flux_units)
-        self._unctable = self.unc*self.flux_units.to(flux_units)
+        if self.unc is not None:
+            self._unctable = self.unc*self.flux_units.to(flux_units)
             
-        # Set the flux_units!
+        # Set the flux_units
         self._flux_units = flux_units
-        self.units = [self._wave_units, self._flux_units, self._flux_units]
+        self._set_units()
+        
+    def _set_units(self):
+        """Set the units for convenience"""
+        self.units = [self._wave_units, self._flux_units]
+        self.units += [self._flux_units] if self.unc is not None else []
         
     def integral(self, units=q.erg/q.s/q.cm**2):
         """Include uncertainties in integrate() method
@@ -323,11 +348,14 @@ class Spectrum(ps.ArraySpectrum):
             
         # Calculate the factor for the given units
         m = self.flux_units*self.wave_units
+        val = (np.trapz(self.flux, x=self.wave)*m).to(units)
         
-        val = np.trapz(self.flux, x=self.wave)*m
-        unc = np.sqrt(np.sum((self.unc*np.gradient(self.wave)*m)**2))
+        if self.unc is None:
+            unc = None
+        else:
+            unc = np.sqrt(np.sum((self.unc*np.gradient(self.wave)*m)**2)).to(units)
     
-        return val.to(units), unc.to(units)
+        return val, unc
     
     def norm_to_mags(self, photometry, force=False, exclude=[], include=[]):
         """
@@ -383,7 +411,9 @@ class Spectrum(ps.ArraySpectrum):
                     if syn_flx is not None:
                         flx, unc = list(row['app_flux','app_flux_unc'])
                         weight = bp.FWHM
-                        data.append([flx.value, unc.value, syn_flx.value, syn_unc.value, weight])
+                        unc = unc.value if hasattr(unc, 'unit') else None
+                        syn_unc = syn_unc.value if hasattr(syn_unc, 'unit') else None
+                        data.append([flx.value, unc, syn_flx.value, syn_unc, weight])
                 except IOError:
                     pass
 
@@ -395,11 +425,19 @@ class Spectrum(ps.ArraySpectrum):
             # Calculate the weighted normalization
             else:
                 f1, e1, f2, e2, weights = np.array(data).T
-                numerator = np.nansum(weight * f1 * f2 / (e1 ** 2 + e2 ** 2))
-                denominator = np.nansum(weight * f2 ** 2 / (e1 ** 2 + e2 ** 2))
-                norm = numerator/denominator
+                if not any(e1):
+                    e1 = None
+                if not any(e2):
+                    e2 = None
+                gstat, norm = u.goodness(f1, f2, e1, e2, weights)
 
-        return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
+        # Make new spectrum
+        spectrum = self.spectrum
+        spectrum[1] *= norm
+        if self.unc is not None:
+            spectrum[2] *= norm
+
+        return Spectrum(*spectrum)
 
     def norm_to_spec(self, spectrum, exclude=[], include=[]):
         """Normalize the spectrum to another spectrum
@@ -440,8 +478,14 @@ class Spectrum(ps.ArraySpectrum):
 
         # Normalize the spectrum to the temp based on equal integrated flux inincluded wavelength ranges
         norm = np.trapz(temp[1], x=temp[0]) / np.trapz(spec[1], x=spec[0])
+        
+        # Make new spectrum
+        spectrum = self.spectrum
+        spectrum[1] *= norm
+        if self.unc is not None:
+            spectrum[2] *= norm
 
-        return Spectrum(self.spectrum[0], self.spectrum[1]*norm, self.spectrum[2]*norm)
+        return Spectrum(*spectrum)
 
     def plot(self, fig=None, components=False, draw=False, **kwargs):
         """Plot the spectrum"""
@@ -456,9 +500,10 @@ class Spectrum(ps.ArraySpectrum):
         fig.line(self.wave, self.flux, color=c)
         
         # Plot the uncertainties
-        band_x = np.append(self.wave, self.wave[::-1])
-        band_y = np.append(self.flux-self.unc, (self.flux+self.unc)[::-1])
-        fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
+        if self.unc is not None:
+            band_x = np.append(self.wave, self.wave[::-1])
+            band_y = np.append(self.flux-self.unc, (self.flux+self.unc)[::-1])
+            fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
         
         # Plot the components
         if components and self.components is not None:
@@ -505,9 +550,12 @@ class Spectrum(ps.ArraySpectrum):
             return norm
             
         # Scale the spectrum
-        data = [self.wave, self.flux*norm, self.unc*norm]
+        spectrum = self.spectrum
+        spectrum[1] *= norm
+        if self.unc is not None:
+            spectrum[2] *= norm
     
-        return Spectrum(*[i*Q for i,Q in zip(data, self.units)])
+        return Spectrum(*spectrum)
         
         
     def resamp(self, wave=None, resolution=None):
@@ -576,8 +624,12 @@ class Spectrum(ps.ArraySpectrum):
         w = np.kaiser(window, beta)
         y = np.convolve(w / w.sum(), s, mode='valid')
         smoothed = y[5:len(y) - 5]
+        
+        # Replace with smoothed spectrum
+        spectrum = self.spectrum
+        spectrum[1] = smoothed*self.flux_units
 
-        return Spectrum(self.spectrum[0], smoothed*self.flux_units, self.spectrum[2])
+        return Spectrum(*spectrum)
 
     @property
     def spectrum(self):
@@ -610,7 +662,7 @@ class Spectrum(ps.ArraySpectrum):
         # Initialize
         flx = unc = None
         
-        if overlap=='full' or (overlap=='partial' and force):
+        if overlap == 'full' or (overlap == 'partial' and force):
 
             # Convert self to bandpass units
             self.wave_units = bandpass.wave_units
@@ -623,12 +675,17 @@ class Spectrum(ps.ArraySpectrum):
         
             # Interpolate the spectrum to the filter wavelengths
             f = np.interp(wav, self.wave, self.flux, left=0, right=0)*self.flux_units
-            sig_f = np.interp(wav, self.wave, self.unc, left=0, right=0)*self.flux_units
         
             # Calculate the flux
             flx = (np.trapz(f*rsr, x=wav)/np.trapz(rsr, x=wav)).to(self.flux_units)
-            unc = np.sqrt(np.sum(((sig_f*rsr*grad)**2).to(self.flux_units**2)))
-        
+            
+            # Calculate uncertainty
+            if self.unc is not None:
+                sig_f = np.interp(wav, self.wave, self.unc, left=0, right=0)*self.flux_units
+                unc = np.sqrt(np.sum(((sig_f*rsr*grad)**2).to(self.flux_units**2)))
+            else:
+                unc = None
+                
             # Plot it
             if plot:
                 fig = figure()
@@ -677,10 +734,10 @@ class Spectrum(ps.ArraySpectrum):
                                     (self.spectrum[0] > mx))
                     
                     if len(idx) > 0:
-                        wave, flux, unc = [i[idx] for i in self.spectrum]
+                        spectrum = [i[idx] for i in self.spectrum]
                         
                         # Update the object
-                        spec = Spectrum(wave, flux, unc)
+                        spec = Spectrum(*spectrum)
                         self.__dict__ = spec.__dict__
                         del spec
                 
@@ -694,7 +751,7 @@ class Spectrum(ps.ArraySpectrum):
         
     @property
     def unc(self):
-        """A property for auncertainty"""
+        """A property for uncertainty"""
         return self._unctable
         
     @property
@@ -729,10 +786,9 @@ class Spectrum(ps.ArraySpectrum):
         self.min = min(self.spectrum[0]).to(wave_units)
         self.max = max(self.spectrum[0]).to(wave_units)
             
-        # Set the wave_units!
+        # Set the wave_units
         self._wave_units = wave_units
-        self.units = [self._wave_units, self._flux_units, self._flux_units]
-
+        self._set_units()
 
 class Blackbody(Spectrum):
     """A spectrum object specifically for blackbodies"""

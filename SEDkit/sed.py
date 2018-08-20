@@ -1225,10 +1225,14 @@ class SED:
         self.get_Mbol()
 
         # Interpolate surface gravity, mass and radius from isochrones
-        if self.radius is None:
-            self.radius_from_age()
-        self.logg_from_age()
-        self.mass_from_age()
+        if self.Lbol_sun[1] is None:
+            print('Lbol={0.Lbol}. Uncertainties are needed to estimate Teff, radius, surface gravity, and mass.'.format(self))
+        else:
+            if self.radius is None:
+                self.radius_from_age()
+            self.logg_from_age()
+            self.mass_from_age()
+            self.teff_from_age()
 
         # Calculate Teff (dependent on Lbol, distance, and radius)
         self.get_Teff()
@@ -1257,15 +1261,16 @@ class SED:
             Lbol_sun = round(np.log10((Lbol/ac.L_sun).decompose().value), 3)
 
             # Calculate Lbol_unc
-            Lbol_unc = Lbol*np.sqrt((self.fbol[1]/self.fbol[0]).value**2+(2*self.distance[1]/self.distance[0]).value**2)
-            Lbol_sun_unc = round(abs(Lbol_unc/(Lbol*np.log(10))).value, 3)
+            if self.fbol[1] is None:
+                Lbol_unc = None
+                Lbol_sun_unc = None
+            else:
+                Lbol_unc = Lbol*np.sqrt((self.fbol[1]/self.fbol[0]).value**2+(2*self.distance[1]/self.distance[0]).value**2)
+                Lbol_sun_unc = round(abs(Lbol_unc/(Lbol*np.log(10))).value, 3)
 
             # Update the attributes
             self.Lbol = Lbol, Lbol_unc
             self.Lbol_sun = Lbol_sun, Lbol_sun_unc
-
-            # Get the Teff from the age and Lbol
-            self.teff_from_age()
 
     def get_mbol(self, L_sun=3.86E26*q.W, Mbol_sun=4.74):
         """Calculate the apparent bolometric magnitude of the SED
@@ -1285,7 +1290,10 @@ class SED:
         mbol = round(-2.5*np.log10(self.fbol[0].value)-11.482, 3)
 
         # Calculate mbol_unc
-        mbol_unc = round((2.5/np.log(10))*(self.fbol[1]/self.fbol[0]).value, 3)
+        if self.fbol[1] is None:
+            mbol_unc = None
+        else:
+            mbol_unc = round((2.5/np.log(10))*(self.fbol[1]/self.fbol[0]).value, 3)
 
         # Update the attribute
         self.mbol = mbol, mbol_unc
@@ -1302,7 +1310,10 @@ class SED:
             Mbol = round(self.mbol[0]-5*np.log10((self.distance[0]/10*q.pc).value), 3)
 
             # Calculate Mbol_unc
-            Mbol_unc = round(np.sqrt(self.mbol[1]**2+((2.5/np.log(10))*(self.distance[1]/self.distance[0]).value)**2), 3)
+            if self.fbol[1] is None:
+                Mbol_unc = None
+            else:
+                Mbol_unc = round(np.sqrt(self.mbol[1]**2+((2.5/np.log(10))*(self.distance[1]/self.distance[0]).value)**2), 3)
 
             # Update the attribute
             self.Mbol = Mbol, Mbol_unc
@@ -1322,7 +1333,10 @@ class SED:
             Teff = np.sqrt(np.sqrt((self.Lbol[0]/(4*np.pi*ac.sigma_sb*self.radius[0]**2)).to(q.K**4))).astype(int)
 
             # Calculate Teff_unc
-            Teff_unc = (Teff*np.sqrt((self.Lbol[1]/self.Lbol[0]).value**2 + (2*self.radius[1]/self.radius[0]).value**2)/4.).astype(int)
+            if self.fbol[1] is None:
+                Teff_unc = None
+            else:
+                Teff_unc = (Teff*np.sqrt((self.Lbol[1]/self.Lbol[0]).value**2 + (2*self.radius[1]/self.radius[0]).value**2)/4.).astype(int)
 
             # Update the attribute
             self.Teff = Teff, Teff_unc
@@ -1356,7 +1370,10 @@ class SED:
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            self.logg = tuple(iso.isochrone_interp(self.Lbol_sun, self.age, yparam='logg', evo_model=self.evo_model))
+            if self.Lbol_sun[1] is None:
+                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
+            else:
+                self.logg = tuple(iso.isochrone_interp(self.Lbol_sun, self.age, yparam='logg', evo_model=self.evo_model))
 
         else:
             if self.verbose:
@@ -1483,11 +1500,15 @@ class SED:
         """Estimate the surface gravity from model isochrones given an age and Lbol
         """
         if self.age is not None and self.Lbol_sun is not None:
+            
+            if self.Lbol_sun[1] is None:
+                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
+            else:
 
-            mass = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='mass',
-                                        evo_model=self.evo_model)
+                mass = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='mass',
+                                            evo_model=self.evo_model)
 
-            self.mass = mass[0].to(mass_units), mass[1].to(mass_units)
+                self.mass = mass[0].to(mass_units), mass[1].to(mass_units)
 
         else:
             if self.verbose:
@@ -1893,7 +1914,7 @@ class SED:
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
                                       unit=(q.hour, q.degree), frame=frame)
 
-            elif isinstance(sky_coords[0], (float, Angle)):
+            elif isinstance(sky_coords[0], (float, Angle, q.quantity.Quantity)):
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
                                       unit=q.degree, frame=frame)
 
@@ -1977,14 +1998,17 @@ class SED:
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            teff = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='teff', evo_model=self.evo_model)
-            teff = np.array(teff).astype(int)
+            if self.Lbol_sun[1] is None:
+                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the Teff.'.format(self))
+            else:
+                teff = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='teff', evo_model=self.evo_model)
+                teff = np.array(teff).astype(int)
 
-            self.Teff_evo = teff[0]*q.K, teff[1]*q.K
+                self.Teff_evo = teff[0]*q.K, teff[1]*q.K
 
         else:
             if self.verbose:
-                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
+                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the Teff.'.format(self))
 
     @property
     def wave_units(self):
