@@ -10,6 +10,8 @@ import numpy as np
 import itertools
 import astropy.units as q
 import astropy.constants as ac
+import astropy.table as at
+import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -24,7 +26,7 @@ def filter_table(table, **kwargs):
     
     Parameters
     ----------
-    table: astropy.table.Table
+    table: astropy.table.Table, pandas.DataFrame
         The table to filter
     param: str
         The parameter to filter by, e.g. 'Teff'
@@ -32,13 +34,18 @@ def filter_table(table, **kwargs):
         The criteria to filter by, 
         which can be single valued like 1400
         or a range with operators [<,<=,>,>=],
-        e.g. (>1200,<1400), ()
+        e.g. ('>1200','<=1400')
     
     Returns
     -------
-    astropy.table.Table
+    astropy.table.Table, pandas.DataFrame
         The filtered table
     """
+    pandas = False
+    if isinstance(table, pd.DataFrame):
+        pandas = True
+        table = at.Table.from_pandas(table)
+        
     for param, value in kwargs.items():
         
         # Check it is a valid column
@@ -108,6 +115,9 @@ def filter_table(table, **kwargs):
             
                 else:
                     raise ValueError("'{}' operator not understood.".format(cond))
+                    
+    if pandas:
+        table = table.to_pandas()
     
     return table
 
@@ -381,6 +391,41 @@ def idx_exclude(x, exclude):
             np.where(~np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))[0]
         except TypeError:
             return range(len(x))
+            
+def interp_flux(flux, params, values):
+    """
+    Interpolate a cube of synthetic spectra for a
+    given index of mu
+
+    Parameters
+    ----------
+    mu: int
+        The index of the (Teff, logg, FeH, *mu*, wavelength)
+        data cube to interpolate
+    flux: np.ndarray
+        The data array
+    params: list
+        A list of each free parameter range
+    values: list
+        A list of each free parameter values
+
+    Returns
+    -------
+    tu
+        The array of new flux values
+    """
+    # Iterate over each wavelength (-1 index of flux array)
+    shp = flux.shape[-1]
+    flx = np.zeros(shp)
+    generators = []
+    for lam in range(shp):
+        interp_f = RegularGridInterpolator(params, flux[:, :, :, lam])
+        f, = interp_f(values)
+
+        flx[lam] = f
+        generators.append(interp_f)
+
+    return flx, generators
 
 def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
     """

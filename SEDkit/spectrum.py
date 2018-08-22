@@ -10,6 +10,7 @@ import astropy.units as q
 import astropy.io.votable as vo
 import pysynphot as ps
 import copy
+import lmfit
 from . import synphot as syn
 from . import utilities as u
 import astropy.constants as ac
@@ -108,8 +109,9 @@ class Spectrum(ps.ArraySpectrum):
         # Add the uncertainty
         self._unctable = None if unc is None else spectrum[2]
         
-        # Store components is added
+        # Store components if added
         self.components = None
+        self.best_fit = None
         
         # Convert back to input units
         self.wave_units = wave_units
@@ -224,6 +226,33 @@ class Spectrum(ps.ArraySpectrum):
         except IOError:
             raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
             
+    def best_fit_model(self, modelgrid):
+        """Perform simple fitting of the spectrum to all models in the given
+        modelgrid and store the best fit
+        
+        Parameters
+        ----------
+        modelgrid: SEDkit.modelgrid.ModelGrid
+            The model grid to fit
+        """
+        # Iterate over entire model grid
+        results = []
+        for n, row in modelgrid.index.iterrows():
+            result = list(self.fit(row.spectrum, wave_units='AA'))+[n]
+            results.append(result)
+            
+        # Get the best fit
+        results = np.array(results)
+        idx = np.argmin(results.T[0])
+        self.best_fit = modelgrid.index.loc[[idx]].iloc[0]
+        
+        # Normalize the model
+        self.best_fit.spectrum[1] *= results[idx, 1]
+        self.best_fit.spectrum[0] *= results[idx, 2]
+        
+        if self.verbose:
+            print(self.best_fit)
+            
     @property
     def data(self):
         """Store the spectrum without units
@@ -233,32 +262,133 @@ class Spectrum(ps.ArraySpectrum):
             data = data[:2]
         return data
         
-    def fit(self, spec, weights=None):
+    def fit(self, spec, weights=None, wave_units=None):
         """Determine the goodness of fit between this and another spectrum
         
         Parameters
         ----------
-        spec: SEDkit.spectrum.Spectrum
-            The spectrum object to fit
+        spec: SEDkit.spectrum.Spectrum, np.ndarray
+            The spectrum object or [W, F] array to fit
+        wave_units: astropy.units.quantity.Quantity
+            The wavelength units of the input spectrum if
+            it is a numpy array
         """
-        # Resample spec onto self wavelength
-        spec = spec.resamp(self.spectrum[0])
+        # In case the wavelength units are different
+        xnorm = 1
         
-        # Get the data
+        if hasattr(spec, 'spectrum'):
+
+            # Resample spec onto self wavelength
+            spec = spec.resamp(self.spectrum[0])
+            flx2 = spec.flux
+            err2 = np.ones_like(spec.flux) if spec.unc is None else spec.unc
+            
+        elif isinstance(spec, (list, tuple, np.ndarray)):
+            
+            spec2 = copy.copy(spec)
+            
+            # Convert A to um
+            if wave_units is not None:
+                xnorm = q.Unit(wave_units).to(self.wave_units)
+                spec2[0] = spec2[0]*xnorm
+            
+            # Resample spec onto self wavelength
+            spec2 = u.spectres(self.wave, *spec2)
+            flx2 = spec2[1]
+            err2 = np.ones_like(flx2) if len(spec2) == 2 else spec2[2]
+            
+        else:
+            raise TypeError("Only an SEDkit.spectrum.Spectrum or numpy.ndarray can be fit.")
+    
+        # Get the self data
         flx1 = self.flux
-        flx2 = spec.flux
         err1 = np.ones_like(self.flux) if self.unc is None else self.unc
-        err2 = np.ones_like(spec.flux) if spec.unc is None else spec.unc
-        
+    
         # Make default weights the bin widths, excluding gaps in spectra
         if weights is None:
             weights = np.gradient(self.wave)
             weights[weights > np.std(weights)] = 1E-6
         
         # Run the fitting
-        gstat, norm = u.goodness(flx1, flx2, err1, err2, weights)
+        gstat, ynorm = u.goodness(flx1, flx2, err1, err2, weights)
         
-        return gstat, norm
+        return gstat, ynorm, xnorm
+
+    # def lmfit_modelgrid(self, modelgrid, method='leastsq', verbose=True):
+    #     """Find the best fit model from the given model grid using lmfit
+    #
+    #     Parameters
+    #     ----------
+    #     spectrum: SEDkit.spectrum.Spectrum
+    #         The spectrum object
+    #     modelgrid: str
+    #         The model grid to fit
+    #
+    #     Returns
+    #     -------
+    #     lmfit.Model.fit.fit_report
+    #         The results of the fit
+    #     """
+    #     # Initialize lmfit Params object
+    #     initialParams = lmfit.Parameters()
+    #
+    #     # Concatenate the lists of parameters
+    #     all_params = modelgrid.parameters
+    #
+    #     # # Group the different variable types
+    #     # param_list = []
+    #     # indep_vars = {}
+    #     # for param in all_params:
+    #     #     param = list(param)
+    #     #     if param[2] == 'free':
+    #     #         param[2] = True
+    #     #         param_list.append(tuple(param))
+    #     #     elif param[2] == 'fixed':
+    #     #         param[2] = False
+    #     #         param_list.append(tuple(param))
+    #     #     else:
+    #     #         indep_vars[param[0]] = param[1]
+    #     #
+    #     # # Add the time as an independent variable
+    #     # indep_vars['time'] = time
+    #     #
+    #     # # Get values from input parameters.Parameters instances
+    #     # initialParams.add_many(*param_list)
+    #
+    #     # Create the lightcurve model
+    #     model = lmfit.Model(modelgrid.get_spectrum)
+    #     model.independent_vars = indep_vars.keys()
+    #
+    #     # # Set the unc
+    #     # if unc is None:
+    #     #     unc = np.ones(len(data))
+    #
+    #     # Fit light curve model to the simulated data
+    #     result = model.fit(data, weights=1/unc, params=initialParams,
+    #                          method=method, **indep_vars)
+    #     if verbose:
+    #         print(result.fit_report())
+    #
+    #     # # Get the best fit params
+    #     # fit_params = result.__dict__['params']
+    #     # new_params = [(fit_params.get(i).name, fit_params.get(i).value,
+    #     #                fit_params.get(i).vary, fit_params.get(i).min,
+    #     #                fit_params.get(i).max) for i in fit_params]
+    #     #
+    #     # # Create new model with best fit parameters
+    #     # params = Parameters()
+    #     #
+    #     # # Try to store each as an attribute
+    #     # for param in new_params:
+    #     #     setattr(params, param[0], param[1:])
+    #     #
+    #     # # Make a new model instance
+    #     # best_model = copy.copy(model)
+    #     # best_model.name = 'Best Fit'
+    #     # best_model.parameters = params
+    #
+    #     return best_model
+        
         
     def flux_calibrate(self, distance, target_distance=10*q.pc, flux_units=None):
         """Flux calibrate the spectrum from the given distance to the target distance
@@ -487,7 +617,8 @@ class Spectrum(ps.ArraySpectrum):
 
         return Spectrum(*spectrum)
 
-    def plot(self, fig=None, components=False, draw=False, **kwargs):
+    def plot(self, fig=None, components=False, best_fit=True, draw=False,
+             **kwargs):
         """Plot the spectrum"""
         # Make the figure
         if fig is None:
@@ -509,6 +640,11 @@ class Spectrum(ps.ArraySpectrum):
         if components and self.components is not None:
             for spec in self.components:
                 fig.line(spec.wave, spec.flux, color=next(COLORS))
+                
+        # Plot the best fit
+        if best_fit and self.best_fit is not None:
+            best = self.best_fit.spectrum
+            fig.line(best[0], best[1], color=c, alpha=0.5)
             
         if draw:
             show(fig)

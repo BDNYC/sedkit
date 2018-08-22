@@ -988,23 +988,24 @@ class SED:
         Parameters
         ----------
         """
-        if not self.calculated:
-            self.make_sed()
-
-        if has_splat and self.app_spec_SED is not None:
-
-            # Make spectrum object in SPLAT
-            sp = splat.Spectrum(wave=self.app_spec_SED.wave,
-                                flux=self.app_spec_SED.flux)
-
-            # Fit the model grid
-            fit = spmod.modelFitGrid(sp, teff_range=[500, 3000],
-                                     model=modelgrid, summary=False)
-
-            print(fit)
-
-        else:
-            print("Sorry, you need the 'splat' package and spectral data for this method.")
+        pass
+        # if not self.calculated:
+#             self.make_sed()
+#
+#         if has_splat and self.app_spec_SED is not None:
+#
+#             # Make spectrum object in SPLAT
+#             sp = splat.Spectrum(wave=self.app_spec_SED.wave,
+#                                 flux=self.app_spec_SED.flux)
+#
+#             # Fit the model grid
+#             fit = spmod.modelFitGrid(sp, teff_range=[500, 3000],
+#                                      model=modelgrid, summary=False)
+#
+#             print(fit)
+#
+#         else:
+#             print("Sorry, you need the 'splat' package and spectral data for this method.")
 
     def fit_spectral_index(self, idx_set='burgasser'):
         """Fit composite spectrum to spectral standards"""

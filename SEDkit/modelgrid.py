@@ -10,10 +10,13 @@ import astropy.io.ascii as ii
 import astropy.table as at
 import astropy.units as q
 import astropy.io.votable as vo
+import pandas as pd
+from copy import copy
 from pkg_resources import resource_filename
 from . import utilities as u
-from .spectrum import FileSpectrum
+from .spectrum import Spectrum
 from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing import Pool
 from functools import partial
 
 # A list of all supported evolutionary models
@@ -22,7 +25,7 @@ EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resourc
 
 class ModelGrid:
     """A class to store a model grid"""
-    def __init__(self, name, wave_units=None, flux_units=None, resolution=200):
+    def __init__(self, name, wave_units=None, flux_units=None, resolution=200, **kwargs):
         """Initialize the model grid from a directory of VO table files
         
         Parameters
@@ -47,20 +50,21 @@ class ModelGrid:
 
         # See if there is a table of parameters
         self.path = root
-        self.index_path = os.path.join(root, 'index.txt')
+        self.index_path = os.path.join(root, 'index.p')
         if not os.path.isfile(self.index_path):
             os.system("touch {}".format(self.index_path))
 
             # Index the models
-            self.index_models()
+            self.index_models(**kwargs)
 
         # Load the index
-        self.index = ii.read(self.index_path)
+        self.index = pd.read_pickle(self.index_path)
+        # self.index = ii.read(self.index_path)
 
         # Store the parameters
         self.wave_units = wave_units
         self.flux_units = flux_units
-        self.parameters = [col for col in self.index.colnames if col != 'filepath']
+        self.parameters = [col for col in self.index.columns if col not in ['filepath', 'spectrum']]
         
         # Store the parameter ranges
         for param in self.parameters:
@@ -111,6 +115,9 @@ class ModelGrid:
 
                 # Add the filename
                 meta['filepath'] = file
+                
+                # Add the data
+                meta['spectrum'] = np.array([list(i) for i in vot.array]).T
 
                 all_meta.append(meta)
                 
@@ -118,44 +125,92 @@ class ModelGrid:
                 print(file, ": Could not parse file")
 
         # Make the index table
-        index = at.Table(all_meta)
-        index.write(self.index_path, format='ascii.tab', overwrite=True)
+        # index = at.Table(all_meta)
+        # index.write(self.index_path, format='ascii.tab', overwrite=True)
+        index = pd.DataFrame(all_meta)
+        index.to_pickle(self.index_path)
         
         # Update attributes
         if parameters is None:
-            parameters = [col for col in index.colnames if col != 'filepath']
+            parameters = [col for col in index.columns if col not in ['filepath', 'spectrum']]
         self.parameters = parameters
         self.index = index
         
-    def get_models(self, **kwargs):
-        """Retrieve all models with the specified parameters
+    # def get_models(self, **kwargs):
+    #     """Retrieve all models with the specified parameters
+    #
+    #     Returns
+    #     -------
+    #     list
+    #         A list of the spectra as SEDkit.spectrum.Spectrum objects
+    #     """
+    #     # Get the relevant table rows
+    #     table = u.filter_table(self.index, **kwargs)
+    #
+    #     # Collect the spectra
+    #     pool = ThreadPool(8)
+    #     func = partial(FileSpectrum, wave_units=self.wave_units,
+    #                    flux_units=self.flux_units)
+    #     spectra = pool.map(func, table['filepath'])
+    #     pool.close()
+    #     pool.join()
+    #
+    #     # Add the metadata
+    #     for n, (row, spec) in enumerate(zip(table, spectra)):
+    #
+    #         for col in table.colnames:
+    #             setattr(spectra[n], col, row[col])
+    #
+    #     if len(spectra) == 1:
+    #         spectra = spectra.pop()
+    #
+    #     return spectra
+    
+    def get_spectrum(self, **kwargs):
+        """Retrieve the first model with the specified parameters
         
         Returns
         -------
-        list
-            A list of the spectra as SEDkit.spectrum.Spectrum objects
+        np.ndarray
+            A numpy array of the spectrum
         """
-        # Get the relevant table rows
-        table = u.filter_table(self.index, **kwargs)
+        # Get the row index and filepath
+        rows = copy(self.index)
+        for arg, val in kwargs.items():
+            rows = rows.loc[rows[arg] == val]
         
-        # Collect the spectra
-        pool = ThreadPool(8) 
-        func = partial(FileSpectrum, wave_units=self.wave_units,
-                       flux_units=self.flux_units)
-        spectra = pool.map(func, table['filepath'])
-        pool.close()
-        pool.join()
+        if rows.empty:
+            return None
+        else:
+            return rows.iloc[0].spectrum
         
-        # Add the metadata
-        for n, (row, spec) in enumerate(zip(table, spectra)):
-            
-            for col in table.colnames:
-                setattr(spectra[n], col, row[col])
-        
-        if len(spectra) == 1:
-            spectra = spectra.pop()
-        
-        return spectra
+    # def get_models(self, **kwargs):
+    #     """Retrieve all models with the specified parameters
+    #
+    #     Returns
+    #     -------
+    #     list
+    #         A list of the spectra as SEDkit.spectrum.Spectrum objects
+    #     """
+    #     # Get the relevant table rows
+    #     table = u.filter_table(self.index, **kwargs)
+    #
+    #     # Collect the spectra
+    #     pool = ThreadPool(8)
+    #     spectra = pool.starmap(Spectrum, table[data])
+    #     pool.close()
+    #     pool.join()
+    #
+    #     # # Add the metadata
+    #     # for n, row in table.iterrows():
+    #     #
+    #     #     for col in table.colnames:
+    #     #         setattr(spectra[n], col, row[col])
+    #
+    #     if len(spectra) == 1:
+    #         spectra = spectra.pop()
+    #
+    #     return spectra
         
     def get(self, resolution=None, interp=True, **kwargs):
         """
@@ -217,163 +272,68 @@ class ModelGrid:
             print(', '.join(param_str)+' model not in grid.')
             return
 
-    def grid_interp(self, **kwargs):
-        """
-        Interpolate the grid to the desired parameters
-
-        Returns
-        -------
-        SEDkit.spectrum.Spectrum
-            The interpolated Spectrum object
-        """
-        return True
-        # # Load the fluxes
-        # if isinstance(self.flux, str):
-        #     self.load_flux()
-        #
-        # # Get the flux array
-        # flux = self.flux.copy()
-        #
-        # # Get the interpolable parameters
-        # params, values = [], []
-        # for p, v in zip([self.Teff_vals, self.logg_vals, self.FeH_vals],
-        #                 [Teff, logg, FeH]):
-        #     if len(p) > 1:
-        #         params.append(p)
-        #         values.append(v)
-        # values = np.asarray(values)
-        # label = '{}/{}/{}'.format(Teff, logg, FeH)
-        #
-        # try:
-        #     # Interpolate flux values at each wavelength
-        #     # using a pool for multiple processes
-        #     print('Interpolating grid point [{}]...'.format(label))
-        #     processes = 4
-        #     mu_index = range(flux.shape[-2])
-        #     start = time.time()
-        #     pool = multiprocessing.Pool(processes)
-        #     func = partial(utils.interp_flux, flux=flux, params=params,
-        #                    values=values)
-        #     new_flux, generators = zip(*pool.map(func, mu_index))
-        #     pool.close()
-        #     pool.join()
-        #
-        #     # Clean up and time of execution
-        #     new_flux = np.asarray(new_flux)
-        #     generators = np.asarray(generators)
-        #     print('Run time in seconds: ', time.time()-start)
-        #
-        #     # Interpolate mu value
-        #     interp_mu = RegularGridInterpolator(params, self.mu)
-        #     mu = interp_mu(np.array(values)).squeeze()
-        #
-        #     # Interpolate r_eff value
-        #     interp_r = RegularGridInterpolator(params, self.r_eff)
-        #     r_eff = interp_r(np.array(values)).squeeze()
-        #
-        #     # Make a dictionary to return
-        #     grid_point = {'Teff': Teff, 'logg': logg, 'FeH': FeH,
-        #                   'mu': mu, 'r_eff': r_eff,
-        #                   'flux': new_flux, 'wave': self.wavelength,
-        #                   'generators': generators}
-        #
-        #     return grid_point
-        #
-        # except IOError:
-        #     print('Grid too sparse. Could not interpolate.')
-        #     return
-        
-    def load_spectra(self, reload=False):
-        """
-        Retrieve the spectra for all models and load into the
-        ModelGrid.array attribute
-        
-        Parameters
-        ----------
-        reload: bool
-            Relod the data even if it already exists
-        """
-        if reload:
-
-            # Delete the old file and clear the flux attribute
-            self.flux = None
-            self.wave = None
-
-        if self.flux is None:
-
-            print('Loading flux into table...')
-
-            if os.path.isfile(self.flux_file):
-
-                # Load the flux from the HDF5 file
-                f = h5py.File(self.flux_file, "r")
-                self.flux = f['flux'][:]
-                f.close()
-
-            else:
-
-                # Get array dimensions
-                T, G, M = self.Teff_vals, self.logg_vals, self.FeH_vals
-                shp = [len(T), len(G), len(M)]
-                n, N = 1, np.prod(shp)
-
-                # Iterate through rows
-                for nt, teff in enumerate(T):
-                    for ng, logg in enumerate(G):
-                        for nm, feh in enumerate(M):
-
-                            try:
-
-                                # Retrieve flux using the `get()` method
-                                d = self.get(teff, logg, feh, interp=False)
-
-                                if d:
-
-                                    # Make sure arrays exist
-                                    if isinstance(self.flux, str):
-                                        new_shp = shp+list(d['flux'].shape)
-                                        self.flux = np.zeros(new_shp)
-                                    if isinstance(self.r_eff, str):
-                                        self.r_eff = np.zeros(shp)
-                                    if isinstance(self.mu, str):
-                                        new_shp = shp+list(d['mu'].shape)
-                                        self.mu = np.zeros(new_shp)
-
-                                    # Add data to respective arrays
-                                    self.flux[nt, ng, nm] = d['flux']
-                                    if d['r_eff'] is None:
-                                        self.r_eff[nt, ng, nm] = np.nan
-                                    else:
-                                        self.r_eff[nt, ng, nm] = d['r_eff']
-                                    self.mu[nt, ng, nm] = d['mu'].squeeze()
-
-                                    # Get the wavelength array
-                                    if isinstance(self.wavelength, str):
-                                        self.wavelength = d['wave']
-
-                                    # Garbage collection
-                                    del d
-
-                                    # Print update
-                                    n += 1
-                                    msg = "{: .2f}% complete.".format(n*100./N)
-                                    print(msg, end='\r')
-
-                            except IOError:
-                                # No model computed so reduce total
-                                N -= 1
-
-                # Load the flux into an HDF5 file
-                f = h5py.File(self.flux_file, "w")
-                # dset = f.create_dataset('flux', data=self.flux)
-                f.create_dataset('flux', data=self.flux)
-                f.close()
-                # del dset
-                print("100.00 percent complete!", end='\n')
-
-        else:
-            print('Data already loaded.')
-    
+    # def grid_interp(self, **kwargs):
+    #     """
+    #     Interpolate the grid to the desired parameters
+    #
+    #     Returns
+    #     -------
+    #     SEDkit.spectrum.Spectrum
+    #         The interpolated Spectrum object
+    #     """
+    #     # Get the flux array
+    #     flux = self.flux.copy()
+    #
+    #     # Get the interpolable parameters
+    #     params, values = [], []
+    #     target = [getattr(self, p) for p in kwargs]
+    #     ranges = [getattr(self, p+'_vals') for p in kwargs]
+    #     for p, v in zip(ranges, target):
+    #         if len(p) > 1:
+    #             params.append(p)
+    #             values.append(v)
+    #     values = np.asarray(values)
+    #     label = '/'.join(target)
+    #
+    #     print(params, values)
+    #     return
+    #
+    #     try:
+    #         # Interpolate flux values at each wavelength
+    #         # using a pool for multiple processes
+    #         print('Interpolating grid point [{}]...'.format(label))
+    #         start = time.time()
+    #         pool = Pool(4)
+    #         func = partial(u.interp_flux, flux=flux, params=params,
+    #                        values=values)
+    #         new_flux, generators = zip(*pool.map(func, mu_index))
+    #         pool.close()
+    #         pool.join()
+    #
+    #         # Clean up and time of execution
+    #         new_flux = np.asarray(new_flux)
+    #         generators = np.asarray(generators)
+    #         print('Run time in seconds: ', time.time()-start)
+    #
+    #         # Interpolate mu value
+    #         interp_mu = RegularGridInterpolator(params, self.mu)
+    #         mu = interp_mu(np.array(values)).squeeze()
+    #
+    #         # Interpolate r_eff value
+    #         interp_r = RegularGridInterpolator(params, self.r_eff)
+    #         r_eff = interp_r(np.array(values)).squeeze()
+    #
+    #         # Make a dictionary to return
+    #         grid_point = {'Teff': Teff, 'logg': logg, 'FeH': FeH,
+    #                       'mu': mu, 'r_eff': r_eff,
+    #                       'flux': new_flux, 'wave': self.wavelength,
+    #                       'generators': generators}
+    #
+    #         return grid_point
+    #
+    #     except IOError:
+    #         print('Grid too sparse. Could not interpolate.')
+    #         return
         
 
 class BTSettl(ModelGrid):
@@ -381,6 +341,7 @@ class BTSettl(ModelGrid):
     def __init__(self):
         """Loat the model object"""
         # Inherit from base class
-        super().__init__('btsettl', q.AA, q.erg/q.s/q.cm**2/q.AA)
+        super().__init__('btsettl', q.AA, q.erg/q.s/q.cm**2/q.AA,
+                         parameters=['alpha', 'logg', 'teff', 'meta'])
         
         
