@@ -1,0 +1,17 @@
+language: python
+
+python:
+    - 3.3
+    - 3.4
+    - 3.5
+    - 3.6
+
+os:
+    - linux
+    - osx
+
+# Setting sudo to false opts in to Travis-CI container-based builds.
+sudo: false
+
+install:
+  - pip install -r requirements.txt

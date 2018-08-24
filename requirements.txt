@@ -4,3 +4,4 @@ scipy
 bokeh
 astroquery
 pysynphot
+lmfit
