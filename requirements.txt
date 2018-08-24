@@ -5,3 +5,4 @@ bokeh
 astroquery
 pysynphot
 lmfit
+pandas
