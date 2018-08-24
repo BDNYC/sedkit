@@ -1,77 +1,18 @@
 import unittest
 import copy
+
 import numpy as np
 import astropy.units as q
+
 from .. import sed
 from .. import spectrum as sp
+
 
 SPEC1 = [np.linspace(0.8,2.5,200)*q.um, abs(np.random.normal(size=200))*1E-15*q.erg/q.s/q.cm**2/q.AA, abs(np.random.normal(size=200))*1E-16*q.erg/q.s/q.cm**2/q.AA]
 SPEC2 = [np.linspace(21000,38000,150)*q.AA, abs(np.random.normal(size=150))*5E-14*q.erg/q.s/q.cm**2/q.AA, abs(np.random.normal(size=150))*5E-15*q.erg/q.s/q.cm**2/q.AA]
 
-def test(n=1):
-    """
-    Run a test target
-    """
-    from astrodbkit import astrodb
-    from SEDkit import sed
-    db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
-    
-    if n==1:
-        source_id = 2
-        from_dict = {'spectra':3176, 'photometry':'*', 'parallaxes':575, 'sources':source_id}
-    if n==2:
-        source_id = 86
-        from_dict = {'spectra':[379,1580,2726], 'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
-    if n==3:
-        source_id = 2051
-        from_dict = {}
-    
-    x = sed.MakeSED(source_id, db, from_dict=from_dict)
-    x.get_syn_photometry()
-    x.plot()
-    
-    return x
 
-def vega_test():
-    s = sed.SED(age=(455*q.Myr,13*q.Myr), radius=(2.362*q.Rsun,0.02*q.Rjup), parallax=(130.23*q.mas,0.36*q.mas), spectral_type='A0V')
-    vega = sp.Vega()
-    spec1 = [vega.wave[:4000]*q.AA, vega.flux[:4000]*q.erg/q.s/q.cm**2/q.AA]
-    spec2 = [vega.wave[3000:]*q.AA, vega.flux[3000:]*q.W/q.m**2/q.um]
-    s.add_spectrum(*spec1)
-    s.add_spectrum(*spec2)
-    s.add_photometry('2MASS.J', -0.177, 0.206)
-    s.add_photometry('2MASS.H', -0.029, 0.146)
-    s.add_photometry('2MASS.Ks', 0.129, 0.186)
-    s.add_photometry('WISE.W1', 1.452, None)
-    s.add_photometry('WISE.W2', 1.143, 0.019)
-    s.add_photometry('WISE.W3', -0.067, 0.008)
-    s.add_photometry('WISE.W4', -0.127, 0.006)
-    
-    # Teff should be 9602 ± 180 K
-    # Mbol should be 0.6
-    # Lbol should be 40.12 ± 0.45 Lsun
-    # Mass shoulf be 2.135 Msun
-    
-    return s, s.results
-
-def no_spectra():
-    s = sed.SED(age=(455*q.Myr,13*q.Myr), radius=(2.362*q.Rsun,0.02*q.Rjup), parallax=(130.23*q.mas,0.36*q.mas), spectral_type='A0V')
-    s.add_photometry('2MASS.J', -0.177, 0.206)
-    s.add_photometry('2MASS.H', -0.029, 0.146)
-    s.add_photometry('2MASS.Ks', 0.129, 0.186)
-    s.add_photometry('WISE.W1', 1.452, None)
-    s.add_photometry('WISE.W2', 1.143, 0.019)
-    s.add_photometry('WISE.W3', -0.067, 0.008)
-    s.add_photometry('WISE.W4', -0.127, 0.006)
-    
-    # Teff should be 9602 ± 180 K
-    # Mbol should be 0.6
-    # Lbol should be 40.12 ± 0.45 Lsun
-    # Mass shoulf be 2.135 Msun
-    
-    return s, s.results
-
-class SEDTests(unittest.TestCase):
+class TestSED(unittest.TestCase):
     """Tests for the SED class"""
     def __init__(self):
     
@@ -80,6 +21,35 @@ class SEDTests(unittest.TestCase):
         self.spec2 = sp.Spectrum(*SPEC2)
     
         self.sed = sed.SED()
+        
+    def test_no_spectra(self):
+        """Test that a purely photometric SED can be creted"""
+        s = copy.copy(self.sed)
+        s.age = 455*q.Myr, 13*q.Myr
+        s.radius = 2.362*q.Rsun, 0.02*q.Rjup
+        s.parallax = 130.23*q.mas, 0.36*q.mas
+        s.spectral_type = 'A0V'
+        s.add_photometry('2MASS.J', -0.177, 0.206)
+        s.add_photometry('2MASS.H', -0.029, 0.146)
+        s.add_photometry('2MASS.Ks', 0.129, 0.186)
+        s.add_photometry('WISE.W1', 1.452, None)
+        s.add_photometry('WISE.W2', 1.143, 0.019)
+        s.add_photometry('WISE.W3', -0.067, 0.008)
+        s.add_photometry('WISE.W4', -0.127, 0.006)
+        
+        self.assertTrue(s.Teff is not None)
+        
+    # def test_from_database(self):
+    #     """Test that an SED can be created from a database"""
+    #     s = copy.copy(self.sed)
+    #     db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
+    #
+    #     source_id = 86
+    #     from_dict = {'spectra':[379,1580,2726], 'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
+    #
+    #     s.from_database(db, **from_dict)
+    #
+    #     self.assertTrue(s.Teff is not None)
 
     def test_SED_add_spectrum(self):
         """Test that spectra are added properly"""
@@ -92,8 +62,5 @@ class SEDTests(unittest.TestCase):
         # Make sure the units are being updated
         self.failUnless(s.spectra[0].wave_units==s.spectra[1].wave_units)
 
-def main():
-    unittest.main()
-
 if __name__ == '__main__':
-    main()
+    unittest.main()
