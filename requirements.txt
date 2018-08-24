@@ -6,3 +6,4 @@ astroquery
 pysynphot
 lmfit
 pandas
+dustmaps
