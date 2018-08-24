@@ -208,6 +208,8 @@ class SED:
         self.Lbol = None
         self.Mbol = None
         self.Lbol_sun = None
+        self.SpT = None
+        self.SpT_fit = None
 
         # Default parameters
         self.age = 6*q.Gyr, 4*q.Gyr
@@ -996,10 +998,11 @@ class SED:
         if self.app_spec_SED is not None:
 
             self.app_spec_SED.best_fit_model(modelgrid)
+            self.best_fit = self.app_spec_SED.best_fit
             
             if self.verbose:
                 print('Best fit: ',
-                      self.app_spec_SED.best_fit[modelgrid.parameters][0])
+                      self.best_fit[modelgrid.parameters][0])
 
         else:
             print("Sorry, you need the 'splat' package and spectral data for this method.")
@@ -1234,14 +1237,17 @@ class SED:
         self.get_Mbol()
 
         # Interpolate surface gravity, mass and radius from isochrones
-        if self.Lbol_sun[1] is None:
-            print('Lbol={0.Lbol}. Uncertainties are needed to estimate Teff, radius, surface gravity, and mass.'.format(self))
-        else:
-            if self.radius is None:
-                self.radius_from_age()
-            self.logg_from_age()
-            self.mass_from_age()
-            self.teff_from_age()
+        if self.Lbol_sun is not None:
+        
+            if self.Lbol_sun[1] is None:
+                print('Lbol={0.Lbol}. Uncertainties are needed to estimate Teff, radius, surface gravity, and mass.'.format(self))
+
+            else:
+                if self.radius is None:
+                    self.radius_from_age()
+                self.logg_from_age()
+                self.mass_from_age()
+                self.teff_from_age()
 
         # Calculate Teff (dependent on Lbol, distance, and radius)
         self.get_Teff()
@@ -1630,7 +1636,10 @@ class SED:
         self._photometry.sort('eff')
         return self._photometry
 
-    def plot(self, app=True, photometry=True, spectra=True, integral=False, syn_photometry=True, blackbody=True, scale=['log', 'log'], output=False, fig=None, color=None, **kwargs):
+    def plot(self, app=True, photometry=True, spectra=True, integral=False,
+             syn_photometry=True, blackbody=True, best_fit=True,
+             scale=['log', 'log'], output=False, fig=None, color=None,
+             **kwargs):
         """
         Plot the SED
 
@@ -1647,7 +1656,9 @@ class SED:
         syn_photometry: bool
             Plot the synthetic photometry
         blackbody: bool
-            Polot the blackbody fit
+            Plot the blackbody fit
+        best_fit: bool
+            Plot the best fit model
         scale: array-like
             The (x, y) scales to plot, 'linear' or 'log'
         bokeh: bool
@@ -1763,6 +1774,10 @@ class SED:
             bb_wav, bb_flx = self.blackbody.data[:2]
             self.fig.line(bb_wav, bb_flx, line_color='red',
                           legend='{} K'.format(self.Teff_bb))
+                          
+        if best_fit and self.best_fit is not None:
+            bf = self.best_fit.spectrum
+            self.fig.line(bf[0], bf[1])
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
@@ -1871,9 +1886,9 @@ class SED:
         # Get the results
         rows = []
         for param in ['name', 'age', 'distance', 'parallax', 'radius', 'SpT', \
-                      'spectral_type', 'membership', 'reddening', 'fbol',
-                      'mbol', 'Lbol', 'Lbol_sun', 'Mbol', 'logg', 'mass',
-                      'Teff', 'Teff_bb', 'Teff_evo']:
+                      'SpT_fit', 'spectral_type', 'membership', 'reddening',
+                      'fbol', 'mbol', 'Lbol', 'Lbol_sun', 'Mbol', 'logg',
+                      'mass', 'Teff', 'Teff_bb', 'Teff_evo']:
 
             # Get the values and format
             attr = getattr(self, param, None)
