@@ -59,8 +59,8 @@ class TestSED(unittest.TestCase):
         s = copy.copy(self.sed)
 
         # Add a new spectra
-        s.add_spectrum(*self.spec1)
-        s.add_spectrum(*self.spec2)
+        s.add_spectrum(self.spec1)
+        s.add_spectrum(self.spec2)
 
         # Make sure the units are being updated
         self.failUnless(s.spectra[0].wave_units == s.spectra[1].wave_units)
