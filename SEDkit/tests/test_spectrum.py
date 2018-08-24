@@ -21,7 +21,7 @@ class TestSpectrum(unittest.TestCase):
         """Test that Spectrum is initialized properly"""
         s = copy.copy(self.spec)
         
-        self.assertTrue(np.array(SPEC).shape == self.spec.data.shape)
+        self.assertTrue(self.spec.data.shape == (3, 200) )
 
     def test_Spectrum_units(self):
         """Test that units are reassigned properly"""
