@@ -21,7 +21,7 @@ class TestSpectrum(unittest.TestCase):
         """Test that Spectrum is initialized properly"""
         s = copy.copy(self.spec)
         check_shape = self.spec.data.shape == (3, 200)
-        self.failUnless(check_shape)
+        self.assertTrue(check_shape)
 
     def test_Spectrum_units(self):
         """Test that units are reassigned properly"""
