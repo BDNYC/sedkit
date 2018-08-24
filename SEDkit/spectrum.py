@@ -242,7 +242,7 @@ class Spectrum(ps.ArraySpectrum):
                 result = list(self.fit(row.spectrum, wave_units='AA'))+[n]
                 results.append(result)
             except IndexError:
-                print('Problem fitting:',list(row[modelgrid.parameters]))
+                print('Problem fitting:', list(row[modelgrid.parameters]))
             
         # Get the best fit
         results = np.array(results)

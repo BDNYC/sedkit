@@ -982,74 +982,82 @@ class SED:
             if self.verbose:
                 print('\nNo blackbody fit.')
 
-    def fit_modelgrid(self, modelgrid='btsettl08'):
+    def fit_modelgrid(self, modelgrid):
         """Fit a model grid to the composite spectra
 
         Parameters
         ----------
+        modelgrid: SEDkit.modelgrid.ModelGrid
+            The model grid to fit
         """
-        pass
-        # if not self.calculated:
-#             self.make_sed()
-#
-#         if has_splat and self.app_spec_SED is not None:
-#
-#             # Make spectrum object in SPLAT
-#             sp = splat.Spectrum(wave=self.app_spec_SED.wave,
-#                                 flux=self.app_spec_SED.flux)
-#
-#             # Fit the model grid
-#             fit = spmod.modelFitGrid(sp, teff_range=[500, 3000],
-#                                      model=modelgrid, summary=False)
-#
-#             print(fit)
-#
-#         else:
-#             print("Sorry, you need the 'splat' package and spectral data for this method.")
-
-    def fit_spectral_index(self, idx_set='burgasser'):
-        """Fit composite spectrum to spectral standards"""
         if not self.calculated:
             self.make_sed()
 
-        if has_splat and self.app_spec_SED is not None:
+        if self.app_spec_SED is not None:
 
-            # Make spectrum object in SPLAT
-            sp = splat.Spectrum(wave=self.app_spec_SED.wave,
-                                flux=self.app_spec_SED.flux)
-
-            # Fit for SpT
-            spt = splat.classifyByIndex(sp, set=idx_set, round=True)[0]
-
+            self.app_spec_SED.best_fit_model(modelgrid)
+            
             if self.verbose:
-                print("SpT from spectral index:", spt)
-
-            self.spectral_type = spt
+                print('Best fit: ',
+                      self.app_spec_SED.best_fit[modelgrid.parameters][0])
 
         else:
             print("Sorry, you need the 'splat' package and spectral data for this method.")
-
+            
     def fit_spectral_type(self):
-        """Fit composite spectrum to spectral standards"""
-        if not self.calculated:
-            self.make_sed()
+        """Fit the spectral SED to a catalog of spectral standards"""
+        # Grab the SPL
+        spl = mg.SpexPrismLibrary()
+        
+        # Run the fit
+        self.fit_modelgrid(spl)
+        
+        # Store the result
+        self.SpT_fit = self.app_spec_SED.best_fit.spty
 
-        if has_splat and self.app_spec_SED is not None:
+    # def fit_spectral_index(self, idx_set='burgasser'):
+    #     """Fit composite spectrum to spectral standards"""
+    #     if not self.calculated:
+    #         self.make_sed()
+    #
+    #     if has_splat and self.app_spec_SED is not None:
+    #
+    #         # Make spectrum object in SPLAT
+    #         sp = splat.Spectrum(wave=self.app_spec_SED.wave,
+    #                             flux=self.app_spec_SED.flux)
+    #
+    #         # Fit for SpT
+    #         spt = splat.classifyByIndex(sp, set=idx_set, round=True)[0]
+    #
+    #         if self.verbose:
+    #             print("SpT from spectral index:", spt)
+    #
+    #         self.spectral_type = spt
+    #
+    #     else:
+    #         print("Sorry, you need the 'splat' package and spectral data for this method.")
 
-            # Make spectrum object in SPLAT
-            sp = splat.Spectrum(wave=self.app_spec_SED.wave,
-                                flux=self.app_spec_SED.flux)
-
-            # Fit for SpT
-            spt = splat.classifyByStandard(sp)[0]
-
-            if self.verbose:
-                print("SpT from spectral standards:", spt)
-
-            self.spectral_type = spt
-
-        else:
-            print("Sorry, you need the 'splat' package and spectral data for this method.")
+    # def fit_spectral_type(self):
+    #     """Fit composite spectrum to spectral standards"""
+    #     if not self.calculated:
+    #         self.make_sed()
+    #
+    #     if has_splat and self.app_spec_SED is not None:
+    #
+    #         # Make spectrum object in SPLAT
+    #         sp = splat.Spectrum(wave=self.app_spec_SED.wave,
+    #                             flux=self.app_spec_SED.flux)
+    #
+    #         # Fit for SpT
+    #         spt = splat.classifyByStandard(sp)[0]
+    #
+    #         if self.verbose:
+    #             print("SpT from spectral standards:", spt)
+    #
+    #         self.spectral_type = spt
+    #
+    #     else:
+    #         print("Sorry, you need the 'splat' package and spectral data for this method.")
 
     @property
     def flux_units(self):
