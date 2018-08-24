@@ -1,6 +1,7 @@
 # SEDkit
 
 [![Powered by Astropy](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org)
+[![Build Status](https://travis-ci.org/hover2pi/SEDkit.svg?branch=master)](https://travis-ci.org/hover2pi/SEDkit)
 
 `SEDkit` is a collection of pure Python 3.5 modules for simple SED construction and analysis. Users can create individual SEDs or SED catalogs from spectra and/or photometry and calculate fundamental parameters (f<sub>bol</sub>, M<sub>bol</sub>, L<sub>bol</sub>, T<sub>eff</sub>, mass, log(g)) using the methods presented in [Filippazzo et al. (2015)](http://adsabs.harvard.edu/abs/2015ApJ...810..158F).
 
