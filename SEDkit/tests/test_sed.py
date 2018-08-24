@@ -37,6 +37,8 @@ class TestSED(unittest.TestCase):
         s.add_photometry('WISE.W3', -0.067, 0.008)
         s.add_photometry('WISE.W4', -0.127, 0.006)
         
+        s.results
+        
         self.assertTrue(s.Teff is not None)
         
     # def test_from_database(self):
@@ -48,6 +50,7 @@ class TestSED(unittest.TestCase):
     #     from_dict = {'spectra':[379,1580,2726], 'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
     #
     #     s.from_database(db, **from_dict)
+    #     s.results
     #
     #     self.assertTrue(s.Teff is not None)
 
