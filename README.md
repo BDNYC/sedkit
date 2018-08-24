@@ -13,6 +13,10 @@ Requirements:
 - `dustmaps>=1.0`
 - `numpy>=1.13.3`
 
+## Installation
+
+```pip install SEDkit```
+
 
 ## Licensed
 
