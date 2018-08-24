@@ -54,17 +54,25 @@ def filter_table(table, **kwargs):
         
         # Wildcard case
         if isinstance(value, str) and '*' in value:
+            
+            # Get column data
+            data = np.array(table[param])
+        
+            if not value.startswith('*'):
+                value = '^'+value
+            if not value.endswith('*'):
+                value = value+'$'
         
             # Strip souble quotes
-            value = value.replace("'", '').replace('"', '')
-        
-            # Split the wildcard
-            start, end = value.split('*')
-        
+            value = value.replace("'", '').replace('"', '').replace('*', '(.*)')
+            
+            # Regex
+            reg = re.compile(value, re.IGNORECASE)
+            keep = list(filter(reg.findall, data))
+            
             # Get indexes
-            data = np.array(table[param])
-            idx = np.where([np.logical_and(i.startswith(start), i.endswith(end)) for i in data])
-        
+            idx = np.where([i in keep for i in data])
+            
             # Filter table
             table = table[idx]
         
@@ -341,6 +349,9 @@ def goodness(f1, f2, e1=None, e2=None, weights=None):
     weights: sequence, float (optional)
         The weights of each point
     """
+    if len(f1) != len(f2):
+        raise ValueError("f1[{}] and f2[{}]. They must be the same length.".format(len(f1), len(f2)))
+
     # Fill in missing arrays
     if e1 is None:
         e1 = np.ones(len(f1))
@@ -558,6 +569,57 @@ def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
         
     return [wavenew, specnew] if not any(errnew) else [wavnew, specnew, errnew]
     
+def overlap(wave1, wave2):
+    """
+    Example of full overlap::
+    
+        |---------- wave2 ----------|
+           |------ wave1 ------|
+
+    Examples of partial overlap::
+
+        |---------- wave1 ----------|
+           |------ wave2 ------|
+
+        |---- wave2 ----|
+           |---- wave1 ----|
+
+        |---- wave1 ----|
+           |---- wave2 ----|
+
+    Examples of no overlap::
+
+        |---- wave1 ----|  |---- wave2 ----|
+
+        |---- wave2 ----|  |---- wave1 ----|
+
+    Parameters
+    ----------
+    wave1: sequence
+        The first array
+    wave2: sequence
+        The second array
+
+    Returns
+    -------
+    ans : {'full', 'partial', 'none'}
+        Overlap status.
+
+    """
+    mn1, mx1 = min(wave1), max(wave1)
+    mn2, mx2 = min(wave2), max(wave2)
+
+    if (mn1 >= mn2 and mx1 <= mx2):
+        ans = 'full'
+
+    elif (mx2 < mn1) or (mx1 < mn2):
+        ans = 'none'
+
+    else:
+        ans = 'partial'
+
+    return ans
+    
 def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     """
     Function for resampling spectra (and optionally associated uncertainties) onto a new wavelength basis.
@@ -585,7 +647,14 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     ---------
     https://github.com/ACCarnall/SpectRes/blob/master/spectres/spectral_resampling.py
     """
-    # Generate arrays of left hand side positions and widths for the old and new bins
+    # Trim new_spec_wavs so they are completely covered by old_spec_wavs
+    idx = idx_overlap(old_spec_wavs, new_spec_wavs)
+    if not any(idx):
+        raise ValueError("spectres: The new wavelengths specified must fall at least partially within the range of the old wavelength values.")
+    new_spec_wavs = new_spec_wavs[idx]
+    
+    # Generate arrays of left hand side positions and widths for the old
+    # and new bins
     spec_lhs = np.zeros(old_spec_wavs.shape[0])
     spec_widths = np.zeros(old_spec_wavs.shape[0])
     spec_lhs = np.zeros(old_spec_wavs.shape[0])
@@ -601,10 +670,10 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     filter_lhs[-1] = new_spec_wavs[-1] + (new_spec_wavs[-1] - new_spec_wavs[-2])/2
     filter_lhs[1:-1] = (new_spec_wavs[1:] + new_spec_wavs[:-1])/2
     filter_widths[:-1] = filter_lhs[1:-1] - filter_lhs[:-2]
-
-    # Check that the range of wavelengths to be resampled_fluxes onto falls within the initial sampling region
-    if filter_lhs[0] < spec_lhs[0] or filter_lhs[-1] > spec_lhs[-1]:
-        raise ValueError("spectres: The new wavelengths specified must fall within the range of the old wavelength values.")
+    
+    # # Check that the range of wavelengths to be resampled_fluxes onto falls within the initial sampling region
+    # if filter_lhs[0] < spec_lhs[0] or filter_lhs[-1] > spec_lhs[-1]:
+    #     raise ValueError("spectres: The new wavelengths specified must fall within the range of the old wavelength values.")
 
     #Generate output arrays to be populated
     resampled_fluxes = np.zeros(spec_fluxes[...,0].shape + new_spec_wavs.shape)
@@ -656,13 +725,29 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
             spec_widths[start] /= start_factor
             spec_widths[stop] /= end_factor
 
-
     # If errors were supplied return the resampled_fluxes spectrum and error arrays
     if spec_errs is None:
         return [new_spec_wavs, resampled_fluxes]
          
     else:
         return [new_spec_wavs, resampled_fluxes, resampled_fluxes_errs]
+        
+def idx_overlap(s1, s2):
+    """Force s2 to be completely overlapped by s1
+    
+    Paramters
+    ---------
+    s1: sequence
+        The first array
+    s2: sequence
+        The second array
+    
+    Returns
+    -------
+    np.ndarray
+        The indexes of the trimmed second sequence
+    """
+    return np.where((s2 > s1[0]) & (s2 < s1[-1]))[0]
     
 def scrub(data):
     """

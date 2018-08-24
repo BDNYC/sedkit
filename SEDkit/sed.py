@@ -1652,7 +1652,7 @@ class SED:
             The color for the plot points and lines
 
         Returns
-         ==  ==  == =
+        -------
         bokeh.models.figure
             The SED plot
         """

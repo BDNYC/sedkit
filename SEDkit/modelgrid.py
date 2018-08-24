@@ -18,6 +18,7 @@ from .spectrum import Spectrum
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool
 from functools import partial
+from bokeh.plotting import figure, output_file, show, save
 
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]
@@ -25,7 +26,8 @@ EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resourc
 
 class ModelGrid:
     """A class to store a model grid"""
-    def __init__(self, name, wave_units=None, flux_units=None, resolution=200, **kwargs):
+    def __init__(self, name, wave_units=None, flux_units=None, resolution=200,
+                 verbose=True, **kwargs):
         """Initialize the model grid from a directory of VO table files
         
         Parameters
@@ -38,9 +40,12 @@ class ModelGrid:
             The flux units
         resolution: float
             The resolution of the models
+        verbose: bool
+            Print info
         """
         # Store the path and name
         self.name = name
+        self.verbose = verbose
 
         # Make the path
         model_path = 'data/models/atmospheric/{}'.format(name)
@@ -184,33 +189,16 @@ class ModelGrid:
         else:
             return rows.iloc[0].spectrum
         
-    # def get_models(self, **kwargs):
-    #     """Retrieve all models with the specified parameters
-    #
-    #     Returns
-    #     -------
-    #     list
-    #         A list of the spectra as SEDkit.spectrum.Spectrum objects
-    #     """
-    #     # Get the relevant table rows
-    #     table = u.filter_table(self.index, **kwargs)
-    #
-    #     # Collect the spectra
-    #     pool = ThreadPool(8)
-    #     spectra = pool.starmap(Spectrum, table[data])
-    #     pool.close()
-    #     pool.join()
-    #
-    #     # # Add the metadata
-    #     # for n, row in table.iterrows():
-    #     #
-    #     #     for col in table.colnames:
-    #     #         setattr(spectra[n], col, row[col])
-    #
-    #     if len(spectra) == 1:
-    #         spectra = spectra.pop()
-    #
-    #     return spectra
+    def filter(self, **kwargs):
+        """Retrieve all models with the specified parameters
+
+        Returns
+        -------
+        list
+            A list of the spectra as SEDkit.spectrum.Spectrum objects
+        """
+        # Get the relevant table rows
+        return u.filter_table(self.index, **kwargs)
         
     def get(self, resolution=None, interp=True, **kwargs):
         """
@@ -271,6 +259,35 @@ class ModelGrid:
             param_str = ['{}={}'.format(k, v) for k, v in kwargs.items()]
             print(', '.join(param_str)+' model not in grid.')
             return
+            
+    def plot(self, fig=None, draw=False, **kwargs):
+        """Plot the models with the given parameters
+        
+        Parameters
+        ----------
+        fig: bokeh.figure (optional)
+            The figure to plot on
+        draw: bool
+            Draw the plot rather than just return it
+        
+        Returns
+        -------
+        bokeh.figure
+            The figure
+        """
+        # Make the figure
+        if fig is None:
+            fig = figure()
+            fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
+            fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
+            
+        model = self.get_spectrum(**kwargs)
+        fig.line(model[0], model[1])
+            
+        if draw:
+            show(fig)
+        else:
+            return fig
 
     # def grid_interp(self, **kwargs):
     #     """
@@ -343,5 +360,12 @@ class BTSettl(ModelGrid):
         # Inherit from base class
         super().__init__('btsettl', q.AA, q.erg/q.s/q.cm**2/q.AA,
                          parameters=['alpha', 'logg', 'teff', 'meta'])
-        
+
+class SpexPrismLibrary(ModelGrid):
+    """Child class for the SpeX Prism Library model grid"""
+    def __init__(self):
+        """Loat the model object"""
+        # Inherit from base class
+        super().__init__('spexprismlibrary', q.AA, q.erg/q.s/q.cm**2/q.AA,
+                         parameters=['spty'])
         

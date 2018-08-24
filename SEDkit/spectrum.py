@@ -238,8 +238,11 @@ class Spectrum(ps.ArraySpectrum):
         # Iterate over entire model grid
         results = []
         for n, row in modelgrid.index.iterrows():
-            result = list(self.fit(row.spectrum, wave_units='AA'))+[n]
-            results.append(result)
+            try:
+                result = list(self.fit(row.spectrum, wave_units='AA'))+[n]
+                results.append(result)
+            except IndexError:
+                print('Problem fitting:',list(row[modelgrid.parameters]))
             
         # Get the best fit
         results = np.array(results)
@@ -251,7 +254,7 @@ class Spectrum(ps.ArraySpectrum):
         self.best_fit.spectrum[0] *= results[idx, 2]
         
         if self.verbose:
-            print(self.best_fit)
+            print(self.best_fit[modelgrid.parameters])
             
     @property
     def data(self):
@@ -262,7 +265,7 @@ class Spectrum(ps.ArraySpectrum):
             data = data[:2]
         return data
         
-    def fit(self, spec, weights=None, wave_units=None):
+    def fit(self, spec, weights=None, wave_units=None, scale=True):
         """Determine the goodness of fit between this and another spectrum
         
         Parameters
@@ -272,9 +275,12 @@ class Spectrum(ps.ArraySpectrum):
         wave_units: astropy.units.quantity.Quantity
             The wavelength units of the input spectrum if
             it is a numpy array
+        scale: bool
+            Scale spec when measuring the goodness of fit
         """
         # In case the wavelength units are different
         xnorm = 1
+        wav = self.wave
         
         if hasattr(spec, 'spectrum'):
 
@@ -294,6 +300,7 @@ class Spectrum(ps.ArraySpectrum):
             
             # Resample spec onto self wavelength
             spec2 = u.spectres(self.wave, *spec2)
+            wav = spec2[0]
             flx2 = spec2[1]
             err2 = np.ones_like(flx2) if len(spec2) == 2 else spec2[2]
             
@@ -301,16 +308,23 @@ class Spectrum(ps.ArraySpectrum):
             raise TypeError("Only an SEDkit.spectrum.Spectrum or numpy.ndarray can be fit.")
     
         # Get the self data
-        flx1 = self.flux
-        err1 = np.ones_like(self.flux) if self.unc is None else self.unc
+        boolarr = np.array([True if i in wav else False for i in self.wave])
+        idx = np.where(boolarr)
+        flx1 = self.flux[idx]
+        err1 = np.ones_like(flx1) if self.unc is None else self.unc[idx]
     
         # Make default weights the bin widths, excluding gaps in spectra
         if weights is None:
-            weights = np.gradient(self.wave)
+            weights = np.gradient(wav)
             weights[weights > np.std(weights)] = 1E-6
         
-        # Run the fitting
+        # Run the fitting and get the normalization
         gstat, ynorm = u.goodness(flx1, flx2, err1, err2, weights)
+        
+        # Run it again with the scaling removed
+        if scale:
+            gstat, ynorm1 = u.goodness(flx1, flx2*ynorm, err1, err2*ynorm,
+                                       weights)
         
         return gstat, ynorm, xnorm
 
@@ -617,9 +631,25 @@ class Spectrum(ps.ArraySpectrum):
 
         return Spectrum(*spectrum)
 
-    def plot(self, fig=None, components=False, best_fit=True, draw=False,
-             **kwargs):
-        """Plot the spectrum"""
+    def plot(self, fig=None, components=False, best_fit=True, draw=False, **kwargs):
+        """Plot the spectrum
+             
+        Parameters
+        ----------
+        fig: bokeh.figure (optional)
+            The figure to plot on
+        components: bool
+            Plot all components of the spectrum
+        best_fit: bool
+            Plot the best fit model if available
+        draw: bool
+            Draw the plot rather than just return it
+        
+        Returns
+        -------
+        bokeh.figure
+            The figure
+        """
         # Make the figure
         if fig is None:
             fig = figure()
