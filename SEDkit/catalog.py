@@ -6,13 +6,15 @@
 A module to produce a catalog of spectral energy distributions
 """
 import os
-import numpy as np
 import pickle
+
 import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
+import numpy as np
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, ColumnDataSource
+
 from .sed import SED
 from .spectrum import COLORS
 

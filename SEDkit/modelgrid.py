@@ -5,20 +5,23 @@ Author: Joe Filippazzo, jfilippazzo@stsci.edu
 """
 import os
 import glob
-import numpy as np
+from copy import copy
+from functools import partial
+from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing import Pool
+from pkg_resources import resource_filename
+
 import astropy.io.ascii as ii
 import astropy.table as at
 import astropy.units as q
 import astropy.io.votable as vo
+import numpy as np
 import pandas as pd
-from copy import copy
-from pkg_resources import resource_filename
+from bokeh.plotting import figure, output_file, show, save
+
 from . import utilities as u
 from .spectrum import Spectrum
-from multiprocessing.dummy import Pool as ThreadPool
-from multiprocessing import Pool
-from functools import partial
-from bokeh.plotting import figure, output_file, show, save
+
 
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]

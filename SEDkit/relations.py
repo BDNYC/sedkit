@@ -3,15 +3,18 @@ This is the code used to generate the polynomial relations
 used in SEDkit's calculations
 """
 from pkg_resources import resource_filename
+
 import astropy.io.ascii as ii
 import astropy.units as q
 import astropy.table as at
-import numpy as np
-import matplotlib.pyplot as plt
 from astroquery.vizier import Vizier
+import numpy as np
+
 from . import utilities as u
 
+
 V = Vizier(columns=["**"])
+
 
 def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
     """Generate a polynomial that describes the radius as
@@ -105,18 +108,18 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
         # Caluclate the uncertainty as a function of spectral type
         sig_p = np.polyfit(t, sig_yi, sig_order)
 
-        # Plot it
-        fg, (ax1, ax2) = plt.subplots(2, 1)
-        ax1.set_title("Fit for Polynomial (degree {}) with $\pm1\sigma$-interval".format(order))
-        ax1.fill_between(t, yi+sig_yi, yi-sig_yi, alpha=.25)
-        ax1.plot(t, yi,'-')
-        ax1.errorbar(data['spt'], data['radius'], yerr=data['radius_unc'], ls='none', marker='o', c='r', label='Boyajian+ 2012b, 2013')
-        ax1.set_ylabel('Radius [$R_\odot$]')
-        ax2.plot(t, sig_yi)
-        ax2.plot(t, np.polyval(sig_p, t))
-        ax2.set_title("Fit for $1\sigma$ Polynomial (degree {})".format(sig_order))
-        ax2.set_xlabel('Spectral Type')
-        ax2.set_ylabel('Uncertainty [$R_\odot$]')
+        # # Plot it
+        # fg, (ax1, ax2) = plt.subplots(2, 1)
+        # ax1.set_title("Fit for Polynomial (degree {}) with $\pm1\sigma$-interval".format(order))
+        # ax1.fill_between(t, yi+sig_yi, yi-sig_yi, alpha=.25)
+        # ax1.plot(t, yi,'-')
+        # ax1.errorbar(data['spt'], data['radius'], yerr=data['radius_unc'], ls='none', marker='o', c='r', label='Boyajian+ 2012b, 2013')
+        # ax1.set_ylabel('Radius [$R_\odot$]')
+        # ax2.plot(t, sig_yi)
+        # ax2.plot(t, np.polyval(sig_p, t))
+        # ax2.set_title("Fit for $1\sigma$ Polynomial (degree {})".format(sig_order))
+        # ax2.set_xlabel('Spectral Type')
+        # ax2.set_ylabel('Uncertainty [$R_\odot$]')
         
         return p, sig_p
         

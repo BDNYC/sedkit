@@ -5,18 +5,20 @@
 """
 Make nicer spectrum objects to pass around SED class
 """
-import numpy as np
-import astropy.units as q
-import astropy.io.votable as vo
-import pysynphot as ps
 import copy
 import lmfit
-from . import synphot as syn
-from . import utilities as u
+from pkg_resources import resource_filename
+
 import astropy.constants as ac
+import astropy.units as q
+import astropy.io.votable as vo
 from astropy.io import fits
 from bokeh.plotting import figure, output_file, show, save
-from pkg_resources import resource_filename
+import numpy as np
+import pysynphot as ps
+
+from . import synphot as syn
+from . import utilities as u
 
 
 COLORS = u.color_gen('Category10')

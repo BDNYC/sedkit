@@ -6,19 +6,17 @@
 Some utilities to accompany SEDkit
 """
 import re
-import numpy as np
 import itertools
+
 import astropy.units as q
 import astropy.constants as ac
 import astropy.table as at
-import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
-import pylab as plt
-import scipy.optimize as opt
-import bokeh.palettes as bpal
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.modeling import models
+import bokeh.palettes as bpal
+import numpy as np
+import pandas as pd
+import scipy.optimize as opt
 
 
 def filter_table(table, **kwargs):

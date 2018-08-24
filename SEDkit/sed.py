@@ -7,11 +7,22 @@ Author: Joe Filippazzo, jfilippazzo@stsci.edu
 import os
 import glob
 import shutil
-import numpy as np
+from pkg_resources import resource_filename
+
 import astropy.table as at
 import astropy.units as q
 import astropy.io.ascii as ii
 import astropy.constants as ac
+import numpy as np
+from astropy.modeling import fitting
+from astropy.io import fits
+from astropy.coordinates import Angle, SkyCoord
+from astroquery.vizier import Vizier
+from astroquery.simbad import Simbad
+from bokeh.io import export_png
+from bokeh.plotting import figure, show
+from bokeh.models import HoverTool, Range1d, ColumnDataSource
+from dustmaps.bayestar import BayestarWebQuery
 
 from . import utilities as u
 from . import synphot as s
@@ -20,25 +31,6 @@ from . import isochrone as iso
 from . import relations as rel
 from . import modelgrid as mg
 
-from astropy.modeling import fitting
-from astropy.io import fits
-from astropy.coordinates import Angle, SkyCoord
-from astroquery.vizier import Vizier
-from astroquery.simbad import Simbad
-from pkg_resources import resource_filename
-from bokeh.io import export_png
-from bokeh.plotting import figure, show
-from bokeh.models import HoverTool, Range1d, ColumnDataSource
-from dustmaps.bayestar import BayestarWebQuery
-from .modelgrid import EVO_MODELS
-from .synphot import PHOT_ALIASES
-from .isochrone import NYMG_AGES
-try:
-    import splat
-    import splat.model as spmod
-    has_splat = True
-except ImportError:
-    has_splat = False
 
 Vizier.columns = ["**", "+_r"]
 
@@ -711,8 +703,8 @@ class SED:
         model: str
             The evolutionary model name
         """
-        if model not in EVO_MODELS:
-            raise IOError("Please use an evolutionary model from the list: {}".format(EVO_MODELS))
+        if model not in mg.EVO_MODELS:
+            raise IOError("Please use an evolutionary model from the list: {}".format(mg.EVO_MODELS))
 
         self._evo_model = model
 
@@ -1096,7 +1088,7 @@ class SED:
         self._calibrate_photometry()
         self._calibrate_spectra()
 
-    def from_database(self, db, rename_bands=PHOT_ALIASES, **kwargs):
+    def from_database(self, db, rename_bands=s.PHOT_ALIASES, **kwargs):
         """
         Load the data from an astrodbkit.astrodb.Database
 
@@ -1541,7 +1533,7 @@ class SED:
 
             self._membership = None
 
-        elif membership in NYMG_AGES:
+        elif membership in iso.NYMG_AGES:
 
             # Set the membership!
             self._membership = membership
@@ -1550,10 +1542,10 @@ class SED:
                 print('Setting membership to', self.membership)
 
             # Set the age
-            self.age = NYMG_AGES.get(membership)
+            self.age = iso.NYMG_AGES.get(membership)
 
         else:
-            print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(NYMG_AGES.keys())))
+            print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(iso.NYMG_AGES.keys())))
 
     @property
     def name(self):

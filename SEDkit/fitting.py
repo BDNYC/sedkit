@@ -5,6 +5,7 @@ spectral energy distributions
 Author: Joe Filippazzo, jfilippazzo@stsci.edu
 """
 import lmfit
+
 from .utilities import spectres
 from .modelgrid import ModelGrid
 

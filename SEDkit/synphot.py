@@ -5,22 +5,23 @@
 """
 A module to calculate synthetic photometry
 """
-import warnings
-import pysynphot as ps
-import numpy as np
-import os
-import itertools
 import glob
+import itertools
+import os
+from pkg_resources import resource_filename
+import warnings
+
 import astropy.table as at
 import astropy.constants as ac
 import astropy.units as q
 import astropy.io.ascii as asc
 import astropy.io.votable as vo
-from pkg_resources import resource_filename
 from bokeh.plotting import figure, show
-
+import numpy as np
+import pysynphot as ps
 # Area of the telescope has to be in centimeters2
 # ps.setref(area=250000.)
+
 
 BANDPASSES = [i.split('/')[-1] for i in glob.glob(resource_filename('SEDkit', 'data/bandpasses/*'))]
 BANDPASS_PATH = resource_filename('SEDkit', 'data/bandpasses/')

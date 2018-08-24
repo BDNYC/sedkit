@@ -6,14 +6,16 @@
 A module to estimate fundamental parameters from model isochrones
 """
 import os
-import numpy as np
 from glob import glob
 from pkg_resources import resource_filename
+
 import astropy.units as q
-from itertools import chain, groupby
-import scipy.interpolate as si
 from bokeh.plotting import figure, show
 from bokeh.models import Range1d
+from itertools import chain, groupby
+import numpy as np
+import scipy.interpolate as si
+
 from .spectrum import COLORS
 
 
