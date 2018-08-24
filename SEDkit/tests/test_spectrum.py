@@ -20,7 +20,8 @@ class TestSpectrum(unittest.TestCase):
     def test_Spectrum_data(self):
         """Test that Spectrum is initialized properly"""
         s = copy.copy(self.spec)
-        self.failUnless(s.spectrum == SPEC)
+        
+        self.failUnless(np.array(SPEC).shape == self.spec.data.shape)
 
     def test_Spectrum_units(self):
         """Test that units are reassigned properly"""
@@ -35,7 +36,9 @@ class TestSpectrum(unittest.TestCase):
         s.flux_units = fu
 
         # Make sure the units are being updated
-        self.failUnless((s.spectrum[0].unit==wu)&(s.spectrum[1].unit==fu)&(s.spectrum[2].unit==fu))
+        self.failUnless((s.spectrum[0].unit == wu) &
+                        (s.spectrum[1].unit == fu) &
+                        (s.spectrum[2].unit == fu))
 
 if __name__ == '__main__':
     unittest.main()
