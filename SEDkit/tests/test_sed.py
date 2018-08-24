@@ -14,7 +14,7 @@ SPEC2 = [np.linspace(21000,38000,150)*q.AA, abs(np.random.normal(size=150))*5E-1
 
 class TestSED(unittest.TestCase):
     """Tests for the SED class"""
-    def __init__(self):
+    def setUp(self):
     
         # Make Spectrum class for testing
         self.spec1 = sp.Spectrum(*SPEC1)

@@ -3,7 +3,6 @@ import copy
 
 import numpy as np
 import astropy.units as q
-from bokeh.plotting import figure, output_file, show, save
 
 from .. import synphot as syn
 from .. import spectrum as sp
@@ -14,18 +13,18 @@ SPEC = [np.linspace(0.8,2.5,200)*q.um, abs(np.random.normal(size=200))*1E-15*q.e
 
 class TestSpectrum(unittest.TestCase):
     """Tests for the Spectrum class"""
-    def __init__(self):
+    def setUp(self):
         # Make Spectrum class for testing
         self.spec = sp.Spectrum(*SPEC)
 
     def test_Spectrum_data(self):
         """Test that Spectrum is initialized properly"""
-        s = copy.copy(spec)
+        s = copy.copy(self.spec)
         self.failUnless(s.spectrum == SPEC)
 
     def test_Spectrum_units(self):
         """Test that units are reassigned properly"""
-        s = copy.copy(spec)
+        s = copy.copy(self.spec)
 
         # Change the wave units
         wu = q.AA
