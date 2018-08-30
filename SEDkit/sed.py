@@ -818,9 +818,24 @@ class SED:
                              ['PS1.g', 'PS1.r', 'PS1.i', 'PS1.z', 'PS1.y'],
                              **kwargs)
 
-    def find_photometry(self, name, catalog, band_names, target_names, search_radius=None, idx=0, **kwargs):
+    def find_photometry(self, name, catalog, band_names, target_names=None, search_radius=None, idx=0, **kwargs):
         """
         Search Vizier for photometry in the given catalog
+        
+        Parameters
+        ----------
+        name: str
+            The informal name of the catalog, e.g. '2MASS'
+        catalog: str
+            The Vizier catalog address, e.g. 'II/246/out'
+        band_names: sequence
+            The list of column names to treat as bandpasses
+        target_names: sequence (optional)
+            The list of renamed columns, must be the same length as band_names
+        search_radius: astropy.units.quantity.Quantity
+            The search radius for the Vizier query
+        idx: int
+            The index of the record to use if multiple Vizier results
         """
         # Make sure there are coordinates
         if not isinstance(self.sky_coords, SkyCoord):
@@ -837,6 +852,9 @@ class SED:
         else:
             rad = search_radius or self.search_radius
             viz_cat = Vizier.query_region(self.sky_coords, radius=rad, catalog=[catalog])
+
+        if target_names is None:
+            target_names = band_names
 
         # Parse the record
         if len(viz_cat) > 0:
