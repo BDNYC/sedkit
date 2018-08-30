@@ -12,6 +12,7 @@ from pkg_resources import resource_filename
 import astropy.constants as ac
 import astropy.units as q
 import astropy.io.votable as vo
+import astropy.table as at
 from astropy.io import fits
 from bokeh.plotting import figure, output_file, show, save
 import numpy as np
@@ -228,7 +229,7 @@ class Spectrum(ps.ArraySpectrum):
         except IOError:
             raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
             
-    def best_fit_model(self, modelgrid):
+    def best_fit_model(self, modelgrid, diagnostics=False):
         """Perform simple fitting of the spectrum to all models in the given
         modelgrid and store the best fit
         
@@ -240,20 +241,29 @@ class Spectrum(ps.ArraySpectrum):
         # Iterate over entire model grid
         results = []
         for n, row in modelgrid.index.iterrows():
+            mg_row = list(copy.copy(row[modelgrid.parameters]))
             try:
-                result = list(self.fit(row.spectrum, wave_units='AA'))+[n]
+                spec = copy.copy(row.spectrum)
+                fit = list(self.fit(spec, wave_units='AA'))
+                result = [n]+fit+mg_row
                 results.append(result)
             except IndexError:
-                print('Problem fitting:', list(row[modelgrid.parameters]))
+                results.append([n]+[np.nan]*3+mg_row)
             
         # Get the best fit
         results = np.array(results)
-        idx = np.argmin(results.T[0])
-        self.best_fit = modelgrid.index.loc[[idx]].iloc[0]
+        gstats = list(map(float, results.T[1]))
+        idx = np.nanargmin(gstats)
+        self.best_fit = copy.copy(modelgrid.index.loc[[idx]].iloc[0])
         
         # Normalize the model
-        self.best_fit.spectrum[1] *= results[idx, 1]
-        self.best_fit.spectrum[0] *= results[idx, 2]
+        self.best_fit.spectrum[1] *= float(results[idx, 2])
+        self.best_fit.spectrum[0] *= float(results[idx, 3])
+        
+        if diagnostics:
+            names = ['idx', 'gstat', 'normy', 'normx']+modelgrid.parameters
+            results = at.Table(results, names=names)
+            results.pprint(max_lines=-1)
         
         if self.verbose:
             print(self.best_fit[modelgrid.parameters])
@@ -287,9 +297,9 @@ class Spectrum(ps.ArraySpectrum):
         if hasattr(spec, 'spectrum'):
 
             # Resample spec onto self wavelength
-            spec = spec.resamp(self.spectrum[0])
-            flx2 = spec.flux
-            err2 = np.ones_like(spec.flux) if spec.unc is None else spec.unc
+            spec2 = spec.resamp(self.spectrum[0])
+            flx2 = spec2.flux
+            err2 = np.ones_like(spec2.flux) if spec2.unc is None else spec2.unc
             
         elif isinstance(spec, (list, tuple, np.ndarray)):
             
@@ -660,7 +670,7 @@ class Spectrum(ps.ArraySpectrum):
         
         # Plot the spectrum
         c = kwargs.get('color', next(COLORS))
-        fig.line(self.wave, self.flux, color=c)
+        fig.line(self.wave, self.flux, color=c, alpha=0.8, legend=self.name)
         
         # Plot the uncertainties
         if self.unc is not None:
@@ -676,7 +686,10 @@ class Spectrum(ps.ArraySpectrum):
         # Plot the best fit
         if best_fit and self.best_fit is not None:
             best = self.best_fit.spectrum
-            fig.line(best[0], best[1], color=c, alpha=0.5)
+            params = list(self.best_fit[[p for p in self.best_fit.keys()\
+                          if p not in ['filepath','spectrum']]].keys())
+            params = list(map(str, list(self.best_fit[params])))
+            fig.line(best[0], best[1], color='black', legend='/'.join(params))
             
         if draw:
             show(fig)
