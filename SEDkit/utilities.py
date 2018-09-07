@@ -247,7 +247,7 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
         if isinstance(dist, q.quantity.Quantity):
             
             # Mag = mag - 2.5*np.log10(dist/scale_to)**2
-            Mag = mag -5*np.log10(dist.value) + 5*np.log10(scale_to.value)
+            Mag = mag - 5*np.log10(dist.value) + 5*np.log10(scale_to.value)
             Mag = Mag.round(3)
             
             if isinstance(sig_d, q.quantity.Quantity) and sig_m!='':
@@ -565,7 +565,36 @@ def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
     specnew[0] = flux[0]
     specnew[-1] = flux[-1]
         
-    return [wavenew, specnew] if not any(errnew) else [wavnew, specnew, errnew]
+    return [wavnew, specnew] if not any(errnew) else [wavnew, specnew, errnew]
+    
+def set_resolution(spec, resolution):
+    """Rebin the spectrum to the given resolution
+    
+    Parameters
+    ----------
+    spec: sequence
+        The spectrum to set the resolution for
+    resolution: float, int
+        The desired resolution
+    
+    Return
+    ------
+    sequence
+        The new spectrum
+    """
+    # Make the wavelength array
+    mn = np.nanmin(spec[0])
+    mx = np.nanmax(spec[0])
+    d_lam = (mx-mn)/resolution
+    wave = np.arange(mn, mx, d_lam)
+
+    # Trim the wavelength
+    dmn = (spec[0][1]-spec[0][0])/2.
+    dmx = (spec[0][-1]-spec[0][-2])/2.
+    wave = wave[np.logical_and(wave >= mn+dmn, wave <= mx-dmx)]
+
+    # Calculate the new spectrum
+    spec = spectres(wave, spec[0], spec[1])
     
 def overlap(wave1, wave2):
     """
@@ -936,7 +965,8 @@ def str2Q(x, target=''):
     else:
         return q.Unit('')
         
-def trim_spectrum(spectrum, regions, smooth_edges=False):
+def trim_spectrum(spectrum, regions=None, wave_min=0*q.um, wave_max=40*q.um, smooth_edges=False):
+    regions = regions or []
     trimmed_spec = [i[idx_exclude(spectrum[0], regions)] for i in spectrum]
     if smooth_edges:
         for r in regions:
@@ -950,4 +980,8 @@ def trim_spectrum(spectrum, regions, smooth_edges=False):
                     trimmed_spec = inject_average(trimmed_spec, r[0], 'left', n=smooth_edges)
             except:
                 pass
+                
+    # Get indexes to keep
+    trimmed_spec = [i[idx_exclude(trimmed_spec[0], [(wave_min, wave_max)])] for i in spectrum]
+                
     return trimmed_spec

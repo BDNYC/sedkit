@@ -55,7 +55,7 @@ def load_ModelGrid(path):
 class ModelGrid:
     """A class to store a model grid"""
     def __init__(self, name, parameters, wave_units=None, flux_units=None,
-                 resolution=200, verbose=True, **kwargs):
+                 resolution=None, trim=None, verbose=True, **kwargs):
         """Initialize the model grid from a directory of VO table files
         
         Parameters
@@ -68,6 +68,8 @@ class ModelGrid:
             The flux units
         resolution: float
             The resolution of the models
+        trim: sequence
+            Trim the models to a particular wavelength range
         verbose: bool
             Print info
         """
@@ -78,6 +80,7 @@ class ModelGrid:
         self.wave_units = wave_units
         self.flux_units = flux_units
         self.resolution = resolution
+        self.trim = trim
         self.verbose = verbose
         
         # Make all args into attributes
@@ -318,7 +321,38 @@ class ModelGrid:
             print("No models found satisfying", kwargs)
             return None
         else:
-            return rows.iloc[0].spectrum
+            spec = rows.iloc[0].spectrum
+            
+            # Trim it
+            trim = kwargs.get('trim', self.trim)
+            if trim is not None:
+                
+                # Get indexes to keep
+                idx, = np.where((spec[0]*self.wave_units > trim[0]) &
+                                (spec[0]*self.wave_units < trim[1]))
+                
+                if len(idx) > 0:
+                    spec = [i[idx] for i in spec]
+            
+            # Rebin
+            resolution = kwargs.get('resolution', self.resolution)
+            if resolution is not None:
+                
+                # Make the wavelength array
+                mn = np.nanmin(spec[0])
+                mx = np.nanmax(spec[0])
+                d_lam = (mx-mn)/resolution
+                wave = np.arange(mn, mx, d_lam)
+
+                # Trim the wavelength
+                dmn = (spec[0][1]-spec[0][0])/2.
+                dmx = (spec[0][-1]-spec[0][-2])/2.
+                wave = wave[np.logical_and(wave >= mn+dmn, wave <= mx-dmx)]
+
+                # Calculate the new spectrum
+                spec = u.spectres(wave, spec[0], spec[1])
+            
+            return spec
             
     def plot(self, fig=None, draw=False, **kwargs):
         """Plot the models with the given parameters
@@ -446,13 +480,14 @@ class ModelGrid:
 
 class BTSettl(ModelGrid):
     """Child class for the BT-Settl model grid"""
-    def __init__(self):
+    def __init__(self, **kwargs):
         """Loat the model object"""
         # List the parameters
         params = ['alpha', 'logg', 'teff', 'meta']
         
         # Inherit from base class
-        super().__init__('BT-Settl', params, q.AA, q.erg/q.s/q.cm**2/q.AA)
+        super().__init__('BT-Settl', params, q.AA, q.erg/q.s/q.cm**2/q.AA,
+                         **kwargs)
         
         # Load the model grid
         model_path = 'data/models/atmospheric/btsettl'

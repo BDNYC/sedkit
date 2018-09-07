@@ -51,7 +51,6 @@ class Spectrum(ps.ArraySpectrum):
             Print helpful stuff
         """
         # Meta
-        self.name = name
         self.verbose = verbose
         
         # Make sure the arrays are the same shape
@@ -109,12 +108,16 @@ class Spectrum(ps.ArraySpectrum):
         # Inherit from ArraySpectrum
         super().__init__(*spectrum[:2])
         
+        # Set the name
+        if name is not None:
+            self.name = name
+        
         # Add the uncertainty
         self._unctable = None if unc is None else spectrum[2]
         
         # Store components if added
         self.components = None
-        self.best_fit = None
+        self.best_fit = []
         
         # Convert back to input units
         self.wave_units = wave_units
@@ -239,26 +242,34 @@ class Spectrum(ps.ArraySpectrum):
             The model grid to fit
         """
         # Iterate over entire model grid
-        results = []
+        results, spectra = [], []
         for n, row in modelgrid.index.iterrows():
             mg_row = list(copy.copy(row[modelgrid.parameters]))
+            dic = {i:j for i,j in zip(modelgrid.parameters, mg_row)}
+            spec = modelgrid.get_spectrum(**dic)
             try:
-                spec = copy.copy(row.spectrum)
+                # spec = copy.copy(row.spectrum)
                 fit = list(self.fit(spec, wave_units='AA'))
                 result = [n]+fit+mg_row
+                spectrum = [spec[0]*fit[2], spec[1]*fit[1]]
+                spectra.append(spectrum)
                 results.append(result)
             except IndexError:
                 results.append([n]+[np.nan]*3+mg_row)
+                spectra.append(spec)
             
         # Get the best fit
         results = np.array(results)
         gstats = list(map(float, results.T[1]))
         idx = np.nanargmin(gstats)
-        self.best_fit = copy.copy(modelgrid.index.loc[[idx]].iloc[0])
+        final_spec = spectra[idx]
+        bf = copy.copy(modelgrid.index.loc[[idx]].iloc[0])
+        bf.spectrum = final_spec
         
-        # Normalize the model
-        self.best_fit.spectrum[1] *= float(results[idx, 2])
-        self.best_fit.spectrum[0] *= float(results[idx, 3])
+        params = list(bf[[p for p in bf.keys()\
+                      if p not in ['filepath','spectrum']]].keys())
+        params = list(map(str, list(bf[params])))
+        bf.name = '/'.join(params)
         
         if diagnostics:
             names = ['idx', 'gstat', 'normy', 'normx']+modelgrid.parameters
@@ -266,7 +277,9 @@ class Spectrum(ps.ArraySpectrum):
             results.pprint(max_lines=-1)
         
         if self.verbose:
-            print(self.best_fit[modelgrid.parameters])
+            print(bf[modelgrid.parameters])
+            
+        self.best_fit.append(bf)
             
     @property
     def data(self):
@@ -681,15 +694,14 @@ class Spectrum(ps.ArraySpectrum):
         # Plot the components
         if components and self.components is not None:
             for spec in self.components:
-                fig.line(spec.wave, spec.flux, color=next(COLORS))
+                fig.line(spec.wave, spec.flux, color=next(COLORS),
+                         legend=spec.name)
                 
         # Plot the best fit
-        if best_fit and self.best_fit is not None:
-            best = self.best_fit.spectrum
-            params = list(self.best_fit[[p for p in self.best_fit.keys()\
-                          if p not in ['filepath','spectrum']]].keys())
-            params = list(map(str, list(self.best_fit[params])))
-            fig.line(best[0], best[1], color='black', legend='/'.join(params))
+        if best_fit and len(self.best_fit) > 0:
+            for bf in self.best_fit:
+                fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.3,
+                         color=next(COLORS), legend=bf.name)
             
         if draw:
             show(fig)

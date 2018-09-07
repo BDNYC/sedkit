@@ -157,6 +157,7 @@ class SED:
         self.abs_spec_SED = None
         self.app_phot_SED = None
         self.abs_phot_SED = None
+        self.best_fit = []
 
         # Photometry
         phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc',
@@ -301,37 +302,37 @@ class SED:
             # Add the magnitude
             self.add_photometry(*row)
 
-    def add_SDSS_spectrum(self, file=None, plate=None, mjd=None, fiber=None):
-        """Add an SDSS spectrum to the SED from file or by
-        the plate, mjd, and fiber numbers
-        
-        Parameters
-        ----------
-        file: str
-            The path to the file
-        plate: int
-            The plate of the SDSS spectrum
-        mjd: int
-            The MJD of the SDSS spectrum
-        fiber: int
-            The fiber of the SDSS spectrum
-        """
-        # Get the local file
-        if file is not None:
-            spec = SDSSfits(file)
-
-        elif plate is not None and mjd is not None and fiber is not None:
-            spec = fetch_sdss_spectrum(plate, mjd, fiber)
-
-        else:
-            raise ValueError('Huh?')
-
-        wave = spec.wavelength()*q.AA
-        flux = spec.spectrum*1E-17*q.erg/q.s/q.cm**2/q.AA
-        unc = spec.error*1E-17*q.erg/q.s/q.cm**2/q.AA
-
-        # Add the data to the SED object
-        self.add_spectrum([wave, flux, unc])
+    # def add_SDSS_spectrum(self, file=None, plate=None, mjd=None, fiber=None):
+    #     """Add an SDSS spectrum to the SED from file or by
+    #     the plate, mjd, and fiber numbers
+    #
+    #     Parameters
+    #     ----------
+    #     file: str
+    #         The path to the file
+    #     plate: int
+    #         The plate of the SDSS spectrum
+    #     mjd: int
+    #         The MJD of the SDSS spectrum
+    #     fiber: int
+    #         The fiber of the SDSS spectrum
+    #     """
+    #     # Get the local file
+    #     if file is not None:
+    #         spec = SDSSfits(file)
+    #
+    #     elif plate is not None and mjd is not None and fiber is not None:
+    #         spec = fetch_sdss_spectrum(plate, mjd, fiber)
+    #
+    #     else:
+    #         raise ValueError('Huh?')
+    #
+    #     wave = spec.wavelength()*q.AA
+    #     flux = spec.spectrum*1E-17*q.erg/q.s/q.cm**2/q.AA
+    #     unc = spec.error*1E-17*q.erg/q.s/q.cm**2/q.AA
+    #
+    #     # Add the data to the SED object
+    #     self.add_spectrum([wave, flux, unc])
 
     def add_spectrum(self, spectrum, **kwargs):
         """Add a new Spectrum object to the SED
@@ -396,7 +397,7 @@ class SED:
                                    ext=ext, survey=survey, **kwargs)
 
         # Add the data to the SED object
-        self.add_spectrum(spectrum)
+        self.add_spectrum(spectrum, **kwargs)
 
     @property
     def age(self):
@@ -1012,10 +1013,10 @@ class SED:
             
             if self.verbose:
                 print('Best fit: ',
-                      self.best_fit[modelgrid.parameters][0])
+                      self.best_fit[-1][modelgrid.parameters][0])
 
         else:
-            print("Sorry, you need the 'splat' package and spectral data for this method.")
+            print("Sorry, could not fit SED to model grid", modelgrid)
             
     def fit_spectral_type(self):
         """Fit the spectral SED to a catalog of spectral standards"""
@@ -1026,51 +1027,7 @@ class SED:
         self.fit_modelgrid(spl)
         
         # Store the result
-        self.SpT_fit = self.app_spec_SED.best_fit.spty
-
-    # def fit_spectral_index(self, idx_set='burgasser'):
-    #     """Fit composite spectrum to spectral standards"""
-    #     if not self.calculated:
-    #         self.make_sed()
-    #
-    #     if has_splat and self.app_spec_SED is not None:
-    #
-    #         # Make spectrum object in SPLAT
-    #         sp = splat.Spectrum(wave=self.app_spec_SED.wave,
-    #                             flux=self.app_spec_SED.flux)
-    #
-    #         # Fit for SpT
-    #         spt = splat.classifyByIndex(sp, set=idx_set, round=True)[0]
-    #
-    #         if self.verbose:
-    #             print("SpT from spectral index:", spt)
-    #
-    #         self.spectral_type = spt
-    #
-    #     else:
-    #         print("Sorry, you need the 'splat' package and spectral data for this method.")
-
-    # def fit_spectral_type(self):
-    #     """Fit composite spectrum to spectral standards"""
-    #     if not self.calculated:
-    #         self.make_sed()
-    #
-    #     if has_splat and self.app_spec_SED is not None:
-    #
-    #         # Make spectrum object in SPLAT
-    #         sp = splat.Spectrum(wave=self.app_spec_SED.wave,
-    #                             flux=self.app_spec_SED.flux)
-    #
-    #         # Fit for SpT
-    #         spt = splat.classifyByStandard(sp)[0]
-    #
-    #         if self.verbose:
-    #             print("SpT from spectral standards:", spt)
-    #
-    #         self.spectral_type = spt
-    #
-    #     else:
-    #         print("Sorry, you need the 'splat' package and spectral data for this method.")
+        self.SpT_fit = self.app_spec_SED.best_fit[-1].spty
 
     @property
     def flux_units(self):
@@ -1738,41 +1695,45 @@ class SED:
             color = '#1f77b4'
 
         # Plot spectra
-        if spectra is not False and len(self.spectra)>0:
+        if spectra is not False and len(self.spectra) > 0:
 
             if spectra == 'all':
                 for n, spec in enumerate(self.spectra):
-                    self.fig.line(spec.wave, spec.flux, color=next(sp.COLORS), legend='Spectrum {}'.format(n))
+                    self.fig = spec.plot(fig=self.fig, components=True)
+                    
             else:
-                self.fig.line(spec_SED.wave, spec_SED.flux, color=color, legend='Spectra')
+                self.fig.line(spec_SED.wave, spec_SED.flux, color=color,
+                              legend='Spectrum')
 
         # Plot photometry
         if photometry and self.photometry is not None:
 
             # Set up hover tool
-            phot_tips = [( 'Band', '@desc'), ('Wave', '@x'), ( 'Flux', '@y'), ('Unc', '@z')]
-            hover = HoverTool(names=['photometry', 'nondetection'], tooltips=phot_tips, mode='vline')
+            phot_tips = [( 'Band', '@desc'), ('Wave', '@x'), ( 'Flux', '@y'),
+                         ('Unc', '@z')]
+            hover = HoverTool(names=['photometry', 'nondetection'],
+                              tooltips=phot_tips, mode='vline')
             self.fig.add_tools(hover)
 
             # Plot points with errors
             pts = np.array([(bnd, wav, flx, err) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre+'flux', pre+'flux_unc']) if not any([np.isnan(i) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
-            source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
-            self.fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', color=color, fill_alpha=0.7, size=8)
+            source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'],
+                                      z=pts['z'],
+                                      desc=[str(b) for b in pts['desc']]))
+            self.fig.circle('x', 'y', source=source, legend='Photometry',
+                            name='photometry', color=color, fill_alpha=0.7,
+                            size=8)
 
             # Plot points with errors
             pts = np.array([(bnd, wav, flx, err) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre+'flux', pre+'flux_unc']) if np.isnan(err) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
-            source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
-            self.fig.circle('x', 'y', source=source, legend='Nondetection', name='nondetection', color=color, fill_alpha=0, size=8)
+            source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'],
+                                      z=pts['z'],
+                                      desc=[str(b) for b in pts['desc']]))
+            self.fig.circle('x', 'y', source=source, legend='Nondetection',
+                            name='nondetection', color=color, fill_alpha=0,
+                            size=8)
 
-        # # Plot synthetic photometry
-        # if syn_photometry and self.syn_photometry is not None:
-        #
-        #     # Plot points with errors
-        #     pts = np.array([(x, y, z) for x, y, z in np.array(self.syn_photometry['eff', pre+'flux', pre+'flux_unc']) if not np.isnan(z)]).T
-        #     try:
-        #         u.errorbar(self.fig, pts[0], pts[1], yerr=pts[2], point_kwargs={'fill_color':'red', 'fill_alpha':0.7, 'size':8}, legend='Synthetic Photometry')
-        #     except:
-        #         pass
+        # Plot synthetic photometry
 
         # Plot the SED with linear interpolation completion
         if integral:
@@ -1785,9 +1746,11 @@ class SED:
             self.fig.line(bb_wav, bb_flx, line_color='red',
                           legend='{} K'.format(self.Teff_bb))
                           
-        if best_fit and self.best_fit is not None:
-            bf = self.best_fit.spectrum
-            self.fig.line(bf[0], bf[1])
+        if best_fit and len(self.best_fit) > 0:
+            for bf in self.best_fit:
+                # self.fig.line(bf.spectrum[0], bf.spectrum[1], legend=bf.name)
+                self.fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.3,
+                                         color=next(sp.COLORS), legend=bf.name)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
