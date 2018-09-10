@@ -527,4 +527,16 @@ class SpexPrismLibrary(ModelGrid):
         model_path = 'data/models/atmospheric/spexprismlibrary'
         root = resource_filename('SEDkit', model_path)
         self.load(root)
-        
+
+def format_XML(modeldir):
+    """Convert VO tables with '<RESOURCE type="datafile">' into 
+    <RESOURCE type="results"> so astropy.io.votable can read it
+
+    Parameters
+    ----------
+    modeldir: str
+        The path to the mdel directory of files to convert
+    """
+    files = glob.glob(modeldir+'*.xml') 
+    for line in fileinput.input(files, inplace=True):
+        print(line.replace('datafile', 'results'), end='')
