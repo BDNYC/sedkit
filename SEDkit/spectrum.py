@@ -15,8 +15,12 @@ import astropy.io.votable as vo
 import astropy.table as at
 from astropy.io import fits
 from bokeh.plotting import figure, output_file, show, save
+from functools import partial
+from multiprocessing import Pool
 import numpy as np
+from pandas import DataFrame
 import pysynphot as ps
+
 
 from . import synphot as syn
 from . import utilities as u
@@ -232,7 +236,7 @@ class Spectrum(ps.ArraySpectrum):
         except IOError:
             raise TypeError('Only another SEDkit.spectrum.Spectrum object can be added. Input is of type {}'.format(type(spec2)))
             
-    def best_fit_model(self, modelgrid, diagnostics=False):
+    def best_fit_model(self, modelgrid):
         """Perform simple fitting of the spectrum to all models in the given
         modelgrid and store the best fit
         
@@ -241,46 +245,33 @@ class Spectrum(ps.ArraySpectrum):
         modelgrid: SEDkit.modelgrid.ModelGrid
             The model grid to fit
         """
+        # Prepare data
+        spectrum = Spectrum(*self.spectrum)
+        rows = [row for n, row in modelgrid.index.iterrows()]
+
         # Iterate over entire model grid
-        results, spectra = [], []
-        for n, row in modelgrid.index.iterrows():
-            mg_row = list(copy.copy(row[modelgrid.parameters]))
-            dic = {i:j for i,j in zip(modelgrid.parameters, mg_row)}
-            spec = modelgrid.get_spectrum(**dic)
-            try:
-                # spec = copy.copy(row.spectrum)
-                fit = list(self.fit(spec, wave_units='AA'))
-                result = [n]+fit+mg_row
-                spectrum = [spec[0]*fit[2], spec[1]*fit[1]]
-                spectra.append(spectrum)
-                results.append(result)
-            except IndexError:
-                results.append([n]+[np.nan]*3+mg_row)
-                spectra.append(spec)
-            
-        # Get the best fit
-        results = np.array(results)
-        gstats = list(map(float, results.T[1]))
-        idx = np.nanargmin(gstats)
-        final_spec = spectra[idx]
-        bf = copy.copy(modelgrid.index.loc[[idx]].iloc[0])
-        bf.spectrum = final_spec
+        pool = Pool(8)
+        func = partial(fit_model, fitspec=spectrum)
+        fit_rows = pool.map(func, rows)
+        pool.close()
+        pool.join()
+
+        # Turn the results into a DataFrame and sort
+        models = DataFrame(fit_rows)
+        models.sort_values('gstat')
         
-        params = list(bf[[p for p in bf.keys()\
-                      if p not in ['filepath','spectrum']]].keys())
+        # Get the best fit
+        bf = copy.copy(models.iloc[0])
+        no_col = ['filepath','spectrum','gstat']
+        params = list(bf[[p for p in bf.keys() if p not in no_col]].keys())
         params = list(map(str, list(bf[params])))
         bf.name = '/'.join(params)
-        
-        if diagnostics:
-            names = ['idx', 'gstat', 'normy', 'normx']+modelgrid.parameters
-            results = at.Table(results, names=names)
-            results.pprint(max_lines=-1)
-        
+
         if self.verbose:
             print(bf[modelgrid.parameters])
-            
+
         self.best_fit.append(bf)
-            
+
     @property
     def data(self):
         """Store the spectrum without units
@@ -1183,4 +1174,30 @@ class Vega(Spectrum):
         super().__init__(wave, flux, **kwargs)
 
         self.name = 'Vega'
-        
+
+
+def fit_model(row, fitspec):
+    """Fit the model grid row to the spectrum with the given parameters
+
+    Parameters
+    ----------
+    row: pandas.Row
+        The dataframe row to fit
+    fitspec: SEDkit.spectrum.Spectrum
+        The spectrum to fit
+
+    Returns
+    -------
+    pandas.Row
+        The input row with the normalized spectrum and additional gstat
+    """
+    try:
+        gstat, yn, xn = list(fitspec.fit(row['spectrum'], wave_units='AA'))
+        spectrum = np.array([row['spectrum'][0]*xn, row['spectrum'][1]*yn])
+        row['spectrum'] = spectrum
+        row['gstat'] = gstat
+
+    except ValueError:
+        row['gstat'] = np.nan
+
+    return row

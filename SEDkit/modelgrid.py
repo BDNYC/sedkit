@@ -27,6 +27,61 @@ from .spectrum import Spectrum
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]
 
+def load_model(file, parameters=None, wl_min=5000, wl_max=50000):
+    """Load a model from file
+    
+    Parameters
+    ----------
+    file: str
+        The path to the file
+    parameters: sequence
+        The parameters to extract
+    wl_min: float
+        The minimum wavelength
+    wl_max: float
+        The maximum wavelength
+
+    Returns
+    -------
+    dict
+        A dictionary of values
+    """
+    # Parse the XML file
+    vot = vo.parse_single_table(file)
+
+    # Parse the SVO filter metadata
+    all_params = [str(p).split() for p in vot.params]
+                        
+    meta = {}
+    for p in all_params:
+
+        # Extract the key/value pairs
+        key = p[1].split('"')[1]
+        val = p[-1].split('"')[1]
+        
+        if (parameters and key in parameters) or not parameters:
+
+            # Do some formatting
+            if p[2].split('"')[1] == 'float' or p[3].split('"')[1] == 'float':
+                val = float(val)
+
+            else:
+                val = val.replace('b&apos;','').replace('&apos','').replace('&amp;','&').strip(';')
+
+            # Add it to the dictionary
+            meta[key] = val
+
+    # Add the filename
+    meta['filepath'] = file
+    
+    # Trim and add the data
+    spectrum = np.array([list(i) for i in vot.array]).T
+    meta['spectrum'] = spectrum[:, (spectrum[0] >= wl_min) & (spectrum[0] <= wl_max)]
+
+    print(file, ': Done!')
+
+    return meta
+
 def load_ModelGrid(path):
     """Load a model grid from a file
     
@@ -110,7 +165,7 @@ class ModelGrid:
         # Add it to the index
         self.index = self.index.append(new_rec)
         
-    def load(self, dirname):
+    def load(self, dirname, **kwargs):
         """Load a model grid from a directory of VO table XML files
         
         Parameters
@@ -140,7 +195,7 @@ class ModelGrid:
             setattr(self, '{}_vals'.format(param),
                     np.asarray(np.unique(self.index[param])))
 
-    def index_models(self, parameters=None):
+    def index_models(self, parameters=None, wl_min=0.3*q.um, wl_max=25*q.um):
         """Generate model index file for faster reading
         
         Parameters
@@ -154,45 +209,13 @@ class ModelGrid:
         print("Indexing {} models for {} grid...".format(self.n_models, self.name))
 
         # Grab the parameters and the filepath for each
-        all_meta = []
-        for file in files:
-
-            try:
-                # Parse the XML file
-                vot = vo.parse_single_table(file)
-
-                # Parse the SVO filter metadata
-                all_params = [str(p).split() for p in vot.params]
-                                    
-                meta = {}
-                for p in all_params:
-
-                    # Extract the key/value pairs
-                    key = p[1].split('"')[1]
-                    val = p[-1].split('"')[1]
-                    
-                    if (parameters and key in parameters) or not parameters:
-
-                        # Do some formatting
-                        if p[2].split('"')[1] == 'float' or p[3].split('"')[1] == 'float':
-                            val = float(val)
-
-                        else:
-                            val = val.replace('b&apos;','').replace('&apos','').replace('&amp;','&').strip(';')
-
-                        # Add it to the dictionary
-                        meta[key] = val
-
-                # Add the filename
-                meta['filepath'] = file
-                
-                # Add the data
-                meta['spectrum'] = np.array([list(i) for i in vot.array]).T
-
-                all_meta.append(meta)
-                
-            except IOError:
-                print(file, ": Could not parse file")
+        pool = Pool(8)
+        func = partial(load_model, parameters=parameters,
+                       wl_min=wl_min.to(self.wave_units).value,
+                       wl_max=wl_max.to(self.wave_units).value)
+        all_meta = pool.map(func, files)
+        pool.close()
+        pool.join()
 
         # Make the index table
         self.index = pd.DataFrame(all_meta)
@@ -480,7 +503,7 @@ class ModelGrid:
 
 class BTSettl(ModelGrid):
     """Child class for the BT-Settl model grid"""
-    def __init__(self, **kwargs):
+    def __init__(self, root=None, **kwargs):
         """Loat the model object"""
         # List the parameters
         params = ['alpha', 'logg', 'teff', 'meta']
@@ -490,8 +513,8 @@ class BTSettl(ModelGrid):
                          **kwargs)
         
         # Load the model grid
-        model_path = 'data/models/atmospheric/btsettl'
-        root = resource_filename('SEDkit', model_path)
+        modeldir = 'data/models/atmospheric/btsettl'
+        root = root or resource_filename('SEDkit', modeldir)
         self.load(root)
         
         
