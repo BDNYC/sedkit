@@ -28,7 +28,7 @@ class SEDCatalog:
         self.color = color
         self.wave_units = q.um
         self.flux_units = q.erg/q.s/q.cm**2/q.AA
-        
+
         # List all the results columns
         self.cols = ['name', 'age', 'age_unc', 'distance', 'distance_unc',
                      'parallax', 'parallax_unc', 'radius', 'radius_unc',
@@ -38,11 +38,11 @@ class SEDCatalog:
                      'Lbol_sun_unc', 'Mbol', 'Mbol_unc', 'logg', 'logg_unc',
                      'mass', 'mass_unc', 'Teff', 'Teff_unc', 'Teff_evo',
                      'Teff_evo_unc', 'Teff_bb', 'SED']
-                
+
         # A master table of all SED results
         self.results = at.QTable(names=self.cols, dtype=['O']*len(self.cols))
         self.results.add_index('name')
-        
+
         # Set the units
         self.results['age'].unit = q.Gyr
         self.results['age_unc'].unit = q.Gyr
@@ -63,16 +63,16 @@ class SEDCatalog:
         self.results['Teff_bb'].unit = q.K
         self.results['Teff_evo'].unit = q.K
         self.results['Teff_evo_unc'].unit = q.K
-        
-        
+
+
     def __add__(self, other):
         """Add two catalogs together
-        
+
         Parameters
         ----------
         other: SEDkit.catalog.SEDCatalog
             The SEDCatalog to add
-        
+
         Returns
         -------
         SEDkit.catalog.SEDCatalog
@@ -80,19 +80,19 @@ class SEDCatalog:
         """
         if not type(other)==type(self):
             raise TypeError('Cannot add object of type', type(other))
-            
+
         # Make a new catalog
         new_cat = SEDCatalog()
-        
+
         # Combine results
         new_cat.results = at.vstack([self.results, other.results])
-        
+
         return new_cat
-        
-    
+
+
     def add_SED(self, sed):
         """Add an SED to the catalog
-        
+
         Parameters
         ----------
         sed: SEDkit.sed.SED
@@ -100,18 +100,18 @@ class SEDCatalog:
         """
         # Turn off print statements
         sed.verbose = False
-        
+
         # Check the units
         sed.wave_units = self.wave_units
         sed.flux_units = self.flux_units
-        
+
         # Run the SED
         sed.make_sed()
-        
+
         # Add the values and uncertainties if applicable
         results = []
         for col in self.cols[:-1]:
-            
+
             if col+'_unc' in self.cols:
                 if isinstance(getattr(sed, col), tuple):
                     val = getattr(sed, col)[0]
@@ -124,20 +124,20 @@ class SEDCatalog:
                     val = None
             else:
                 val = getattr(sed, col)
-        
+
             val = val.to(self.results[col.replace('_unc','')].unit).value if hasattr(val, 'unit') else val
-            
+
             results.append(val)
-            
+
         # Add the SED
         results.append(sed)
-        
+
         # Make the table
         cat = SEDCatalog()
         table = cat.results
         table.add_row(results)
         table = at.Table(table)
-        
+
         # Append apparent and absolute photometry
         for row in sed.photometry:
 
@@ -152,14 +152,14 @@ class SEDCatalog:
 
             # Add the absolute uncertainty
             table.add_column(at.Column([row['abs_magnitude_unc']], name='M_'+row['band']+'_unc'))
-        
+
         # Stack with current table
         if len(self.results)==0:
             self.results = table
         else:
             self.results = at.vstack([self.results,table])
-            
-    
+
+
     def export(self, parentdir='.', dirname=None, format='ipac',
                sources=True, zipped=False):
         """
@@ -186,7 +186,7 @@ class SEDCatalog:
         name = self.name.replace(' ', '_')
         dirname = dirname or name
         dirpath = os.path.join(parentdir, dirname)
-        
+
         # Remove '.' from column names
         final = self.results.filled(np.nan)
         for col in final.colnames:
@@ -194,39 +194,39 @@ class SEDCatalog:
 
         # Write a directory of results and all SEDs...
         if sources:
-            
+
             # Make a directory
             if not os.path.exists(dirpath):
                 os.system('mkdir {}'.format(dirpath))
             else:
                 raise IOError('Directory already exists:', dirpath)
-                
+
             # Export the results table
             resultspath = os.path.join(dirpath,'{}_results.txt'.format(name))
             final.write(resultspath, format=format)
-            
+
             # Make a sources directory
             sourcedir = os.path.join(dirpath,'sources')
             os.system('mkdir {}'.format(sourcedir))
-            
+
             # Export all SEDs
             for source in self.results['SED']:
                 source.export(sourcedir)
-                
+
             # zip if desired
             if zipped:
                 shutil.make_archive(dirpath, 'zip', dirpath)
                 os.system('rm -R {}'.format(dirpath))
-                
+
         # ...or just write the results table
         else:
             resultspath = dirpath+'_results.txt'
             final.write(resultspath, format=format)
-        
-        
+
+
     def filter(self, param, value):
         """Retrieve the filtered rows
-        
+
         Parameters
         ----------
         param: str
@@ -236,7 +236,7 @@ class SEDCatalog:
             which can be single valued like 1400
             or a range with operators [<,<=,>,>=],
             e.g. (>1200,<1400), ()
-        
+
         Returns
         -------
         SEDkit.sed.SEDCatalog
@@ -245,20 +245,20 @@ class SEDCatalog:
         # Make a new catalog
         cat = SEDCatalog()
         cat.results = u.filter_table(self.results, **{param: value})
-        
+
         return cat
-        
-        
+
+
     def from_file(self, coords):
         """Generate a catalog from a list of coordinates
-        
+
         Parameters
         ----------
         coords: str
             The path to the two-column file of ra, dec values
         """
         data = np.genfromtxt(coords)
-        
+
         for ra, dec, *k in data:
 
             # Make the SED
@@ -272,35 +272,35 @@ class SEDCatalog:
 
             # Add it to the catalog
             self.add_SED(s)
-        
-        
+
+
     def get_data(self, *args):
         """Fetch the data for the given columns
         """
         results = []
-        
+
         for x in args:
-            
+
             # Get the data
             if '-' in x:
                 x1, x2 = x.split('-')
                 if self.results[x1].unit!=self.results[x2].unit:
                     raise TypeError('Columns must be the same units.')
-            
+
                 xunit = self.results[x1].unit
                 xdata = self.results[x1]-self.results[x2]
             else:
                 xunit = self.results[x].unit
                 xdata = self.results[x]
-                
+
             results.append([xdata, xunit])
-            
+
         return results
-        
-        
+
+
     def get_SED(self, name_or_idx):
         """Retrieve the SED for the given object
-        
+
         Parameters
         ----------
         idx_or_name: str, int
@@ -308,39 +308,39 @@ class SEDCatalog:
         """
         # Add the index
         self.results.add_index('name')
-        
+
         # Get the rows
         if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
             return self.results.loc[name_or_idx]['SED']
-            
+
         elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
             return self.results[name_or_idx]['SED']
-            
+
         else:
             print('Could not retrieve SED', name_or_idx)
-            
+
             return
-        
-        
+
+
     def load(self, file):
         """Load a saved SEDCatalog"""
         if os.path.isfile(file):
-            
+
             f = open(file)
             cat = pickle.load(f)
             f.close()
-            
+
             f = open(file, 'rb')
             cat = pickle.load(f)
             f.close()
 
             self.results = cat
-        
-    
+
+
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
              xlabel=None, ylabel=None, fig=None, **kwargs):
         """Plot parameter x versus parameter y
-        
+
         Parameters
         ----------
         x: str
@@ -368,21 +368,21 @@ class SEDCatalog:
             fig = figure(plot_width=800, plot_height=500, title=title, 
                          y_axis_type=scale[1], x_axis_type=scale[0], 
                          tools=TOOLS)
-                         
+
         # Make sure marker is legit
         marker = getattr(fig, marker or self.marker)
         color = color or self.color
-                         
+
         # Get the source names
         names = self.results['name'] 
-                        
+
         # Get the data
         (xdata, xunit), (ydata, yunit) = self.get_data(x, y)
-            
+
         # Set axis labels
         fig.xaxis.axis_label = '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
         fig.yaxis.axis_label = '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
-        
+
         # Set up hover tool
         tips = [( 'Name', '@desc'), (x, '@x'), (y, '@y')]
         hover = HoverTool(tooltips=tips)
@@ -392,17 +392,17 @@ class SEDCatalog:
         source = ColumnDataSource(data=dict(x=xdata, y=ydata, desc=names))
         marker('x', 'y', source=source, legend=self.name, color=color,
                name='photometry', fill_alpha=0.7, size=8, **kwargs)
-        
+
         # Formatting
         fig.legend.location = "top_right"
         fig.legend.click_policy = "hide"
-        
+
         return fig
-        
-    
+
+
     def plot_SEDs(self, name_or_idx, scale=['log', 'log'], **kwargs):
         """Plot the SED for the given object or objects
-        
+
         Parameters
         ----------
         idx_or_name: str, int, sequence
@@ -411,11 +411,11 @@ class SEDCatalog:
         # Plot all SEDS
         if name_or_idx in ['all', '*']:
             name_or_idx = [n for n, i in enumerate(self.results)]
-        
+
         # Make it into a list
         if isinstance(name_or_idx, (str, int)):
             name_or_idx = [name_or_idx]
-        
+
         # Make the plot
         TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
         title = self.name
@@ -424,18 +424,18 @@ class SEDCatalog:
                      x_axis_label='Wavelength [{}]'.format(self.wave_units),
                      y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
                      tools=TOOLS)
-        
+
         # Plot each SED
         for obj in name_or_idx:
             c = next(COLORS)
             fig = self.get_SED(obj).plot(fig=fig, color=c, output=True)
-            
+
         show(fig)
-        
-        
+
+
     def remove_SED(self, name_or_idx):
         """Remove an SED from the catalog
-        
+
         Parameters
         ----------
         name_or_idx: str, int
@@ -443,39 +443,39 @@ class SEDCatalog:
         """
         # Add the index
         self.results.add_index('name')
-        
+
         # Get the rows
         if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
             self.results = self.results[self.results['name'] != name_or_idx]
-            
+
         elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
             self.results.remove_row([name_or_idx])
-            
+
         else:
             print('Could not remove SED', name_or_idx)
-            
+
             return
-        
-        
+
+
     def save(self, file):
         """Save the serialized data
-        
+
         Parameters
         ----------
         file: str
             The filepath
         """
         path = os.path.dirname(file)
-        
+
         if os.path.exists(path):
-            
+
             # Make the file if necessary
             if not os.path.isfile(file):
                 os.system('touch {}'.format(file))
-                
+
             # Write the file
             f = open(file, 'wb')
             pickle.dump(self.results, f, pickle.HIGHEST_PROTOCOL)
             f.close()
-            
+
             print('SEDCatalog saved to',file)

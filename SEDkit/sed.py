@@ -269,7 +269,7 @@ class SED:
 
         # Set SED as uncalculated
         self.calculated = False
-        
+
         # Update photometry max and min wavelengths
         if self.min_phot is None or bp.eff < self.min_phot:
             self.min_phot = bp.eff
@@ -345,16 +345,16 @@ class SED:
         """
         if isinstance(spectrum, sp.Spectrum):
             spec = spectrum
-            
+
         elif isinstance(spectrum, (list, tuple)):
-            
+
             # Create the Spectrum object
             if len(spectrum) in [2, 3]:
                 spec = sp.Spectrum(*spectrum, **kwargs)
-                
+
             else:
                 raise ValueError('Input spectrum must be [W,F] or [W,F,E].')
-                
+
         else:
             raise TypeError('Must enter [W,F], [W,F,E], or a Spectrum object')
 
@@ -367,7 +367,7 @@ class SED:
 
         # Set SED as uncalculated
         self.calculated = False
-        
+
         # Update spectra max and min wavelengths
         if self.min_spec is None or np.nanmin(spec.spectrum[0]) < self.min_spec:
             self.min_spec = np.nanmin(spec.spectrum[0])
@@ -428,7 +428,7 @@ class SED:
 
         # Set SED as uncalculated
         self.calculated = False
-        
+
         
     def _calculate_sed(self):
         """Stitch the components together and flux calibrate if possible
@@ -481,7 +481,7 @@ class SED:
         self._photometry['abs_magnitude'] = np.nan
         self._photometry['abs_magnitude_unc'] = np.nan
         self.abs_phot_SED = None
-        
+
         if self.photometry is not None and len(self.photometry)>0:
 
             # Update the photometry
@@ -533,7 +533,7 @@ class SED:
         """
         # Reset absolute spectra
         self.abs_spec_SED = None
-        
+
         if self.spectra is not None and len(self.spectra) > 0:
 
             # Update the spectra
@@ -556,7 +556,7 @@ class SED:
             else:
                 self.stitched_spectra = []
                 print('No spectra available for SED.')
-            
+
             # Renormalize the stitched spectra
             self.stitched_spectra = [i.norm_to_mags(self.photometry)\
                                      for i in self.stitched_spectra]
@@ -575,16 +575,16 @@ class SED:
 
         # Set SED as uncalculated
         self.calculated = False
-        
+
     @property
     def dec(self):
         """A property for declination"""
         return self._dec
-        
+
     @dec.setter
     def dec(self, dec, dec_unc=None, frame='icrs'):
         """Set the declination of the source
-        
+
         Padecmeters
         ----------
         dec: astropy.units.quantity.Quantity
@@ -596,7 +596,7 @@ class SED:
         """
         if not isinstance(dec, (q.quantity.Quantity, str)):
             raise TypeError("Cannot interpret dec :", dec)
-            
+
         # Make sure it's decimal degrees
         self._dec = Angle(dec)
         if self.ra is not None:
@@ -617,16 +617,16 @@ class SED:
             The (distance, err) or (distance, lower_err, upper_err)
         """
         if distance is None:
-            
+
             self._distance = None
             self._parallax = None
-            
+
             # Only clear radius if determined from isochrones,
             # otherwise keep it if manually set
             if self.isochrone_radius:
                 self.radius = None
                 self.isochrone_radius = False
-            
+
         else:
             # Make sure it's a sequence
             typs = (tuple, list, np.ndarray)
@@ -758,7 +758,7 @@ class SED:
         # All results
         resultspath = os.path.join(dirpath,'{}_results.txt'.format(name))
         self.results.write(resultspath, format='ipac')
-        
+
         # The SED plot
         if self.fig is not None:
             pltopath = os.path.join(dirpath,'{}_plot.png'.format(name))
@@ -822,7 +822,7 @@ class SED:
     def find_photometry(self, name, catalog, band_names, target_names=None, search_radius=None, idx=0, **kwargs):
         """
         Search Vizier for photometry in the given catalog
-        
+
         Parameters
         ----------
         name: str
@@ -1010,22 +1010,22 @@ class SED:
 
             self.app_spec_SED.best_fit_model(modelgrid)
             self.best_fit = self.app_spec_SED.best_fit
-            
+
             if self.verbose:
                 print('Best fit: ',
                       self.best_fit[-1][modelgrid.parameters][0])
 
         else:
             print("Sorry, could not fit SED to model grid", modelgrid)
-            
+
     def fit_spectral_type(self):
         """Fit the spectral SED to a catalog of spectral standards"""
         # Grab the SPL
         spl = mg.SpexPrismLibrary()
-        
+
         # Run the fit
         self.fit_modelgrid(spl)
-        
+
         # Store the result
         self.SpT_fit = self.app_spec_SED.best_fit[-1].spty
 
@@ -1084,12 +1084,14 @@ class SED:
         s = SED()
         s.from_database(db, source_id=710, photometry='*', spectra=[1639], parallax=49)
         s.spectral_type = 'M9'
+        s.fit_spectral_type()
         print(s.results)
-        s.plot()
+        s.plot(draw=True)
         """
         # Check that astrodbkit is imported
         if not hasattr(db, 'query'):
-            raise TypeError("Please provide an astrodbkit.astrodb.Database object to query.")
+            raise TypeError("Please provide an astrodbkit.astrodb.Database\
+                             object to query.")
 
         # Get the metadata
         if 'source_id' in kwargs:
@@ -1205,7 +1207,7 @@ class SED:
 
         # Interpolate surface gravity, mass and radius from isochrones
         if self.Lbol_sun is not None:
-        
+
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to estimate Teff, radius, surface gravity, and mass.'.format(self))
 
@@ -1360,11 +1362,11 @@ class SED:
         else:
             if self.verbose:
                 print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
-        
+
         
     def make_rj_tail(self, teff=3000*q.K):
         """Generate a Rayleigh Jeans tail for the SED
-        
+
         Parameters
         ----------
         teff: astropy.units.quantity.Quantity
@@ -1373,23 +1375,23 @@ class SED:
         # Make the blackbody from 2 to 1000um
         rj_wave = np.linspace(2., 1000, 2000)*q.um
         rj = sp.Blackbody(rj_wave, (teff, 100*q.K))
-        
+
         # Convert to native units
         rj.wave_units = self.wave_units
         rj.flux_units = self.flux_units
-        
+
         # Normalize to longest wavelength data
         if self.max_spec > self.max_phot:
             rj = rj.norm_to_spec(self.app_spec_SED)
         else:
             rj = rj.norm_to_mags(self.photometry)
-        
+
         # Trim so there is no data overlap
         max_wave = np.nanmax([self.max_spec.value, self.max_phot.value])
         rj.trim([(0*q.um, max_wave*self.wave_units)])
-        
+
         self.rj = rj
-        
+
         
     def make_sed(self):
         """Construct the SED"""
@@ -1414,21 +1416,21 @@ class SED:
                     if i < spec.wave[-1] and i > spec.wave[0]:
                         covered.append(idx)
             WP, FP, EP = [[i for n, i in enumerate(A) if n not in covered]*Q for A, Q in zip(self.app_phot_SED.spectrum, self.units)]
-            
+
             if len(WP) == 0:
                 self.app_specphot_SED = None
             else:
                 self.app_specphot_SED = sp.Spectrum(WP, FP, EP)
         else:
             self.app_specphot_SED = self.app_phot_SED
-            
+
         # Make Wein and Rayleigh Jeans tails
         self.make_wein_tail()
         self.make_rj_tail()
-        
+
         # Run the calculation
         self._calculate_sed()
-        
+
         # If Teff and Lbol have been caluclated, recalculate with 
         # better Blackbody
         if self.Teff_evo is not None:
@@ -1438,51 +1440,51 @@ class SED:
 
         # Set SED as calculated
         self.calculated = True
-        
+
         
     def make_wein_tail(self, teff=None, trim=None):
         """Generate a Wein tail for the SED
-        
+
         Parameters
         ----------
         teff: astropy.units.quantity.Quantity (optional)
             The effective temperature of the source
         """
         if teff is not None:
-            
+
             # Make the blackbody from ~0 to 1um
             wein_wave = np.linspace(0.0001, 1., 500)*q.um
             wein = sp.Blackbody(wein_wave, (teff, 100*q.K))
-            
+
             # Convert to native units
             wein.wave_units = self.wave_units
             wein.flux_units = self.flux_units
-            
+
             # Normalize to shortest wavelength data
             if self.min_spec < self.min_phot:
                 wein = wein.norm_to_spec(self.app_spec_SED, exclude=[(1.*q.um, 1E30*q.um)])
             else:
                 wein = wein.norm_to_mags(self.photometry)
-            
+
         else:
-            
+
             # Otherwise just use ~0 flux at ~0 wavelength
             wein = sp.Spectrum(np.array([0.0001])*self.wave_units,
                                np.array([1E-30])*self.flux_units,
                                np.array([1E-30])*self.flux_units)
-        
+
         # Trim so there is no data overlap
         min_wave = np.nanmin([self.min_spec.value, self.min_phot.value])
         wein.trim([(min_wave*self.wave_units, 1E30*q.um)])
-        
+
         self.wein = wein
-        
+
 
     def mass_from_age(self, mass_units=q.Msun):
         """Estimate the surface gravity from model isochrones given an age and Lbol
         """
         if self.age is not None and self.Lbol_sun is not None:
-            
+
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
             else:
@@ -1556,14 +1558,14 @@ class SED:
             The (parallax, err) or (parallax, lower_err, upper_err)
         """
         if parallax is None:
-            
+
             self._parallax = None
             self._distance = None
-            
+
             if self.isochrone_radius:
                 self.radius = None
                 self.isochrone_radius = False
-            
+
         else:
 
             # Make sure it's a sequence
@@ -1680,7 +1682,7 @@ class SED:
         # Make the plot
         if hasattr(fig, 'legend'):
             self.fig = fig
-            
+
         else:
             TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'wheel_zoom', 'save']
             xlab = 'Wavelength [{}]'.format(self.wave_units)
@@ -1700,7 +1702,7 @@ class SED:
             if spectra == 'all':
                 for n, spec in enumerate(self.spectra):
                     self.fig = spec.plot(fig=self.fig, components=True)
-                    
+
             else:
                 self.fig.line(spec_SED.wave, spec_SED.flux, color=color,
                               legend='Spectrum')
@@ -1745,7 +1747,7 @@ class SED:
             bb_wav, bb_flx = self.blackbody.data[:2]
             self.fig.line(bb_wav, bb_flx, line_color='red',
                           legend='{} K'.format(self.Teff_bb))
-                          
+
         if best_fit and len(self.best_fit) > 0:
             for bf in self.best_fit:
                 # self.fig.line(bf.spectrum[0], bf.spectrum[1], legend=bf.name)
@@ -1761,16 +1763,16 @@ class SED:
             show(self.fig)
 
         return self.fig
-        
+
     @property
     def ra(self):
         """A property for right ascension"""
         return self._ra
-        
+
     @ra.setter
     def ra(self, ra, ra_unc=None, frame='icrs'):
         """Set the right ascension of the source
-        
+
         Parameters
         ----------
         ra: astropy.units.quantity.Quantity
@@ -1782,7 +1784,7 @@ class SED:
         """
         if not isinstance(ra, (q.quantity.Quantity, str)):
             raise TypeError("Cannot interpret ra :", ra)
-            
+
         # Make sure it's decimal degrees
         self._ra = Angle(ra)
         if self.dec is not None:
@@ -1842,7 +1844,7 @@ class SED:
             radius = iso.isochrone_interp(self.Lbol_sun, self.age, evo_model=self.evo_model)
 
             self.radius = radius[0].to(radius_units), radius[1].to(radius_units)
-            
+
             self.isochrone_radius = True
 
         else:
@@ -1895,7 +1897,7 @@ class SED:
     @sky_coords.setter
     def sky_coords(self, sky_coords, frame='icrs'):
         """A setter for sky coordinates
-        
+
         Parameters
         ----------
         sky_coords: astropy.coordinates.SkyCoord, tuple
@@ -2065,7 +2067,7 @@ class SED:
     #
     #     except:
     #         print('No spectral coverage to calculate synthetic photometry.')
-    
+
     
 class VegaSED(SED):
     """A precomputed SED of Vega
@@ -2082,9 +2084,9 @@ class VegaSED(SED):
         self.parallax = 130.23*q.mas, 0.36*q.mas
         self.radius = 2.818*q.Rsun, 0.008*q.Rsun
         self.spectral_type = 'A0'
-        
+
         # Get the spectrum
         self.add_spectrum(sp.Vega())
-        
+
         # Calculate
         self.make_sed()

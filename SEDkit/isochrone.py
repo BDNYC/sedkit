@@ -237,7 +237,7 @@ def isochrone_interp(xval, age, xparam='Lbol', yparam='radius', jupiter=False,
     # Round the values
     val = round(np.mean([y_min, y_max]), 2)
     unc = round(abs(y_min - np.mean([y_min, y_max])), 2)
-        
+
     # Set the units of the output
     if yparam == 'radius':
         units = q.Rjup if jupiter else q.Rsun
@@ -288,7 +288,7 @@ def isochrones(evo_model='hybrid_solar_age', xparam='Lbol', yparam='radius',
     DME = DMEstar(ages, xparam=xparam, yparam=yparam, jupiter=jupiter)
     evo_path = 'data/models/evolutionary/{}.txt'.format(evo_model)
     evo_file = resource_filename('SEDkit', evo_path)
-    
+
     # Stitch them together using cubic spline
     D = []
     models = np.genfromtxt(evo_file, delimiter=',', usecols=range(6))

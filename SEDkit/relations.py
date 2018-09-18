@@ -20,7 +20,7 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
     """Generate a polynomial that describes the radius as
     a function of spectral type for empirically measured
     main sequence stars (Boyajian+ 2012b, 2013)
-    
+
     Parameters
     ----------
     xp: float
@@ -31,40 +31,40 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
         Generate the polynomial
     """
     if generate:
-        
+
         #======================================================================
         # Boyajian sample (A0-M6)
         #======================================================================
-        
+
         # Get the data
         f = resource_filename('SEDkit', 'data/radii.txt')
         AFGK = ii.read(f, format='csv', comment='#')
-        
+
         #======================================================================
         # Filippazo sample (M6-T8)
         #======================================================================
-        
+
         # Get the data
         cat1 = V.query_constraints('J/ApJ/810/158/table1')[0]
         cat2 = V.query_constraints('J/ApJ/810/158/table9')[0]
-        
+
         # Join the tables to getthe spectral types and radii in one table
         MLTY = at.join(cat1, cat2, keys='ID', join_type='outer')
-        
+
         # Rename columns
         MLTY.rename_column('SpT', 'spectral_type')
         MLTY.rename_column('Rad', 'radius')
         MLTY.rename_column('e_Rad', 'radius_unc')
-        
+
         # Make solar radii units
         MLTY['radius'] = MLTY['radius'].to(q.Rsun)
         MLTY['radius_unc'] = MLTY['radius_unc'].to(q.Rsun)
-        
+
         #======================================================================
-        
+
         # Join the two tables
         data = at.vstack([AFGK, MLTY], join_type='inner')
-    
+
         # Translate string SPT to numbers
         spts = []
         keep = []
@@ -75,29 +75,29 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
                 keep.append(n)
             except:
                 pass
-        
+
         # Filter bad spectral types
         data = data[keep]
-    
+
         # Add the number to the table
         num, *_, lum = np.array(spts).T
         data['spt'] = num.astype(float)
         data['lum'] = lum
-    
+
         # Filter out sub-giants
         data = data[data['lum']=='V']
-        
+
         # Filter out nans
         data = data[data['radius']<4]
         data = data[data['radius']>0]
         data = data[data['radius_unc']>0]
         data = data[data['spt']>0]
         # data = data[data['spectral_type']>0]
-        
+
         # ===========================================================
         # Boyajian data
         # ===========================================================
-        
+
         # Translate string SPT to numbers
         spts = []
         keep = []
@@ -108,28 +108,28 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
                 keep.append(n)
             except:
                 pass
-        
+
         # Filter bad spectral types
         AFGK = AFGK[keep]
-    
+
         # Add the number to the table
         num, *_, lum = np.array(spts).T
         AFGK['spt'] = num.astype(float)
         AFGK['lum'] = lum
-    
+
         # Filter out sub-giants
         AFGK = AFGK[AFGK['lum']=='V']
-        
+
         # Filter out nans
         AFGK = AFGK[AFGK['radius']<4]
         AFGK = AFGK[AFGK['radius']>0]
         AFGK = AFGK[AFGK['radius_unc']>0]
         AFGK = AFGK[AFGK['spt']>0]
-        
+
         # ===========================================================
         # Filippazzo data
         # ===========================================================
-        
+
         # Translate string SPT to numbers
         spts = []
         keep = []
@@ -140,26 +140,26 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
                 keep.append(n)
             except:
                 pass
-        
+
         # Filter bad spectral types
         MLTY = MLTY[keep]
-    
+
         # Add the number to the table
         num, *_, lum = np.array(spts).T
         MLTY['spt'] = num.astype(float)
         MLTY['lum'] = lum
-    
+
         # Filter out sub-giants
         MLTY = MLTY[MLTY['lum']=='V']
-        
+
         # Filter out nans
         MLTY = MLTY[MLTY['radius']<4]
         MLTY = MLTY[MLTY['radius']>0]
         MLTY = MLTY[MLTY['radius_unc']>0]
         MLTY = MLTY[MLTY['spt']>0]
-        
+
         # ===========================================================        
-    
+
         # Fit polynomial
         p, C_p = np.polyfit(data['spt'], data['radius'], order, w=1./data['radius_unc'], cov=True)
 
@@ -179,7 +179,7 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
         import matplotlib.pyplot as plt
         import matplotlib
         matplotlib.rcParams.update({'font.size': 16})
-        
+
         # fg, (ax1, ax2) = plt.subplots(2, 1)
         fg, ax1 = plt.subplots(1, 1)
         # ax1.set_title("Fit for Polynomial (degree {}) with $\pm1\sigma$-interval".format(order))
@@ -200,7 +200,7 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
         # ax2.set_ylabel('Uncertainty [$R_\odot$]')
         # AFGK[(AFGK['spt']<51)&(AFGK['spt']>35)&(AFGK['radius']>1.5)].pprint(max_lines=-1, max_width=-1)
         return p, sig_p
-        
+
         # '#1f77b4',  // muted blue
         # '#ff7f0e',  // safety orange
         # '#2ca02c',  // cooked asparagus green
@@ -211,23 +211,23 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
         # '#7f7f7f',  // middle gray
         # '#bcbd22',  // curry yellow-green
         # '#17becf'   // blue-teal
-        
+
     elif xp is not None and 20<=xp<=90:
-        
+
         # Use precomputed polynomial
         default = np.array([7.58092691e-12,-3.38093782e-09,6.43208620e-07,-6.80497975e-05,4.37080146e-03,-1.74200537e-01,4.19992200e+00,-5.59630176e+01,3.17382890e+02])
         sig_default = np.array([-2.86548806e-12,1.17656611e-09,-2.02883746e-07,1.90972008e-05,-1.06440025e-03,3.53953274e-02,-6.58260385e-01,5.38782735e+00])
-        
+
         # Evaluate the polynomials
         radius = np.polyval(default, xp)*q.Rsun
         radius_unc = np.polyval(sig_default, xp)*q.Rsun
-        
+
         return radius, radius_unc
-        
+
     else:
-        
+
         raise TypeError("Please provide 20<=xp<=66 to evaluate or set 'generate=True'")
-        
-        
-        
+
+
+
     
