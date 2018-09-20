@@ -37,28 +37,31 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
         #======================================================================
 
         # Get the data
-        f = resource_filename('SEDkit', 'data/radii.txt')
-        AFGK = ii.read(f, format='csv', comment='#')
+        afgk = resource_filename('SEDkit', 'data/AFGK_radii.txt')
+        AFGK = ii.read(afgk, format='csv', comment='#')
 
         #======================================================================
         # Filippazo sample (M6-T8)
         #======================================================================
 
-        # Get the data
-        cat1 = V.query_constraints('J/ApJ/810/158/table1')[0]
-        cat2 = V.query_constraints('J/ApJ/810/158/table9')[0]
-
-        # Join the tables to getthe spectral types and radii in one table
-        MLTY = at.join(cat1, cat2, keys='ID', join_type='outer')
-
-        # Rename columns
-        MLTY.rename_column('SpT', 'spectral_type')
-        MLTY.rename_column('Rad', 'radius')
-        MLTY.rename_column('e_Rad', 'radius_unc')
-
-        # Make solar radii units
-        MLTY['radius'] = MLTY['radius'].to(q.Rsun)
-        MLTY['radius_unc'] = MLTY['radius_unc'].to(q.Rsun)
+        # # Get the data
+        # cat1 = V.query_constraints('J/ApJ/810/158/table1')[0]
+        # cat2 = V.query_constraints('J/ApJ/810/158/table9')[0]
+        #
+        # # Join the tables to getthe spectral types and radii in one table
+        # MLTY = at.join(cat1, cat2, keys='ID', join_type='outer')
+        #
+        # # Rename columns
+        # MLTY.rename_column('SpT', 'spectral_type')
+        # MLTY.rename_column('Rad', 'radius')
+        # MLTY.rename_column('e_Rad', 'radius_unc')
+        #
+        # # Make solar radii units
+        # MLTY['radius'] = MLTY['radius'].to(q.Rsun)
+        # MLTY['radius_unc'] = MLTY['radius_unc'].to(q.Rsun)
+        
+        mlty = resource_filename('SEDkit', 'data/MLTY_radii.txt')
+        MLTY = ii.read(mlty, format='csv', comment='#')
 
         #======================================================================
 
