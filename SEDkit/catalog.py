@@ -51,7 +51,7 @@ class SEDCatalog:
         self.results['parallax'].unit = q.mas
         self.results['parallax_unc'].unit = q.mas
         self.results['radius'].unit = q.Rsun
-        self.results['radius'].unit = q.Rsun
+        self.results['radius_unc'].unit = q.Rsun
         self.results['fbol'].unit = q.erg/q.s/q.cm**2
         self.results['fbol_unc'].unit = q.erg/q.s/q.cm**2
         self.results['Lbol'].unit = q.erg/q.s
@@ -157,7 +157,7 @@ class SEDCatalog:
         if len(self.results)==0:
             self.results = table
         else:
-            self.results = at.vstack([self.results,table])
+            self.results = at.vstack([self.results, table])
 
 
     def export(self, parentdir='.', dirname=None, format='ipac',

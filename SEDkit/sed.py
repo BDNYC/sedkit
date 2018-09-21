@@ -121,10 +121,8 @@ class SED:
         verbose: bool
             Print some diagnostic stuff
         """
-        # Single valued attributes
+        # Attributes with setters
         self._name = None
-        self.all_names = []
-        self.verbose = verbose
         self._ra = None
         self._dec = None
         self._age = None
@@ -134,10 +132,13 @@ class SED:
         self._spectral_type = None
         self._membership = None
         self._sky_coords = None
-        self.search_radius = 15*q.arcsec
         self._evo_model = 'hybrid_solar_age'
 
-        # Keep track of the calculation status
+        # Static attributes
+        self.verbose = verbose
+        self.search_radius = 15*q.arcsec
+
+        # Book keeping
         self.calculated = False
         self.isochrone_radius = False
 
@@ -151,6 +152,7 @@ class SED:
         self.max_spec = 0*q.um
 
         # Attributes of arbitrary length
+        self.all_names = []
         self._spectra = []
         self.stitched_spectra = []
         self.app_spec_SED = None
@@ -159,29 +161,27 @@ class SED:
         self.abs_phot_SED = None
         self.best_fit = []
 
-        # Photometry
+        # Photometry setup
         phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc',
                      'app_flux', 'app_flux_unc', 'abs_magnitude',
                      'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc',
                      'bandpass')
-        phot_typs = ('U16', float, float, float, float, float, float, float,
-                     float, float, 'O')
-        self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
-        self._photometry['eff'].unit = self._wave_units
-        self._photometry['app_flux'].unit = self._flux_units
-        self._photometry['app_flux_unc'].unit = self._flux_units
-        self._photometry['abs_flux'].unit = self._flux_units
-        self._photometry['abs_flux_unc'].unit = self._flux_units
-        self._photometry.add_index('band')
+        phot_typs = ('U16', np.float16, np.float16, np.float16, float, float,
+                     np.float16, np.float16, float, float, 'O')
         self.reddening = 0
 
-        # Synthetic photometry
+        # Make empty photometry table
+        self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
+        for col in ['app_flux', 'app_flux_unc', 'abs_flux', 'abs_flux_unc']:
+            self._photometry[col].unit = self._flux_units
+        self._photometry['eff'].unit = self._wave_units
+        self._photometry.add_index('band')
+
+        # Make empty synthetic photometry table
         self._synthetic_photometry = at.QTable(names=phot_cols, dtype=phot_typs)
+        for col in ['app_flux', 'app_flux_unc', 'abs_flux', 'abs_flux_unc']:
+            self._synthetic_photometry[col].unit = self._flux_units
         self._synthetic_photometry['eff'].unit = self._wave_units
-        self._synthetic_photometry['app_flux'].unit = self._flux_units
-        self._synthetic_photometry['app_flux_unc'].unit = self._flux_units
-        self._synthetic_photometry['abs_flux'].unit = self._flux_units
-        self._synthetic_photometry['abs_flux_unc'].unit = self._flux_units
         self._synthetic_photometry.add_index('band')
 
         # Try to set attributes from kwargs
@@ -203,15 +203,14 @@ class SED:
         self.Lbol_sun = None
         self.SpT = None
         self.SpT_fit = None
-
-        # Default parameters
-        self.age = 6*q.Gyr, 4*q.Gyr
         self.mass = None
         self.logg = None
-
-        # Fit
         self.bb_source = None
         self.blackbody = None
+
+        # Default parameters
+        if self.age is None:
+            self.age = 6*q.Gyr, 4*q.Gyr
 
     def add_photometry(self, band, mag, mag_unc=None, **kwargs):
         """Add a photometric measurement to the photometry table
@@ -258,8 +257,8 @@ class SED:
         mag -= bp.ext_vector*self.reddening
 
         # Make a dict for the new point
-        new_photometry = {'band':band, 'eff':bp.eff, 'app_magnitude':mag,
-                          'app_magnitude_unc':mag_unc, 'bandpass':bp}
+        new_photometry = {'band': band, 'eff': bp.eff, 'app_magnitude': mag,
+                          'app_magnitude_unc': mag_unc, 'bandpass': bp}
 
         # Add the kwargs
         new_photometry.update(kwargs)
@@ -429,7 +428,6 @@ class SED:
         # Set SED as uncalculated
         self.calculated = False
 
-        
     def _calculate_sed(self):
         """Stitch the components together and flux calibrate if possible
         """
@@ -558,8 +556,9 @@ class SED:
                 print('No spectra available for SED.')
 
             # Renormalize the stitched spectra
-            self.stitched_spectra = [i.norm_to_mags(self.photometry)\
-                                     for i in self.stitched_spectra]
+            if len(self.photometry) > 0:
+                self.stitched_spectra = [i.norm_to_mags(self.photometry)\
+                                         for i in self.stitched_spectra]
 
             # Make apparent spectral SED
             if len(self.stitched_spectra) > 1:
@@ -1363,7 +1362,6 @@ class SED:
             if self.verbose:
                 print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
 
-        
     def make_rj_tail(self, teff=3000*q.K):
         """Generate a Rayleigh Jeans tail for the SED
 
@@ -1373,8 +1371,8 @@ class SED:
             The effective temperature of the source
         """
         # Make the blackbody from 2 to 1000um
-        rj_wave = np.linspace(2., 1000, 2000)*q.um
-        rj = sp.Blackbody(rj_wave, (teff, 100*q.K))
+        rj_wave = np.linspace(0.1, 1000, 2000)*q.um
+        rj = sp.Blackbody(rj_wave, (teff, 100*q.K), name='RJ Tail')
 
         # Convert to native units
         rj.wave_units = self.wave_units
@@ -1392,7 +1390,6 @@ class SED:
 
         self.rj = rj
 
-        
     def make_sed(self):
         """Construct the SED"""
         # Make sure the is data
@@ -1408,19 +1405,30 @@ class SED:
         # Get synthetic mags
         # self.calculate_synthetic_mags()
 
-        # Exclude photometric points with spectrum coverage
-        if self.stitched_spectra is not None:
-            covered = []
-            for idx, i in enumerate(self.app_phot_SED.wave):
-                for N, spec in enumerate(self.stitched_spectra):
-                    if i < spec.wave[-1] and i > spec.wave[0]:
-                        covered.append(idx)
-            WP, FP, EP = [[i for n, i in enumerate(A) if n not in covered]*Q for A, Q in zip(self.app_phot_SED.spectrum, self.units)]
+        #
+        if len(self.stitched_spectra) > 0:
+            
+            # If photometry and spectra, exclude photometric points with
+            # spectrum coverage
+            if len(self.photometry) > 0:
+                covered = []
+                for idx, i in enumerate(self.app_phot_SED.wave):
+                    for N, spec in enumerate(self.stitched_spectra):
+                        if i < spec.wave[-1] and i > spec.wave[0]:
+                            covered.append(idx)
+                WP, FP, EP = [[i for n, i in enumerate(A) if n not in covered]*Q for A, Q in zip(self.app_phot_SED.spectrum, self.units)]
 
-            if len(WP) == 0:
-                self.app_specphot_SED = None
+                # If all the photometry is covered, just use spectra
+                if len(WP) == 0:
+                    self.app_specphot_SED = None
+                else:
+                    self.app_specphot_SED = sp.Spectrum(WP, FP, EP)
+
+            # If no photometry, just use spectra
             else:
-                self.app_specphot_SED = sp.Spectrum(WP, FP, EP)
+                self.app_specphot_SED = self.app_spec_SED
+
+        # If no spectra, just use photometry
         else:
             self.app_specphot_SED = self.app_phot_SED
 
@@ -1441,7 +1449,6 @@ class SED:
         # Set SED as calculated
         self.calculated = True
 
-        
     def make_wein_tail(self, teff=None, trim=None):
         """Generate a Wein tail for the SED
 
@@ -1453,8 +1460,8 @@ class SED:
         if teff is not None:
 
             # Make the blackbody from ~0 to 1um
-            wein_wave = np.linspace(0.0001, 1., 500)*q.um
-            wein = sp.Blackbody(wein_wave, (teff, 100*q.K))
+            wein_wave = np.linspace(0.0001, 1.1, 500)*q.um
+            wein = sp.Blackbody(wein_wave, (teff, 100*q.K), name='Wein Tail')
 
             # Convert to native units
             wein.wave_units = self.wave_units
@@ -1462,7 +1469,8 @@ class SED:
 
             # Normalize to shortest wavelength data
             if self.min_spec < self.min_phot:
-                wein = wein.norm_to_spec(self.app_spec_SED, exclude=[(1.*q.um, 1E30*q.um)])
+                wein = wein.norm_to_spec(self.app_spec_SED,
+                                         exclude=[(1.1*q.um, 1E30*q.um)])
             else:
                 wein = wein.norm_to_mags(self.photometry)
 
@@ -1471,14 +1479,14 @@ class SED:
             # Otherwise just use ~0 flux at ~0 wavelength
             wein = sp.Spectrum(np.array([0.0001])*self.wave_units,
                                np.array([1E-30])*self.flux_units,
-                               np.array([1E-30])*self.flux_units)
+                               np.array([1E-30])*self.flux_units,
+                               name='Wein Tail')
 
         # Trim so there is no data overlap
         min_wave = np.nanmin([self.min_spec.value, self.min_phot.value])
         wein.trim([(min_wave*self.wave_units, 1E30*q.um)])
 
         self.wein = wein
-
 
     def mass_from_age(self, mass_units=q.Msun):
         """Estimate the surface gravity from model isochrones given an age and Lbol
@@ -1739,8 +1747,9 @@ class SED:
 
         # Plot the SED with linear interpolation completion
         if integral:
+            label = str(self.Teff[0]) if self.Teff is not None else 'Integral'
             self.fig.line(full_SED.wave, full_SED.flux, line_color='black',
-                          alpha=0.3, legend=str(self.Teff[0]))
+                          alpha=0.3, legend=label)
 
         # Plot the blackbody fit
         if blackbody and self.blackbody:
@@ -1878,7 +1887,10 @@ class SED:
                 unc = unc.value if hasattr(unc, 'unit') else unc
                 if val < 1E-3 or val > 1e5:
                     val = float('{:.2e}'.format(val))
-                    unc = float('{:.2e}'.format(unc))
+                    if unc is None:
+                        unc = '--'
+                    else:
+                        unc = float('{:.2e}'.format(unc))
                 rows.append([param, val, unc, unit])
 
             elif isinstance(attr, str):

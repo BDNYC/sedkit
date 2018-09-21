@@ -146,7 +146,7 @@ class Spectrum(ps.ArraySpectrum):
         """
         # If None is added, just return a copy
         if spec2 is None:
-            return Spectrum(*self.spectrum)
+            return Spectrum(*self.spectrum, name=self.name)
 
         try:
 
@@ -304,9 +304,11 @@ class Spectrum(ps.ArraySpectrum):
     def data(self):
         """Store the spectrum without units
         """
-        data = np.array([self.wave, self.flux, self.unc])
         if self.unc is None:
-            data = data[:2]
+            data = np.stack([self.wave, self.flux])
+        else:
+            data = np.stack([self.wave, self.flux, self.unc])
+
         return data
 
     def fit(self, spec, weights=None, wave_units=None, scale=True):
@@ -480,7 +482,7 @@ class Spectrum(ps.ArraySpectrum):
             term2 = (2*self.spectrum[1]*(distance[1]*distance[0]/target_distance**2)).to(flux_units)
             unc = np.sqrt(term1**2 + term2**2)
 
-        return Spectrum(self.spectrum[0], flux, unc)
+        return Spectrum(self.spectrum[0], flux, unc, name=self.name)
 
     @property
     def flux_units(self):
@@ -630,7 +632,7 @@ class Spectrum(ps.ArraySpectrum):
         if self.unc is not None:
             spectrum[2] *= norm
 
-        return Spectrum(*spectrum)
+        return Spectrum(*spectrum, name=self.name)
 
     def norm_to_spec(self, spectrum, exclude=[], include=[]):
         """Normalize the spectrum to another spectrum
@@ -678,7 +680,7 @@ class Spectrum(ps.ArraySpectrum):
         if self.unc is not None:
             spectrum[2] *= norm
 
-        return Spectrum(*spectrum)
+        return Spectrum(*spectrum, name=self.name)
 
     def plot(self, fig=None, components=False, best_fit=True, draw=False, **kwargs):
         """Plot the spectrum
@@ -772,7 +774,7 @@ class Spectrum(ps.ArraySpectrum):
         if self.unc is not None:
             spectrum[2] *= norm
 
-        return Spectrum(*spectrum)
+        return Spectrum(*spectrum, name=self.name)
 
         
     def resamp(self, wave=None, resolution=None):
@@ -818,7 +820,7 @@ class Spectrum(ps.ArraySpectrum):
         # Update the spectrum
         spectrum = [i*Q for i, Q in zip(binned, self.units)]
 
-        return Spectrum(*spectrum)
+        return Spectrum(*spectrum, name=self.name)
 
     def smooth(self, beta, window=11):
         """
@@ -846,7 +848,7 @@ class Spectrum(ps.ArraySpectrum):
         spectrum = self.spectrum
         spectrum[1] = smoothed*self.flux_units
 
-        return Spectrum(*spectrum)
+        return Spectrum(*spectrum, name=self.name)
 
     @property
     def spectrum(self):
