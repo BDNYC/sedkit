@@ -269,7 +269,7 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
         print('Could not flux calibrate that input to distance {}.'.format(dist))
         return [np.nan, np.nan]
 
-def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_kwargs={}, legend=''):
+def errorbar(fig, x, y, xerr=None, yerr=None, color='black', point_kwargs={}, error_kwargs={}, legend=None):
     """
     Hack to make errorbar plots in bokeh
 
@@ -294,7 +294,7 @@ def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_
     """
     fig.circle(x, y, color=color, legend=legend, **point_kwargs)
 
-    if xerr!='':
+    if xerr is not None:
         x_err_x = []
         x_err_y = []
         for px, py, err in zip(x, y, xerr):
@@ -302,7 +302,7 @@ def errorbar(fig, x, y, xerr='', yerr='', color='black', point_kwargs={}, error_
             x_err_y.append((py, py))
         fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
 
-    if yerr!='':
+    if yerr is not None:
         y_err_x = []
         y_err_y = []
         for px, py, err in zip(x, y, yerr):

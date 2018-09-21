@@ -1727,21 +1727,29 @@ class SED:
 
             # Plot points with errors
             pts = np.array([(bnd, wav, flx, err) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre+'flux', pre+'flux_unc']) if not any([np.isnan(i) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
-            source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'],
-                                      z=pts['z'],
-                                      desc=[str(b) for b in pts['desc']]))
-            self.fig.circle('x', 'y', source=source, legend='Photometry',
-                            name='photometry', color=color, fill_alpha=0.7,
-                            size=8)
+            if len(pts) > 0:
+                source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'],
+                                          z=pts['z'],
+                                          desc=[str(b) for b in pts['desc']]))
+                self.fig.circle('x', 'y', source=source, legend='Photometry',
+                                name='photometry', color=color, fill_alpha=0.7,
+                                size=8)
+                y_err_x = []
+                y_err_y = []
+                for name, px, py, err in pts:
+                    y_err_x.append((px, px))
+                    y_err_y.append((py - err, py + err))
+                self.fig.multi_line(y_err_x, y_err_y, color=color)
 
-            # Plot points with errors
+            # Plot points without errors
             pts = np.array([(bnd, wav, flx, err) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre+'flux', pre+'flux_unc']) if np.isnan(err) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
-            source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'],
-                                      z=pts['z'],
-                                      desc=[str(b) for b in pts['desc']]))
-            self.fig.circle('x', 'y', source=source, legend='Nondetection',
-                            name='nondetection', color=color, fill_alpha=0,
-                            size=8)
+            if len(pts) > 0:
+                source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'],
+                                          z=pts['z'],
+                                          desc=[str(b) for b in pts['desc']]))
+                self.fig.circle('x', 'y', source=source, legend='Nondetection',
+                                name='nondetection', color=color, fill_alpha=0,
+                                size=8)
 
         # Plot synthetic photometry
 
@@ -1761,7 +1769,8 @@ class SED:
             for bf in self.best_fit:
                 # self.fig.line(bf.spectrum[0], bf.spectrum[1], legend=bf.name)
                 self.fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.3,
-                                         color=next(sp.COLORS), legend=bf.name)
+                                         color=next(sp.COLORS),
+                                         legend=bf.label)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
@@ -1868,11 +1877,13 @@ class SED:
             self.make_sed()
 
         # Get the results
+        ptypes = (float, bytes, str, type(None), q.quantity.Quantity)
+        params = {k[1:] if k.startswith('_') else k for k, v in
+                  self.__dict__.items() if
+                  isinstance(v, ptypes) or
+                  (isinstance(v, (list, tuple)) and len(v) == 2)}
         rows = []
-        for param in ['name', 'age', 'distance', 'parallax', 'radius', 'SpT', \
-                      'SpT_fit', 'spectral_type', 'membership', 'reddening',
-                      'fbol', 'mbol', 'Lbol', 'Lbol_sun', 'Mbol', 'logg',
-                      'mass', 'Teff', 'Teff_bb', 'Teff_evo']:
+        for param in sorted(params):
 
             # Get the values and format
             attr = getattr(self, param, None)
@@ -1893,7 +1904,7 @@ class SED:
                         unc = float('{:.2e}'.format(unc))
                 rows.append([param, val, unc, unit])
 
-            elif isinstance(attr, str):
+            elif isinstance(attr, (str, float, bytes, int)):
                 rows.append([param, attr, '--', '--'])
 
             else:
