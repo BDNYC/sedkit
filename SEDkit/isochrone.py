@@ -15,15 +15,68 @@ from bokeh.models import Range1d
 from itertools import chain, groupby
 import numpy as np
 import scipy.interpolate as si
+from dask import dataframe, array
 
 from .spectrum import COLORS
 
 
-# A dictionary of all supported moving group ages
-NYMG_AGES = {'TW Hya': (14*q.Myr, 6*q.Myr), 'beta Pic': (17*q.Myr, 5*q.Myr),
-             'Tuc-Hor': (25*q.Myr, 15*q.Myr), 'Columba': (25*q.Myr, 15*q.Myr),
-             'Carina': (25*q.Myr, 15*q.Myr), 'Argus': (40*q.Myr, 10*q.Myr),
-             'AB Dor': (85*q.Myr, 35*q.Myr), 'Pleiades': (120*q.Myr, 10*q.Myr)}
+# A dictionary of all supported moving group ages from Bell et al. (2015)
+NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr),
+             'beta Pic': (24*q.Myr, 3*q.Myr),
+             'Carina': (45*q.Myr, 11*q.Myr),
+             'Columba': (42*q.Myr, 6*q.Myr),
+             'eta Cha': (11*q.Myr, 3*q.Myr),
+             'Tuc-Hor': (45*q.Myr, 4*q.Myr),
+             'TW Hya': (10*q.Myr, 3*q.Myr),
+             '32 Ori': (22*q.Myr, 4*q.Myr)}
+
+
+class Isochrone:
+    """A class to handle model isochrones"""
+    def __init__(self, name, path, colnames, **kwargs):
+        """Initialize the isochrone object
+
+        Parameters
+        ----------
+        name: str
+            The name of the model set
+        path: str
+            The path to the isochrone files
+        colnames: sequence
+            The names of the isochrone file columns
+        """
+        self.name = name
+        self.path = path
+        self.colnames = colnames
+
+        # Load the the isochrones
+        self.files = glob(path)
+        self.data = dataframe.read_csv(self.files, names=self.colnames,
+                                       **kwargs)
+
+
+class PARSEC(Isochrone):
+    """A class for the PARSEC 1.2 model isochrones
+
+    Data described in Bressan et al. (2012).
+    Data retrieved from https://philrosenfield.github.io/padova_tracks/
+    """
+    def __init__(self, **kwargs):
+        """Initialize the model isochrone instance"""
+        # Set the init parameters
+        path = resource_filename('SEDkit', 'data/models/evolutionary/PARSEC12/*')
+        colnames=['logAge', 'Mass', 'logTe', 'Mbol', 'logg', 'C/O']
+
+        # Inherit from Isochrone class
+        super().__init__(name='PARSEC', path=path, colnames=colnames,
+                         delim_whitespace=True, skiprows=[0], **kwargs)
+
+        # Add the metallicity column
+        filenames = [os.path.basename(f) for f in self.files]
+        spl = [fn.split('Z')[1].split('Y') for fn in filenames]
+        self.data['Z'] = array.from_array(np.array([eval(i[0]) for i in spl]),
+                                          chunks=500)
+        # self.data['Y'] = [eval(i[1].split('OUT')[0]) for i in spl]
 
 
 def avg_param(yparam, z, z_unc, min_age, max_age, spt, xparam='Lbol', plot=False):
