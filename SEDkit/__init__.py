@@ -1,4 +1,4 @@
-from .catalog import SEDCatalog
+from .catalog import Catalog
 from .sed import SED, VegaSED
 from .spectrum import Spectrum, FileSpectrum, Vega, Blackbody
 from .synphot import Bandpass

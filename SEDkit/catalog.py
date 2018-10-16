@@ -18,10 +18,10 @@ from bokeh.models import HoverTool, ColumnDataSource
 from .sed import SED
 from .spectrum import COLORS
 
-class SEDCatalog:
+class Catalog:
     """An object to collect SED results for plotting and analysis"""
     def __init__(self, name='SED Catalog', marker='circle', color='blue'):
-        """Initialize the SEDCatalog object"""
+        """Initialize the Catalog object"""
         # Metadata
         self.name = name
         self.marker = marker
@@ -70,19 +70,19 @@ class SEDCatalog:
 
         Parameters
         ----------
-        other: SEDkit.catalog.SEDCatalog
-            The SEDCatalog to add
+        other: SEDkit.catalog.Catalog
+            The Catalog to add
 
         Returns
         -------
-        SEDkit.catalog.SEDCatalog
+        SEDkit.catalog.Catalog
             The combined catalog
         """
         if not type(other)==type(self):
             raise TypeError('Cannot add object of type', type(other))
 
         # Make a new catalog
-        new_cat = SEDCatalog()
+        new_cat = Catalog()
 
         # Combine results
         new_cat.results = at.vstack([self.results, other.results])
@@ -133,7 +133,7 @@ class SEDCatalog:
         results.append(sed)
 
         # Make the table
-        cat = SEDCatalog()
+        cat = Catalog()
         table = cat.results
         table.add_row(results)
         table = at.Table(table)
@@ -239,11 +239,11 @@ class SEDCatalog:
 
         Returns
         -------
-        SEDkit.sed.SEDCatalog
+        SEDkit.sed.Catalog
             The filtered catalog
         """
         # Make a new catalog
-        cat = SEDCatalog()
+        cat = Catalog()
         cat.results = u.filter_table(self.results, **{param: value})
 
         return cat
@@ -323,7 +323,7 @@ class SEDCatalog:
 
 
     def load(self, file):
-        """Load a saved SEDCatalog"""
+        """Load a saved Catalog"""
         if os.path.isfile(file):
 
             f = open(file)
@@ -478,4 +478,4 @@ class SEDCatalog:
             pickle.dump(self.results, f, pickle.HIGHEST_PROTOCOL)
             f.close()
 
-            print('SEDCatalog saved to',file)
+            print('Catalog saved to',file)
