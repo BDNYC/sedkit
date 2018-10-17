@@ -604,7 +604,8 @@ class Spectrum(ps.ArraySpectrum):
                     bp = row['bandpass']
                     syn_flx, syn_unc = self.synthetic_flux(bp, force=force)
                     if syn_flx is not None:
-                        flx, unc = list(row['app_flux','app_flux_unc'])
+                        flx = row['app_flux']
+                        unc = row['app_flux_unc']
                         weight = bp.FWHM
                         unc = unc.value if hasattr(unc, 'unit') else None
                         syn_unc = syn_unc.value if hasattr(syn_unc, 'unit') else None

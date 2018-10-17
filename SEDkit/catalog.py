@@ -17,6 +17,7 @@ from bokeh.models import HoverTool, ColumnDataSource
 
 from .sed import SED
 from .spectrum import COLORS
+from . import utilities as u
 
 class Catalog:
     """An object to collect SED results for plotting and analysis"""

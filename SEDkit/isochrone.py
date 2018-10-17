@@ -74,8 +74,7 @@ class PARSEC(Isochrone):
         # Add the metallicity column
         filenames = [os.path.basename(f) for f in self.files]
         spl = [fn.split('Z')[1].split('Y') for fn in filenames]
-        self.data['Z'] = array.from_array(np.array([eval(i[0]) for i in spl]),
-                                          chunks=500)
+        # self.data['Z'] = array.from_array(np.array([eval(i[0]) for i in spl]), chunks=500)
         # self.data['Y'] = [eval(i[1].split('OUT')[0]) for i in spl]
 
 
