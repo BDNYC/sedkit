@@ -11,6 +11,7 @@ os:
 sudo: false
 
 install:
+  - pip install dask[dataframe] --upgrade
   - pip install -r requirements.txt
 
 script: pytest
