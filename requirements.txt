@@ -7,3 +7,4 @@ pysynphot
 lmfit
 pandas
 dustmaps
+dask
