@@ -1,0 +1,389 @@
+<?xml version="1.0"?>
+<VOTABLE version="1.1" xsi:schemaLocation="http://www.ivoa.net/xml/VOTable/v1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <INFO name="QUERY_STATUS" value="OK"/>
+  <RESOURCE type="results">
+    <TABLE utype="photdm:PhotometryFilter.transmissionCurve.spectrum">
+    <PARAM name="FilterProfileService" value="ivo://svo/fps" ucd="meta.ref.ivorn" utype="PhotometryFilter.fpsIdentifier" datatype="char" arraysize="*"/>
+    <PARAM name="filterID" value="JWST/NIRCam.F187N" ucd="meta.id" utype="photdm:PhotometryFilter.identifier" datatype="char" arraysize="*"/>
+    <PARAM name="WavelengthUnit" value="Angstrom" ucd="meta.unit" utype="PhotometryFilter.SpectralAxis.unit" datatype="char" arraysize="*"/>
+    <PARAM name="WavelengthUCD" value="em.wl" ucd="meta.ucd" utype="PhotometryFilter.SpectralAxis.UCD" datatype="char" arraysize="*"/>
+    <PARAM name="Description" value="NIRCam F187N filter" ucd="meta.note" utype="photdm:PhotometryFilter.description" datatype="char" arraysize="*"/>
+    <PARAM name="PhotSystem" value="NIRCam" utype="photdm:PhotometricSystem.description" datatype="char" arraysize="*">
+       <DESCRIPTION>Photometric system</DESCRIPTION>
+    </PARAM>
+    <PARAM name="DetectorType" value="1" utype="photdm:PhotometricSystem.detectorType" datatype="char" arraysize="*">
+       <DESCRIPTION>Detector type</DESCRIPTION>
+    </PARAM>
+    <PARAM name="Instrument" value="NIRCam" ucd="instr" datatype="char" arraysize="*">
+       <DESCRIPTION>Instrument</DESCRIPTION>
+    </PARAM>
+    <PARAM name="Facility" value="JWST" ucd="instr.obsty" datatype="char" arraysize="*">
+       <DESCRIPTION>Observational facility</DESCRIPTION>
+    </PARAM>
+    <PARAM name="ProfileReference" value="https://jwst-docs.stsci.edu/display/JTI/NIRCam+Filters" datatype="char" arraysize="*"/>
+    <PARAM name="Description" value="NIRCam F187N filter" ucd="meta.note" utype="photdm:PhotometryFilter.description" datatype="char" arraysize="*"/>
+    <PARAM name="Comments" value="includes NIRCam optics, DBS, QE and JWST Optical Telescope Element" ucd="meta.note" datatype="char" arraysize="*"/>
+    <PARAM name="WavelengthMean" value="18739.20607979" unit="Angstrom" ucd="em.wl" utype="photdm:PhotometryFilter.SpectralAxis.Coverage.Location.Value" datatype="float" >
+       <DESCRIPTION>Mean wavelength. Defined as integ[x*filter(x) dx]/integ[filter(x) dx]</DESCRIPTION>
+    </PARAM>
+    <PARAM name="WavelengthEff" value="18736.764495334" unit="Angstrom" ucd="em.wl.effective" datatype="float" >
+       <DESCRIPTION>Effective wavelength. Defined as integ[x*filter(x)*vega(x) dx]/integ[filter(x)*vega(x) dx]</DESCRIPTION>
+    </PARAM>
+    <PARAM name="WavelengthMin" value="18444.959005075" unit="Angstrom" ucd="em.wl;stat.min" utype="photdm:PhotometryFilter.SpectralAxis.Coverage.Bounds.Start" datatype="float" >
+       <DESCRIPTION>Minimum filter wavelength. Defined as the first lambda value with a transmission at least 1% of maximum transmission</DESCRIPTION>
+    </PARAM>
+    <PARAM name="WavelengthMax" value="19029.62542713" unit="Angstrom" ucd="em.wl;stat.max" utype="photdm:PhotometryFilter.SpectralAxis.Coverage.Bounds.Stop" datatype="float" >
+       <DESCRIPTION>Maximum filter wavelength. Defined as the last lambda value with a transmission at least 1% of maximum transmission</DESCRIPTION>
+    </PARAM>
+    <PARAM name="WidthEff" value="236.59428376297" unit="Angstrom" ucd="instr.bandwidth" utype="photdm:PhotometryFilter.SpectralAxis.Coverage.Bounds.Extent" datatype="float" >
+       <DESCRIPTION>Effective width. Defined as integ[x*filter(x) dx].\nEquivalent to the horizontal size of a rectangle with height equal to maximum transmission and with the same area that the one covered by the filter transmission curve.</DESCRIPTION>
+    </PARAM>
+    <PARAM name="WavelengthCen" value="18738.569587232" unit="Angstrom" ucd="em.wl" datatype="float" >
+       <DESCRIPTION>Central wavelength. Defined as the central wavelength between the two points defining FWMH</DESCRIPTION>
+    </PARAM>
+    <PARAM name="WavelengthPivot" value="18738.546070692" unit="Angstrom" ucd="em.wl" datatype="float" >
+       <DESCRIPTION>Peak wavelength. Defined as sqrt{integ[x*filter(x) dx]/integ[filter(x) dx/x]}</DESCRIPTION>
+    </PARAM>
+    <PARAM name="WavelengthPeak" value="18732" unit="Angstrom" ucd="em.wl" datatype="float" >
+       <DESCRIPTION>Peak wavelength. Defined as the lambda value with larger transmission</DESCRIPTION>
+    </PARAM>
+    <PARAM name="WavelengthPhot" value="18737.223385567" unit="Angstrom" ucd="em.wl" datatype="float" >
+       <DESCRIPTION>Photon distribution based effective wavelength. Defined as integ[x^2*filter(x)*vega(x) dx]/integ[x*filter(x)*vega(x) dx]</DESCRIPTION>
+    </PARAM>
+    <PARAM name="FWHM" value="211.29893609826" unit="Angstrom" ucd="instr.bandwidth" datatype="float" >
+       <DESCRIPTION>Full width at half maximum. Defined as the difference between the two wavelengths for which filter transmission is half maximum</DESCRIPTION>
+    </PARAM>
+    <PARAM name="PhotCalID" value="JWST/NIRCam.F187N/Vega" ucd="meta.id" utype="photdm:PhotCal.identifier" datatype="char" arraysize="*"/>
+    <PARAM name="MagSys" value="Vega" ucd="meta.code" utype="photdm:PhotCal.MagnitudeSystem.type" datatype="char" arraysize="*"/>
+    <PARAM name="ZeroPoint" value="813.47663198905" unit="Jy" ucd="phot.flux.density" utype="photdm:PhotCal.ZeroPoint.Flux.value" datatype="float" />
+    <PARAM name="ZeroPointUnit" value="Jy" ucd="meta.unit" utype="photdm:PhotCal.ZeroPoint.Flux.unit" datatype="char" arraysize="*"/>
+    <PARAM name="ZeroPointType" value="Pogson" ucd="meta.code" utype="photdm:PhotCal.ZeroPoint.type" datatype="char" arraysize="*"/>
+      <FIELD name="Wavelength" utype="spec:Data.SpectralAxis.Value" ucd="em.wl" unit="Angstrom" datatype="float"/>
+      <FIELD name="Transmission" utype="spec:Data.FluxAxis.Value" ucd="phys.transmission" unit="" datatype="float"/>
+      <DATA>
+        <TABLEDATA>
+          <TR>
+            <TD>18342</TD>
+            <TD>0.000103148</TD>
+          </TR>
+          <TR>
+            <TD>18352</TD>
+            <TD>0.000131861</TD>
+          </TR>
+          <TR>
+            <TD>18362</TD>
+            <TD>0.000171293</TD>
+          </TR>
+          <TR>
+            <TD>18372</TD>
+            <TD>0.000219328</TD>
+          </TR>
+          <TR>
+            <TD>18382</TD>
+            <TD>0.000298494</TD>
+          </TR>
+          <TR>
+            <TD>18392</TD>
+            <TD>0.000421847</TD>
+          </TR>
+          <TR>
+            <TD>18402</TD>
+            <TD>0.000622217</TD>
+          </TR>
+          <TR>
+            <TD>18412</TD>
+            <TD>0.000949507</TD>
+          </TR>
+          <TR>
+            <TD>18422</TD>
+            <TD>0.00151122</TD>
+          </TR>
+          <TR>
+            <TD>18432</TD>
+            <TD>0.00244918</TD>
+          </TR>
+          <TR>
+            <TD>18442</TD>
+            <TD>0.00390198</TD>
+          </TR>
+          <TR>
+            <TD>18452</TD>
+            <TD>0.00606737</TD>
+          </TR>
+          <TR>
+            <TD>18462</TD>
+            <TD>0.00905615</TD>
+          </TR>
+          <TR>
+            <TD>18472</TD>
+            <TD>0.0126345</TD>
+          </TR>
+          <TR>
+            <TD>18482</TD>
+            <TD>0.0163208</TD>
+          </TR>
+          <TR>
+            <TD>18492</TD>
+            <TD>0.0200583</TD>
+          </TR>
+          <TR>
+            <TD>18502</TD>
+            <TD>0.023646</TD>
+          </TR>
+          <TR>
+            <TD>18512</TD>
+            <TD>0.0276377</TD>
+          </TR>
+          <TR>
+            <TD>18522</TD>
+            <TD>0.0316866</TD>
+          </TR>
+          <TR>
+            <TD>18532</TD>
+            <TD>0.0359896</TD>
+          </TR>
+          <TR>
+            <TD>18542</TD>
+            <TD>0.0396152</TD>
+          </TR>
+          <TR>
+            <TD>18552</TD>
+            <TD>0.0464873</TD>
+          </TR>
+          <TR>
+            <TD>18562</TD>
+            <TD>0.053833</TD>
+          </TR>
+          <TR>
+            <TD>18572</TD>
+            <TD>0.0638679</TD>
+          </TR>
+          <TR>
+            <TD>18582</TD>
+            <TD>0.0754185</TD>
+          </TR>
+          <TR>
+            <TD>18592</TD>
+            <TD>0.0917678</TD>
+          </TR>
+          <TR>
+            <TD>18602</TD>
+            <TD>0.112155</TD>
+          </TR>
+          <TR>
+            <TD>18612</TD>
+            <TD>0.140973</TD>
+          </TR>
+          <TR>
+            <TD>18622</TD>
+            <TD>0.176981</TD>
+          </TR>
+          <TR>
+            <TD>18632</TD>
+            <TD>0.221948</TD>
+          </TR>
+          <TR>
+            <TD>18642</TD>
+            <TD>0.278332</TD>
+          </TR>
+          <TR>
+            <TD>18652</TD>
+            <TD>0.3304</TD>
+          </TR>
+          <TR>
+            <TD>18662</TD>
+            <TD>0.378472</TD>
+          </TR>
+          <TR>
+            <TD>18672</TD>
+            <TD>0.413302</TD>
+          </TR>
+          <TR>
+            <TD>18682</TD>
+            <TD>0.434989</TD>
+          </TR>
+          <TR>
+            <TD>18692</TD>
+            <TD>0.44549</TD>
+          </TR>
+          <TR>
+            <TD>18702</TD>
+            <TD>0.452087</TD>
+          </TR>
+          <TR>
+            <TD>18712</TD>
+            <TD>0.453965</TD>
+          </TR>
+          <TR>
+            <TD>18722</TD>
+            <TD>0.453915</TD>
+          </TR>
+          <TR>
+            <TD>18732</TD>
+            <TD>0.454272</TD>
+          </TR>
+          <TR>
+            <TD>18742</TD>
+            <TD>0.453325</TD>
+          </TR>
+          <TR>
+            <TD>18752</TD>
+            <TD>0.452206</TD>
+          </TR>
+          <TR>
+            <TD>18762</TD>
+            <TD>0.449517</TD>
+          </TR>
+          <TR>
+            <TD>18772</TD>
+            <TD>0.445449</TD>
+          </TR>
+          <TR>
+            <TD>18782</TD>
+            <TD>0.437419</TD>
+          </TR>
+          <TR>
+            <TD>18792</TD>
+            <TD>0.425541</TD>
+          </TR>
+          <TR>
+            <TD>18802</TD>
+            <TD>0.404255</TD>
+          </TR>
+          <TR>
+            <TD>18812</TD>
+            <TD>0.373641</TD>
+          </TR>
+          <TR>
+            <TD>18822</TD>
+            <TD>0.332361</TD>
+          </TR>
+          <TR>
+            <TD>18832</TD>
+            <TD>0.284807</TD>
+          </TR>
+          <TR>
+            <TD>18842</TD>
+            <TD>0.23679</TD>
+          </TR>
+          <TR>
+            <TD>18852</TD>
+            <TD>0.193285</TD>
+          </TR>
+          <TR>
+            <TD>18862</TD>
+            <TD>0.157641</TD>
+          </TR>
+          <TR>
+            <TD>18872</TD>
+            <TD>0.128755</TD>
+          </TR>
+          <TR>
+            <TD>18882</TD>
+            <TD>0.107033</TD>
+          </TR>
+          <TR>
+            <TD>18892</TD>
+            <TD>0.0891157</TD>
+          </TR>
+          <TR>
+            <TD>18902</TD>
+            <TD>0.0760267</TD>
+          </TR>
+          <TR>
+            <TD>18912</TD>
+            <TD>0.0650723</TD>
+          </TR>
+          <TR>
+            <TD>18922</TD>
+            <TD>0.0569369</TD>
+          </TR>
+          <TR>
+            <TD>18932</TD>
+            <TD>0.049413</TD>
+          </TR>
+          <TR>
+            <TD>18942</TD>
+            <TD>0.0433947</TD>
+          </TR>
+          <TR>
+            <TD>18952</TD>
+            <TD>0.0373836</TD>
+          </TR>
+          <TR>
+            <TD>18962</TD>
+            <TD>0.0317836</TD>
+          </TR>
+          <TR>
+            <TD>18972</TD>
+            <TD>0.0266474</TD>
+          </TR>
+          <TR>
+            <TD>18982</TD>
+            <TD>0.0216912</TD>
+          </TR>
+          <TR>
+            <TD>18992</TD>
+            <TD>0.0170193</TD>
+          </TR>
+          <TR>
+            <TD>19002</TD>
+            <TD>0.0125226</TD>
+          </TR>
+          <TR>
+            <TD>19012</TD>
+            <TD>0.00889334</TD>
+          </TR>
+          <TR>
+            <TD>19022</TD>
+            <TD>0.00608921</TD>
+          </TR>
+          <TR>
+            <TD>19032</TD>
+            <TD>0.00406114</TD>
+          </TR>
+          <TR>
+            <TD>19042</TD>
+            <TD>0.00261502</TD>
+          </TR>
+          <TR>
+            <TD>19052</TD>
+            <TD>0.0016935</TD>
+          </TR>
+          <TR>
+            <TD>19062</TD>
+            <TD>0.00111099</TD>
+          </TR>
+          <TR>
+            <TD>19072</TD>
+            <TD>0.000741078</TD>
+          </TR>
+          <TR>
+            <TD>19082</TD>
+            <TD>0.000508555</TD>
+          </TR>
+          <TR>
+            <TD>19092</TD>
+            <TD>0.000362592</TD>
+          </TR>
+          <TR>
+            <TD>19102</TD>
+            <TD>0.000260952</TD>
+          </TR>
+          <TR>
+            <TD>19112</TD>
+            <TD>0.00019614</TD>
+          </TR>
+          <TR>
+            <TD>19122</TD>
+            <TD>0.000149173</TD>
+          </TR>
+          <TR>
+            <TD>19132</TD>
+            <TD>0.000115321</TD>
+          </TR>
+        </TABLEDATA>
+      </DATA>
+    </TABLE>
+  </RESOURCE>
+</VOTABLE>
