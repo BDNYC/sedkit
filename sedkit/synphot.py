@@ -23,8 +23,8 @@ import pysynphot as ps
 # ps.setref(area=250000.)
 
 
-BANDPASSES = [i.split('/')[-1] for i in glob.glob(resource_filename('SEDkit', 'data/bandpasses/*'))]
-BANDPASS_PATH = resource_filename('SEDkit', 'data/bandpasses/')
+BANDPASSES = [i.split('/')[-1] for i in glob.glob(resource_filename('sedkit', 'data/bandpasses/*'))]
+BANDPASS_PATH = resource_filename('sedkit', 'data/bandpasses/')
 warnings.simplefilter('ignore')
 
 
@@ -32,7 +32,7 @@ EXTINCTION = {'PS1.g':3.384, 'PS1.r':2.483, 'PS1.i':1.838, 'PS1.z':1.414, 'PS1.y
               'SDSS.u':4.0, 'SDSS.g':3.384, 'SDSS.r':2.483, 'SDSS.i':1.838, 'SDSS.z':1.414,
               '2MASS.J':0.650, '2MASS.H':0.327, '2MASS.Ks':0.161}
 
-# A dict of BDNYCdb band names to work with SEDkit
+# A dict of BDNYCdb band names to work with sedkit
 PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
                 '2MASS_Ks': '2MASS.Ks', 'WISE_W1': 'WISE.W1',
                 'WISE_W2': 'WISE.W2', 'WISE_W3': 'WISE.W3',
@@ -62,7 +62,7 @@ class Bandpass(ps.ArrayBandpass):
         """
         # Look for the file
         if name in BANDPASSES:
-            file = glob.glob(resource_filename('SEDkit', 'data/bandpasses/{}'.format(name)))[0]
+            file = glob.glob(resource_filename('sedkit', 'data/bandpasses/{}'.format(name)))[0]
 
         else:
             raise IOError("No bandpass named {} in {}".format(name, BANDPASS_PATH))
@@ -131,7 +131,7 @@ class Bandpass(ps.ArrayBandpass):
 
         Parameters
         ----------
-        other: SEDkit.spectrum.Spectrum
+        other: sedkit.spectrum.Spectrum
             The other spectrum
 
         Returns

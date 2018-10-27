@@ -71,12 +71,12 @@ class Catalog:
 
         Parameters
         ----------
-        other: SEDkit.catalog.Catalog
+        other: sedkit.catalog.Catalog
             The Catalog to add
 
         Returns
         -------
-        SEDkit.catalog.Catalog
+        sedkit.catalog.Catalog
             The combined catalog
         """
         if not type(other)==type(self):
@@ -96,7 +96,7 @@ class Catalog:
 
         Parameters
         ----------
-        sed: SEDkit.sed.SED
+        sed: sedkit.sed.SED
             The SED object to add
         """
         # Turn off print statements
@@ -240,7 +240,7 @@ class Catalog:
 
         Returns
         -------
-        SEDkit.sed.Catalog
+        sedkit.sed.Catalog
             The filtered catalog
         """
         # Make a new catalog

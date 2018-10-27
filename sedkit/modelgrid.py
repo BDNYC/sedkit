@@ -25,7 +25,7 @@ from .spectrum import Spectrum
 
 
 # A list of all supported evolutionary models
-EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('SEDkit', 'data/models/evolutionary/*'))]
+EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
 
 def load_model(file, parameters=None, wl_min=5000, wl_max=50000):
     """Load a model from file
@@ -94,7 +94,7 @@ def load_ModelGrid(path):
 
     Returns
     -------
-    SEDkit.modelgrid.ModelGrid
+    sedkit.modelgrid.ModelGrid
         The loaded ModelGrid object
     """
     if not os.path.isfile(path):
@@ -235,7 +235,7 @@ class ModelGrid:
     #     Returns
     #     -------
     #     list
-    #         A list of the spectra as SEDkit.spectrum.Spectrum objects
+    #         A list of the spectra as sedkit.spectrum.Spectrum objects
     #     """
     #     # Get the relevant table rows
     #     table = u.filter_table(self.index, **kwargs)
@@ -265,7 +265,7 @@ class ModelGrid:
         Returns
         -------
         list
-            A list of the spectra as SEDkit.spectrum.Spectrum objects
+            A list of the spectra as sedkit.spectrum.Spectrum objects
         """
         # Get the relevant table rows
         return u.filter_table(self.index, **kwargs)
@@ -284,7 +284,7 @@ class ModelGrid:
 
         Returns
         -------
-        SEDkit.spectrum.Spectrum, list
+        sedkit.spectrum.Spectrum, list
             A Spectrum object or list of Spectrum objects
         """
         # See if the model with the desired parameters is witin the grid
@@ -446,7 +446,7 @@ class ModelGrid:
     #
     #     Returns
     #     -------
-    #     SEDkit.spectrum.Spectrum
+    #     sedkit.spectrum.Spectrum
     #         The interpolated Spectrum object
     #     """
     #     # Get the flux array
@@ -517,7 +517,7 @@ class BTSettl(ModelGrid):
 
         # Load the model grid
         modeldir = 'data/models/atmospheric/btsettl'
-        root = root or resource_filename('SEDkit', modeldir)
+        root = root or resource_filename('sedkit', modeldir)
         self.load(root)
 
         
@@ -526,7 +526,7 @@ class Filippazzo2016(ModelGrid):
     def __init__(self):
         """Load the model object"""
         model_path = 'data/models/atmospheric/Filippazzo2016.p'
-        root = resource_filename('SEDkit', model_path)
+        root = resource_filename('sedkit', model_path)
 
         data = pickle.load(open(root, 'rb'))
 
@@ -551,7 +551,7 @@ class SpexPrismLibrary(ModelGrid):
 
         # Load the model grid
         model_path = 'data/models/atmospheric/spexprismlibrary'
-        root = resource_filename('SEDkit', model_path)
+        root = resource_filename('sedkit', model_path)
         self.load(root)
 
         # Add numeric spectral type

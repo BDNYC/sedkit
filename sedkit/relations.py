@@ -1,6 +1,6 @@
 """
 This is the code used to generate the polynomial relations
-used in SEDkit's calculations
+used in sedkit's calculations
 """
 from pkg_resources import resource_filename
 
@@ -37,7 +37,7 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
         #======================================================================
 
         # Get the data
-        afgk = resource_filename('SEDkit', 'data/AFGK_radii.txt')
+        afgk = resource_filename('sedkit', 'data/AFGK_radii.txt')
         AFGK = ii.read(afgk, format='csv', comment='#')
 
         #======================================================================
@@ -60,7 +60,7 @@ def spt_radius_relation(xp=None, order=8, sig_order=7, generate=False):
         # MLTY['radius'] = MLTY['radius'].to(q.Rsun)
         # MLTY['radius_unc'] = MLTY['radius_unc'].to(q.Rsun)
         
-        mlty = resource_filename('SEDkit', 'data/MLTY_radii.txt')
+        mlty = resource_filename('sedkit', 'data/MLTY_radii.txt')
         MLTY = ii.read(mlty, format='csv', comment='#')
 
         #======================================================================

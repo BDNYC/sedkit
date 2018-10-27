@@ -6,17 +6,17 @@ This documentation describes a toolkit of classes, methods, and functions useful
 Installation
 ============
 
-To install **SEDkit**, do::
+To install **sedkit**, do::
 
-    pip install SEDkit
+    pip install sedkit
     
 Alternatively, clone the Github repo with::
 
-    git clone https://github.com/hover2pi/SEDkit.git
+    git clone https://github.com/hover2pi/sedkit.git
     
 And then install with::
 
-    python SEDkit/setup.py install
+    python sedkit/setup.py install
   
 Contents
 ========
@@ -24,12 +24,12 @@ Contents
 .. toctree::
    :maxdepth: 4
    
-.. automodule:: SEDkit.catalog
-.. automodule:: SEDkit.isochrone
-.. automodule:: SEDkit.sed
-.. automodule:: SEDkit.spectrum
-.. automodule:: SEDkit.synphot
-.. automodule:: SEDkit.utilities
+.. automodule:: sedkit.catalog
+.. automodule:: sedkit.isochrone
+.. automodule:: sedkit.sed
+.. automodule:: sedkit.spectrum
+.. automodule:: sedkit.synphot
+.. automodule:: sedkit.utilities
 
 Indices and tables
 

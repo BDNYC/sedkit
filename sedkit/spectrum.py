@@ -136,12 +136,12 @@ class Spectrum(ps.ArraySpectrum):
 
         Parameters
         ----------
-        spec2: SEDkit.spectrum.Spectrum
+        spec2: sedkit.spectrum.Spectrum
             The spectrum object to add
 
         Returns
         -------
-        SEDkit.spectrum.Spectrum
+        sedkit.spectrum.Spectrum
             A new spectrum object with the input spectra stitched together
         """
         # If None is added, just return a copy
@@ -237,7 +237,7 @@ class Spectrum(ps.ArraySpectrum):
             return new_spec
 
         except IOError:
-            raise TypeError('Only another SEDkit.spectrum.Spectrum object can\
+            raise TypeError('Only another sedkit.spectrum.Spectrum object can\
                              be added. Input is type {}'.format(type(spec2)))
 
     def best_fit_model(self, modelgrid, report=None):
@@ -246,7 +246,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Parameters
         ----------
-        modelgrid: SEDkit.modelgrid.ModelGrid
+        modelgrid: sedkit.modelgrid.ModelGrid
             The model grid to fit
         report: str
             The name of the parameter to plot versus the
@@ -316,7 +316,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Parameters
         ----------
-        spec: SEDkit.spectrum.Spectrum, np.ndarray
+        spec: sedkit.spectrum.Spectrum, np.ndarray
             The spectrum object or [W, F] array to fit
         wave_units: astropy.units.quantity.Quantity
             The wavelength units of the input spectrum if
@@ -356,7 +356,7 @@ class Spectrum(ps.ArraySpectrum):
             err2 = np.ones_like(flx2) if len(spec2) == 2 else spec2[2]
 
         else:
-            raise TypeError("Only an SEDkit.spectrum.Spectrum or numpy.ndarray can be fit.")
+            raise TypeError("Only an sedkit.spectrum.Spectrum or numpy.ndarray can be fit.")
 
         # Get the self data
         boolarr = np.array([True if i in wav else False for i in self.wave])
@@ -384,7 +384,7 @@ class Spectrum(ps.ArraySpectrum):
     #
     #     Parameters
     #     ----------
-    #     spectrum: SEDkit.spectrum.Spectrum
+    #     spectrum: sedkit.spectrum.Spectrum
     #         The spectrum object
     #     modelgrid: str
     #         The model grid to fit
@@ -640,7 +640,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Parameters
         ----------
-        spectrum: SEDkit.spectrum.Spectrum
+        spectrum: sedkit.spectrum.Spectrum
             The spectrum to normalize to
         exclude: sequence (optional)
             A list of wavelength ranges to exclude from the normalization
@@ -649,7 +649,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Returns
         -------
-        SEDkit.spectrum.Spectrum
+        sedkit.spectrum.Spectrum
           The normalized spectrum
         """
         spec = self.spectrum
@@ -742,7 +742,7 @@ class Spectrum(ps.ArraySpectrum):
         ----------
         mag: float
             The target magnitude
-        bandpass: SEDkit.synphot.Bandpass
+        bandpass: sedkit.synphot.Bandpass
             The bandpass to use
         system: str
             The magnitude system to use
@@ -753,7 +753,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Returns
         -------
-        float, SEDkit.spectrum.Spectrum
+        float, sedkit.spectrum.Spectrum
             The normalization constant or normalized spectrum object
         """
         # # Caluclate the remornalized flux
@@ -792,7 +792,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Returns
         -------
-        SEDkit.spectrum.Spectrum
+        sedkit.spectrum.Spectrum
             The resampled spectrum
         """
         mn = np.nanmin(self.wave)
@@ -837,7 +837,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Returns
         -------
-        SEDkit.spectrum.Spectrum
+        sedkit.spectrum.Spectrum
             The smoothed spectrum
         """
         s = np.r_[self.flux[window - 1:0:-1], self.flux, self.flux[-1:-window:-1]]
@@ -1197,7 +1197,7 @@ class Vega(Spectrum):
             The desired flux units
         """
         # Get the data and apply units
-        vega_file = resource_filename('SEDkit', 'data/STScI_Vega.txt')
+        vega_file = resource_filename('sedkit', 'data/STScI_Vega.txt')
         wave, flux = np.genfromtxt(vega_file, unpack=True)
         wave *= q.AA
         flux *= q.erg/q.s/q.cm**2/q.AA
@@ -1219,7 +1219,7 @@ def fit_model(row, fitspec):
     ----------
     row: pandas.Row
         The dataframe row to fit
-    fitspec: SEDkit.spectrum.Spectrum
+    fitspec: sedkit.spectrum.Spectrum
         The spectrum to fit
 
     Returns

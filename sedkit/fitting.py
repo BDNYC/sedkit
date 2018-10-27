@@ -15,7 +15,7 @@ def lmfit_modelgrid(spectrum, modelgrid, method='leastsq', verbose=True):
 
     Parameters
     ----------
-    spectrum: SEDkit.spectrum.Spectrum
+    spectrum: sedkit.spectrum.Spectrum
         The spectrum object
     modelgrid: str
         The model grid to fit

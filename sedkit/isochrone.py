@@ -64,7 +64,7 @@ class PARSEC(Isochrone):
     def __init__(self, **kwargs):
         """Initialize the model isochrone instance"""
         # Set the init parameters
-        path = resource_filename('SEDkit', 'data/models/evolutionary/PARSEC12/*')
+        path = resource_filename('sedkit', 'data/models/evolutionary/PARSEC12/*')
         colnames=['logAge', 'Mass', 'logTe', 'Mbol', 'logg', 'C/O']
 
         # Inherit from Isochrone class
@@ -163,7 +163,7 @@ def DMEstar(ages, xparam='Lbol', yparam='radius', jupiter=False):
     """
     # Fetch the data
     path_str = 'data/models/evolutionary/DMESTAR/*.txt'
-    data = glob(resource_filename('SEDkit', path_str))
+    data = glob(resource_filename('sedkit', path_str))
 
     # Add them to the list
     D = []
@@ -339,7 +339,7 @@ def isochrones(evo_model='hybrid_solar_age', xparam='Lbol', yparam='radius',
     # Get the DMEStar and BD evo tracks
     DME = DMEstar(ages, xparam=xparam, yparam=yparam, jupiter=jupiter)
     evo_path = 'data/models/evolutionary/{}.txt'.format(evo_model)
-    evo_file = resource_filename('SEDkit', evo_path)
+    evo_file = resource_filename('sedkit', evo_path)
 
     # Stitch them together using cubic spline
     D = []

@@ -217,7 +217,7 @@ class SED:
 
         Parameters
         ----------
-        band: name, SEDkit.synphot.Bandpass
+        band: name, sedkit.synphot.Bandpass
             The bandpass name or instance
         mag: float
             The magnitude
@@ -240,7 +240,7 @@ class SED:
         # Get the bandpass
         if isinstance(band, str):
             bp = s.Bandpass(band)
-        elif isinstance(band, SEDkit.synphot.Bandpass):
+        elif isinstance(band, sedkit.synphot.Bandpass):
             bp, band = band, band.name
         else:
             print('Not a recognized bandpass:', band)
@@ -338,7 +338,7 @@ class SED:
 
         Parameters
         ----------
-        spectrum: sequence, SEDkit.spectrum.Spectrum
+        spectrum: sequence, sedkit.spectrum.Spectrum
             A sequence of [W,F] or [W,F,E] with astropy units
             or a Spectrum object
         """
@@ -999,7 +999,7 @@ class SED:
 
         Parameters
         ----------
-        modelgrid: SEDkit.modelgrid.ModelGrid
+        modelgrid: sedkit.modelgrid.ModelGrid
             The model grid to fit
         """
         if not self.calculated:
@@ -1072,12 +1072,12 @@ class SED:
             The database instance to query
         rename_bands: dict
             A lookup dictionary to map database bandpass
-            names to SEDkit required bandpass names,
+            names to sedkit required bandpass names,
             e.g. {'2MASS_J': '2MASS.J', 'WISE_W1': 'WISE.W1'}
 
         Example
         -------
-        from SEDkit import SED
+        from sedkit import SED
         from astrodbkit.astrodb import Database
         db = Database('/Users/jfilippazzo/Documents/Modules/BDNYCdb/bdnyc_database.db')
         s = SED()

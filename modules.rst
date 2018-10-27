@@ -1,7 +1,7 @@
-SEDkit
+sedkit
 ======
 
 .. toctree::
    :maxdepth: 4
 
-   SEDkit
+   sedkit

@@ -3,7 +3,7 @@
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
 #!python3
 """
-Some utilities to accompany SEDkit
+Some utilities to accompany sedkit
 """
 import re
 import itertools
@@ -442,7 +442,7 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
 
     Parameters
     ----------
-    band: SEDkit.synphot.Bandpass
+    band: sedkit.synphot.Bandpass
         The bandpass
     mag: float, astropy.unit.quantity.Quantity
         The magnitude
