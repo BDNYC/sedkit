@@ -23,7 +23,7 @@ from pandas import DataFrame
 import pysynphot as ps
 
 
-from . import synphot as syn
+from . import synphot as synp
 from . import utilities as u
 
 
@@ -31,9 +31,11 @@ COLORS = u.color_gen('Category10')
 
 
 class Spectrum(ps.ArraySpectrum):
-    """A spectrum object to add uncertainty handling and spectrum stitching to ps.ArraySpectrum
+    """A spectrum object to add uncertainty handling and spectrum stitching
+    to ps.ArraySpectrum
     """
-    def __init__(self, wave, flux, unc=None, snr=None, snr_trim=5, trim=None, name=None, verbose=False):
+    def __init__(self, wave, flux, unc=None, snr=None, snr_trim=None,
+                 trim=None, name=None, verbose=False):
         """Store the spectrum and units separately
 
         Parameters
@@ -49,7 +51,8 @@ class Spectrum(ps.ArraySpectrum):
         snr_trim: float (optional)
             The SNR value to trim spectra edges up to
         trim: sequence (optional)
-            A sequence of (wave_min, wave_max) sequences to override spectrum trimming
+            A sequence of (wave_min, wave_max) sequences to override spectrum
+            trimming
         name: str
             A name for the spectrum
         verbose: bool
@@ -820,6 +823,7 @@ class Spectrum(ps.ArraySpectrum):
 
         # Update the spectrum
         spectrum = [i*Q for i, Q in zip(binned, self.units)]
+        print(Spectrum(*spectrum, name=self.name).data.shape)
 
         return Spectrum(*spectrum, name=self.name)
 
