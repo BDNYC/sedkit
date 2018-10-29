@@ -41,19 +41,19 @@ class TestSED(unittest.TestCase):
 
         self.assertTrue(s.Teff is not None)
 
-    def test_no_photometry(self):
-        """Test that a purely photometric SED can be creted"""
-        s = copy.copy(self.sed)
-        s.age = 455*q.Myr, 13*q.Myr
-        s.radius = 2.362*q.Rsun, 0.02*q.Rjup
-        s.parallax = 130.23*q.mas, 0.36*q.mas
-        s.spectral_type = 'A0V'
-        s.add_spectrum(self.spec1)
-        s.add_spectrum(self.spec1)
-
-        s.results
-
-        self.assertTrue(s.Teff is not None)
+    # def test_no_photometry(self):
+    #     """Test that a purely photometric SED can be creted"""
+    #     s = copy.copy(self.sed)
+    #     s.age = 455*q.Myr, 13*q.Myr
+    #     s.radius = 2.362*q.Rsun, 0.02*q.Rjup
+    #     s.parallax = 130.23*q.mas, 0.36*q.mas
+    #     s.spectral_type = 'A0V'
+    #     s.add_spectrum(self.spec1)
+    #     s.add_spectrum(self.spec1)
+    #
+    #     s.results
+    #
+    #     self.assertTrue(s.Teff is not None)
 
     # def test_from_database(self):
     #     """Test that an SED can be created from a database"""
