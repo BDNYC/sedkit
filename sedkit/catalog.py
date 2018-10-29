@@ -364,7 +364,7 @@ class Catalog:
         # Make the figure
         if fig is None:
             # Make the plot
-            TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
+            TOOLS = ['pan', 'reset', 'box_zoom', 'save']
             title = '{} v {}'.format(x,y)
             fig = figure(plot_width=800, plot_height=500, title=title, 
                          y_axis_type=scale[1], x_axis_type=scale[0], 
@@ -411,14 +411,14 @@ class Catalog:
         """
         # Plot all SEDS
         if name_or_idx in ['all', '*']:
-            name_or_idx = [n for n, i in enumerate(self.results)]
+            name_or_idx = list(range(len(self.results)))
 
         # Make it into a list
         if isinstance(name_or_idx, (str, int)):
             name_or_idx = [name_or_idx]
 
         # Make the plot
-        TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'save']
+        TOOLS = ['pan', 'reset', 'box_zoom', 'save']
         title = self.name
         fig = figure(plot_width=800, plot_height=500, title=title,
                      y_axis_type=scale[1], x_axis_type=scale[0],
@@ -429,9 +429,10 @@ class Catalog:
         # Plot each SED
         for obj in name_or_idx:
             c = next(COLORS)
-            fig = self.get_SED(obj).plot(fig=fig, color=c, output=True)
+            targ = self.get_SED(obj)
+            fig = targ.plot(fig=fig, color=c, output=True, **kwargs)
 
-        show(fig)
+        return fig
 
 
     def remove_SED(self, name_or_idx):

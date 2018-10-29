@@ -1687,12 +1687,13 @@ class SED:
         mn_y = np.nanmin([mn_yp, mn_ys])
         mx_y = np.nanmax([mx_yp, mx_ys])
 
-        # Make the plot
+        # Use input figure...
         if hasattr(fig, 'legend'):
             self.fig = fig
 
+        # ...or make a new plot
         else:
-            TOOLS = ['pan', 'resize', 'reset', 'box_zoom', 'wheel_zoom', 'save']
+            TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
             xlab = 'Wavelength [{}]'.format(self.wave_units)
             ylab = 'Flux Density [{}]'.format(str(self.flux_units))
             self.fig = figure(plot_width=800, plot_height=500, title=self.name,
@@ -1705,7 +1706,7 @@ class SED:
             color = '#1f77b4'
 
         # Plot spectra
-        if spectra is not False and len(self.spectra) > 0:
+        if spectra and len(self.spectra) > 0:
 
             if spectra == 'all':
                 for n, spec in enumerate(self.spectra):
@@ -1730,7 +1731,7 @@ class SED:
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'],
                                           z=pts['z'],
-                                          desc=[str(b) for b in pts['desc']]))
+                                          desc=[b.decode("utf-8") for b in pts['desc']]))
                 self.fig.circle('x', 'y', source=source, legend='Photometry',
                                 name='photometry', color=color, fill_alpha=0.7,
                                 size=8)

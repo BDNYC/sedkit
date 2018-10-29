@@ -1,9 +1,9 @@
 name: py35
 dependencies:
-- numpy
+- numpy>=1.15.3
 - astropy>=3.0.2
 - python>=3.5
-- bokeh>=0.12.6
+- bokeh>=1.0.0
 - astroquery>=0.3.8
 - scipy>=0.17.0
 - pip:
