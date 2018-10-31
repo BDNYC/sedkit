@@ -47,7 +47,7 @@ class SpectralTypeRadius:
         """
         # Test valid range
         if not 0 <= spt <= 99:
-            raise TypeError("Please provide a spectral type within [0, 99]")
+            raise ValueError("Please provide a spectral type within [0, 99]")
 
         # Evaluate the polynomials
         radius = np.polyval(self.coeffs, spt)*q.Rsun
