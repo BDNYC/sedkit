@@ -33,6 +33,7 @@ from . import modelgrid as mg
 
 
 Vizier.columns = ["**", "+_r"]
+SptRadius = rel.SpectralTypeRadius()
 
 
 class SED:
@@ -1850,7 +1851,7 @@ class SED:
         """
         spt = spt or self.spectral_type[0]
         try:
-            self.radius = rel.spt_radius_relation(spt)
+            self.radius = SptRadius.get_radius(spt)
 
         except:
             print("Could not estimate radius from spectral type {}".format(spt))
