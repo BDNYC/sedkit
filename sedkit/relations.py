@@ -46,7 +46,7 @@ class SpectralTypeRadius:
             The radius and uncertainty in solar radii
         """
         # Test valid range
-        if not 0 <= spt <= 99:
+        if not isinstance(spt, int) or not 0 <= spt <= 99:
             raise ValueError("Please provide a spectral type within [0, 99]")
 
         # Evaluate the polynomials

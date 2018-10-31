@@ -15,16 +15,16 @@ class TestRelations(unittest.TestCase):
     def test_get_radius_bounds(self):
         """Test that the get_radius method works"""
         # Test valid input
-        rad, unc = self.radius(58)
+        rad, unc = self.radius.get_radius(58)
         self.assertTrue(isinstance(rad, q.quantity.Quantity))
         self.assertTrue(isinstance(unc, q.quantity.Quantity))
         
         # Test out of bounds
-        self.assertRaises(ValueError, self.radius.get_radius(104))
-        self.assertRaises(ValueError, self.radius.get_radius(-23))
+        self.assertRaises(ValueError, self.radius.get_radius, 104)
+        self.assertRaises(ValueError, self.radius.get_radius, -23)
 
         # Test alphanumeric
-        self.assertRaises(ValueError, self.radius.get_radius('A0'))
+        self.assertRaises(ValueError, self.radius.get_radius, 'A0')
 
     def test_radius_generate(self):
         """Test that the generate method works"""
