@@ -6,16 +6,19 @@
 A module to estimate fundamental parameters from model isochrones
 """
 import os
+from functools import partial
 from glob import glob
+import multiprocessing
 from pkg_resources import resource_filename
 
 import astropy.units as q
+from astropy.io.ascii import read
+import astropy.table as at
 from bokeh.plotting import figure, show
 from bokeh.models import Range1d
 from itertools import chain, groupby
 import numpy as np
 import scipy.interpolate as si
-from dask import dataframe, array
 
 from .spectrum import COLORS
 
@@ -50,9 +53,120 @@ class Isochrone:
         self.colnames = colnames
 
         # Load the the isochrones
-        self.files = glob(path)
-        self.data = dataframe.read_csv(self.files, names=self.colnames,
-                                       **kwargs)
+        files = glob(path)
+        pool = multiprocessing.Pool(8)
+        tables = pool.map(read, files)
+        pool.close()
+        pool.join()
+        self.data = at.vstack(tables)
+
+    def evaluate(self, xval, age, xparam='Lbol', yparam='radius', jupiter=False,
+                 ages=[0.01, 0.03, 0.05, 0.1, 0.2, 0.5, 1, 10],
+                 xlabel=None, ylabel=None, xlims=None, ylims=None,
+                 evo_model='hybrid_solar_age', title=None, plot=False):
+        """
+        Interpolates the model isochrones to obtain a range in yparam given a
+        range in age
+
+        Parameters
+        ----------
+        xval: sequence
+            The (value, uncertainty) of the xparam to interpolate to
+        age: sequence
+            The (min_age, max_age) in astropy units to interpolate to
+        xparam: str
+            The x-axis parameter
+        yapram: str
+            The y-axis parameter
+        ages: sequence
+            The ages at which the isochrones should be evaluated
+        xlabel: str
+            The x-axis label for the plot
+        ylabel: str
+            The y-axis label for the plot
+        xlims: sequence
+            The x-axis limits for the plot
+        ylims: sequence
+            The y-axis limits for the plot
+        evo_model: str
+            The name of the evolutionary model
+        title: str
+            The plot title
+        plot: bool
+            Plot the figure
+
+        Returns
+        -------
+        tuple
+            The value and uncertainty of the interpolated value
+        """
+        # Convert (age, unc) into age range
+        min_age = (age[0]-age[1]).to(q.Gyr).value
+        max_age = (age[0]+age[1]).to(q.Gyr).value
+
+        if max_age > 10 or min_age < 0.01:
+            raise ValueError('Please provide an age range within 0.01-10 Gyr')
+
+        # Get xval floats
+        if hasattr(xval[0], 'unit'):
+            xval, xval_unc = xval
+            xval = xval.value
+            xval_unc = xval_unc.value
+        else:
+            xval, xval_unc = xval
+
+        # Grab and plot the desired isochrones
+        D, fig = isochrones(evo_model=evo_model, xparam=xparam, yparam=yparam,
+                            ages=ages, jupiter=jupiter, plot=plot)
+        Q = {d[0]: {'x': d[1], 'y': d[2]} for d in D}
+
+        # Pull out isochrones which lie just above and below min_age and max_age
+        A = np.array(list(zip(*D))[0])
+        min1 = A[A <= min_age][-1]
+        min2 = A[A >= min_age][0]
+        max1 = A[A <= max_age][-1]
+        max2 = A[A >= max_age][0]
+
+        # Create a high-res x-axis in region of interest and interpolate
+        # isochrones horizontally onto new x-axis
+        x = np.linspace(xval - xval_unc, xval + xval_unc, 20)
+        for k, v in Q.items():
+            v['y'] = np.interp(x, v['x'], v['y'])
+            v['x'] = x
+
+        # Create isochrones interpolated vertically to *min_age* and *max_age*
+        mn = zip(Q[min1]['y'], Q[min2]['y'])
+        mx = zip(Q[max1]['y'], Q[max2]['y'])
+        min_iso = [np.interp(min_age, [min1, min2], [r1, r2]) for r1, r2 in mn]
+        max_iso = [np.interp(max_age, [max1, max2], [r1, r2]) for r1, r2 in mx]
+
+        # Pull out least and greatest y value of interpolated isochrones in
+        # x range of interest
+        y_min, y_max = min(min_iso + max_iso), max(min_iso + max_iso)
+
+        if plot:
+            fig.patch([-10, -10, 10, 10], [y_min, y_max, y_max, y_min], alpha=0.3,
+                      line_width=0, legend='{} range'.format(yparam))
+            xmin = min([min(i[1]) for i in D])*0.75
+            xmax = max([max(i[1]) for i in D])*1.25
+            fig.x_range = Range1d(xmin, xmax)
+            show(fig)
+
+        # Round the values
+        val = round(np.mean([y_min, y_max]), 2)
+        unc = round(abs(y_min - np.mean([y_min, y_max])), 2)
+
+        # Set the units of the output
+        if yparam == 'radius':
+            units = q.Rjup if jupiter else q.Rsun
+        elif yparam == 'teff':
+            units = q.K
+        elif yparam == 'mass':
+            units = q.Mjup if jupiter else q.Msun
+        else:
+            units = 1.
+
+        return np.array([val, unc])*units
 
 
 class PARSEC(Isochrone):
@@ -61,21 +175,22 @@ class PARSEC(Isochrone):
     Data described in Bressan et al. (2012).
     Data retrieved from https://philrosenfield.github.io/padova_tracks/
     """
-    def __init__(self, **kwargs):
+    def __init__(self, Z='solar', **kwargs):
         """Initialize the model isochrone instance"""
         # Set the init parameters
-        path = resource_filename('sedkit', 'data/models/evolutionary/PARSEC12/*')
+        path = resource_filename('sedkit', 'data/models/evolutionary/PARSEC12/{}/*'.format(Z))
         colnames=['logAge', 'Mass', 'logTe', 'Mbol', 'logg', 'C/O']
 
         # Inherit from Isochrone class
         super().__init__(name='PARSEC', path=path, colnames=colnames,
                          delim_whitespace=True, skiprows=[0], **kwargs)
 
-        # Add the metallicity column
-        filenames = [os.path.basename(f) for f in self.files]
-        spl = [fn.split('Z')[1].split('Y') for fn in filenames]
-        # self.data['Z'] = array.from_array(np.array([eval(i[0]) for i in spl]), chunks=500)
-        # self.data['Y'] = [eval(i[1].split('OUT')[0]) for i in spl]
+        # Conversions  Mbol = 4.77 - 2.5 * log L
+        self.data['Lbol'] = (4.77-self.data['Mbol'])/2.5
+        self.data['age'] = 10**self.data['logAge']
+        self.data['teff'] = 10**self.data['logTe']
+        self.data.rename_column('Mass', 'mass')
+        self.data.remove_columns(['logAge', 'logTe', 'C/O'])
 
 
 def avg_param(yparam, z, z_unc, min_age, max_age, spt, xparam='Lbol', plot=False):
