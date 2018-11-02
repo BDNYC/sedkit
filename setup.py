@@ -27,7 +27,7 @@ setup(
     ],
     keywords='astrophysics',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
-    install_requires=['numpy','astropy','bokeh','pysynphot','scipy','astroquery','dustmaps'],
+    install_requires=['numpy','astropy','bokeh','pysynphot','scipy','astroquery','dustmaps', 'svo_filters'],
     include_package_data=True,
 
 )

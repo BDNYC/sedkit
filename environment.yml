@@ -7,4 +7,5 @@ dependencies:
 - astroquery>=0.3.8
 - scipy>=0.17.0
 - pip:
+  - svo_filters
   - pysynphot>=0.9.8.5
