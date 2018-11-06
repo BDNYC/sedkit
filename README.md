@@ -28,9 +28,11 @@ git clone https://github.com/hover2pi/sedkit.git
 python sedkit/setup.py install
 ```
 
-## Usage
+## Documentation
 
-The package contains detailed Jupyter notebooks highlighting the core functionality of its primary classes, including
+Full documentation for the latest build can be found on [ReadTheDocs](https://sedkit.readthedocs.io/en/latest/).
+
+The package also contains detailed Jupyter notebooks highlighting the core functionality of its primary classes, including
 
 - [sedkit.spectrum.Spectrum](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/working_with_spectra.ipynb)
 - [sedkit.sed.SED](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_sed.ipynb)
