@@ -7,16 +7,26 @@
 
 Requirements:
 - `astropy>=3.0.2`
-- `bokeh>=0.12.6`
-- `pysynphot>=0.9.8.5`
 - `astroquery>=0.3.8`
+- `bokeh>=0.12.6`
 - `dustmaps>=1.0`
 - `numpy>=1.13.3`
+- `svo_filters>=0.2.5`
 
 ## Installation
 
-```pip install sedkit```
+Install via PYPI with
 
+```
+pip install sedkit
+```
+
+or via Github with
+
+```
+git clone https://github.com/hover2pi/sedkit.git
+python sedkit/setup.py install
+```
 
 ## Licensed
 
