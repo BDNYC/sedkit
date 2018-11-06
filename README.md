@@ -38,6 +38,8 @@ The package also contains detailed Jupyter notebooks highlighting the core funct
 - [sedkit.sed.SED](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_sed.ipynb)
 - [sedkit.catalog.Catalog](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_catalog.ipynb)
 
+If you use or reference this software, please cite the paper in PASP [Filippazzo et al. (submitted)]()
+
 ## Licensed
 
 This project is Copyright (c) Joe Filippazzo and licensed under the terms of the BSD 3-Clause license. See the licenses folder for more information.
