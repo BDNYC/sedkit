@@ -38,7 +38,7 @@ The package also contains detailed Jupyter notebooks highlighting the core funct
 - [sedkit.sed.SED](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_sed.ipynb)
 - [sedkit.catalog.Catalog](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_catalog.ipynb)
 
-If you use or reference this software, please cite the paper in PASP [Filippazzo et al. (submitted)]()
+If you use or reference this software, please cite [Filippazzo et al. (submitted to PASP)]()
 
 ## Licensed
 
