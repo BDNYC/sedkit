@@ -28,6 +28,14 @@ git clone https://github.com/hover2pi/sedkit.git
 python sedkit/setup.py install
 ```
 
+## Usage
+
+The package contains detailed Jupyter notebooks highlighting the core functionality of its primary classes, including
+
+- [sedkit.spectrum.Spectrum](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/working_with_spectra.ipynb)
+- [sedkit.sed.SED](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_sed.ipynb)
+- [sedkit.catalog.Catalog](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_catalog.ipynb)
+
 ## Licensed
 
 This project is Copyright (c) Joe Filippazzo and licensed under the terms of the BSD 3-Clause license. See the licenses folder for more information.
