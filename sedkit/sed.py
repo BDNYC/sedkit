@@ -218,7 +218,7 @@ class SED:
 
         Parameters
         ----------
-        band: name, sedkit.synphot.Bandpass
+        band: name, svo_filters.svo.Filter
             The bandpass name or instance
         mag: float
             The magnitude
@@ -240,8 +240,8 @@ class SED:
 
         # Get the bandpass
         if isinstance(band, str):
-            bp = s.Bandpass(band)
-        elif isinstance(band, sedkit.synphot.Bandpass):
+            bp = svo.Filter(band)
+        elif isinstance(band, svo.Filter):
             bp, band = band, band.name
         else:
             print('Not a recognized bandpass:', band)
@@ -454,7 +454,7 @@ class SED:
                 for band in s.BANDPASSES:
 
                     # Get the bandpass
-                    bp = s.Bandpass(band)
+                    bp = svo.Filter(band)
 
                     # Check for overlap before calculating
                     if bp.check_overlap(spec) in ['full', 'partial']:

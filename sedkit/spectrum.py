@@ -22,7 +22,6 @@ import numpy as np
 from pandas import DataFrame
 import pysynphot as ps
 
-
 from . import synphot as synp
 from . import utilities as u
 
