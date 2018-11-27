@@ -41,7 +41,3 @@ class TestRelations(unittest.TestCase):
         old = self.radius.get_radius(62)
         new = new_rel.get_radius(62)
         self.assertNotEquals(new, old)
-
-
-if __name__ == '__main__':
-    unittest.main()

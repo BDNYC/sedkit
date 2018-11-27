@@ -78,6 +78,3 @@ class TestSED(unittest.TestCase):
 
         # Make sure the units are being updated
         self.failUnless(s.spectra[0].wave_units == s.spectra[1].wave_units)
-
-if __name__ == '__main__':
-    unittest.main()

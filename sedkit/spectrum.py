@@ -22,11 +22,7 @@ import numpy as np
 from pandas import DataFrame
 import pysynphot as ps
 
-from . import synphot as synp
 from . import utilities as u
-
-
-COLORS = u.color_gen('Category10')
 
 
 class Spectrum(ps.ArraySpectrum):

@@ -4,7 +4,6 @@ import copy
 import numpy as np
 import astropy.units as q
 
-from .. import synphot as syn
 from .. import spectrum as sp
 
 
@@ -39,6 +38,3 @@ class TestSpectrum(unittest.TestCase):
         self.assertTrue((s.spectrum[0].unit == wu) &
                         (s.spectrum[1].unit == fu) &
                         (s.spectrum[2].unit == fu))
-
-if __name__ == '__main__':
-    unittest.main()

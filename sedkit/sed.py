@@ -23,9 +23,9 @@ from bokeh.io import export_png
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 from dustmaps.bayestar import BayestarWebQuery
+from svo_filters import svo
 
 from . import utilities as u
-from . import synphot as s
 from . import spectrum as sp
 from . import isochrone as iso
 from . import relations as rel
@@ -258,8 +258,9 @@ class SED:
         mag -= bp.ext_vector*self.reddening
 
         # Make a dict for the new point
-        new_photometry = {'band': band, 'eff': bp.eff, 'app_magnitude': mag,
-                          'app_magnitude_unc': mag_unc, 'bandpass': bp}
+        new_photometry = {'band': band, 'eff': bp.wave_eff,
+                          'app_magnitude': mag, 'app_magnitude_unc': mag_unc,
+                          'bandpass': bp}
 
         # Add the kwargs
         new_photometry.update(kwargs)
@@ -271,10 +272,10 @@ class SED:
         self.calculated = False
 
         # Update photometry max and min wavelengths
-        if self.min_phot is None or bp.eff < self.min_phot:
-            self.min_phot = bp.eff
-        if self.max_phot is None or bp.eff > self.max_phot:
-            self.max_phot = bp.eff
+        if self.min_phot is None or bp.wave_eff < self.min_phot:
+            self.min_phot = bp.wave_eff
+        if self.max_phot is None or bp.wave_eff > self.max_phot:
+            self.max_phot = bp.wave_eff
 
     def add_photometry_file(self, file):
         """Add a table of photometry from an ASCII file that
@@ -457,7 +458,7 @@ class SED:
                     bp = svo.Filter(band)
 
                     # Check for overlap before calculating
-                    if bp.check_overlap(spec) in ['full', 'partial']:
+                    if bp.overlap(spec) in ['full', 'partial']:
 
                         # Calculate the magnitiude
                         mag, mag_unc = spec.synthetic_mag(bp)
@@ -1063,7 +1064,7 @@ class SED:
         self._calibrate_photometry()
         self._calibrate_spectra()
 
-    def from_database(self, db, rename_bands=s.PHOT_ALIASES, **kwargs):
+    def from_database(self, db, rename_bands=u.PHOT_ALIASES, **kwargs):
         """
         Load the data from an astrodbkit.astrodb.Database
 

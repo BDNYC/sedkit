@@ -27,6 +27,7 @@ from .spectrum import Spectrum
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
 
+
 def load_model(file, parameters=None, wl_min=5000, wl_max=50000):
     """Load a model from file
 
@@ -83,6 +84,7 @@ def load_model(file, parameters=None, wl_min=5000, wl_max=50000):
     print(file, ': Done!')
 
     return meta
+
 
 def load_ModelGrid(path):
     """Load a model grid from a file
@@ -520,7 +522,7 @@ class BTSettl(ModelGrid):
         root = root or resource_filename('sedkit', modeldir)
         self.load(root)
 
-        
+
 class Filippazzo2016(ModelGrid):
     """Child class for the Filippazzo et al. (2016) sample"""
     def __init__(self):
@@ -558,6 +560,7 @@ class SpexPrismLibrary(ModelGrid):
         self.index['SpT'] = [u.specType(i.split(',')[0].replace('Opt:','')\
                               .replace('NIR:',''))[0] for i in\
                               self.index['spty']]
+
 
 def format_XML(modeldir):
     """Convert VO tables with '<RESOURCE type="datafile">' into 

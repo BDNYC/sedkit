@@ -15,7 +15,3 @@ class TestPARSEC(unittest.TestCase):
     def test_interp(self):
         """Test that the model isochrone can be interpolated"""
         pass
-
-
-if __name__ == '__main__':
-    unittest.main()
