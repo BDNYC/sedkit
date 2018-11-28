@@ -188,11 +188,11 @@ def filter_table(table, **kwargs):
 
                 # Assume eqality if no operator
                 else:
-                    value = [' == '+value]
+                    value = ['== '+value]
 
             # Turn numbers into strings
-            if isinstance(value, (int, float)):
-                value = [" == {}".format(value)]
+            if isinstance(value, (int, float)) or (isinstance(value, str) and isnumber(value)):
+                value = ["== {}".format(value)]
 
             # Iterate through multiple conditions
             for cond in value:

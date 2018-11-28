@@ -73,6 +73,9 @@ class Isochrone:
         for uname, unit in units.items():
             setattr(self, '{}_units'.format(uname), unit)
 
+        # Save the raw data for resampling
+        self.raw_data = self.data
+
     @property
     def age_units(self):
         """A getter for the age units"""
@@ -112,6 +115,35 @@ class Isochrone:
         data = filter_table(self.data, **kwargs)[[col for col in kwargs.keys()]]
 
         return data
+
+    def plot(self, xparam, yparam):
+        """Plot an evaluated isochrone, isochrone, or set of isochrones
+
+        Parameters
+        ----------
+        xparam: str
+            The column name to plot on the x-axis
+        yparam: str
+            The column name to plot on the y-axis
+
+        Returns
+        -------
+        bokeh.figure
+            The figure
+        """
+        # Make the figure
+        fig = figure()
+
+        # Get the unique ages
+        ages = np.unique(self.data['age'])
+
+        # Plot a line for each isochrone
+        for age in ages:
+            data = filter_table(self.data, age=age)
+            fig.line(data[xparam], data[yparam], color=next(COLORS),
+                     legend=str(age))
+
+        return fig
 
     # def evaluate(self, xval, age, xparam='Lbol', yparam='radius', jupiter=False,
     #              ages=[0.01, 0.03, 0.05, 0.1, 0.2, 0.5, 1, 10],
