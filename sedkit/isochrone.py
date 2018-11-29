@@ -1,22 +1,20 @@
-#!/usr/bin/env python
+# !/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
-#!python3
+# !python3
 """
 A module to estimate fundamental parameters from model isochrones
 """
 import os
-from glob import glob
 from pkg_resources import resource_filename
 
 import astropy.units as q
 from astropy.io.ascii import read
-import astropy.table as at
 from bokeh.plotting import figure, show
-from bokeh.models import Range1d, LinearColorMapper, BasicTicker, ColorBar
+from bokeh.models import LinearColorMapper, BasicTicker, ColorBar
 import numpy as np
 
-from .utilities import filter_table, color_gen
+from .utilities import color_gen
 
 # A dictionary of all supported moving group ages from Bell et al. (2015)
 NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr),
@@ -231,7 +229,7 @@ class Isochrone:
         color_bar = ColorBar(color_mapper=color_mapper, ticker=BasicTicker(),
                              label_standoff=5, border_line_color=None,
                              title='Age [{}]'.format(self.age_units),
-                             location=(0,0))
+                             location=(0, 0))
 
         # Plot a line for each isochrone
         for age in self.ages.value:
