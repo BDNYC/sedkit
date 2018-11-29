@@ -705,7 +705,7 @@ class SED:
         model: str
             The evolutionary model name
         """
-        if model not in mg.EVO_MODELS:
+        if model not in iso.EVO_MODELS:
             raise IOError("Please use an evolutionary model from the list: {}".format(mg.EVO_MODELS))
 
         self._evo_model = model

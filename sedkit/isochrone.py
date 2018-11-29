@@ -6,6 +6,7 @@
 A module to estimate fundamental parameters from model isochrones
 """
 import os
+import glob
 from pkg_resources import resource_filename
 
 import astropy.units as q
@@ -26,24 +27,30 @@ NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr),
              'TW Hya': (10*q.Myr, 3*q.Myr),
              '32 Ori': (22*q.Myr, 4*q.Myr)}
 
+# A list of supported units types
 UNIT_DTYPES = (q.quantity.Quantity, q.core.PrefixUnit, q.core.Unit,
                q.core.CompositeUnit, q.core.IrreducibleUnit)
+
+# A list of all supported evolutionary models
+EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
 
 
 class Isochrone:
     """A class to handle model isochrones"""
-    def __init__(self, path, name=None, units=None, **kwargs):
+    def __init__(self, name, units=None, **kwargs):
         """Initialize the isochrone object
 
         Parameters
         ----------
-        path: str
-            The path to the isochrone files
         name: str
             The name of the model set
         """
-        self.name = name or os.path.basename(path)
-        self.path = path
+        if name not in EVO_MODELS:
+            raise ValueError(name, 'No evolutionary model by this name. Try', EVO_MODELS)
+
+        # Set the path
+        self.name = name
+        self.path = resource_filename('sedkit', 'data/models/evolutionary/{}.txt'.format(self.name))
         self._age_units = None
         self._mass_units = None
         self._teff_units = None
@@ -302,17 +309,3 @@ class Isochrone:
         # ...or convert them
         else:
             self.data['teff'] = self.data['teff'].to(self.teff_units)
-
-
-class PARSEC(Isochrone):
-    """A class for the PARSEC 1.2 model isochrones
-
-    Data described in Bressan et al. (2012)
-    """
-    def __init__(self, Z='solar', **kwargs):
-        """Initialize the model isochrone instance"""
-        # Set the init parameters
-        path = resource_filename('sedkit', 'data/models/evolutionary/parsec12_{}.txt'.format(Z))
-
-        # Inherit from Isochrone class
-        super().__init__(name='PARSEC v1.2 - Solar Metallicity', path=path, **kwargs)

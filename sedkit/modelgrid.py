@@ -24,10 +24,6 @@ from . import utilities as u
 from .spectrum import Spectrum
 
 
-# A list of all supported evolutionary models
-EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
-
-
 def load_model(file, parameters=None, wl_min=5000, wl_max=50000):
     """Load a model from file
 
