@@ -10,7 +10,7 @@ class TestPARSEC(unittest.TestCase):
     """Tests for the PARSEC model isochrones"""
     def setUp(self):
         # Make Spectrum class for testing
-        self.pc = iso.PARSEC()
+        self.hsa = iso.Isochrone('hybrid_solar_age')
 
     def test_interp(self):
         """Test that the model isochrone can be interpolated"""

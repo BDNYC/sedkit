@@ -39,7 +39,7 @@ class TestSED(unittest.TestCase):
 
         s.results
 
-        self.assertTrue(s.Teff is not None)
+        self.assertTrue(s.fbol is not None)
 
     # def test_no_photometry(self):
     #     """Test that a purely photometric SED can be creted"""

@@ -1355,7 +1355,11 @@ class SED:
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
             else:
-                self.logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg')
+                try:
+                    self.logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg')
+                except ValueError as err:
+                    print("Could not calculate surface gravity.")
+                    print(err)
 
         else:
             if self.verbose:
@@ -1496,9 +1500,12 @@ class SED:
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
             else:
-
-                self.evo_model.mass_units = mass_units
-                self.mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass')
+                try:
+                    self.evo_model.mass_units = mass_units
+                    self.mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass')
+                except ValueError as err:
+                    print("Could not calculate mass.")
+                    print(err)
 
         else:
             if self.verbose:
@@ -1854,9 +1861,14 @@ class SED:
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            self.evo_model.radius_units = radius_units
-            self.radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius')
-            self.isochrone_radius = True
+            try:
+                self.evo_model.radius_units = radius_units
+                self.radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius')
+                self.isochrone_radius = True
+
+            except ValueError as err:
+                print("Could not calculate radius.")
+                print(err)
 
         else:
             if self.verbose:
@@ -2016,8 +2028,12 @@ class SED:
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the Teff.'.format(self))
             else:
-                self.evo_model.teff_units = teff_units
-                self.Teff_evo = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff')
+                try:
+                    self.evo_model.teff_units = teff_units
+                    self.Teff_evo = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff')
+                except ValueError as err:
+                    print("Could not calculate Teff.")
+                    print(err)
 
         else:
             if self.verbose:
