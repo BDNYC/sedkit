@@ -1,24 +1,21 @@
-#!/usr/bin/env python
+# !/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
-#!python3
+# !python3
 """
 A module to estimate fundamental parameters from model isochrones
 """
 import os
-from glob import glob
+import glob
 from pkg_resources import resource_filename
 
 import astropy.units as q
+from astropy.io.ascii import read
 from bokeh.plotting import figure, show
-from bokeh.models import Range1d
-from itertools import chain, groupby
+from bokeh.models import LinearColorMapper, BasicTicker, ColorBar
 import numpy as np
-import scipy.interpolate as si
-from dask import dataframe, array
 
-from .spectrum import COLORS
-
+from .utilities import color_gen
 
 # A dictionary of all supported moving group ages from Bell et al. (2015)
 NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr),
@@ -30,361 +27,330 @@ NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr),
              'TW Hya': (10*q.Myr, 3*q.Myr),
              '32 Ori': (22*q.Myr, 4*q.Myr)}
 
+# A list of supported units types
+UNIT_DTYPES = (q.quantity.Quantity, q.core.PrefixUnit, q.core.Unit,
+               q.core.CompositeUnit, q.core.IrreducibleUnit)
+
+# A list of all supported evolutionary models
+EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
+
 
 class Isochrone:
     """A class to handle model isochrones"""
-    def __init__(self, name, path, colnames, **kwargs):
+    def __init__(self, name, units=None, **kwargs):
         """Initialize the isochrone object
 
         Parameters
         ----------
         name: str
             The name of the model set
-        path: str
-            The path to the isochrone files
-        colnames: sequence
-            The names of the isochrone file columns
         """
+        if name not in EVO_MODELS:
+            raise ValueError(name, 'No evolutionary model by this name. Try', EVO_MODELS)
+
+        # Set the path
         self.name = name
-        self.path = path
-        self.colnames = colnames
+        self.path = resource_filename('sedkit', 'data/models/evolutionary/{}.txt'.format(self.name))
+        self._age_units = None
+        self._mass_units = None
+        self._radius_units = None
+        self._teff_units = None
 
-        # Load the the isochrones
-        self.files = glob(path)
-        self.data = dataframe.read_csv(self.files, names=self.colnames,
-                                       **kwargs)
+        # Read in the data
+        self.data = read(self.path)
 
+        # Convert log to linear
+        for col in self.data.colnames:
+            if col.startswith('log_'):
+                self.data[col[4:]] = 10**self.data[col]
 
-class PARSEC(Isochrone):
-    """A class for the PARSEC 1.2 model isochrones
+        # Convert years to Gyr if necessary
+        if min(self.data['age']) > 100000:
+            self.data['age'] *= 1E-9
 
-    Data described in Bressan et al. (2012).
-    Data retrieved from https://philrosenfield.github.io/padova_tracks/
-    """
-    def __init__(self, **kwargs):
-        """Initialize the model isochrone instance"""
-        # Set the init parameters
-        path = resource_filename('sedkit', 'data/models/evolutionary/PARSEC12/*')
-        colnames=['logAge', 'Mass', 'logTe', 'Mbol', 'logg', 'C/O']
+        # Get the units
+        if units is None or not isinstance(units, dict):
+            units = {'age': q.Gyr, 'mass': q.Msun, 'teff': q.K, 'radius': q.Rsun}
 
-        # Inherit from Isochrone class
-        super().__init__(name='PARSEC', path=path, colnames=colnames,
-                         delim_whitespace=True, skiprows=[0], **kwargs)
+        # Set the initial units
+        for uname, unit in units.items():
+            setattr(self, '{}_units'.format(uname), unit)
 
-        # Add the metallicity column
-        filenames = [os.path.basename(f) for f in self.files]
-        spl = [fn.split('Z')[1].split('Y') for fn in filenames]
-        # self.data['Z'] = array.from_array(np.array([eval(i[0]) for i in spl]), chunks=500)
-        # self.data['Y'] = [eval(i[1].split('OUT')[0]) for i in spl]
+        # Save the raw data for resampling
+        self.raw_data = self.data
 
+    @property
+    def age_units(self):
+        """A getter for the age units"""
+        return self._age_units
 
-def avg_param(yparam, z, z_unc, min_age, max_age, spt, xparam='Lbol', plot=False):
-    """
-    Get the average parameter value across multiple evolutionary models
+    @age_units.setter
+    def age_units(self, unit):
+        """A setter for the age age_units
 
-    Parameters
-    ----------
-    yparam: str
-        The y-axis value
-    z: float
-        The value to interpolate to
-    z_unc: float
-        The uncertainty
-    min_age: float
-        The lower age limit in [Gyr]
-    max_age: float
-        The upper age limit in [Gyr]
-    spt: float
-        The numeric spectral type, 0-29 for M0-T9 dwarfs
-    xparam: str
-        The x-axis value
-    plot: bool
-        Plot the isochrone
+        Parameters
+        ----------
+        unit: astropy.units.quantity.Quantity
+            The desired units of the age column
+        """
+        # Make sure it's a quantity
+        if not isinstance(unit, UNIT_DTYPES):
+            raise TypeError('Age units must be astropy.units.quantity.Quantity')
 
-    Returns
-    -------
-    tuple
-        The average interpolate value
-    """
-    # Get the late type models
-    late_models = ['nc_solar_age', 'COND03' if z > -5.1 else None]
-    late_models = (filter(None, late_models) if spt > 17 else [])
+        # Make sure the values are in flux density age_units
+        if not unit.is_equivalent(q.Gyr):
+            raise TypeError("{}: Age units must be time units, e.g. 'Gyr'".format(unit))
 
-    # Get the even later type models
-    later_models = ['f2_solar_age', 'DUSTY00' if z > -5.1 else None]
-    later_models = (filter(None, later_models) if spt < 23 else [])
+        # Define the age_units...
+        self._age_units = unit
+        if self.data['age'].unit is None:
+            self.data['age'] *= self.age_units
 
-    # Get the final list
-    models = ['hybrid_solar_age'] + late_models + later_models
-
-    # Get interpolated values forom all models
-    results = []
-    for m in models:
-        result = isochrone_interp(z, z_unc, min_age, max_age, xparam=xparam,
-                                  yparam=yparam, evo_model=m, plot=plot)
-        results.append(result)
-
-    # Make into arrays
-    x, sig_x = [np.array(i) for i in zip(*results)]
-
-    # Convert (value, unc) to (max, min) range
-    min_x = min(x - sig_x)
-    max_x = max(x + sig_x)
-    X, X_unc = [(max_x + min_x) / 2., (max_x - min_x) / 2.]
-
-    # # Plot it
-    # if plot:
-    #     plt.axhline(y=X, color='k', ls='-', lw=2)
-    #     plt.axhline(y=X - X_unc, color='k', ls='--', lw=2)
-    #     plt.axhline(y=X + X_unc, color='k', ls='--', lw=2)
-
-    return [X, X_unc]
-
-
-def DMEstar(ages, xparam='Lbol', yparam='radius', jupiter=False):
-    """
-    Retrieve the DMEstar isochrones
-
-    Parameters
-    ----------
-    ages: sequence
-        The ages at which the isochrones should be evaluated
-    xparam: str
-        The x-axis parameter
-    yapram: str
-        The y-axis parameter
-    jupiter: bool
-        Use Jupiter units instead of solar units
-
-    Returns
-    -------
-    list
-        The isochrones for the given ages
-    """
-    # Fetch the data
-    path_str = 'data/models/evolutionary/DMESTAR/*.txt'
-    data = glob(resource_filename('sedkit', path_str))
-
-    # Add them to the list
-    D = []
-    for f in data:
-
-        # Convert age to Gyr
-        age = int(os.path.basename(f).split('_')[1][:-5]) / 1000.
-
-        if age in ages:
-
-            # Get the data
-            dat = np.genfromtxt(f, usecols=(1, 3, 4, 2, 5), unpack=True)
-            mass, teff, Lbol, logg, radius = dat
-
-            # Convert to linear
-            teff = 10**teff
-            radius = 10**radius
-
-            # Jupiuter units if necessary
-            if jupiter:
-                radius *= 9.72847
-                mass *= 1047.2
-
-            # Add to the list
-            xp = mass if xparam == 'mass' else logg if xparam == 'logg' else radius if xparam == 'radius' else teff if xparam == 'teff' else Lbol
-            yp = mass if yparam == 'mass' else logg if yparam == 'logg' else radius if yparam == 'radius' else teff if yparam == 'teff' else Lbol
-            D.append([age, xp, yp])
-
-    return D
-
-
-def isochrone_interp(xval, age, xparam='Lbol', yparam='radius', jupiter=False,
-                     ages=[0.01, 0.03, 0.05, 0.1, 0.2, 0.5, 1, 10],
-                     xlabel=None, ylabel=None, xlims=None, ylims=None,
-                     evo_model='hybrid_solar_age', title=None, plot=False):
-    """
-    Interpolates the model isochrones to obtain a range in y given an age range
-
-    Parameters
-    ----------
-    xval: sequence
-        The (value, uncertainty) of the xparam to interpolate to
-    age: sequence
-        The (min_age, max_age) in astropy units to interpolate to
-    xparam: str
-        The x-axis parameter
-    yapram: str
-        The y-axis parameter
-    ages: sequence
-        The ages at which the isochrones should be evaluated
-    xlabel: str
-        The x-axis label for the plot
-    ylabel: str
-        The y-axis label for the plot
-    xlims: sequence
-        The x-axis limits for the plot
-    ylims: sequence
-        The y-axis limits for the plot
-    evo_model: str
-        The name of the evolutionary model
-    title: str
-        The plot title
-    plot: bool
-        Plot the figure
-
-    Returns
-    -------
-    tuple
-        The value and uncertainty of the interpolated value
-    """
-    # Convert (age, unc) into age range
-    min_age = (age[0]-age[1]).to(q.Gyr).value
-    max_age = (age[0]+age[1]).to(q.Gyr).value
-
-    if max_age > 10 or min_age < 0.01:
-        raise ValueError('Please provide an age range within 0.01-10 Gyr')
-
-    # Get xval floats
-    if hasattr(xval[0], 'unit'):
-        xval, xval_unc = xval
-        xval = xval.value
-        xval_unc = xval_unc.value
-    else:
-        xval, xval_unc = xval
-
-    # Grab and plot the desired isochrones
-    D, fig = isochrones(evo_model=evo_model, xparam=xparam, yparam=yparam,
-                        ages=ages, jupiter=jupiter, plot=plot)
-    Q = {d[0]: {'x': d[1], 'y': d[2]} for d in D}
-
-    # Pull out isochrones which lie just above and below min_age and max_age
-    A = np.array(list(zip(*D))[0])
-    min1 = A[A <= min_age][-1]
-    min2 = A[A >= min_age][0]
-    max1 = A[A <= max_age][-1]
-    max2 = A[A >= max_age][0]
-
-    # Create a high-res x-axis in region of interest and interpolate
-    # isochrones horizontally onto new x-axis
-    x = np.linspace(xval - xval_unc, xval + xval_unc, 20)
-    for k, v in Q.items():
-        v['y'] = np.interp(x, v['x'], v['y'])
-        v['x'] = x
-
-    # Create isochrones interpolated vertically to *min_age* and *max_age*
-    mn = zip(Q[min1]['y'], Q[min2]['y'])
-    mx = zip(Q[max1]['y'], Q[max2]['y'])
-    min_iso = [np.interp(min_age, [min1, min2], [r1, r2]) for r1, r2 in mn]
-    max_iso = [np.interp(max_age, [max1, max2], [r1, r2]) for r1, r2 in mx]
-
-    # Pull out least and greatest y value of interpolated isochrones in
-    # x range of interest
-    y_min, y_max = min(min_iso + max_iso), max(min_iso + max_iso)
-
-    if plot:
-        fig.patch([-10, -10, 10, 10], [y_min, y_max, y_max, y_min], alpha=0.3,
-                  line_width=0, legend='{} range'.format(yparam))
-        xmin = min([min(i[1]) for i in D])*0.75
-        xmax = max([max(i[1]) for i in D])*1.25
-        fig.x_range = Range1d(xmin, xmax)
-        show(fig)
-
-    # Round the values
-    val = round(np.mean([y_min, y_max]), 2)
-    unc = round(abs(y_min - np.mean([y_min, y_max])), 2)
-
-    # Set the units of the output
-    if yparam == 'radius':
-        units = q.Rjup if jupiter else q.Rsun
-    elif yparam == 'teff':
-        units = q.K
-    elif yparam == 'mass':
-        units = q.Mjup if jupiter else q.Msun
-    else:
-        units = 1.
-
-    return np.array([val, unc])*units
-
-
-def isochrones(evo_model='hybrid_solar_age', xparam='Lbol', yparam='radius',
-               ages=[0.01, 0.03, 0.05, 0.1, 0.2, 0.5, 1, 10], jupiter=False,
-               plot=False, fig=None):
-    """Generate model isochrones for the given ages
-
-    Parameters
-    ----------
-    evo_model: str
-        The name of the evolutionary model
-    xparam: str
-        The x-axis parameter
-    yapram: str
-        The y-axis parameter
-    ages: sequence
-        The ages at which the isochrones should be evaluated
-    jupiter: bool
-        Use Jupiter units instead of solar units
-    plot: bool
-        Plot the isochrones
-    fig: bokeh.plotting.figure (optional)
-        An existing figure to plot to
-
-    Returns
-    -------
-    list
-        The isochrones for the given ages
-    """
-    if plot:
-        if fig is not None:
-            fig = fig
+        # ...or convert them
         else:
-            fig = figure()
+            self.data['age'] = self.data['age'].to(self.age_units)
 
-    # Get the DMEStar and BD evo tracks
-    DME = DMEstar(ages, xparam=xparam, yparam=yparam, jupiter=jupiter)
-    evo_path = 'data/models/evolutionary/{}.txt'.format(evo_model)
-    evo_file = resource_filename('sedkit', evo_path)
+        # Get the min and max ages
+        self.ages = np.array(np.unique(self.data['age']))*self.age_units
 
-    # Stitch them together using cubic spline
-    D = []
-    models = np.genfromtxt(evo_file, delimiter=',', usecols=range(6))
-    data = [d for d in models if d[0] in ages and d[0] in list(zip(*DME))[0]]
+    def evaluate(self, xval, age, xparam, yparam, plot=False):
+        """Interpolate the value and uncertainty of *yparam* given an
+        x-value and age range
 
-    for k, g in groupby(data, key=lambda y: y[0]):
-        dat = [np.array(i) for i in list(zip(*[list(i) for i in list(g)]))[:6]]
-        age, mass, teff, Lbol, logg, radius = dat
-        color = next(COLORS)
+        Parameters
+        ----------
+        xval: float, int, astropy.units.quantity.Quantity, sequence
+            The value of the x-axis (or value and uncertainty) to evaluate
+        age: astropy.units.quantity.Quantity, sequence
+            The age or (age, uncertainty) of the source
+        xparam: str
+            The name of the parameter on the x-axis
+        yparam: str
+            The name of the parameter on the y-axis
+        plot: bool
+            Plot all isochrones and the interpolated value
 
-        # Convert to Jupier mass and radius
-        if jupiter:
-            mass *= 1047.2
-            radius *= 9.72847
+        Returns
+        -------
+        float, int, astropy.units.quantity.Quantity, sequence
+            The interpolated result
+        """
+        # Check if the age has an uncertainty
+        if not isinstance(age, (tuple, list)):
+            age = (age, age * 0)
 
-        # Get the data for the chosen parameters
-        x = mass if xparam == 'mass' else logg if xparam == 'logg' else radius if xparam == 'radius' else teff if xparam == 'teff' else Lbol
-        y = mass if yparam == 'mass' else logg if yparam == 'logg' else radius if yparam == 'radius' else teff if yparam == 'teff' else Lbol
+        # Make sure the age has units
+        if not isinstance(age[0], UNIT_DTYPES) or not isinstance(age[1], UNIT_DTYPES):
+            raise ValueError("'age' argument only accepts a sequence of the nominal age and associated uncertainty with astropy units of time.")
 
-        # Stitch together isochrones
-        for idx, m in zip([15, 25, 0, 30, 28, 20, 20, 20], DME):
-            if m[0] == k:
-                (x1, y1) = (x, y) if x[0] < m[1][0] else (m[1], m[2])
-                (x3, y3) = (x, y) if x[-1] > m[1][-1] else (m[1], m[2])
-                x2 = np.arange(x1[0], x3[-1], 0.05)
-                y2 = si.interp1d(np.concatenate([x1, x3]),
-                                 np.concatenate([y1, y3]),
-                                 kind='cubic')
+        # Check if the xval has an uncertainty
+        if not isinstance(xval, (tuple, list)):
+            xval = (xval, 0)
 
-                x2 = x2[np.logical_and(x2 > x1[-1], x2 < x3[0])]
-                y2 = y2(x2)[np.logical_and(x2 > x1[-1], x2 < x3[0])]
-                xnew = np.concatenate([x1, x2, x3])
-                ynew = np.concatenate([y1, y2, y3])
+        # Convert (age, unc) into age range
+        min_age = age[0] - age[1]
+        max_age = age[0] + age[1]
 
-                # Plot the isochrones
-                if plot:
-                    fig.line(xnew, ynew, color=color, legend='{} Gyr'.format(k))
+        # Test the age range is inbounds
+        if age[0] < self.ages.min() or age[0] > self.ages.max():
+            raise ValueError('Please provide an age range within {} and {}'.format(self.ages.min(), self.ages.max()))
 
-        D.append([k, xnew, ynew])
+        # Get the lower, nominal, and upper values
+        lower = self.iso_interp(xval[0] - xval[1], age[0]-age[1], xparam, yparam)
+        nominal = self.iso_interp(xval[0], age[0], xparam, yparam)
+        upper = self.iso_interp(xval[0] + xval[1], age[0]+age[1], xparam, yparam)
 
-    if plot:
-        fig.xaxis.axis_label = xparam
-        fig.yaxis.axis_label = yparam
-        fig.legend.location = 'top_left'
-        fig.legend.click_policy = "hide"
+        # Caluclate the symmetric error
+        error = max(abs(nominal - lower), abs(nominal - upper)) * 2
 
-    return D, fig
+        # Plot the figure and evaluated point
+        if plot:
+            fig = self.plot(xparam, yparam)
+            fig.circle(xval[0], nominal.value, color='red')
+            fig.ellipse(x=xval[0], y=nominal.value, width=xval[1]*2, height=error.value,
+                        color='red', alpha=0.1)
+            show(fig)
+
+        return nominal, error
+
+    def iso_interp(self, xval, age, xparam, yparam):
+        """Interpolate a value between two isochrones
+
+        Parameters
+        ----------
+        xval: float, int, astropy.units.quantity.Quantity
+            The value of the x-axis to evaluate
+        age: astropy.units.quantity.Quantity
+            The age of the source
+        xparam: str
+            The name of the parameter on the x-axis
+        yparam: str
+            The name of the parameter on the y-axis
+
+        Returns
+        -------
+        float, int, astropy.units.quantity.Quantity
+            The interpolated result
+        """
+        # Get the neighboring ages
+        try:
+            lower_age = self.ages[self.ages < age].max()
+        except ValueError:
+            lower_age =  self.ages.min()
+        try:
+            upper_age = self.ages[self.ages > age].min()
+        except ValueError:
+            upper_age = self.ages.max()
+
+        # Get the neighboring isochrones
+        lower_iso = self.data[self.data['age'] == lower_age.value][[xparam, yparam]].as_array()
+        upper_iso = self.data[self.data['age'] == upper_age.value][[xparam, yparam]].as_array()
+
+        # Test the xval is inbounds
+        min_x = min(lower_iso[xparam].min(), upper_iso[xparam].min())
+        max_x = max(lower_iso[xparam].max(), upper_iso[xparam].max())
+        if xval < min_x or xval > max_x:
+            raise ValueError('Please provide a {} range within {} and {}'.format(xparam, min_x, max_x))
+
+        # Get the neighboring interpolated values
+        lower_val = np.interp(xval, lower_iso[xparam], lower_iso[yparam])
+        upper_val = np.interp(xval, upper_iso[xparam], upper_iso[yparam])
+
+        # Take the weighted mean of the two points to find the single value
+        weights = (lower_age/age).value, (upper_age/age).value
+        result = np.average([lower_val, upper_val], weights=weights)
+        unit = self.data[yparam].unit or 1
+
+        return result * unit
+
+    def plot(self, xparam, yparam, **kwargs):
+        """Plot an evaluated isochrone, isochrone, or set of isochrones
+
+        Parameters
+        ----------
+        xparam: str
+            The column name to plot on the x-axis
+        yparam: str
+            The column name to plot on the y-axis
+
+        Returns
+        -------
+        bokeh.figure
+            The figure
+        """
+        # Make the figure
+        fig = figure(title=self.name, x_axis_label=xparam, y_axis_label=yparam,
+                     **kwargs)
+
+        # Generate a colorbar
+        colors = color_gen(colormap='viridis', n=len(self.ages))
+        color_mapper = LinearColorMapper(palette='Viridis256',
+                                         low=self.ages.min().value,
+                                         high=self.ages.max().value)
+        color_bar = ColorBar(color_mapper=color_mapper, ticker=BasicTicker(),
+                             label_standoff=5, border_line_color=None,
+                             title='Age [{}]'.format(self.age_units),
+                             location=(0, 0))
+
+        # Plot a line for each isochrone
+        for age in self.ages.value:
+            data = self.data[self.data['age'] == age][[xparam, yparam]].as_array()
+            fig.line(data[xparam], data[yparam], color=next(colors))
+
+        # Add the colorbar
+        fig.add_layout(color_bar, 'right')
+
+        return fig
+
+    @property
+    def mass_units(self):
+        """A getter for the mass units"""
+        return self._mass_units
+
+    @mass_units.setter
+    def mass_units(self, unit):
+        """A setter for the mass mass_units
+
+        Parameters
+        ----------
+        unit: astropy.units.quantity.Quantity
+            The desired units of the mass column
+        """
+        # Make sure it's a quantity
+        if not isinstance(unit, UNIT_DTYPES):
+            raise TypeError('Age units must be astropy.units.quantity.Quantity')
+
+        # Make sure the values are in flux density mass_units
+        if not unit.is_equivalent(q.Msun):
+            raise TypeError("{}: Mass units must be mass units, e.g. 'Msun'".format(unit))
+
+        # Define the mass_units...
+        self._mass_units = unit
+        if self.data['mass'].unit is None:
+            self.data['mass'] *= self.mass_units
+
+        # ...or convert them
+        else:
+            self.data['mass'] = self.data['mass'].to(self.mass_units)
+
+    @property
+    def radius_units(self):
+        """A getter for the radius units"""
+        return self._radius_units
+
+    @radius_units.setter
+    def radius_units(self, unit):
+        """A setter for the radius radius_units
+
+        Parameters
+        ----------
+        unit: astropy.units.quantity.Quantity
+            The desired units of the radius column
+        """
+        # Make sure it's a quantity
+        if not isinstance(unit, UNIT_DTYPES):
+            raise TypeError('Radius units must be astropy.units.quantity.Quantity')
+
+        # Make sure the values are in flux density radius_units
+        if not unit.is_equivalent(q.Rsun):
+            raise TypeError("{}: Radius units must be distance units, e.g. 'Rsun'".format(unit))
+
+        # Define the radius_units...
+        self._radius_units = unit
+        if self.data['radius'].unit is None:
+            self.data['radius'] *= self.radius_units
+
+        # ...or convert them
+        else:
+            self.data['radius'] = self.data['radius'].to(self.radius_units)
+
+    @property
+    def teff_units(self):
+        """A getter for the teff units"""
+        return self._teff_units
+
+    @teff_units.setter
+    def teff_units(self, unit):
+        """A setter for the teff teff_units
+
+        Parameters
+        ----------
+        unit: astropy.units.quantity.Quantity
+            The desired units of the teff column
+        """
+        # Make sure it's a quantity
+        if not isinstance(unit, UNIT_DTYPES):
+            raise TypeError('Teff units must be astropy.units.quantity.Quantity')
+
+        # Make sure the values are in flux density teff_units
+        if not unit.is_equivalent(q.K):
+            raise TypeError("{}: Teff units must be temperature units, e.g. 'K'".format(unit))
+
+        # Define the teff_units...
+        self._teff_units = unit
+        if self.data['teff'].unit is None:
+            self.data['teff'] *= self.teff_units
+
+        # ...or convert them
+        else:
+            self.data['teff'] = self.data['teff'].to(self.teff_units)

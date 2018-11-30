@@ -22,12 +22,7 @@ import numpy as np
 from pandas import DataFrame
 import pysynphot as ps
 
-
-from . import synphot as synp
 from . import utilities as u
-
-
-COLORS = u.color_gen('Category10')
 
 
 class Spectrum(ps.ArraySpectrum):
@@ -457,7 +452,6 @@ class Spectrum(ps.ArraySpectrum):
     #
     #     return best_model
 
-        
     def flux_calibrate(self, distance, target_distance=10*q.pc, flux_units=None):
         """Flux calibrate the spectrum from the given distance to the target distance
 
@@ -609,7 +603,7 @@ class Spectrum(ps.ArraySpectrum):
                     if syn_flx is not None:
                         flx = row['app_flux']
                         unc = row['app_flux_unc']
-                        weight = bp.FWHM
+                        weight = bp.fwhm.value
                         unc = unc.value if hasattr(unc, 'unit') else None
                         syn_unc = syn_unc.value if hasattr(syn_unc, 'unit') else None
                         data.append([flx.value, unc, syn_flx.value, syn_unc, weight])
@@ -892,7 +886,7 @@ class Spectrum(ps.ArraySpectrum):
             self.wave_units = bandpass.wave_units
 
             # Caluclate the bits
-            wav = bandpass.wave*bandpass.wave_units
+            wav = bandpass.wave[0]
             rsr = bandpass.throughput
             erg = (wav/(ac.h*ac.c)).to(1/q.erg)
             grad = np.gradient(wav).value

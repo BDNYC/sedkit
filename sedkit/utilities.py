@@ -5,8 +5,10 @@
 """
 Some utilities to accompany sedkit
 """
-import re
+import glob
 import itertools
+import re
+import warnings
 
 import astropy.units as q
 import astropy.constants as ac
@@ -19,113 +21,25 @@ import pandas as pd
 import scipy.optimize as opt
 
 
-def filter_table(table, **kwargs):
-    """Retrieve the filtered rows
+warnings.simplefilter('ignore')
 
-    Parameters
-    ----------
-    table: astropy.table.Table, pandas.DataFrame
-        The table to filter
-    param: str
-        The parameter to filter by, e.g. 'Teff'
-    value: str, float, int, sequence
-        The criteria to filter by, 
-        which can be single valued like 1400
-        or a range with operators [<,<=,>,>=],
-        e.g. ('>1200','<=1400')
 
-    Returns
-    -------
-    astropy.table.Table, pandas.DataFrame
-        The filtered table
-    """
-    pandas = False
-    if isinstance(table, pd.DataFrame):
-        pandas = True
-        table = at.Table.from_pandas(table)
-
-    for param, value in kwargs.items():
-
-        # Check it is a valid column
-        if param not in table.colnames:
-            raise KeyError("No column named {}".format(param))
-
-        # Wildcard case
-        if isinstance(value, str) and '*' in value:
-
-            # Get column data
-            data = np.array(table[param])
-
-            if not value.startswith('*'):
-                value = '^'+value
-            if not value.endswith('*'):
-                value = value+'$'
-
-            # Strip souble quotes
-            value = value.replace("'", '').replace('"', '').replace('*', '(.*)')
-
-            # Regex
-            reg = re.compile(value, re.IGNORECASE)
-            keep = list(filter(reg.findall, data))
-
-            # Get indexes
-            idx = np.where([i in keep for i in data])
-
-            # Filter table
-            table = table[idx]
-
-        else:
-
-            # Make single value string into conditions
-            if isinstance(value, str):
-
-                # Check for operator
-                if any([value.startswith(o) for o in ['<','>','=']]):
-                    value = [value]
-
-                # Assume eqality if no operator
-                else:
-                    value = ['=='+value]
-
-            # Turn numbers into strings
-            if isinstance(value, (int,float)):
-                value = ["=={}".format(value)]
-
-            # Iterate through multiple conditions
-            for cond in value:
-
-                # Equality
-                if cond.startswith('='):
-                    v = cond.replace('=','')
-                    table = table[table[param]==eval(v)]
-
-                # Less than or equal
-                elif cond.startswith('<='):
-                    v = cond.replace('<=','')
-                    table = table[table[param]<=eval(v)]
-
-                # Less than
-                elif cond.startswith('<'):
-                    v = cond.replace('<','')
-                    table = table[table[param]<eval(v)]
-
-                # Greater than or equal
-                elif cond.startswith('>='):
-                    v = cond.replace('>=','')
-                    table = table[table[param]>=eval(v)]
-
-                # Greater than
-                elif cond.startswith('>'):
-                    v = cond.replace('>','')
-                    table = table[table[param]>eval(v)]
-
-                else:
-                    raise ValueError("'{}' operator not understood.".format(cond))
-
-    if pandas:
-        table = table.to_pandas()
-
-    return table
+# A dict of BDNYCdb band names to work with sedkit
+PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
+                '2MASS_Ks': '2MASS.Ks', 'WISE_W1': 'WISE.W1',
+                'WISE_W2': 'WISE.W2', 'WISE_W3': 'WISE.W3',
+                'WISE_W4': 'WISE.W4', 'IRAC_ch1': 'IRAC.I1',
+                'IRAC_ch2': 'IRAC.I2', 'IRAC_ch3': 'IRAC.I3',
+                'IRAC_ch4': 'IRAC.I4', 'SDSS_u': 'SDSS.u',
+                'SDSS_g': 'SDSS.g', 'SDSS_r': 'SDSS.r',
+                'SDSS_i': 'SDSS.i', 'SDSS_z': 'SDSS.z',
+                'MKO_J': 'NSFCam.J', 'MKO_Y': 'Wircam.Y',
+                'MKO_H': 'NSFCam.H', 'MKO_K': 'NSFCam.K',
+                "MKO_L'": 'NSFCam.Lp', "MKO_M'": 'NSFCam.Mp',
+                'Johnson_V': 'Johnson.V', 'Cousins_R': 'Cousins.R',
+                'Cousins_I': 'Cousins.I', 'FourStar_J': 'FourStar.J',
+                'FourStar_J1': 'FourStar.J1', 'FourStar_J2': 'FourStar.J2',
+                'FourStar_J3': 'FourStar.J3', 'HST_F125W': 'WFC3_IR.F125W'}
 
 
 @models.custom_model
@@ -187,6 +101,10 @@ def color_gen(colormap='viridis', key=None, n=10):
 
     yield from itertools.cycle(palette)
 
+
+COLORS = color_gen('Category10')
+
+
 def isnumber(s):
     """
     Tests to see if the given string is an int, float, or exponential
@@ -201,7 +119,117 @@ def isnumber(s):
     bool
         The boolean result
     """
-    return s.replace('.','').replace('-','').replace('+','').isnumeric()
+    return s.replace('.', '').replace('-', '').replace('+', '').isnumeric()
+
+
+def filter_table(table, **kwargs):
+    """Retrieve the filtered rows
+
+    Parameters
+    ----------
+    table: astropy.table.Table, pandas.DataFrame
+        The table to filter
+    param: str
+        The parameter to filter by, e.g. 'Teff'
+    value: str, float, int, sequence
+        The criteria to filter by, 
+        which can be single valued like 1400
+        or a range with operators [<, <=, >, >=], 
+        e.g. ('>1200', '<=1400')
+
+    Returns
+    -------
+    astropy.table.Table, pandas.DataFrame
+        The filtered table
+    """
+    pandas = False
+    if isinstance(table, pd.DataFrame):
+        pandas = True
+        table = at.Table.from_pandas(table)
+
+    for param, value in kwargs.items():
+
+        # Check it is a valid column
+        if param not in table.colnames:
+            raise KeyError("No column named {}".format(param))
+
+        # Wildcard case
+        if isinstance(value, str) and '*' in value:
+
+            # Get column data
+            data = np.array(table[param])
+
+            if not value.startswith('*'):
+                value = '^'+value
+            if not value.endswith('*'):
+                value = value+'$'
+
+            # Strip souble quotes
+            value = value.replace("'", '').replace('"', '').replace('*', '(.*)')
+
+            # Regex
+            reg = re.compile(value, re.IGNORECASE)
+            keep = list(filter(reg.findall, data))
+
+            # Get indexes
+            idx = np.where([i in keep for i in data])
+
+            # Filter table
+            table = table[idx]
+
+        else:
+
+            # Make single value string into conditions
+            if isinstance(value, str):
+
+                # Check for operator
+                if any([value.startswith(o) for o in ['<', '>', '=']]):
+                    value = [value]
+
+                # Assume eqality if no operator
+                else:
+                    value = ['== '+value]
+
+            # Turn numbers into strings
+            if isinstance(value, (int, float)) or (isinstance(value, str) and isnumber(value)):
+                value = ["== {}".format(value)]
+
+            # Iterate through multiple conditions
+            for cond in value:
+
+                # Equality
+                if cond.startswith('='):
+                    v = cond.replace('=', '')
+                    table = table[table[param] == eval(v)]
+
+                # Less than or equal
+                elif cond.startswith('<='):
+                    v = cond.replace('<=', '')
+                    table = table[table[param]<=eval(v)]
+
+                # Less than
+                elif cond.startswith('<'):
+                    v = cond.replace('<', '')
+                    table = table[table[param]<eval(v)]
+
+                # Greater than or equal
+                elif cond.startswith('>='):
+                    v = cond.replace('>=', '')
+                    table = table[table[param]>=eval(v)]
+
+                # Greater than
+                elif cond.startswith('>'):
+                    v = cond.replace('>', '')
+                    table = table[table[param]>eval(v)]
+
+                else:
+                    raise ValueError("'{}' operator not understood.".format(cond))
+
+    if pandas:
+        table = table.to_pandas()
+
+    return table
+
 
 def finalize_spec(spec, wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA):
     """
@@ -210,15 +238,16 @@ def finalize_spec(spec, wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA):
     Parameters
     ----------
     spec: sequence
-        The [W,F,E] to be cleaned up
+        The [W, F, E] to be cleaned up
 
     Returns
     -------
     spec: sequence
-        The cleaned and ordered [W,F,E]
+        The cleaned and ordered [W, F, E]
     """
     spec = list(zip(*sorted(zip(*map(list, [[i.value if hasattr(i, 'unit') else i for i in j] for j in spec])), key=lambda x: x[0])))
     return scrub([spec[0]*wave_units, spec[1]*flux_units, spec[2]*flux_units])
+
 
 def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
     """
@@ -250,7 +279,7 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
             Mag = mag - 5*np.log10(dist.value) + 5*np.log10(scale_to.value)
             Mag = Mag.round(3)
 
-            if isinstance(sig_d, q.quantity.Quantity) and sig_m!='':
+            if isinstance(sig_d, q.quantity.Quantity) and sig_m!='': 
                 Mag_unc = np.sqrt(sig_m**2 + (2.5*sig_d/(np.log(10)*dist))**2)
                 Mag_unc = Mag_unc.round(3).value
 
@@ -268,6 +297,59 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
 
         print('Could not flux calibrate that input to distance {}.'.format(dist))
         return [np.nan, np.nan]
+
+
+def flux2mag(flx, bandpass):
+    """Calculate the magnitude for a given flux
+
+    Parameters
+    ----------
+    flx: astropy.units.quantity.Quantity, sequence
+        The flux or (flux, uncertainty)
+    bandpass: pysynphot.spectrum.ArraySpectralElement
+        The bandpass to use
+    """
+    if isinstance(flx, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
+        flx = flx, np.nan*flx.unit
+
+    # Calculate the magnitude
+    eff = bandpass.wave_eff
+    zp = bandpass.zp
+    flx, unc = flx
+    unit = flx.unit
+
+    # Convert energy units to photon counts
+    flx = (flx*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
+    zp = (zp*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
+    unc = (unc*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
+
+    # Calculate magnitude
+    m = -2.5*np.log10((flx/zp).value)
+    m_unc = (2.5/np.log(10))*(unc/flx).value
+
+    return m, m_unc
+
+
+def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):
+    """
+    Convert a flux density as a function of frequency 
+    into a function of wavelength
+
+    Parameters
+    ----------
+    f_nu: astropy.unit.quantity.Quantity
+        The flux density
+    lam: astropy.unit.quantity.Quantity
+        The effective wavelength of the flux
+    units: astropy.unit.quantity.Quantity
+        The desired units
+    """
+    # ergs_per_photon = (ac.h*ac.c/lam).to(q.erg)
+
+    f_lam = (f_nu*ac.c/lam**2).to(units)
+
+    return f_lam
+
 
 def errorbar(fig, x, y, xerr=None, yerr=None, color='black', point_kwargs={}, error_kwargs={}, legend=None):
     """
@@ -311,26 +393,6 @@ def errorbar(fig, x, y, xerr=None, yerr=None, color='black', point_kwargs={}, er
         fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
 
 
-def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):
-    """
-    Convert a flux density as a function of frequency 
-    into a function of wavelength
-
-    Parameters
-    ----------
-    f_nu: astropy.unit.quantity.Quantity
-        The flux density
-    lam: astropy.unit.quantity.Quantity
-        The effective wavelength of the flux
-    units: astropy.unit.quantity.Quantity
-        The desired units
-    """
-    # ergs_per_photon = (ac.h*ac.c/lam).to(q.erg)
-
-    f_lam = (f_nu*ac.c/lam**2).to(units)
-
-    return f_lam
-
 def goodness(f1, f2, e1=None, e2=None, weights=None):
     """Calculate the goodness of fit statistic and normalization constant between two spectra
 
@@ -367,6 +429,7 @@ def goodness(f1, f2, e1=None, e2=None, weights=None):
 
     return gstat, norm
 
+
 def group_spectra(spectra):
     """
     Puts a list of *spectra* into groups with overlapping wavelength arrays
@@ -381,15 +444,6 @@ def group_spectra(spectra):
             groups.append(group)
     return groups
 
-def idx_include(x, include):
-    try:
-        return np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in include])))))[0]
-    except TypeError:
-        try:
-            return \
-            np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in [include]])))))[0]
-        except TypeError:
-            return range(len(x))
 
 def idx_exclude(x, exclude):
     try:
@@ -400,6 +454,36 @@ def idx_exclude(x, exclude):
             np.where(~np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))[0]
         except TypeError:
             return range(len(x))
+
+
+def idx_include(x, include):
+    try:
+        return np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in include])))))[0]
+    except TypeError:
+        try:
+            return \
+            np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in [include]])))))[0]
+        except TypeError:
+            return range(len(x))
+
+
+def idx_overlap(s1, s2):
+    """Force s2 to be completely overlapped by s1
+
+    Paramters
+    ---------
+    s1: sequence
+        The first array
+    s2: sequence
+        The second array
+
+    Returns
+    -------
+    np.ndarray
+        The indexes of the trimmed second sequence
+    """
+    return np.where((s2 > s1[0]) & (s2 < s1[-1]))[0]
+
 
 def interp_flux(flux, params, values):
     """
@@ -436,6 +520,7 @@ def interp_flux(flux, params, values):
 
     return flx, generators
 
+
 def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
     """
     Caluclate the flux for a given magnitude
@@ -453,16 +538,16 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
     """
     try:
         # Make mag unitless
-        if hasattr(mag,'unit'):
+        if hasattr(mag, 'unit'):
             mag = mag.value
-        if hasattr(sig_m,'unit'):
+        if hasattr(sig_m, 'unit'):
             sig_m = sig_m.value
 
         # Calculate the flux density
-        zp = band.zero_point
+        zp = band.zp
         f = (zp*10**(mag/-2.5)).to(units)
 
-        if isinstance(sig_m,str):
+        if isinstance(sig_m, str):
             sig_m = np.nan
 
         sig_f = (f*sig_m*np.log(10)/2.5).to(units)
@@ -471,18 +556,6 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
 
     except IOError:
         return np.array([np.nan, np.nan])*units
-
-def fmin_spec(spec1, spec2):
-
-    def errfunc(p, a1, a2):
-        return np.sum(a1 - a2 * p)
-
-    # Find the minimum fit
-    flux = np.interp(spec1[0], spec2[0], spec2[1], right=0, left=0)
-    p0 = spec1[1][-1]/spec2[0][0]
-    norm = opt.fmin(errfunc, p0, args=(spec1[1], flux), xtol=1, ftol=1)
-
-    return [spec2[0], spec2[1]*norm, spec2[2]*norm]
 
 
 def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, pc2pi=False):
@@ -515,6 +588,7 @@ def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, p
     else:
         return val, low
 
+
 def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
     """
     Rebin a spectrum to a new wavelength array while preserving 
@@ -545,8 +619,8 @@ def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
 
     # Set up the bin edges for down-binning
     maxdiffw1 = np.diff(wavnew).max()
-    w1bins = np.concatenate(([wavnew[0]-maxdiffw1],
-                              .5*(wavnew[1::]+wavnew[0:-1]),
+    w1bins = np.concatenate(([wavnew[0]-maxdiffw1], 
+                              .5*(wavnew[1::]+wavnew[0:-1]), 
                               [wavnew[-1]+maxdiffw1]))
 
     # Bin down the interpolated spectrum:
@@ -554,7 +628,7 @@ def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
     nbins = len(w1bins)-1
     specnew = np.zeros(nbins)
     errnew = np.zeros(nbins)
-    inds2 = [[w0int.searchsorted(w1bins[ii], side='left'),
+    inds2 = [[w0int.searchsorted(w1bins[ii], side='left'), 
               w0int.searchsorted(w1bins[ii+1], side='left')] 
               for ii in range(nbins)]
 
@@ -568,6 +642,35 @@ def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
     specnew[-1] = flux[-1]
 
     return [wavnew, specnew] if not any(errnew) else [wavnew, specnew, errnew]
+
+
+def scrub(data):
+    """
+    For input data [w, f, e] or [w, f] returns the list with NaN, negative, and zero flux (and corresponsing wavelengths and errors) removed.
+    """
+    # Unit check
+    units = [i.unit if hasattr(i, 'unit') else 1 for i in data]
+
+    # Ensure floats
+    data = [np.asarray(i.value if hasattr(i, 'unit') else i, dtype=np.float32) for i in data if isinstance(i, np.ndarray)]
+
+    # Remove infinities
+    data = [i[np.where(~np.isinf(data[1]))] for i in data]
+
+    # Remove zeros and negatives
+    data = [i[np.where(data[1] > 0)] for i in data]
+
+    # Remove nans
+    data = [i[np.where(~np.isnan(data[1]))] for i in data]
+
+    # Remove duplicate wavelengths
+    data = [i[np.unique(data[0], return_index=True)[1]] for i in data]
+
+    # Ensure monotonic and return units
+    data = [i[np.lexsort([data[0]])] * Q for i, Q in zip(data, units)]
+
+    return data
+
 
 def set_resolution(spec, resolution):
     """Rebin the spectrum to the given resolution
@@ -598,56 +701,6 @@ def set_resolution(spec, resolution):
     # Calculate the new spectrum
     spec = spectres(wave, spec[0], spec[1])
 
-def overlap(wave1, wave2):
-    """
-    Example of full overlap::
-
-        |---------- wave2 ----------|
-           |------ wave1 ------|
-
-    Examples of partial overlap::
-
-        |---------- wave1 ----------|
-           |------ wave2 ------|
-
-        |---- wave2 ----|
-           |---- wave1 ----|
-
-        |---- wave1 ----|
-           |---- wave2 ----|
-
-    Examples of no overlap::
-
-        |---- wave1 ----|  |---- wave2 ----|
-
-        |---- wave2 ----|  |---- wave1 ----|
-
-    Parameters
-    ----------
-    wave1: sequence
-        The first array
-    wave2: sequence
-        The second array
-
-    Returns
-    -------
-    ans : {'full', 'partial', 'none'}
-        Overlap status.
-
-    """
-    mn1, mx1 = min(wave1), max(wave1)
-    mn2, mx2 = min(wave2), max(wave2)
-
-    if (mn1 >= mn2 and mx1 <= mx2):
-        ans = 'full'
-
-    elif (mx2 < mn1) or (mx1 < mn2):
-        ans = 'none'
-
-    else:
-        ans = 'partial'
-
-    return ans
 
 def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     """
@@ -717,7 +770,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     # fall within the range of the old wavelength values.")
 
     #Generate output arrays to be populated
-    resampled_fluxes = np.zeros(spec_fluxes[...,0].shape + new_spec_wavs.shape)
+    resampled_fluxes = np.zeros(spec_fluxes[..., 0].shape + new_spec_wavs.shape)
 
     if spec_errs is not None:
         if spec_errs.shape != spec_fluxes.shape:
@@ -729,7 +782,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     start = 0
     stop = 0
 
-    # Calculate the new spectral flux and uncertainty values,
+    # Calculate the new spectral flux and uncertainty values, 
     # loop over the new bins
     for j in range(new_spec_wavs.shape[0]-1):
 
@@ -745,11 +798,11 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
         # the new flux and new error are the same as for that bin
         if stop == start:
 
-            resampled_fluxes[...,j] = spec_fluxes[...,start]
+            resampled_fluxes[..., j] = spec_fluxes[..., start]
             if spec_errs is not None:
-                resampled_fluxes_errs[...,j] = spec_errs[...,start]
+                resampled_fluxes_errs[..., j] = spec_errs[..., start]
 
-        # Otherwise multiply the first and last old bin widths by P_ij,
+        # Otherwise multiply the first and last old bin widths by P_ij, 
         # all the ones in between have P_ij = 1
         else:
 
@@ -760,10 +813,10 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
             spec_widths[stop] *= end_factor
 
             # Populate the resampled_fluxes spectrum and uncertainty arrays
-            resampled_fluxes[...,j] = np.sum(spec_widths[start:stop+1]*spec_fluxes[...,start:stop+1], axis=-1)/np.sum(spec_widths[start:stop+1])
+            resampled_fluxes[..., j] = np.sum(spec_widths[start:stop+1]*spec_fluxes[..., start:stop+1], axis=-1)/np.sum(spec_widths[start:stop+1])
 
             if spec_errs is not None:
-                resampled_fluxes_errs[...,j] = np.sqrt(np.sum((spec_widths[start:stop+1]*spec_errs[...,start:stop+1])**2, axis=-1))/np.sum(spec_widths[start:stop+1])
+                resampled_fluxes_errs[..., j] = np.sqrt(np.sum((spec_widths[start:stop+1]*spec_errs[..., start:stop+1])**2, axis=-1))/np.sum(spec_widths[start:stop+1])
 
             # Put back the old bin widths to their initial values for later use
             spec_widths[start] /= start_factor
@@ -776,51 +829,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     else:
         return [new_spec_wavs, resampled_fluxes, resampled_fluxes_errs]
 
-def idx_overlap(s1, s2):
-    """Force s2 to be completely overlapped by s1
 
-    Paramters
-    ---------
-    s1: sequence
-        The first array
-    s2: sequence
-        The second array
-
-    Returns
-    -------
-    np.ndarray
-        The indexes of the trimmed second sequence
-    """
-    return np.where((s2 > s1[0]) & (s2 < s1[-1]))[0]
-
-def scrub(data):
-    """
-    For input data [w,f,e] or [w,f] returns the list with NaN, negative, and zero flux (and corresponsing wavelengths and errors) removed.
-    """
-    # Unit check
-    units = [i.unit if hasattr(i, 'unit') else 1 for i in data]
-
-    # Ensure floats
-    data = [np.asarray(i.value if hasattr(i, 'unit') else i, dtype=np.float32) for i in data if isinstance(i, np.ndarray)]
-
-    # Remove infinities
-    data = [i[np.where(~np.isinf(data[1]))] for i in data]
-
-    # Remove zeros and negatives
-    data = [i[np.where(data[1] > 0)] for i in data]
-
-    # Remove nans
-    data = [i[np.where(~np.isnan(data[1]))] for i in data]
-
-    # Remove duplicate wavelengths
-    data = [i[np.unique(data[0], return_index=True)[1]] for i in data]
-
-    # Ensure monotonic and return units
-    data = [i[np.lexsort([data[0]])] * Q for i, Q in zip(data, units)]
-
-    return data
-
-    
 def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
     """
     Converts between float and letter/number spectral types (e.g. 14.5 => 'B4.5' and 'A3' => 23).
@@ -830,7 +839,7 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
     SpT: float, str
         Float spectral type or letter/number spectral type between O0.0 and Y9.9
     types: list
-        The MK spectral type letters to include, e.g. ['M','L','T','Y']
+        The MK spectral type letters to include, e.g. ['M', 'L', 'T', 'Y']
 
     Returns
     -------
@@ -839,7 +848,7 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
     """
     try:
         # String input
-        if isinstance(SpT, (str,bytes)):
+        if isinstance(SpT, (str, bytes)):
 
             # Convert bytes to string
             if isinstance(SpT, bytes):
@@ -860,12 +869,12 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
                 val += types.index(MK)*10
 
                 # See if low SNR
-                if '::' in suf:
+                if ': :' in suf:
                     unc = 2
-                    suf = suf.replace('::','')
-                elif ':' in suf:
+                    suf = suf.replace(': :', '')
+                elif ': ' in suf:
                     unc = 1
-                    suf = suf.replace(':','')
+                    suf = suf.replace(': ', '')
                 else:
                     unc = 0.5
 
@@ -878,14 +887,14 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
                     grv = ''
 
                 # Clean up the suffix
-                suf = suf.replace(str(val), '').replace('n','').replace('e','')\
-                         .replace('w','').replace('m','').replace('a','')\
-                         .replace('Fe','').replace('-1','').replace('?','')\
-                         .replace('-V','').replace('p','')
+                suf = suf.replace(str(val), '').replace('n', '').replace('e', '')\
+                         .replace('w', '').replace('m', '').replace('a', '')\
+                         .replace('Fe', '').replace('-1', '').replace('?', '')\
+                         .replace('-V', '').replace('p', '')
 
                 # Check for luminosity class
                 LC = []
-                for cl in ['III','V','IV']:
+                for cl in ['III', 'V', 'IV']:
                     if cl in suf:
                         LC.append(cl)
                         suf.replace(cl, '')
@@ -894,24 +903,24 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
                 return [val, unc, pre, grv, LC]
 
             else:
-                print('Not in list of MK spectral classes',types)
+                print('Not in list of MK spectral classes', types)
                 return [np.nan, np.nan, '', '', '']
 
         # Numerical or list input
-        elif isinstance(SpT, (float,int,list,tuple)):
-            if isinstance(SpT, (int,float)):
+        elif isinstance(SpT, (float, int, list, tuple)):
+            if isinstance(SpT, (int, float)):
                 SpT = [SpT]
 
             # Get the MK class
             MK = ''.join(types)[int(SpT[0]//10)]
-            num = int(SpT[0]%10) if SpT[0]%10==int(SpT[0]%10) else SpT[0]%10
+            num = int(SpT[0]%10) if SpT[0]%10 == int(SpT[0]%10) else SpT[0]%10
 
             # Get the uncertainty
             if len(SpT)>1:
-                if SpT[1]==':' or SpT[1]==1:
-                    unc = ':'
-                elif SpT[1]=='::' or SpT[1]==2:
-                    unc = '::'
+                if SpT[1] == ': ' or SpT[1] == 1:
+                    unc = ': '
+                elif SpT[1] == ': :' or SpT[1] == 2:
+                    unc = ': :'
                 else:
                     unc = ''
             else:
@@ -935,12 +944,12 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
             else:
                 LC = ''
 
-            return ''.join([pre,MK,str(num),grv,LC,unc])
+            return ''.join([pre, MK, str(num), grv, LC, unc])
 
         # Bogus input
         else:
             if verbose:
-                print('Spectral type',SpT,'must be a float between 0 and',len(types)*10,'or a string of class',types)
+                print('Spectral type', SpT, 'must be a float between 0 and', len(types)*10, 'or a string of class', types)
             return
 
     except IOError:
@@ -954,15 +963,15 @@ def str2Q(x, target=''):
     *x*
       The units as a string, e.g. str2Q('W/m2/um') => np.array(1.0) * W/(m**2*um)
     *target*
-      The target units as a string if rescaling is necessary, e.g. str2Q('Wm-2um-1',target='erg/s/cm2/cm') => np.array(10000000.0) * erg/(cm**3*s)
+      The target units as a string if rescaling is necessary, e.g. str2Q('Wm-2um-1', target='erg/s/cm2/cm') => np.array(10000000.0) * erg/(cm**3*s)
     """
     if x:
         def Q(IN):
             OUT = 1
-            text = ['Jy', 'erg', '/s', 's-1', 's', '/um', 'um-1', 'um', '/nm', 'nm-1', 'nm', '/cm2', 'cm-2', 'cm2',
+            text = ['Jy', 'erg', '/s', 's-1', 's', '/um', 'um-1', 'um', '/nm', 'nm-1', 'nm', '/cm2', 'cm-2', 'cm2', 
                     '/cm', 'cm-1', 'cm', '/A', 'A-1', 'A', 'W', '/m2', 'm-2', 'm2', '/m', 'm-1', 'm', '/Hz', 'Hz-1']
-            vals = [q.Jy, q.erg, q.s ** -1, q.s ** -1, q.s, q.um ** -1, q.um ** -1, q.um, q.nm ** -1, q.nm ** -1, q.nm,
-                    q.cm ** -2, q.cm ** -2, q.cm ** 2, q.cm ** -1, q.cm ** -1, q.cm, q.AA ** -1, q.AA ** -1, q.AA, q.W,
+            vals = [q.Jy, q.erg, q.s ** -1, q.s ** -1, q.s, q.um ** -1, q.um ** -1, q.um, q.nm ** -1, q.nm ** -1, q.nm, 
+                    q.cm ** -2, q.cm ** -2, q.cm ** 2, q.cm ** -1, q.cm ** -1, q.cm, q.AA ** -1, q.AA ** -1, q.AA, q.W, 
                     q.m ** -2, q.m ** -2, q.m ** 2, q.m ** -1, q.m ** -1, q.m, q.Hz ** -1, q.Hz ** -1]
             for t, v in zip(text, vals):
                 if t in IN:

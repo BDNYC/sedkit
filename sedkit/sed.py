@@ -23,9 +23,9 @@ from bokeh.io import export_png
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 from dustmaps.bayestar import BayestarWebQuery
+from svo_filters import svo
 
 from . import utilities as u
-from . import synphot as s
 from . import spectrum as sp
 from . import isochrone as iso
 from . import relations as rel
@@ -133,7 +133,8 @@ class SED:
         self._spectral_type = None
         self._membership = None
         self._sky_coords = None
-        self._evo_model = 'hybrid_solar_age'
+        self._evo_model = None
+        self.evo_model = 'hybrid_solar_age'
 
         # Static attributes
         self.verbose = verbose
@@ -218,7 +219,7 @@ class SED:
 
         Parameters
         ----------
-        band: name, sedkit.synphot.Bandpass
+        band: name, svo_filters.svo.Filter
             The bandpass name or instance
         mag: float
             The magnitude
@@ -240,8 +241,8 @@ class SED:
 
         # Get the bandpass
         if isinstance(band, str):
-            bp = s.Bandpass(band)
-        elif isinstance(band, sedkit.synphot.Bandpass):
+            bp = svo.Filter(band)
+        elif isinstance(band, svo.Filter):
             bp, band = band, band.name
         else:
             print('Not a recognized bandpass:', band)
@@ -258,8 +259,9 @@ class SED:
         mag -= bp.ext_vector*self.reddening
 
         # Make a dict for the new point
-        new_photometry = {'band': band, 'eff': bp.eff, 'app_magnitude': mag,
-                          'app_magnitude_unc': mag_unc, 'bandpass': bp}
+        new_photometry = {'band': band, 'eff': bp.wave_eff,
+                          'app_magnitude': mag, 'app_magnitude_unc': mag_unc,
+                          'bandpass': bp}
 
         # Add the kwargs
         new_photometry.update(kwargs)
@@ -271,10 +273,10 @@ class SED:
         self.calculated = False
 
         # Update photometry max and min wavelengths
-        if self.min_phot is None or bp.eff < self.min_phot:
-            self.min_phot = bp.eff
-        if self.max_phot is None or bp.eff > self.max_phot:
-            self.max_phot = bp.eff
+        if self.min_phot is None or bp.wave_eff < self.min_phot:
+            self.min_phot = bp.wave_eff
+        if self.max_phot is None or bp.wave_eff > self.max_phot:
+            self.max_phot = bp.wave_eff
 
     def add_photometry_file(self, file):
         """Add a table of photometry from an ASCII file that
@@ -414,9 +416,7 @@ class SED:
                             (value, lower_error, upper_error).')
 
         # Make sure the values are in time units
-        try:
-            _ = [i.to(q.Gyr) for i in age]
-        except:
+        if not age[0].unit.is_equivalent(q.Gyr):
             raise TypeError("Age values must be time units of\
                              astropy.units.quantity.Quantity, e.g. 'Gyr'")
 
@@ -454,10 +454,10 @@ class SED:
                 for band in s.BANDPASSES:
 
                     # Get the bandpass
-                    bp = s.Bandpass(band)
+                    bp = svo.Filter(band)
 
                     # Check for overlap before calculating
-                    if bp.check_overlap(spec) in ['full', 'partial']:
+                    if bp.overlap(spec) in ['full', 'partial']:
 
                         # Calculate the magnitiude
                         mag, mag_unc = spec.synthetic_mag(bp)
@@ -634,9 +634,7 @@ class SED:
                 raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
 
             # Make sure the values are in time units
-            try:
-                _ = [i.to(q.pc) for i in distance]
-            except:
+            if not distance[0].unit.is_equivalent(q.pc):
                 raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
 
             # Set the distance
@@ -704,10 +702,10 @@ class SED:
         model: str
             The evolutionary model name
         """
-        if model not in mg.EVO_MODELS:
+        if model not in iso.EVO_MODELS:
             raise IOError("Please use an evolutionary model from the list: {}".format(mg.EVO_MODELS))
 
-        self._evo_model = model
+        self._evo_model = iso.Isochrone(model)
 
     def export(self, parentdir='.', dirname=None, zipped=False):
         """
@@ -1063,7 +1061,7 @@ class SED:
         self._calibrate_photometry()
         self._calibrate_spectra()
 
-    def from_database(self, db, rename_bands=s.PHOT_ALIASES, **kwargs):
+    def from_database(self, db, rename_bands=u.PHOT_ALIASES, **kwargs):
         """
         Load the data from an astrodbkit.astrodb.Database
 
@@ -1357,7 +1355,11 @@ class SED:
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
             else:
-                self.logg = tuple(iso.isochrone_interp(self.Lbol_sun, self.age, yparam='logg', evo_model=self.evo_model))
+                try:
+                    self.logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg')
+                except ValueError as err:
+                    print("Could not calculate surface gravity.")
+                    print(err)
 
         else:
             if self.verbose:
@@ -1435,7 +1437,8 @@ class SED:
 
         # Make Wein and Rayleigh Jeans tails
         self.make_wein_tail()
-        self.make_rj_tail()
+        # self.make_rj_tail()
+        self.rj = None
 
         # Run the calculation
         self._calculate_sed()
@@ -1497,11 +1500,12 @@ class SED:
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
             else:
-
-                mass = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='mass',
-                                            evo_model=self.evo_model)
-
-                self.mass = mass[0].to(mass_units), mass[1].to(mass_units)
+                try:
+                    self.evo_model.mass_units = mass_units
+                    self.mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass')
+                except ValueError as err:
+                    print("Could not calculate mass.")
+                    print(err)
 
         else:
             if self.verbose:
@@ -1584,9 +1588,7 @@ class SED:
                                    or (value, lower_error, upper_error).""")
 
             # Make sure the values are in time units
-            try:
-                _ = [i.to(q.mas) for i in parallax]
-            except:
+            if not parallax[0].unit.is_equivalent(q.mas):
                 raise TypeError("""'parallax' values must be parallax units of \
                                    astropy.units.quantity.Quantity, e.g. 'mas'""")
 
@@ -1827,9 +1829,7 @@ class SED:
                 raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
 
             # Make sure the values are in length units
-            try:
-                _ = [i.to(q.m) for i in radius]
-            except:
+            if not radius[0].unit.is_equivalent(q.m):
                 raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
 
             # Set the radius!
@@ -1861,11 +1861,14 @@ class SED:
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            radius = iso.isochrone_interp(self.Lbol_sun, self.age, evo_model=self.evo_model)
+            try:
+                self.evo_model.radius_units = radius_units
+                self.radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius')
+                self.isochrone_radius = True
 
-            self.radius = radius[0].to(radius_units), radius[1].to(radius_units)
-
-            self.isochrone_radius = True
+            except ValueError as err:
+                print("Could not calculate radius.")
+                print(err)
 
         else:
             if self.verbose:
@@ -2017,7 +2020,7 @@ class SED:
         self._synthetic_photometry.sort('eff')
         return self._synthetic_photometry
 
-    def teff_from_age(self):
+    def teff_from_age(self, teff_units=q.K):
         """Estimate the radius from model isochrones given an age and Lbol
         """
         if self.age is not None and self.Lbol_sun is not None:
@@ -2025,10 +2028,12 @@ class SED:
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the Teff.'.format(self))
             else:
-                teff = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='teff', evo_model=self.evo_model)
-                teff = np.array(teff).astype(int)
-
-                self.Teff_evo = teff[0]*q.K, teff[1]*q.K
+                try:
+                    self.evo_model.teff_units = teff_units
+                    self.Teff_evo = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff')
+                except ValueError as err:
+                    print("Could not calculate Teff.")
+                    print(err)
 
         else:
             if self.verbose:

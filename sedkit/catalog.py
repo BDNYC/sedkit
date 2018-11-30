@@ -16,7 +16,6 @@ from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, ColumnDataSource
 
 from .sed import SED
-from .spectrum import COLORS
 from . import utilities as u
 
 class Catalog:
@@ -409,6 +408,8 @@ class Catalog:
         idx_or_name: str, int, sequence
             The name or index of the SED to get
         """
+        COLORS = u.color_gen('Category10')
+
         # Plot all SEDS
         if name_or_idx in ['all', '*']:
             name_or_idx = list(range(len(self.results)))
