@@ -53,6 +53,7 @@ class Isochrone:
         self.path = resource_filename('sedkit', 'data/models/evolutionary/{}.txt'.format(self.name))
         self._age_units = None
         self._mass_units = None
+        self._radius_units = None
         self._teff_units = None
 
         # Read in the data
@@ -69,7 +70,7 @@ class Isochrone:
 
         # Get the units
         if units is None or not isinstance(units, dict):
-            units = {'age': q.Gyr, 'mass': q.Msun, 'teff': q.K}
+            units = {'age': q.Gyr, 'mass': q.Msun, 'teff': q.K, 'radius': q.Rsun}
 
         # Set the initial units
         for uname, unit in units.items():
@@ -136,7 +137,7 @@ class Isochrone:
         """
         # Check if the age has an uncertainty
         if not isinstance(age, (tuple, list)):
-            age = (age, age*0)
+            age = (age, age * 0)
 
         # Make sure the age has units
         if not isinstance(age[0], UNIT_DTYPES) or not isinstance(age[1], UNIT_DTYPES):
@@ -147,26 +148,26 @@ class Isochrone:
             xval = (xval, 0)
 
         # Convert (age, unc) into age range
-        min_age = age[0]-age[1]
-        max_age = age[0]+age[1]
+        min_age = age[0] - age[1]
+        max_age = age[0] + age[1]
 
         # Test the age range is inbounds
-        if max_age > self.ages.max() or min_age < self.ages.min():
+        if age[0] < self.ages.min() or age[0] > self.ages.max():
             raise ValueError('Please provide an age range within {} and {}'.format(self.ages.min(), self.ages.max()))
 
         # Get the lower, nominal, and upper values
-        lower = self.iso_interp(xval[0]-xval[1], age[0]-age[1], xparam, yparam)
+        lower = self.iso_interp(xval[0] - xval[1], age[0]-age[1], xparam, yparam)
         nominal = self.iso_interp(xval[0], age[0], xparam, yparam)
-        upper = self.iso_interp(xval[0]+xval[1], age[0]+age[1], xparam, yparam)
+        upper = self.iso_interp(xval[0] + xval[1], age[0]+age[1], xparam, yparam)
 
         # Caluclate the symmetric error
-        error = max(abs(nominal-lower), abs(nominal-upper))*2
+        error = max(abs(nominal - lower), abs(nominal - upper)) * 2
 
         # Plot the figure and evaluated point
         if plot:
             fig = self.plot(xparam, yparam)
-            fig.circle(xval[0], nominal, color='red')
-            fig.ellipse(x=xval[0], y=nominal, width=xval[1]*2, height=error,
+            fig.circle(xval[0], nominal.value, color='red')
+            fig.ellipse(x=xval[0], y=nominal.value, width=xval[1]*2, height=error.value,
                         color='red', alpha=0.1)
             show(fig)
 
@@ -192,12 +193,24 @@ class Isochrone:
             The interpolated result
         """
         # Get the neighboring ages
-        lower_age = self.ages[self.ages < age].max()
-        upper_age = self.ages[self.ages > age].min()
+        try:
+            lower_age = self.ages[self.ages < age].max()
+        except ValueError:
+            lower_age =  self.ages.min()
+        try:
+            upper_age = self.ages[self.ages > age].min()
+        except ValueError:
+            upper_age = self.ages.max()
 
         # Get the neighboring isochrones
         lower_iso = self.data[self.data['age'] == lower_age.value][[xparam, yparam]].as_array()
         upper_iso = self.data[self.data['age'] == upper_age.value][[xparam, yparam]].as_array()
+
+        # Test the xval is inbounds
+        min_x = min(lower_iso[xparam].min(), upper_iso[xparam].min())
+        max_x = max(lower_iso[xparam].max(), upper_iso[xparam].max())
+        if xval < min_x or xval > max_x:
+            raise ValueError('Please provide a {} range within {} and {}'.format(xparam, min_x, max_x))
 
         # Get the neighboring interpolated values
         lower_val = np.interp(xval, lower_iso[xparam], lower_iso[yparam])
@@ -206,8 +219,9 @@ class Isochrone:
         # Take the weighted mean of the two points to find the single value
         weights = (lower_age/age).value, (upper_age/age).value
         result = np.average([lower_val, upper_val], weights=weights)
+        unit = self.data[yparam].unit or 1
 
-        return result
+        return result * unit
 
     def plot(self, xparam, yparam, **kwargs):
         """Plot an evaluated isochrone, isochrone, or set of isochrones
@@ -278,6 +292,37 @@ class Isochrone:
         # ...or convert them
         else:
             self.data['mass'] = self.data['mass'].to(self.mass_units)
+
+    @property
+    def radius_units(self):
+        """A getter for the radius units"""
+        return self._radius_units
+
+    @radius_units.setter
+    def radius_units(self, unit):
+        """A setter for the radius radius_units
+
+        Parameters
+        ----------
+        unit: astropy.units.quantity.Quantity
+            The desired units of the radius column
+        """
+        # Make sure it's a quantity
+        if not isinstance(unit, UNIT_DTYPES):
+            raise TypeError('Radius units must be astropy.units.quantity.Quantity')
+
+        # Make sure the values are in flux density radius_units
+        if not unit.is_equivalent(q.Rsun):
+            raise TypeError("{}: Radius units must be distance units, e.g. 'Rsun'".format(unit))
+
+        # Define the radius_units...
+        self._radius_units = unit
+        if self.data['radius'].unit is None:
+            self.data['radius'] *= self.radius_units
+
+        # ...or convert them
+        else:
+            self.data['radius'] = self.data['radius'].to(self.radius_units)
 
     @property
     def teff_units(self):

@@ -133,7 +133,8 @@ class SED:
         self._spectral_type = None
         self._membership = None
         self._sky_coords = None
-        self._evo_model = 'hybrid_solar_age'
+        self._evo_model = None
+        self.evo_model = 'hybrid_solar_age'
 
         # Static attributes
         self.verbose = verbose
@@ -415,9 +416,7 @@ class SED:
                             (value, lower_error, upper_error).')
 
         # Make sure the values are in time units
-        try:
-            _ = [i.to(q.Gyr) for i in age]
-        except:
+        if not age[0].unit.is_equivalent(q.Gyr):
             raise TypeError("Age values must be time units of\
                              astropy.units.quantity.Quantity, e.g. 'Gyr'")
 
@@ -635,9 +634,7 @@ class SED:
                 raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
 
             # Make sure the values are in time units
-            try:
-                _ = [i.to(q.pc) for i in distance]
-            except:
+            if not distance[0].unit.is_equivalent(q.pc):
                 raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
 
             # Set the distance
@@ -708,7 +705,7 @@ class SED:
         if model not in iso.EVO_MODELS:
             raise IOError("Please use an evolutionary model from the list: {}".format(mg.EVO_MODELS))
 
-        self._evo_model = model
+        self._evo_model = iso.Isochrone(model)
 
     def export(self, parentdir='.', dirname=None, zipped=False):
         """
@@ -1358,7 +1355,7 @@ class SED:
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
             else:
-                self.logg = tuple(iso.isochrone_interp(self.Lbol_sun, self.age, yparam='logg', evo_model=self.evo_model))
+                self.logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg')
 
         else:
             if self.verbose:
@@ -1436,7 +1433,8 @@ class SED:
 
         # Make Wein and Rayleigh Jeans tails
         self.make_wein_tail()
-        self.make_rj_tail()
+        # self.make_rj_tail()
+        self.rj = None
 
         # Run the calculation
         self._calculate_sed()
@@ -1499,10 +1497,8 @@ class SED:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
             else:
 
-                mass = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='mass',
-                                            evo_model=self.evo_model)
-
-                self.mass = mass[0].to(mass_units), mass[1].to(mass_units)
+                self.evo_model.mass_units = mass_units
+                self.mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass')
 
         else:
             if self.verbose:
@@ -1585,9 +1581,7 @@ class SED:
                                    or (value, lower_error, upper_error).""")
 
             # Make sure the values are in time units
-            try:
-                _ = [i.to(q.mas) for i in parallax]
-            except:
+            if not parallax[0].unit.is_equivalent(q.mas):
                 raise TypeError("""'parallax' values must be parallax units of \
                                    astropy.units.quantity.Quantity, e.g. 'mas'""")
 
@@ -1828,9 +1822,7 @@ class SED:
                 raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
 
             # Make sure the values are in length units
-            try:
-                _ = [i.to(q.m) for i in radius]
-            except:
+            if not radius[0].unit.is_equivalent(q.m):
                 raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
 
             # Set the radius!
@@ -1862,10 +1854,8 @@ class SED:
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            radius = iso.isochrone_interp(self.Lbol_sun, self.age, evo_model=self.evo_model)
-
-            self.radius = radius[0].to(radius_units), radius[1].to(radius_units)
-
+            self.evo_model.radius_units = radius_units
+            self.radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius')
             self.isochrone_radius = True
 
         else:
@@ -2018,7 +2008,7 @@ class SED:
         self._synthetic_photometry.sort('eff')
         return self._synthetic_photometry
 
-    def teff_from_age(self):
+    def teff_from_age(self, teff_units=q.K):
         """Estimate the radius from model isochrones given an age and Lbol
         """
         if self.age is not None and self.Lbol_sun is not None:
@@ -2026,10 +2016,8 @@ class SED:
             if self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the Teff.'.format(self))
             else:
-                teff = iso.isochrone_interp(self.Lbol_sun, self.age, yparam='teff', evo_model=self.evo_model)
-                teff = np.array(teff).astype(int)
-
-                self.Teff_evo = teff[0]*q.K, teff[1]*q.K
+                self.evo_model.teff_units = teff_units
+                self.Teff_evo = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff')
 
         else:
             if self.verbose:
