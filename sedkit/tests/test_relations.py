@@ -35,9 +35,9 @@ class TestRelations(unittest.TestCase):
         new_rel.generate(6)
 
         # Check that the order has changed
-        self.assertNotEquals(self.radius.order, new_rel.order)
+        self.assertNotEqual(self.radius.order, new_rel.order)
 
         # Check that the polynomial has changed
         old = self.radius.get_radius(62)
         new = new_rel.get_radius(62)
-        self.assertNotEquals(new, old)
+        self.assertNotEqual(new, old)
