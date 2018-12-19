@@ -3,13 +3,18 @@ import copy
 
 import numpy as np
 import astropy.units as q
+from astropy.modeling.blackbody import blackbody_lambda
 
 from .. import sed
 from .. import spectrum as sp
+from .. import utilities as u
 
-
-SPEC1 = [np.linspace(0.8,2.5,200)*q.um, abs(np.random.normal(size=200))*1E-15*q.erg/q.s/q.cm**2/q.AA, abs(np.random.normal(size=200))*1E-16*q.erg/q.s/q.cm**2/q.AA]
-SPEC2 = [np.linspace(21000,38000,150)*q.AA, abs(np.random.normal(size=150))*5E-14*q.erg/q.s/q.cm**2/q.AA, abs(np.random.normal(size=150))*5E-15*q.erg/q.s/q.cm**2/q.AA]
+WAVE1 = np.linspace(0.8, 2.5, 200)*q.um
+FLUX1 = blackbody_lambda(WAVE1, 3000*q.K)*q.sr
+SPEC1 = [WAVE1, FLUX1, FLUX1/100.]
+WAVE2 = np.linspace(21000, 38000, 150)*q.AA
+FLUX2 = blackbody_lambda(WAVE2, 6000*q.K)*q.sr
+SPEC2 = [WAVE2, FLUX2, FLUX2/100.]
 
 
 class TestSED(unittest.TestCase):
@@ -77,4 +82,4 @@ class TestSED(unittest.TestCase):
         s.add_spectrum(self.spec2)
 
         # Make sure the units are being updated
-        self.failUnless(s.spectra[0].wave_units == s.spectra[1].wave_units)
+        self.assertTrue(s.spectra[0].wave_units == s.spectra[1].wave_units)
