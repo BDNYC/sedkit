@@ -74,7 +74,10 @@ class Isochrone:
 
         # Set the initial units
         for uname, unit in units.items():
-            setattr(self, '{}_units'.format(uname), unit)
+            try:
+                setattr(self, '{}_units'.format(uname), unit)
+            except KeyError:
+                print("No '{}' parameter in {} models. Skipping.".format(uname, self.name))
 
         # Save the raw data for resampling
         self.raw_data = self.data
@@ -156,9 +159,9 @@ class Isochrone:
             raise ValueError('Please provide an age range within {} and {}'.format(self.ages.min(), self.ages.max()))
 
         # Get the lower, nominal, and upper values
-        lower = self.iso_interp(xval[0] - xval[1], age[0]-age[1], xparam, yparam)
-        nominal = self.iso_interp(xval[0], age[0], xparam, yparam)
-        upper = self.iso_interp(xval[0] + xval[1], age[0]+age[1], xparam, yparam)
+        lower = self.interpolate(xval[0] - xval[1], age[0]-age[1], xparam, yparam)
+        nominal = self.interpolate(xval[0], age[0], xparam, yparam)
+        upper = self.interpolate(xval[0] + xval[1], age[0]+age[1], xparam, yparam)
 
         # Caluclate the symmetric error
         error = max(abs(nominal - lower), abs(nominal - upper)) * 2
@@ -173,7 +176,7 @@ class Isochrone:
 
         return nominal, error
 
-    def iso_interp(self, xval, age, xparam, yparam):
+    def interpolate(self, xval, age, xparam, yparam):
         """Interpolate a value between two isochrones
 
         Parameters

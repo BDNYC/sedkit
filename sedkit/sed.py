@@ -897,7 +897,7 @@ class SED:
             rad = search_radius or self.search_radius
             viz_cat = Simbad.query_region(self.sky_coords, radius=rad)
 
-        elif self.name is not None:
+        elif self.name is not None and self.name != 'My Target':
 
             viz_cat = Simbad.query_object(self.name)
 
@@ -1884,7 +1884,7 @@ class SED:
         # Get the results
         ptypes = (float, bytes, str, type(None), q.quantity.Quantity)
         params = {k[1:] if k.startswith('_') else k for k, v in
-                  self.__dict__.items() if
+                  self.__dict__.items() if k not in ['spectra'] and
                   isinstance(v, ptypes) or
                   (isinstance(v, (list, tuple)) and len(v) == 2)}
         rows = []
@@ -1901,6 +1901,7 @@ class SED:
                 unit = val.unit if hasattr(val, 'unit') else '--'
                 val = val.value if hasattr(val, 'unit') else val
                 unc = unc.value if hasattr(unc, 'unit') else unc
+                print(param, val, unc, unit)
                 if val < 1E-3 or val > 1e5:
                     val = float('{:.2e}'.format(val))
                     if unc is None:
@@ -2098,7 +2099,7 @@ class SED:
     #     except:
     #         print('No spectral coverage to calculate synthetic photometry.')
 
-    
+
 class VegaSED(SED):
     """A precomputed SED of Vega
     """

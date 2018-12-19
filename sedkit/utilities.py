@@ -249,7 +249,7 @@ def finalize_spec(spec, wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA):
     return scrub([spec[0]*wave_units, spec[1]*flux_units, spec[2]*flux_units])
 
 
-def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
+def flux_calibrate(mag, dist, sig_m=None, sig_d=None, scale_to=10*q.pc):
     """
     Flux calibrate a magnitude to be at the distance *scale_to*
 
@@ -279,7 +279,7 @@ def flux_calibrate(mag, dist, sig_m='', sig_d='', scale_to=10*q.pc):
             Mag = mag - 5*np.log10(dist.value) + 5*np.log10(scale_to.value)
             Mag = Mag.round(3)
 
-            if isinstance(sig_d, q.quantity.Quantity) and sig_m!='': 
+            if isinstance(sig_d, q.quantity.Quantity) and sig_m is not None: 
                 Mag_unc = np.sqrt(sig_m**2 + (2.5*sig_d/(np.log(10)*dist))**2)
                 Mag_unc = Mag_unc.round(3).value
 
