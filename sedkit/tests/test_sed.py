@@ -4,7 +4,6 @@ import copy
 import numpy as np
 import astropy.units as q
 from astropy.modeling.blackbody import blackbody_lambda
-from astrodbkit import astrodb
 
 from .. import sed
 from .. import spectrum as sp
