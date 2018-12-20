@@ -1884,11 +1884,11 @@ class SED:
         # Get the results
         ptypes = (float, bytes, str, type(None), q.quantity.Quantity)
         params = {k[1:] if k.startswith('_') else k for k, v in
-                  self.__dict__.items() if k not in ['spectra'] and
-                  isinstance(v, ptypes) or
+                  self.__dict__.items() if isinstance(v, ptypes) or
                   (isinstance(v, (list, tuple)) and len(v) == 2)}
         rows = []
-        for param in sorted(params):
+        exclude = ['spectra']
+        for param in sorted([p for p in params if p not in exclude]):
 
             # Get the values and format
             attr = getattr(self, param, None)
