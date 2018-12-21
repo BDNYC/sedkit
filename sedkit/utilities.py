@@ -656,6 +656,9 @@ def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
         fig = figure()
         fig.line(wave, flux, color='blue', legend='Original')
         fig.line(wavnew, specnew, color='red', legend='Rebinned')
+
+        # Plot interpolated flux to show rebinning is necessary!
+        fig.line(wavnew, np.interp(wavnew, wave, flux), color='green', legend='Interpolated')
         show(fig)
 
     return [wavnew, specnew] if not any(errnew) else [wavnew, specnew, errnew]
