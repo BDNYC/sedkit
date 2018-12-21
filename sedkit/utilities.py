@@ -15,6 +15,7 @@ import astropy.constants as ac
 import astropy.table as at
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.modeling import models
+from bokeh.plotting import figure, show
 import bokeh.palettes as bpal
 import numpy as np
 import pandas as pd
@@ -527,7 +528,7 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
 
     Parameters
     ----------
-    band: sedkit.synphot.Bandpass
+    band: svo_filters.svo.Filter
         The bandpass
     mag: float, astropy.unit.quantity.Quantity
         The magnitude
@@ -544,8 +545,7 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
             sig_m = sig_m.value
 
         # Calculate the flux density
-        zp = band.zp
-        f = (zp*10**(mag/-2.5)).to(units)
+        f = (band.zp*10**(mag/-2.5)).to(units)
 
         if isinstance(sig_m, str):
             sig_m = np.nan
@@ -605,8 +605,13 @@ def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
     -------
     np.ndarray
         The rebinned flux
-
     """
+    idx = idx_overlap(wave, wavnew)
+    if not any(idx):
+        raise ValueError("rebin_spec: The new wavelengths specified must fall\
+                          at least partially within the range of the old\
+                          wavelength values.")
+
     nlam = len(wave)
     x0 = np.arange(nlam, dtype=float)
     x0int = np.arange((nlam-1.)*oversamp + 1., dtype=float)/oversamp
@@ -615,13 +620,11 @@ def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
     try:
         err0int = np.interp(w0int, wave, err)/oversamp
     except:
-        err0int = ''
+        err0int = None
 
     # Set up the bin edges for down-binning
     maxdiffw1 = np.diff(wavnew).max()
-    w1bins = np.concatenate(([wavnew[0]-maxdiffw1], 
-                              .5*(wavnew[1::]+wavnew[0:-1]), 
-                              [wavnew[-1]+maxdiffw1]))
+    w1bins = np.concatenate(([wavnew[0]-maxdiffw1], .5*(wavnew[1::]+wavnew[0:-1]), [wavnew[-1]+maxdiffw1]))
 
     # Bin down the interpolated spectrum:
     w1bins = np.sort(w1bins)
@@ -637,9 +640,23 @@ def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
         if err is not None:
             errnew[ii] = np.sum(err0int[inds2[ii][0]:inds2[ii][1]])
 
-    # Fix edges
-    specnew[0] = flux[0]
-    specnew[-1] = flux[-1]
+    # Normalize
+    pi = np.nonzero(specnew)[0][0]
+    pf = np.nonzero(specnew)[0][-1]
+    specnew[specnew <= 0] = np.nan
+    trim = np.where((wave >= wavnew[pi]) & (wave <= wavnew[pf]))
+    norm = np.trapz(flux[trim], x=wave[trim])/np.trapz(specnew[pi:pf], x=wavnew[pi:pf])
+    specnew *= norm
+
+    # Fix the edges
+    specnew[pi] = flux[trim][0]
+    specnew[pf] = flux[trim][-1]
+
+    if plot:
+        fig = figure()
+        fig.line(wave, flux, color='blue', legend='Original')
+        fig.line(wavnew, specnew, color='red', legend='Rebinned')
+        show(fig)
 
     return [wavnew, specnew] if not any(errnew) else [wavnew, specnew, errnew]
 
@@ -769,7 +786,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     #     raise ValueError("spectres: The new wavelengths specified must\
     # fall within the range of the old wavelength values.")
 
-    #Generate output arrays to be populated
+    # Generate output arrays to be populated
     resampled_fluxes = np.zeros(spec_fluxes[..., 0].shape + new_spec_wavs.shape)
 
     if spec_errs is not None:
@@ -784,7 +801,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
 
     # Calculate the new spectral flux and uncertainty values, 
     # loop over the new bins
-    for j in range(new_spec_wavs.shape[0]-1):
+    for j in range(new_spec_wavs.size):
 
         # Find the first old bin which is partially covered by the new bin
         while spec_lhs[start+1] <= filter_lhs[j]:
@@ -794,7 +811,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
         while spec_lhs[stop+1] < filter_lhs[j+1]:
             stop += 1
 
-        # If the new bin falls entirely within one old bin the are the same
+        # If the new bin falls entirely within one old bin they are the same
         # the new flux and new error are the same as for that bin
         if stop == start:
 
@@ -822,7 +839,8 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
             spec_widths[start] /= start_factor
             spec_widths[stop] /= end_factor
 
-    # If errors were supplied return the resampled_fluxes spectrum and error arrays
+    # If errors were supplied return the resampled_fluxes spectrum and
+    # error arrays
     if spec_errs is None:
         return [new_spec_wavs, resampled_fluxes]
 

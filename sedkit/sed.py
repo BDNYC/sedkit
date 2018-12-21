@@ -1901,7 +1901,6 @@ class SED:
                 unit = val.unit if hasattr(val, 'unit') else '--'
                 val = val.value if hasattr(val, 'unit') else val
                 unc = unc.value if hasattr(unc, 'unit') else unc
-                print(param, val, unc, unit)
                 if val < 1E-3 or val > 1e5:
                     val = float('{:.2e}'.format(val))
                     if unc is None:

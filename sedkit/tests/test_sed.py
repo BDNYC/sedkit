@@ -59,6 +59,10 @@ class TestSED(unittest.TestCase):
 
         self.assertIsNotNone(s.Teff)
 
+    def test_fit_spectrum(self):
+        """Test that the SED can be fit by a model grid"""
+        pass
+
     # def test_from_database(self):
     #     """Test that an SED can be created from a database"""
     #     # Create the SED
