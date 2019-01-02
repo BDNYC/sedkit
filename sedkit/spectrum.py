@@ -274,10 +274,10 @@ class Spectrum(ps.ArraySpectrum):
         if report is not None:
 
             # Configure plot
-            tools = "resize, pan, wheel_zoom, box_zoom, reset"
+            tools = "pan, wheel_zoom, box_zoom, reset"
             rep = figure(tools=tools, x_axis_label=report,
                          y_axis_label='Goodness-of-fit',
-                         plot_width=800)
+                         plot_width=600, plot_height=400)
 
             # Single out best fit
             best = ColumnDataSource(data=models.iloc[:1])
@@ -289,11 +289,12 @@ class Spectrum(ps.ArraySpectrum):
             rep.add_tools(hover)
 
             # Plot the fits
-            rep.circle(report, 'gstat', source=best, color='red', size=12)
+            rep.circle(report, 'gstat', source=best, color='red')
             rep.circle(report, 'gstat', source=others)
 
             # Store the plot
-            bf['plot'] = rep
+            show(rep)
+            
 
         if bf['filepath'] not in [i['filepath'] for i in self.best_fit]:
             self.best_fit.append(bf)
@@ -816,7 +817,6 @@ class Spectrum(ps.ArraySpectrum):
 
         # Calculate the new spectrum
         binned = u.spectres(wave, self.wave, self.flux, self.unc)
-        # binned = u.rebin_spec(wave, self.wave, self.flux, self.unc)
 
         # Update the spectrum
         spectrum = [i*Q for i, Q in zip(binned, self.units)]
@@ -1009,6 +1009,7 @@ class Spectrum(ps.ArraySpectrum):
         # Set the wave_units
         self._wave_units = wave_units
         self._set_units()
+
 
 class Blackbody(Spectrum):
     """A spectrum object specifically for blackbodies"""

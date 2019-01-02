@@ -589,81 +589,6 @@ def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, p
         return val, low
 
 
-def rebin_spec(wavnew, wave, flux, err=None, oversamp=100, plot=False):
-    """
-    Rebin a spectrum to a new wavelength array while preserving 
-    the total flux
-
-    Parameters
-    ----------
-    spec: array-like
-        The wavelength and flux to be binned
-    wavenew: array-like
-        The new wavelength array
-
-    Returns
-    -------
-    np.ndarray
-        The rebinned flux
-    """
-    idx = idx_overlap(wave, wavnew)
-    if not any(idx):
-        raise ValueError("rebin_spec: The new wavelengths specified must fall\
-                          at least partially within the range of the old\
-                          wavelength values.")
-
-    nlam = len(wave)
-    x0 = np.arange(nlam, dtype=float)
-    x0int = np.arange((nlam-1.)*oversamp + 1., dtype=float)/oversamp
-    w0int = np.interp(x0int, x0, wave)
-    spec0int = np.interp(w0int, wave, flux)/oversamp
-    try:
-        err0int = np.interp(w0int, wave, err)/oversamp
-    except:
-        err0int = None
-
-    # Set up the bin edges for down-binning
-    maxdiffw1 = np.diff(wavnew).max()
-    w1bins = np.concatenate(([wavnew[0]-maxdiffw1], .5*(wavnew[1::]+wavnew[0:-1]), [wavnew[-1]+maxdiffw1]))
-
-    # Bin down the interpolated spectrum:
-    w1bins = np.sort(w1bins)
-    nbins = len(w1bins)-1
-    specnew = np.zeros(nbins)
-    errnew = np.zeros(nbins)
-    inds2 = [[w0int.searchsorted(w1bins[ii], side='left'), 
-              w0int.searchsorted(w1bins[ii+1], side='left')] 
-              for ii in range(nbins)]
-
-    for ii in range(nbins):
-        specnew[ii] = np.sum(spec0int[inds2[ii][0]:inds2[ii][1]])
-        if err is not None:
-            errnew[ii] = np.sum(err0int[inds2[ii][0]:inds2[ii][1]])
-
-    # Normalize
-    pi = np.nonzero(specnew)[0][0]
-    pf = np.nonzero(specnew)[0][-1]
-    specnew[specnew <= 0] = np.nan
-    trim = np.where((wave >= wavnew[pi]) & (wave <= wavnew[pf]))
-    norm = np.trapz(flux[trim], x=wave[trim])/np.trapz(specnew[pi:pf], x=wavnew[pi:pf])
-    specnew *= norm
-
-    # Fix the edges
-    specnew[pi] = flux[trim][0]
-    specnew[pf] = flux[trim][-1]
-
-    if plot:
-        fig = figure()
-        fig.line(wave, flux, color='blue', legend='Original')
-        fig.line(wavnew, specnew, color='red', legend='Rebinned')
-
-        # Plot interpolated flux to show rebinning is necessary!
-        fig.line(wavnew, np.interp(wavnew, wave, flux), color='green', legend='Interpolated')
-        show(fig)
-
-    return [wavnew, specnew] if not any(errnew) else [wavnew, specnew, errnew]
-
-
 def scrub(data):
     """
     For input data [w, f, e] or [w, f] returns the list with NaN, negative, and zero flux (and corresponsing wavelengths and errors) removed.
@@ -783,12 +708,6 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     filter_lhs[1:-1] = (new_spec_wavs[1:] + new_spec_wavs[:-1])/2
     filter_widths[:-1] = filter_lhs[1:-1] - filter_lhs[:-2]
 
-    # # Check that the range of wavelengths to be resampled_fluxes onto 
-    # # falls within the initial sampling region
-    # if filter_lhs[0] < spec_lhs[0] or filter_lhs[-1] > spec_lhs[-1]:
-    #     raise ValueError("spectres: The new wavelengths specified must\
-    # fall within the range of the old wavelength values.")
-
     # Generate output arrays to be populated
     resampled_fluxes = np.zeros(spec_fluxes[..., 0].shape + new_spec_wavs.shape)
 
@@ -797,7 +716,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
             raise ValueError("If specified, spec_errs must be the same shape\
                               as spec_fluxes.")
         else:
-            resampled_fluxes_errs = np.copy(resampled_fluxes)
+            resampled_fluxes_errs = np.zeros_like(resampled_fluxes)
 
     start = 0
     stop = 0
@@ -806,41 +725,49 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     # loop over the new bins
     for j in range(new_spec_wavs.size):
 
-        # Find the first old bin which is partially covered by the new bin
-        while spec_lhs[start+1] <= filter_lhs[j]:
-            start += 1
+        try:
 
-        # Find the last old bin which is partially covered by the new bin
-        while spec_lhs[stop+1] < filter_lhs[j+1]:
-            stop += 1
+            # Find the first old bin which is partially covered by the new bin
+            while spec_lhs[start+1] <= filter_lhs[j]:
+                start += 1
 
-        # If the new bin falls entirely within one old bin they are the same
-        # the new flux and new error are the same as for that bin
-        if stop == start:
+            # Find the last old bin which is partially covered by the new bin
+            while spec_lhs[stop+1] < filter_lhs[j+1]:
+                stop += 1
 
-            resampled_fluxes[..., j] = spec_fluxes[..., start]
+            # If the new bin falls entirely within one old bin they are the same
+            # the new flux and new error are the same as for that bin
+            if stop == start:
+
+                resampled_fluxes[..., j] = spec_fluxes[..., start]
+                if spec_errs is not None:
+                    resampled_fluxes_errs[..., j] = spec_errs[..., start]
+
+            # Otherwise multiply the first and last old bin widths by P_ij, 
+            # all the ones in between have P_ij = 1
+            else:
+
+                start_factor = (spec_lhs[start+1] - filter_lhs[j])/(spec_lhs[start+1] - spec_lhs[start])
+                end_factor = (filter_lhs[j+1] - spec_lhs[stop])/(spec_lhs[stop+1] - spec_lhs[stop])
+
+                spec_widths[start] *= start_factor
+                spec_widths[stop] *= end_factor
+
+                # Populate the resampled_fluxes spectrum and uncertainty arrays
+                resampled_fluxes[..., j] = np.sum(spec_widths[start:stop+1]*spec_fluxes[..., start:stop+1], axis=-1)/np.sum(spec_widths[start:stop+1])
+
+                if spec_errs is not None:
+                    resampled_fluxes_errs[..., j] = np.sqrt(np.sum((spec_widths[start:stop+1]*spec_errs[..., start:stop+1])**2, axis=-1))/np.sum(spec_widths[start:stop+1])
+
+                # Put back the old bin widths to their initial values for later use
+                spec_widths[start] /= start_factor
+                spec_widths[stop] /= end_factor
+
+        except IndexError:
+            
+            resampled_fluxes[..., j] = np.nan
             if spec_errs is not None:
-                resampled_fluxes_errs[..., j] = spec_errs[..., start]
-
-        # Otherwise multiply the first and last old bin widths by P_ij, 
-        # all the ones in between have P_ij = 1
-        else:
-
-            start_factor = (spec_lhs[start+1] - filter_lhs[j])/(spec_lhs[start+1] - spec_lhs[start])
-            end_factor = (filter_lhs[j+1] - spec_lhs[stop])/(spec_lhs[stop+1] - spec_lhs[stop])
-
-            spec_widths[start] *= start_factor
-            spec_widths[stop] *= end_factor
-
-            # Populate the resampled_fluxes spectrum and uncertainty arrays
-            resampled_fluxes[..., j] = np.sum(spec_widths[start:stop+1]*spec_fluxes[..., start:stop+1], axis=-1)/np.sum(spec_widths[start:stop+1])
-
-            if spec_errs is not None:
-                resampled_fluxes_errs[..., j] = np.sqrt(np.sum((spec_widths[start:stop+1]*spec_errs[..., start:stop+1])**2, axis=-1))/np.sum(spec_widths[start:stop+1])
-
-            # Put back the old bin widths to their initial values for later use
-            spec_widths[start] /= start_factor
-            spec_widths[stop] /= end_factor
+                resampled_fluxes_errs[..., j] = np.nan
 
     # If errors were supplied return the resampled_fluxes spectrum and
     # error arrays
