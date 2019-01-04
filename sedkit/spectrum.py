@@ -274,10 +274,10 @@ class Spectrum(ps.ArraySpectrum):
         if report is not None:
 
             # Configure plot
-            tools = "resize, pan, wheel_zoom, box_zoom, reset"
+            tools = "pan, wheel_zoom, box_zoom, reset"
             rep = figure(tools=tools, x_axis_label=report,
                          y_axis_label='Goodness-of-fit',
-                         plot_width=800)
+                         plot_width=600, plot_height=400)
 
             # Single out best fit
             best = ColumnDataSource(data=models.iloc[:1])
@@ -289,11 +289,12 @@ class Spectrum(ps.ArraySpectrum):
             rep.add_tools(hover)
 
             # Plot the fits
-            rep.circle(report, 'gstat', source=best, color='red', size=12)
+            rep.circle(report, 'gstat', source=best, color='red')
             rep.circle(report, 'gstat', source=others)
 
             # Store the plot
-            bf['plot'] = rep
+            show(rep)
+            
 
         if bf['filepath'] not in [i['filepath'] for i in self.best_fit]:
             self.best_fit.append(bf)
@@ -680,7 +681,7 @@ class Spectrum(ps.ArraySpectrum):
 
         return Spectrum(*spectrum, name=self.name)
 
-    def plot(self, fig=None, components=False, best_fit=True, draw=False, **kwargs):
+    def plot(self, fig=None, components=False, best_fit=True, scale='log', draw=False, **kwargs):
         """Plot the spectrum
 
         Parameters
@@ -691,6 +692,8 @@ class Spectrum(ps.ArraySpectrum):
             Plot all components of the spectrum
         best_fit: bool
             Plot the best fit model if available
+        scale: str
+            The scale of the x and y axes, ['linear', 'log']
         draw: bool
             Draw the plot rather than just return it
 
@@ -701,12 +704,12 @@ class Spectrum(ps.ArraySpectrum):
         """
         # Make the figure
         if fig is None:
-            fig = figure()
+            fig = figure(x_axis_type=scale, y_axis_type=scale)
             fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
             fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
 
         # Plot the spectrum
-        c = kwargs.get('color', next(COLORS))
+        c = kwargs.get('color', next(u.COLORS))
         fig.line(self.wave, self.flux, color=c, alpha=0.8, legend=self.name)
 
         # Plot the uncertainties
@@ -718,14 +721,14 @@ class Spectrum(ps.ArraySpectrum):
         # Plot the components
         if components and self.components is not None:
             for spec in self.components:
-                fig.line(spec.wave, spec.flux, color=next(COLORS),
+                fig.line(spec.wave, spec.flux, color=next(u.COLORS),
                          legend=spec.name)
 
         # Plot the best fit
         if best_fit and len(self.best_fit) > 0:
             for bf in self.best_fit:
                 fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.3,
-                         color=next(COLORS), legend=bf.name)
+                         color=next(u.COLORS), legend=bf.label)
 
         if draw:
             show(fig)
@@ -760,7 +763,7 @@ class Spectrum(ps.ArraySpectrum):
         # norm = np.mean(self.flux)/np.mean(spec.flux)
 
         # My solution
-        norm = syn.mag2flux(mag, bandpass)[0]/self.synthetic_flux(bandpass, force=force)[0]
+        norm = u.mag2flux(bandpass, mag)[0]/self.synthetic_flux(bandpass, force=force)[0]
 
         # Just return the normalization factor
         if no_spec:
@@ -817,7 +820,6 @@ class Spectrum(ps.ArraySpectrum):
 
         # Update the spectrum
         spectrum = [i*Q for i, Q in zip(binned, self.units)]
-        print(Spectrum(*spectrum, name=self.name).data.shape)
 
         return Spectrum(*spectrum, name=self.name)
 
@@ -1007,6 +1009,7 @@ class Spectrum(ps.ArraySpectrum):
         # Set the wave_units
         self._wave_units = wave_units
         self._set_units()
+
 
 class Blackbody(Spectrum):
     """A spectrum object specifically for blackbodies"""

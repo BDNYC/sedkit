@@ -1884,11 +1884,11 @@ class SED:
         # Get the results
         ptypes = (float, bytes, str, type(None), q.quantity.Quantity)
         params = {k[1:] if k.startswith('_') else k for k, v in
-                  self.__dict__.items() if k not in ['spectra'] and
-                  isinstance(v, ptypes) or
+                  self.__dict__.items() if isinstance(v, ptypes) or
                   (isinstance(v, (list, tuple)) and len(v) == 2)}
         rows = []
-        for param in sorted(params):
+        exclude = ['spectra']
+        for param in sorted([p for p in params if p not in exclude]):
 
             # Get the values and format
             attr = getattr(self, param, None)
@@ -1901,7 +1901,6 @@ class SED:
                 unit = val.unit if hasattr(val, 'unit') else '--'
                 val = val.value if hasattr(val, 'unit') else val
                 unc = unc.value if hasattr(unc, 'unit') else unc
-                print(param, val, unc, unit)
                 if val < 1E-3 or val > 1e5:
                     val = float('{:.2e}'.format(val))
                     if unc is None:

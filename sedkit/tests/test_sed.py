@@ -7,7 +7,6 @@ from astropy.modeling.blackbody import blackbody_lambda
 
 from .. import sed
 from .. import spectrum as sp
-from .. import utilities as u
 
 WAVE1 = np.linspace(0.8, 2.5, 200)*q.um
 FLUX1 = blackbody_lambda(WAVE1, 3000*q.K)*q.sr
@@ -44,34 +43,45 @@ class TestSED(unittest.TestCase):
 
         s.results
 
-        self.assertTrue(s.fbol is not None)
+        self.assertIsNotNone(s.fbol)
 
-    # def test_no_photometry(self):
-    #     """Test that a purely photometric SED can be creted"""
-    #     s = copy.copy(self.sed)
-    #     s.age = 455*q.Myr, 13*q.Myr
-    #     s.radius = 2.362*q.Rsun, 0.02*q.Rjup
-    #     s.parallax = 130.23*q.mas, 0.36*q.mas
-    #     s.spectral_type = 'A0V'
-    #     s.add_spectrum(self.spec1)
-    #     s.add_spectrum(self.spec1)
-    #
-    #     s.results
-    #
-    #     self.assertTrue(s.Teff is not None)
+    def test_no_photometry(self):
+        """Test that a purely photometric SED can be creted"""
+        s = copy.copy(self.sed)
+        s.age = 455*q.Myr, 13*q.Myr
+        s.radius = 2.362*q.Rsun, 0.02*q.Rjup
+        s.parallax = 130.23*q.mas, 0.36*q.mas
+        s.spectral_type = 'A0V'
+        s.add_spectrum(self.spec1)
+        s.add_spectrum(self.spec1)
+
+        s.results
+
+        self.assertIsNotNone(s.Teff)
+
+    def test_fit_spectrum(self):
+        """Test that the SED can be fit by a model grid"""
+        pass
 
     # def test_from_database(self):
     #     """Test that an SED can be created from a database"""
+    #     # Create the SED
     #     s = copy.copy(self.sed)
-    #     db = astrodb.Database('/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db')
     #
-    #     source_id = 86
-    #     from_dict = {'spectra':[379,1580,2726], 'photometry':'*', 'parallaxes':247, 'spectral_types':277, 'sources':86}
+    #     # Open the database
+    #     path = '/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db'
+    #     db = astrodb.Database(path)
     #
+    #     # Make a dict of the target records
+    #     from_dict = {'spectra': [379,1580,2726], 'photometry': '*',
+    #                  'parallaxes': 247, 'spectral_types': 277, 'sources': 86}
+    #
+    #     # Pull the data in and caluclate
+    #     s.source_id = 86
     #     s.from_database(db, **from_dict)
     #     s.results
     #
-    #     self.assertTrue(s.Teff is not None)
+    #     self.assertIsNotNone(s.Teff)
 
     def test_SED_add_spectrum(self):
         """Test that spectra are added properly"""
@@ -82,4 +92,4 @@ class TestSED(unittest.TestCase):
         s.add_spectrum(self.spec2)
 
         # Make sure the units are being updated
-        self.assertTrue(s.spectra[0].wave_units == s.spectra[1].wave_units)
+        self.assertEqual(s.spectra[0].wave_units, s.spectra[1].wave_units)
