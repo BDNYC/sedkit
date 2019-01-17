@@ -5,11 +5,14 @@
 """
 Some utilities to accompany sedkit
 """
+import copy
 import glob
 import itertools
+import os
 import re
 import warnings
 
+from astropy.io import fits, ascii
 import astropy.units as q
 import astropy.constants as ac
 import astropy.table as at
@@ -24,6 +27,8 @@ import scipy.optimize as opt
 
 warnings.simplefilter('ignore')
 
+# Valid dtypes for units
+UNITS = q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit, q.quantity.Quantity
 
 # A dict of BDNYCdb band names to work with sedkit
 PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
@@ -104,6 +109,34 @@ def color_gen(colormap='viridis', key=None, n=10):
 
 
 COLORS = color_gen('Category10')
+
+
+def equivalent(value, units):
+    """Function to test if value is equivalent to gievn units
+
+    Parameters
+    ----------
+    value: array-like
+        The value to check
+    units: astropy.units.core.PrefixUnit, astropy.units.core.Unit, astropy.units.core.CompositeUnit
+        The units to test for equivalency
+
+    Returns
+    -------
+    bool
+        Equivalent or not
+    """
+    # Ensure the units aren't bare
+    value *= 1
+
+    # Assert units exist AND they are the RIGHT units
+    if isinstance(value, UNITS):
+        if value.unit.is_equivalent(units):
+            return True
+        else:
+            return False
+    else:
+        return False
 
 
 def isnumber(s):
@@ -352,6 +385,32 @@ def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):
     return f_lam
 
 
+def minimize_norm(arr1, arr2):
+    """Minimize the function to find the normalization factor that best
+    aligns arr2 with arr1
+
+    Parameters
+    ----------
+    arr1: np.ndarray
+        The first array
+    arr2: np.ndarray
+        The second array
+
+    Returns
+    -------
+    float
+        The normalization constant
+    """
+    def errfunc(p, a1, a2):
+        return np.nansum(abs(a1 - (a2*p)))
+
+    # Initial guess
+    p0 = np.nanmean(arr2)/np.nanmean(arr1)
+    norm_factor = opt.fmin(errfunc, p0, args=(arr1, arr2), disp=0)
+
+    return norm_factor
+
+
 def errorbar(fig, x, y, xerr=None, yerr=None, color='black', point_kwargs={}, error_kwargs={}, legend=None):
     """
     Hack to make errorbar plots in bokeh
@@ -468,8 +527,8 @@ def idx_include(x, include):
             return range(len(x))
 
 
-def idx_overlap(s1, s2):
-    """Force s2 to be completely overlapped by s1
+def idx_overlap(s1, s2, inclusive=False):
+    """Returns the indices of s2 that overlap with s1
 
     Paramters
     ---------
@@ -483,7 +542,10 @@ def idx_overlap(s1, s2):
     np.ndarray
         The indexes of the trimmed second sequence
     """
-    return np.where((s2 > s1[0]) & (s2 < s1[-1]))[0]
+    if inclusive:
+        return np.where((s2 >= s1[0]) & (s2 <= s1[-1]))[0]
+    else:
+        return np.where((s2 > s1[0]) & (s2 < s1[-1]))[0]
 
 
 def interp_flux(flux, params, values):
@@ -589,24 +651,34 @@ def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, p
         return val, low
 
 
-def scrub(data):
+def scrub(raw_data, fill_value=None):
     """
-    For input data [w, f, e] or [w, f] returns the list with NaN, negative, and zero flux (and corresponsing wavelengths and errors) removed.
+    For input data [w, f, e] or [w, f] returns the list with negative, and
+    zero flux and corresponsing wavelengths and errors removed (default), or
+    converted to fill_value
     """
+    # Make a copy
+    data = copy.copy(raw_data)
+
     # Unit check
     units = [i.unit if hasattr(i, 'unit') else 1 for i in data]
 
     # Ensure floats
     data = [np.asarray(i.value if hasattr(i, 'unit') else i, dtype=np.float32) for i in data if isinstance(i, np.ndarray)]
 
-    # Remove infinities
-    data = [i[np.where(~np.isinf(data[1]))] for i in data]
+    # Change infinities to nan
+    data[1][np.where(np.isinf(data[1]))] = np.nan
 
-    # Remove zeros and negatives
-    data = [i[np.where(data[1] > 0)] for i in data]
+    # Change zeros and negatives to nan
+    data[1][np.where(data[1] <= 0)] = np.nan
 
-    # Remove nans
-    data = [i[np.where(~np.isnan(data[1]))] for i in data]
+    # Remove nans or replace with fill_value
+    if fill_value is None:
+        data = [i[np.where(~np.isnan(data[1]))] for i in data]
+    else:
+        if not isinstance(fill_value, (int, float)):
+            raise ValueError("Please use float or int for fill_value")
+        data[1][np.where(np.isnan(data[1]))] = fill_value
 
     # Remove duplicate wavelengths
     data = [i[np.unique(data[0], return_index=True)[1]] for i in data]
@@ -959,3 +1031,241 @@ def trim_spectrum(spectrum, regions=None, wave_min=0*q.um, wave_max=40*q.um, smo
     trimmed_spec = [i[idx_exclude(trimmed_spec[0], [(wave_min, wave_max)])] for i in spectrum]
 
     return trimmed_spec
+
+def spectrum_from_fits(File, ext=0, verbose=False):
+    """
+    Converts a SPECTRUM data type stored in the database into a (W,F,E) sequence of arrays.
+
+    Parameters
+    ----------
+    File: str
+        The URL or filepath of the file to be converted into arrays.
+    verbose: bool
+        Whether or not to display some diagnostic information (Default: False)
+
+    Returns
+    -------
+    sequence
+        The converted spectrum.
+
+    """
+    spectrum, header = '', ''
+    if isinstance(File, type(b'')):  # Decode if needed (ie, for Python 3)
+        File = File.decode('utf-8')
+
+    if isinstance(File, (str, type(u''))):
+
+        # Convert variable path to absolute path
+        if File.startswith('$'):
+            abspath = os.popen('echo {}'.format(File.split('/')[0])).read()[:-1]
+            if abspath:
+                File = File.replace(File.split('/')[0], abspath)
+
+        if File.startswith('http'):
+            if verbose:
+                print('Downloading {}'.format(File))
+            downloaded_file = download_file(File, cache=True)  # download only once
+        else:
+            downloaded_file = File
+
+        try:  # Try FITS files first
+
+            # Get the data
+            spectrum, header = fits.getdata(downloaded_file, cache=True, header=True, ext=ext)
+
+            # Check the key type
+            KEY_TYPE = ['CTYPE1']
+            setType = set(KEY_TYPE).intersection(set(header.keys()))
+            if len(setType) == 0:
+                isLinear = True
+            else:
+                valType = header[setType.pop()]
+                isLinear = valType.strip().upper() == 'LINEAR'
+
+            # Get wl, flux & error data from fits file
+            spectrum = __get_spec(spectrum, header, File)
+
+            # Generate wl axis when needed
+            if not isinstance(spectrum[0], np.ndarray):
+                tempwav = __create_waxis(header, len(spectrum[1]), File)
+
+                # Check to see if it's a FIRE spectrum with CDELT1, if so needs wlog=True
+                if 'INSTRUME' in header.keys():
+                    if header['INSTRUME'].strip() == 'FIRE' and 'CDELT1' in header.keys():
+                        tempwav = __create_waxis(header, len(spectrum[1]), File, wlog=True)
+
+                spectrum[0] = tempwav
+
+            # If no wl axis generated, then clear out all retrieved data for object
+            if not isinstance(spectrum[0], np.ndarray):
+                spectrum = None
+
+            if verbose: print('Read as FITS...')
+
+        except (IOError, KeyError):
+
+            # Check if the FITS file is just Numpy arrays
+            try:
+                spectrum, header = fits.getdata(downloaded_file, cache=True, header=True, ext=ext)
+                if verbose: print('Read as FITS Numpy array...')
+
+            except (IOError, KeyError):
+
+                try:  # Try ascii
+                    spectrum = ii.read(downloaded_file)
+                    spectrum = np.array([np.asarray(spectrum.columns[n]) for n in range(len(spectrum.columns))])
+                    if verbose: print('Read as ascii...')
+
+                    txt, header = open(downloaded_file), []
+                    for i in txt:
+                        if any([i.startswith(char) for char in ['#', '|', '\\']]):
+                            header.append(i.replace('\n', ''))
+                    txt.close()
+
+                except:
+                    pass
+
+    if spectrum == '':
+        print('Could not retrieve spectrum at {}.'.format(File))
+        return File
+    else:
+        # spectrum = Spectrum(spectrum, header, File)
+        return spectrum
+
+
+def __create_waxis(fitsHeader, lenData, fileName, wlog=False, verb=True):
+    # Define key names in
+    KEY_MIN = ['COEFF0', 'CRVAL1']  # Min wl
+    KEY_DELT = ['COEFF1', 'CDELT1', 'CD1_1']  # Delta of wl
+    KEY_OFF = ['LTV1']  # Offset in wl to subsection start
+
+    # Find key names for minimum wl, delta, and wl offset in fits header
+    setMin = set(KEY_MIN).intersection(set(fitsHeader.keys()))
+    setDelt = set(KEY_DELT).intersection(set(fitsHeader.keys()))
+    setOff = set(KEY_OFF).intersection(set(fitsHeader.keys()))
+
+    # Get the values for minimum wl, delta, and wl offset, and generate axis
+    if len(setMin) >= 1 and len(setDelt) >= 1:
+        nameMin = setMin.pop()
+        valMin = fitsHeader[nameMin]
+
+        nameDelt = setDelt.pop()
+        valDelt = fitsHeader[nameDelt]
+
+        if len(setOff) == 0:
+            valOff = 0
+        else:
+            nameOff = setOff.pop()
+            valOff = fitsHeader[nameOff]
+
+        # generate wl axis
+        if nameMin == 'COEFF0' or wlog == True:
+            # SDSS fits files
+            wAxis = 10 ** (np.arange(lenData) * valDelt + valMin)
+        else:
+            wAxis = (np.arange(lenData) * valDelt) + valMin - (valOff * valDelt)
+
+    else:
+        wAxis = None
+        if verb:
+            print('Could not re-create wavelength axis for ' + fileName + '.')
+
+    return wAxis
+
+def __get_spec(fitsData, fitsHeader, fileName, verb=True):
+    validData = [None] * 3
+
+    # Identify number of data sets in fits file
+    dimNum = len(fitsData)
+
+    # Identify data sets in fits file
+    fluxIdx = None
+    waveIdx = None
+    sigmaIdx = None
+
+    if dimNum == 1:
+        fluxIdx = 0
+    elif dimNum == 2:
+        if len(fitsData[0]) == 1:
+            sampleData = fitsData[0][0][20]
+        else:
+            sampleData = fitsData[0][20]
+        if sampleData < 0.0001:
+            # 0-flux, 1-unknown
+            fluxIdx = 0
+        else:
+            waveIdx = 0
+            fluxIdx = 1
+    elif dimNum == 3:
+        waveIdx = 0
+        fluxIdx = 1
+        sigmaIdx = 2
+    elif dimNum == 4:
+        # 0-flux clean, 1-flux raw, 2-background, 3-sigma clean
+        fluxIdx = 0
+        sigmaIdx = 3
+    elif dimNum == 5:
+        # 0-flux, 1-continuum substracted flux, 2-sigma, 3-mask array, 4-unknown
+        fluxIdx = 0
+        sigmaIdx = 2
+    elif dimNum > 10:
+        # Implies that only one data set in fits file: flux
+        fluxIdx = -1
+        if np.isscalar(fitsData[0]):
+            fluxIdx = -1
+        elif len(fitsData[0]) == 2:
+            # Data comes in a xxxx by 2 matrix (ascii origin)
+            tmpWave = []
+            tmpFlux = []
+            for pair in fitsData:
+                tmpWave.append(pair[0])
+                tmpFlux.append(pair[1])
+            fitsData = [tmpWave, tmpFlux]
+            fitsData = np.array(fitsData)
+
+            waveIdx = 0
+            fluxIdx = 1
+        else:
+            # Indicates that data is structured in an unrecognized way
+            fluxIdx = None
+    else:
+        fluxIdx = None
+
+    # Fetch wave data set from fits file
+    if fluxIdx is None:
+        # No interpretation known for fits file data sets
+        validData = None
+        if verb:
+            print('Unable to interpret data in ' + fileName + '.')
+        return validData
+    else:
+        if waveIdx is not None:
+            if len(fitsData[waveIdx]) == 1:
+                # Data set may be a 1-item list
+                validData[0] = fitsData[waveIdx][0]
+            else:
+                validData[0] = fitsData[waveIdx]
+
+    # Fetch flux data set from fits file
+    if fluxIdx == -1:
+        validData[1] = fitsData
+    else:
+        if len(fitsData[fluxIdx]) == 1:
+            validData[1] = fitsData[fluxIdx][0]
+        else:
+            validData[1] = fitsData[fluxIdx]
+
+    # Fetch sigma data set from fits file, if requested
+    if sigmaIdx is None:
+        validData[2] = np.array([np.nan] * len(validData[1]))
+    else:
+        if len(fitsData[sigmaIdx]) == 1:
+            validData[2] = fitsData[sigmaIdx][0]
+        else:
+            validData[2] = fitsData[sigmaIdx]
+
+    # If all sigma values have the same value, replace them with nans
+    if validData[2][10] == validData[2][11] == validData[2][12]:
+        validData[2] = np.array([np.nan] * len(validData[1]))
+
+    return validData

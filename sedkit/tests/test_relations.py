@@ -32,10 +32,11 @@ class TestRelations(unittest.TestCase):
         new_rel = copy.copy(self.radius)
 
         # Generate new relation with polynomial order 6
-        new_rel.generate(6)
+        new_rel.generate((2, 2))
 
         # Check that the order has changed
-        self.assertNotEqual(self.radius.order, new_rel.order)
+        self.assertNotEqual(self.radius.MLTY['order'], new_rel.MLTY['order'])
+        self.assertNotEqual(self.radius.AFGK['order'], new_rel.AFGK['order'])
 
         # Check that the polynomial has changed
         old = self.radius.get_radius(62)

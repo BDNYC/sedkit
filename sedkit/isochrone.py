@@ -168,9 +168,11 @@ class Isochrone:
 
         # Plot the figure and evaluated point
         if plot:
+            val = nominal.value if hasattr(nominal, 'unit') else nominal
+            err = error.value if hasattr(error, 'unit') else error
             fig = self.plot(xparam, yparam)
-            fig.circle(xval[0], nominal.value, color='red')
-            fig.ellipse(x=xval[0], y=nominal.value, width=xval[1]*2, height=error.value,
+            fig.circle(xval[0], val, color='red')
+            fig.ellipse(x=xval[0], y=val, width=xval[1]*2, height=err,
                         color='red', alpha=0.1)
             show(fig)
 
@@ -226,7 +228,7 @@ class Isochrone:
 
         return result * unit
 
-    def plot(self, xparam, yparam, **kwargs):
+    def plot(self, xparam, yparam, draw=False, **kwargs):
         """Plot an evaluated isochrone, isochrone, or set of isochrones
 
         Parameters
@@ -263,7 +265,10 @@ class Isochrone:
         # Add the colorbar
         fig.add_layout(color_bar, 'right')
 
-        return fig
+        if draw:
+            show(fig)
+        else:
+            return fig
 
     @property
     def mass_units(self):

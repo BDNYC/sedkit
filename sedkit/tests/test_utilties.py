@@ -8,6 +8,18 @@ import astropy.units as q
 from .. import utilities as u
 
 
+def test_equivalent():
+    """Test for equivalent function"""
+    # Positive test
+    assert u.equivalent(np.arange(10)*q.um, q.cm)
+
+    # Negative units test
+    assert not u.equivalent(np.arange(10)*q.um, q.Jy)
+
+    # Negative dtype test
+    assert not u.equivalent(np.arange(10), q.um)
+
+
 class TestSpectres(unittest.TestCase):
     """Tests for the spectres function"""
     def setUp(self):

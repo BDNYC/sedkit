@@ -7,6 +7,7 @@ from astropy.modeling.blackbody import blackbody_lambda
 
 from .. import sed
 from .. import spectrum as sp
+from .. import modelgrid as mg
 
 WAVE1 = np.linspace(0.8, 2.5, 200)*q.um
 FLUX1 = blackbody_lambda(WAVE1, 3000*q.K)*q.sr
@@ -25,6 +26,35 @@ class TestSED(unittest.TestCase):
         self.spec2 = sp.Spectrum(*SPEC2)
 
         self.sed = sed.SED()
+
+    def test_add_photometry(self):
+        """Test that photometry is added properly"""
+        s = copy.copy(self.sed)
+
+        # Add the photometry
+        s.add_photometry('2MASS.J', -0.177, 0.206)
+        self.assertEqual(len(s.photometry), 1)
+
+        # Now remove it
+        s.drop_photometry(0)
+        self.assertEqual(len(s.photometry), 0)
+
+    def test_add_spectrum(self):
+        """Test that spectra are added properly"""
+        s = copy.copy(self.sed)
+
+        # Add a new spectra
+        s.add_spectrum(self.spec1)
+        s.add_spectrum(self.spec2)
+
+        # Make sure the units are being updated
+        self.assertEqual(len(s.spectra), 2)
+        self.assertEqual(s.spectra[0]['spectrum'].wave_units,
+                         s.spectra[1]['spectrum'].wave_units)
+
+        # Test removal
+        s.drop_spectrum(0)
+        self.assertEqual(len(s.spectra), 1)
 
     def test_no_spectra(self):
         """Test that a purely photometric SED can be creted"""
@@ -53,7 +83,6 @@ class TestSED(unittest.TestCase):
         s.parallax = 130.23*q.mas, 0.36*q.mas
         s.spectral_type = 'A0V'
         s.add_spectrum(self.spec1)
-        s.add_spectrum(self.spec1)
 
         s.results
 
@@ -61,35 +90,18 @@ class TestSED(unittest.TestCase):
 
     def test_fit_spectrum(self):
         """Test that the SED can be fit by a model grid"""
-        pass
+        # Grab the SPL
+        spl = mg.SpexPrismLibrary()
 
-    # def test_from_database(self):
-    #     """Test that an SED can be created from a database"""
-    #     # Create the SED
-    #     s = copy.copy(self.sed)
-    #
-    #     # Open the database
-    #     path = '/Users/jfilippazzo/Documents/Modules/BDNYCdevdb/bdnycdev.db'
-    #     db = astrodb.Database(path)
-    #
-    #     # Make a dict of the target records
-    #     from_dict = {'spectra': [379,1580,2726], 'photometry': '*',
-    #                  'parallaxes': 247, 'spectral_types': 277, 'sources': 86}
-    #
-    #     # Pull the data in and caluclate
-    #     s.source_id = 86
-    #     s.from_database(db, **from_dict)
-    #     s.results
-    #
-    #     self.assertIsNotNone(s.Teff)
-
-    def test_SED_add_spectrum(self):
-        """Test that spectra are added properly"""
+        # Add known spectrum
         s = copy.copy(self.sed)
+        label = 'Opt:L4'
+        model = spl.get_spectrum(label=label)
+        spec = sp.Spectrum(model[0]*spl.wave_units, model[1]*spl.flux_units)
+        s.add_spectrum(spec)
 
-        # Add a new spectra
-        s.add_spectrum(self.spec1)
-        s.add_spectrum(self.spec2)
+        # Fit with SPL
+        s.fit_spectral_type()
 
-        # Make sure the units are being updated
-        self.assertEqual(s.spectra[0].wave_units, s.spectra[1].wave_units)
+        self.assertEqual(s.SpT_fit, label)
+

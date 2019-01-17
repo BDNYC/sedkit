@@ -20,12 +20,11 @@ from functools import partial
 from multiprocessing import Pool
 import numpy as np
 from pandas import DataFrame
-import pysynphot as ps
 
 from . import utilities as u
 
 
-class Spectrum(ps.ArraySpectrum):
+class Spectrum:
     """A spectrum object to add uncertainty handling and spectrum stitching
     to ps.ArraySpectrum
     """
@@ -55,6 +54,7 @@ class Spectrum(ps.ArraySpectrum):
         """
         # Meta
         self.verbose = verbose
+        self.name = name or 'New Spectrum'
 
         # Make sure the arrays are the same shape
         if not wave.shape == flux.shape and ((unc is None) or not (unc.shape == flux.shape)):
@@ -62,17 +62,11 @@ class Spectrum(ps.ArraySpectrum):
 
         # Check wave units and convert to Angstroms if necessary to work
         # with pysynphot
-        try:
-            # Store original units
-            wave_units = wave.unit
-            wave = wave.to(q.AA)
-        except:
+        if not u.equivalent(wave, q.um):
             raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
 
         # Check flux units
-        try:
-            _ = flux.to(q.erg/q.s/q.cm**2/q.AA)
-        except:
+        if not u.equivalent(flux, q.erg/q.s/q.cm**2/q.AA):
             raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 
         # Generate uncertainty array
@@ -81,18 +75,16 @@ class Spectrum(ps.ArraySpectrum):
 
         # Make sure the uncertainty array is in the correct units
         if unc is not None:
-            try:
-                _ = unc.to(q.erg/q.s/q.cm**2/q.AA)
-            except:
+            if not u.equivalent(unc, q.erg/q.s/q.cm**2/q.AA):
                 raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 
-        # Remove nans, negatives, zeros, and infs
+        # Replace negatives, zeros, and infs with nans
         spectrum = [wave, flux]
         spectrum += [unc] if unc is not None else []
-        spectrum = u.scrub(spectrum)
+        spectrum = u.scrub(spectrum, fill_value=np.nan)
 
         # Strip and store units
-        self._wave_units = q.AA
+        self._wave_units = wave.unit
         self._flux_units = flux.unit
         self.units = [self._wave_units, self._flux_units]
         self.units += [self._flux_units] if unc is not None else []
@@ -108,22 +100,18 @@ class Spectrum(ps.ArraySpectrum):
             if any(idx):
                 spectrum = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in spectrum]
 
-        # Inherit from ArraySpectrum
-        super().__init__(*spectrum[:2])
-
         # Set the name
         if name is not None:
             self.name = name
 
-        # Add the uncertainty
-        self._unctable = None if unc is None else spectrum[2]
+        # Add the data
+        self.wave = spectrum[0]
+        self.flux = spectrum[1]
+        self.unc = None if unc is None else spectrum[2]
 
         # Store components if added
         self.components = None
         self.best_fit = []
-
-        # Convert back to input units
-        self.wave_units = wave_units
 
         # Trim manually
         if trim is not None:
@@ -496,20 +484,14 @@ class Spectrum(ps.ArraySpectrum):
         flux_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
-        # Make sure it's a quantity
-        if not isinstance(flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
-            raise TypeError('flux_units must be astropy.units.quantity.Quantity')
-
-        # Make sure the values are in flux density units
-        try:
-            _ = flux_units.to(q.erg/q.s/q.cm**2/q.AA)
-        except:
+        # Check the units
+        if not u.equivalent(flux_units, q.erg/q.s/q.cm**2/q.AA):
             raise TypeError("flux_units must be in flux density units, e.g. 'erg/s/cm2/A'")
 
         # Update the flux and unc arrays
-        self._fluxtable = self.flux*self.flux_units.to(flux_units)
+        self.flux = self.flux*self.flux_units.to(flux_units)
         if self.unc is not None:
-            self._unctable = self.unc*self.flux_units.to(flux_units)
+            self.unc = self.unc*self.flux_units.to(flux_units)
 
         # Set the flux_units
         self._flux_units = flux_units
@@ -520,8 +502,8 @@ class Spectrum(ps.ArraySpectrum):
         self.units = [self._wave_units, self._flux_units]
         self.units += [self._flux_units] if self.unc is not None else []
 
-    def integral(self, units=q.erg/q.s/q.cm**2):
-        """Include uncertainties in integrate() method
+    def integrate(self, units=q.erg/q.s/q.cm**2):
+        """Calculate the area under the spectrum
 
         Parameters
         ----------
@@ -534,9 +516,7 @@ class Spectrum(ps.ArraySpectrum):
             The integrated flux and uncertainty
         """
         # Make sure the target units are flux units
-        try:
-            _ = units.to(q.erg/q.s/q.cm**2)
-        except:
+        if not u.equivalent(units, q.erg/q.s/q.cm**2):
             raise TypeError("units must be in flux units, e.g. 'erg/s/cm2'")
 
         # Calculate the factor for the given units
@@ -549,6 +529,37 @@ class Spectrum(ps.ArraySpectrum):
             unc = np.sqrt(np.sum((self.unc*np.gradient(self.wave)*m)**2)).to(units)
 
         return val, unc
+
+    def interpolate(self, wave):
+        """Interpolate the spectrum to another wavelength array
+
+        Parameters
+        ----------
+        wave: astropy.units.quantity.Quantity, sedkit.spectrum.Spectrum
+            The wavelength array to interpolate to
+
+        Returns
+        -------
+        sedkit.spectrum.Spectrum
+            The interpolated spectrum object
+        """
+        # Pull out wave if its a Spectrum object
+        if isinstance(type(wave), type(Spectrum)):
+            wave = wave.spectrum[0]
+
+        # Test units
+        if not u.equivalent(wave, q.um):
+            raise ValueError("New wavelength array must be in units of length.")
+
+        # Get the data and make into same wavelength units
+        w0 = self.wave*self.wave_units.to(wave.unit)
+        f0, e0 = self.spectrum[1:]
+
+        # Interpolate self to new wavelengths
+        f1 = np.interp(wave, w0, f0, left=np.nan, right=np.nan)*self.flux_units
+        e1 = np.interp(wave, w0, e0, left=np.nan, right=np.nan)*self.flux_units
+
+        return Spectrum(wave, f1, e1, name=self.name)
 
     def norm_to_mags(self, photometry, force=False, exclude=[], include=[]):
         """
@@ -565,7 +576,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Returns
         -------
-        pysynphot.spectrum.ArraySpectralElement
+        sedkit.spectrum.Spectrum
             The normalized spectrum object
         """
         # Default norm
@@ -633,12 +644,12 @@ class Spectrum(ps.ArraySpectrum):
 
         return Spectrum(*spectrum, name=self.name)
 
-    def norm_to_spec(self, spectrum, exclude=[], include=[]):
+    def norm_to_spec(self, spec, exclude=[], include=[], plot=False):
         """Normalize the spectrum to another spectrum
 
         Parameters
         ----------
-        spectrum: sedkit.spectrum.Spectrum
+        spec: sedkit.spectrum.Spectrum
             The spectrum to normalize to
         exclude: sequence (optional)
             A list of wavelength ranges to exclude from the normalization
@@ -650,28 +661,17 @@ class Spectrum(ps.ArraySpectrum):
         sedkit.spectrum.Spectrum
           The normalized spectrum
         """
-        spec = self.spectrum
+        # Resample self onto spec wavelengths
+        w0 = self.wave*self.wave_units.to(spec.wave_units)
+        slf = self.resamp(spec.spectrum[0])
 
-        # Make into the same units
-        spectrum.wave_units = self.wave_units
-        spectrum.flux_units = self.flux_units
-        temp = spectrum.spectrum
+        # Trim both to just overlapping wavelengths
+        idx = u.idx_overlap(w0, spec.wave, inclusive=True)
+        spec0 = slf.data[:, idx]
+        spec1 = spec.data[:, idx]
 
-        # Find wavelength range of overlap for array masking
-        spec_mask = np.logical_and(spec[0] > temp[0][0], spec[0] < temp[0][-1])
-        temp_mask = np.logical_and(temp[0] > spec[0][0], temp[0] < spec[0][-1])
-        spectrum = [i[spec_mask] for i in spec]
-        temp = [i[temp_mask] for i in temp]
-
-        # Also mask arrays in wavelength ranges specified in *exclude*
-        for r in exclude:
-            spec_mask = np.logical_and(spec[0] > r[0], spec[0] < r[-1])
-            temp_mask = np.logical_and(temp[0] > r[0], temp[0] < r[-1])
-            spec = [i[~spec_mask] for i in spec]
-            temp = [i[~temp_mask] for i in temp]
-
-        # Normalize the spectrum to the temp based on equal integrated flux inincluded wavelength ranges
-        norm = np.trapz(temp[1], x=temp[0]) / np.trapz(spec[1], x=spec[0])
+        # Find the normalization factor
+        norm = u.minimize_norm(spec1, spec0)
 
         # Make new spectrum
         spectrum = self.spectrum
@@ -679,7 +679,20 @@ class Spectrum(ps.ArraySpectrum):
         if self.unc is not None:
             spectrum[2] *= norm
 
-        return Spectrum(*spectrum, name=self.name)
+        # Make the new spectrum
+        new_spec =  Spectrum(*spectrum, name=self.name)
+
+        if plot:
+            # Rename and plot each
+            new_spec.name = 'Normalized'
+            self.name = 'Input'
+            spec.name = 'Target'
+            fig = new_spec.plot()
+            fig = self.plot(fig=fig)
+            fig = spec.plot(fig=fig)
+            show(fig)
+
+        return new_spec
 
     def plot(self, fig=None, components=False, best_fit=True, scale='log', draw=False, **kwargs):
         """Plot the spectrum
@@ -756,18 +769,13 @@ class Spectrum(ps.ArraySpectrum):
         float, sedkit.spectrum.Spectrum
             The normalization constant or normalized spectrum object
         """
-        # # Caluclate the remornalized flux
-        # spec = self.renorm(mag, system, bandpass, force)
-        #
-        # # Caluclate the normalization factor
-        # norm = np.mean(self.flux)/np.mean(spec.flux)
-
         # My solution
+        print(u.mag2flux(bandpass, mag)[0], self.synthetic_flux(bandpass, force=force)[0])
         norm = u.mag2flux(bandpass, mag)[0]/self.synthetic_flux(bandpass, force=force)[0]
 
         # Just return the normalization factor
         if no_spec:
-            return norm
+            return float(norm.value)
 
         # Scale the spectrum
         spectrum = self.spectrum
@@ -795,20 +803,23 @@ class Spectrum(ps.ArraySpectrum):
         sedkit.spectrum.Spectrum
             The resampled spectrum
         """
-        mn = np.nanmin(self.wave)
-        mx = np.nanmax(self.wave)
-
+        # Generate wavelength if resolution is set
         if resolution is not None:
 
             # Make the wavelength array
+            mn = np.nanmin(self.wave)
+            mx = np.nanmax(self.wave)
             d_lam = (mx-mn)/resolution
-            wave = np.arange(mn, mx, d_lam)
+            wave = np.arange(mn, mx, d_lam)*self.wave_units
 
-        elif wave is not None:
-            wave = wave.to(self.wave_units).value
+        if not u.equivalent(wave, q.um):
+            raise TypeError("wave must be in length units")
 
-        else:
-            return
+        # Convert wave to target units
+        self.wave_units = wave.unit
+        mn = np.nanmin(self.wave)
+        mx = np.nanmax(self.wave)
+        wave = wave.value
 
         # Trim the wavelength
         dmn = (self.wave[1]-self.wave[0])/2.
@@ -863,7 +874,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Parameters
         ----------
-        bandpass: pysynphot.spectrum.ArraySpectralElement
+        bandpass: svo_filters.svo.Filter
             The bandpass to use
         force: bool
             Force the magnitude calculation even if
@@ -921,7 +932,7 @@ class Spectrum(ps.ArraySpectrum):
 
         Parameters
         ----------
-        bandpass: pysynphot.spectrum.ArraySpectralElement
+        bandpass: svo_filters.svo.Filter
             The bandpass to use
         force: bool
             Force the magnitude calculation even if
@@ -957,7 +968,7 @@ class Spectrum(ps.ArraySpectrum):
                         spectrum = [i[idx] for i in self.spectrum]
 
                         # Update the object
-                        spec = Spectrum(*spectrum)
+                        spec = Spectrum(*spectrum, name=self.name)
                         self.__dict__ = spec.__dict__
                         del spec
 
@@ -968,11 +979,6 @@ class Spectrum(ps.ArraySpectrum):
         else:
             raise TypeError("""Please provide a list of (lower,upper) bounds\
                              with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
-
-    @property
-    def unc(self):
-        """A property for uncertainty"""
-        return self._unctable
 
     @property
     def wave_units(self):
@@ -988,19 +994,12 @@ class Spectrum(ps.ArraySpectrum):
         wave_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
-        # Make sure it's a quantity
-        good_units = q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit
-        if not isinstance(wave_units, good_units):
-            raise TypeError('wave_units must be in astropy units')
-
         # Make sure the values are in length units
-        try:
-            wave_units.to(q.um)
-        except:
+        if not u.equivalent(wave_units, q.um):
             raise TypeError("wave_units must be a unit of length, e.g. 'um'")
 
         # Update the wavelength array
-        self.convert(str(wave_units))
+        self.wave = self.wave*self.wave_units.to(wave_units)
 
         # Update min and max
         self.min = min(self.spectrum[0]).to(wave_units)
@@ -1122,13 +1121,13 @@ class Blackbody(Spectrum):
 
 class FileSpectrum(Spectrum):
     def __init__(self, file, wave_units=None, flux_units=None, ext=0,
-                 survey=None, **kwargs):
+                 survey=None, name=None, **kwargs):
         """Create a spectrum from an ASCII or FITS file
 
         Parameters
         ----------
         file: str
-            The path to the ascii file
+            The path to the ascii or FITS file
         wave_units: astropy.units.quantity.Quantity
             The wavelength units
         flux_units: astropy.units.quantity.Quantity
@@ -1141,9 +1140,10 @@ class FileSpectrum(Spectrum):
         # Read the fits data...
         if file.endswith('.fits'):
 
-            raw = fits.getdata(file, ext=ext)
+            if file.endswith('.fits'):
+                data = u.spectrum_from_fits(file, ext=ext)
 
-            if survey == 'SDSS':
+            elif survey == 'SDSS':
                 head = fits.getheader(file)
                 flux_units = 1E-17*q.erg/q.s/q.cm**2/q.AA
                 wave_units = q.AA
@@ -1159,7 +1159,7 @@ class FileSpectrum(Spectrum):
 
             # Otherwise just an array
             else:
-                data = raw
+                print("Sorry, I cannot read the file at", file)
 
         # ...or the ascii data...
         elif file.endswith('.txt'):
@@ -1181,7 +1181,10 @@ class FileSpectrum(Spectrum):
         else:
             unc = None
 
-        super().__init__(wave, flux, unc, **kwargs)
+        if name is None:
+            name = file
+
+        super().__init__(wave, flux, unc, name=name, **kwargs)
 
 
 class Vega(Spectrum):

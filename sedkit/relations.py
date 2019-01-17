@@ -18,7 +18,7 @@ V = Vizier(columns=["**"])
 
 
 class SpectralTypeRadius:
-    def __init__(self, order=8, name='Spectral Type vs. Radius'):
+    def __init__(self, orders=(5, 3), name='Spectral Type vs. Radius'):
         """Initialize the object
 
         Parameters
@@ -27,7 +27,7 @@ class SpectralTypeRadius:
             The order polynomial to fit to the spt-radius data
         """
         self.name = name
-        self.generate(order)
+        self.generate(orders)
 
     def get_radius(self, spt, plot=False):
         """Get the radius for the given spectral type
@@ -45,22 +45,30 @@ class SpectralTypeRadius:
         tuple
             The radius and uncertainty in solar radii
         """
-        # Test valid range
-        if not isinstance(spt, int) or not 0 <= spt <= 99:
-            raise ValueError("Please provide a spectral type within [0, 99]")
+        # Convert to integer
+        if isinstance(spt, (str, bytes)):
+            spt = u.specType(spt)[0]
+
+        # Test valid ranges
+        if not isinstance(spt, (int, float)) or not 30 <= spt <= 99:
+            raise ValueError("Please provide a spectral type within [30, 99]")
 
         # Evaluate the polynomials
-        radius = np.polyval(self.coeffs, spt)*q.Rsun
-        radius_unc = np.interp(spt, self.spt, self.sig_yi)*q.Rsun
+        if spt > 64:
+            data = self.MLTY
+        else:
+            data = self.AFGK
+        radius = np.polyval(data['coeffs'], spt)*q.Rsun
+        radius_unc = np.interp(spt, data['spt'], data['sig_yi'])*q.Rsun
 
         if plot:
             fig = self.plot()
-            fig.circle([spt], [radius.value], color='red', size=15)
+            fig.triangle([spt], [radius.value], color='red', size=15, legend=u.specType(spt))
             show(fig)
 
         return radius, radius_unc
 
-    def generate(self, order):
+    def generate(self, orders):
         """Generate a polynomial that describes the radius as a function of
         spectral type for empirically measured AFGKM main sequence stars
         (Boyajian+ 2012b, 2013) and MLTY model isochrone interpolated stars
@@ -68,18 +76,17 @@ class SpectralTypeRadius:
 
         Parameters
         ----------
-        order: int
-            The polynomial order to fit to the data
+        orders: sequence
+            The order polynomials to fit to the MLTY and AFGK data
         generate: bool
-            Generate the polynomial
+            Generate the polynomials
         """
         # ====================================================================
         # Boyajian AFGKM data
         # ====================================================================
 
         afgk = resource_filename('sedkit', 'data/AFGK_radii.txt')
-        self.AFGK = ii.read(afgk, format='csv', comment='#')
-        self.AFGK['name'] = 'AFGK'
+        afgk_data = ii.read(afgk, format='csv', comment='#')
 
         # ====================================================================
         # Filippazzo MLTY data
@@ -90,75 +97,93 @@ class SpectralTypeRadius:
         cat2 = V.query_constraints('J/ApJ/810/158/table9')[0]
 
         # Join the tables to getthe spectral types and radii in one table
-        MLTY = at.join(cat1, cat2, keys='ID', join_type='outer')
+        mlty_data = at.join(cat1, cat2, keys='ID', join_type='outer')
+
+        # Only keep field age
+        mlty_data = mlty_data[mlty_data['b_Age'] >= 0.5]
 
         # Rename columns
-        MLTY.rename_column('SpT', 'spectral_type')
-        MLTY.rename_column('Rad', 'radius')
-        MLTY.rename_column('e_Rad', 'radius_unc')
+        mlty_data.rename_column('SpT', 'spectral_type')
+        mlty_data.rename_column('Rad', 'radius')
+        mlty_data.rename_column('e_Rad', 'radius_unc')
 
         # Make solar radii units
-        MLTY['radius'] = MLTY['radius'].to(q.Rsun)
-        MLTY['radius_unc'] = MLTY['radius_unc'].to(q.Rsun)
-        MLTY['name'] = 'MLTY'
-        self.MLTY = MLTY
+        mlty_data['radius'] = mlty_data['radius'].to(q.Rsun)
+        mlty_data['radius_unc'] = mlty_data['radius_unc'].to(q.Rsun)
 
         # ====================================================================
-        # Combine and fit the data
+        # Fit and save the data
         # ====================================================================
 
-        # Join the two tables
-        data = at.vstack([self.AFGK, self.MLTY], join_type='inner')
+        for data, name, order, ref, rng in zip([afgk_data, mlty_data],
+                                               ['AFGK', 'MLTY'], orders,
+                                               ['Boyajian+ 2012b, 2013', 'Filippazzo+ 2015'],
+                                               [(30, 65), (65, 99)]):
 
-        # Translate string SPT to numbers
-        spts = []
-        keep = []
-        for n,i in enumerate(data['spectral_type']):
-            try:
-                spt = u.specType(i)
-                spts.append(spt)
-                keep.append(n)
-            except:
-                pass
+            # Container for data
+            container = {}
 
-        # Filter bad spectral types
-        data = data[keep]
+            # Translate string SPT to numbers
+            spts = []
+            keep = []
+            for n,i in enumerate(data['spectral_type']):
+                try:
+                    spt = u.specType(i)
+                    spts.append(spt)
+                    keep.append(n)
+                except:
+                    pass
 
-        # Add the number to the table
-        num, *_, lum = np.array(spts).T
-        data['spt'] = num.astype(float)
-        data['lum'] = lum
+            # Filter bad spectral types
+            data = data[keep]
 
-        # Filter out sub-giants
-        data = data[data['lum'] == 'V']
+            # Add the number to the table
+            num, *_, lum = np.array(spts).T
+            data['spt'] = num.astype(float)
+            data['lum'] = lum
 
-        # Filter out nans
-        data = data[data['radius'] < 4]
-        data = data[data['radius'] > 0]
-        data = data[data['radius_unc'] > 0]
-        self.data = data[data['spt'] > 0]
+            # Filter out sub-giants
+            data = data[(data['spt'] > rng[0]) & (data['spt'] < rng[1])]
+            data = data[data['lum'] == 'V']
+            data = data[((data['radius'] < 1.8) & (data['spt'] > 37)) | (data['spt'] <= 37)]
 
-        # Fit polynomial
-        self.coeffs, self.C_p = np.polyfit(data['spt'], data['radius'], order,
-                                           w=1./data['radius_unc'], cov=True)
+            # Filter out nans
+            data = data[data['radius'] < 4]
+            data = data[data['radius'] > 0]
+            data = data[data['radius_unc'] > 0]
+            container['data'] = data[data['spt'] > 0]
+            container['rng'] = rng
 
-        # Do the interpolation for plotting
-        self.spt = np.arange(np.nanmin(data['spt']), np.nanmax(data['spt'])+1)
+            # Fit polynomial
+            container['coeffs'], container['C_p'] = np.polyfit(data['spt'],
+                                                               data['radius'],
+                                                               order,
+                                                               w=1./data['radius_unc'],
+                                                               cov=True)
 
-        # Matrix with rows 1, spt, spt**2, ...
-        self.sptT = np.vstack([self.spt**(order-i) for i in range(order+1)]).T
+            # Do the interpolation for plotting
+            container['spt'] = np.arange(np.nanmin(data['spt'])-3, np.nanmax(data['spt'])+1)
 
-        # Matrix multiplication calculates the polynomial values
-        self.yi = np.dot(self.sptT, self.coeffs)
+            # Matrix with rows 1, spt, spt**2, ...
+            container['sptT'] = np.vstack([container['spt']**(order-i) for i in range(order+1)]).T
 
-        # C_y = TT*C_z*TT.T
-        self.C_yi = np.dot(self.sptT, np.dot(self.C_p, self.sptT.T))
+            # Matrix multiplication calculates the polynomial values
+            container['yi'] = np.dot(container['sptT'], container['coeffs'])
 
-        # Standard deviations are sqrt of diagonal
-        self.sig_yi = np.sqrt(np.diag(self.C_yi))
+            # C_y = TT*C_z*TT.T
+            container['C_yi'] = np.dot(container['sptT'], np.dot(container['C_p'], container['sptT'].T))
 
-        # Store the new order
-        self.order = order
+            # Standard deviations are sqrt of diagonal
+            container['sig_yi'] = np.sqrt(np.diag(container['C_yi']))
+
+            # Store the new order
+            container['order'] = order
+
+            # Set the reference
+            container['ref'] = ref
+
+            # Add the container as an attribute
+            setattr(self, name, container)
 
     def plot(self, draw=False):
         """Plot the relation
@@ -175,32 +200,32 @@ class SpectralTypeRadius:
         """
         AFGK_color = '#1f77b4'
         MLTY_color = '#2ca02c'
-        data_color = '#7f7f7f'
 
         # Configure plot
         TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
         xlab = 'Spectral Type'
-        ylab = r'$Radius [R_\odot]$'
+        ylab = 'Solar Radii'
         fig = figure(plot_width=800, plot_height=500, title=self.name,
                           x_axis_label=xlab, y_axis_label=ylab,
                           tools=TOOLS)
 
         # Plot the fit
-        fig.line(self.spt, self.yi, color=data_color,
-                 legend='Order {} Fit'.format(self.order))
-        x = np.append(self.spt, self.spt[::-1])
-        y = np.append(self.yi-self.sig_yi, (self.yi+self.sig_yi)[::-1])
-        fig.patch(x, y, fill_alpha=0.1, line_alpha=0, color=data_color)
+        for n, (data, color) in enumerate(zip([self.AFGK, self.MLTY], [AFGK_color, MLTY_color])):
 
-        # Add the AFGK data
-        AFGK = self.data[self.data['name'] == 'AFGK']
-        fig.circle(AFGK['spt'], AFGK['radius'], size=8, color=AFGK_color,
-                   legend='Boyajian+ 2012b, 2013')
+            # Add the data
+            if n == 0:
+                fig.circle(data['data']['spt'], data['data']['radius'], size=8,
+                           color=color, legend=data['ref'])
+            else:
+                fig.square(data['data']['spt'], data['data']['radius'], size=8,
+                           color=color, legend=data['ref'])
 
-        # Add the MLTY data
-        MLTY = self.data[self.data['name'] == 'MLTY']
-        fig.circle(MLTY['spt'], MLTY['radius'], size=8, color=MLTY_color,
-                   legend='Filippazzo+ 2015')
+            # Add the fit line and uncertainty
+            fig.line(data['spt'], data['yi'], color=color,
+                     legend='Order {} Fit'.format(data['order']))
+            x = np.append(data['spt'], data['spt'][::-1])
+            y = np.append(data['yi']-data['sig_yi'], (data['yi']+data['sig_yi'])[::-1])
+            fig.patch(x, y, fill_alpha=0.1, line_alpha=0, color=color)
 
         if draw:
             show(fig)
