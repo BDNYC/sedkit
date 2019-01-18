@@ -28,8 +28,7 @@ class Spectrum:
     """A spectrum object to add uncertainty handling and spectrum stitching
     to ps.ArraySpectrum
     """
-    def __init__(self, wave, flux, unc=None, snr=None, snr_trim=None,
-                 trim=None, name=None, verbose=False):
+    def __init__(self, wave, flux, unc=None, snr=None, trim=None, name=None, verbose=False):
         """Store the spectrum and units separately
 
         Parameters
@@ -90,16 +89,6 @@ class Spectrum:
         self.units += [self._flux_units] if unc is not None else []
         spectrum = [i.value for i in spectrum]
 
-        # Make negatives and zeros into nans
-        idx, = np.where(spectrum[1][spectrum[1] > 0])
-        spectrum = [i[idx] for i in spectrum]
-
-        # Trim spectrum edges by SNR value
-        if isinstance(snr_trim, (float, int)) and unc is not None:
-            idx, = np.where(spectrum[1]/spectrum[2] >= snr_trim)
-            if any(idx):
-                spectrum = [i[np.nanmin(idx):np.nanmax(idx)+1] for i in spectrum]
-
         # Set the name
         if name is not None:
             self.name = name
@@ -117,12 +106,12 @@ class Spectrum:
         if trim is not None:
             self.trim(trim)
 
-    def __add__(self, spec2):
+    def __add__(self, spec):
         """Add the spectra of this and another Spectrum object
 
         Parameters
         ----------
-        spec2: sedkit.spectrum.Spectrum
+        spec: sedkit.spectrum.Spectrum
             The spectrum object to add
 
         Returns
@@ -131,100 +120,95 @@ class Spectrum:
             A new spectrum object with the input spectra stitched together
         """
         # If None is added, just return a copy
-        if spec2 is None:
+        if spec is None:
             return Spectrum(*self.spectrum, name=self.name)
 
-        try:
+        if not isinstance(type(spec), type(Spectrum)):
+            raise TypeError('spec must be sedkit.spectrum.Spectrum')
 
-            # Make spec2 the same units
-            spec2.wave_units = self.wave_units
-            spec2.flux_units = self.flux_units
+        # Make spec the same units
+        spec.wave_units = self.wave_units
+        spec.flux_units = self.flux_units
 
-            # Get the two spectra to stitch
-            s1 = self.data
-            s2 = spec2.data
+        # Get the two spectra to stitch
+        s1 = self.data
+        s2 = spec.data
 
-            # Determine if overlapping
-            overlap = True
-            if s1[0][-1] > s1[0][0] > s2[0][-1] or s2[0][-1] > s2[0][0] > s1[0][-1]:
-                overlap = False
+        # Determine if overlapping
+        overlap = True
+        if s1[0][-1] > s1[0][0] > s2[0][-1] or s2[0][-1] > s2[0][0] > s1[0][-1]:
+            overlap = False
 
-            # Concatenate and order two segments if no overlap
-            if not overlap:
+        # Concatenate and order two segments if no overlap
+        if not overlap:
 
-                # Drop uncertainties on both spectra if one is missing
-                if self.unc is None or spec2.unc is None:
-                    s1 = [self.wave, self.flux]
-                    s2 = [spec2.wave, spec2.flux]
+            # Drop uncertainties on both spectra if one is missing
+            if self.unc is None or spec.unc is None:
+                s1 = [self.wave, self.flux]
+                s2 = [spec.wave, spec.flux]
 
-                # Concatenate arrays and sort by wavelength
-                spec = np.concatenate([s1, s2], axis=1).T
-                spec = spec[np.argsort(spec[:, 0])].T
+            # Concatenate arrays and sort by wavelength
+            new_spec = np.concatenate([s1, s2], axis=1).T
+            new_spec = new_spec[np.argsort(new_spec[:, 0])].T
 
-            # Otherwise there are three segments, (left, overlap, right)
+        # Otherwise there are three segments, (left, overlap, right)
+        else:
+
+            # Get the left segemnt
+            left = s1[:, s1[0] <= s2[0][0]]
+            if not np.any(left):
+                left = s2[:, s2[0] <= s1[0][0]]
+
+            # Get the right segment
+            right = s1[:, s1[0] >= s2[0][-1]]
+            if not np.any(right):
+                right = s2[:, s2[0] >= s1[0][-1]]
+
+            # Get the overlapping segements
+            o1 = s1[:, np.where((s1[0] < right[0][0]) & (s1[0] > left[0][-1]))].squeeze()
+            o2 = s2[:, np.where((s2[0] < right[0][0]) & (s2[0] > left[0][-1]))].squeeze()
+
+            # Get the resolutions
+            r1 = s1.shape[1]/(max(s1[0])-min(s1[0]))
+            r2 = s2.shape[1]/(max(s2[0])-min(s2[0]))
+
+            # Make higher resolution s1
+            if r1 < r2:
+                o1, o2 = o2, o1
+
+            # Interpolate s2 to s1
+            o2_flux = np.interp(o1[0], s2[0], s2[1])
+
+            # Get the average
+            o_flux = np.nanmean([o1[1], o2_flux], axis=0)
+
+            # Calculate uncertainties if possible
+            if len(s2) == 3:
+                o2_unc = np.interp(o1[0], s2[0], s2[2])
+                o_unc = np.sqrt(o1[2]**2 + o2_unc**2)
+                overlap = np.array([o1[0], o_flux, o_unc])
             else:
+                overlap = np.array([o1[0], o_flux])
 
-                # Get the left segemnt
-                left = s1[:, s1[0] <= s2[0][0]]
-                if not np.any(left):
-                    left = s2[:, s2[0] <= s1[0][0]]
+            # Make sure it is 2D
+            if overlap.shape == (3,):
+                overlap.shape = 3, 1
+            if overlap.shape == (2,):
+                overlap.shape = 2, 1
 
-                # Get the right segment
-                right = s1[:, s1[0] >= s2[0][-1]]
-                if not np.any(right):
-                    right = s2[:, s2[0] >= s1[0][-1]]
+            # Concatenate the segments
+            new_spec = np.concatenate([left, overlap, right], axis=1)
 
-                # Get the overlapping segements
-                o1 = s1[:, np.where((s1[0] < right[0][0]) &
-                                    (s1[0] > left[0][-1]))].squeeze()
-                o2 = s2[:, np.where((s2[0] < right[0][0]) &
-                                    (s2[0] > left[0][-1]))].squeeze()
+        # Add units
+        new_spec = [i*Q for i,Q in zip(new_spec, self.units)]
 
-                # Get the resolutions
-                r1 = s1.shape[1]/(max(s1[0])-min(s1[0]))
-                r2 = s2.shape[1]/(max(s2[0])-min(s2[0]))
+        # Make the new spectrum object
+        new_spec = Spectrum(*new_spec)
 
-                # Make higher resolution s1
-                if r1 < r2:
-                    o1, o2 = o2, o1
+        # Store the components
+        new_spec.components = Spectrum(*self.spectrum), spec
 
-                # Interpolate s2 to s1
-                o2_flux = np.interp(o1[0], s2[0], s2[1])
-
-                # Get the average
-                o_flux = np.nanmean([o1[1], o2_flux], axis=0)
-
-                # Calculate uncertainties if possible
-                if len(s2) == 3:
-                    o2_unc = np.interp(o1[0], s2[0], s2[2])
-                    o_unc = np.sqrt(o1[2]**2 + o2_unc**2)
-                    overlap = np.array([o1[0], o_flux, o_unc])
-                else:
-                    overlap = np.array([o1[0], o_flux])
-
-                # Make sure it is 2D
-                if overlap.shape == (3,):
-                    overlap.shape = 3, 1
-                if overlap.shape == (2,):
-                    overlap.shape = 2, 1
-
-                # Concatenate the segments
-                spec = np.concatenate([left, overlap, right], axis=1)
-
-            # Add units
-            spec = [i*Q for i,Q in zip(spec, self.units)]
-
-            # Make the new spectrum object
-            new_spec = Spectrum(*spec)
-
-            # Store the components
-            new_spec.components = Spectrum(*self.spectrum), spec2
-
-            return new_spec
-
-        except IOError:
-            raise TypeError('Only another sedkit.spectrum.Spectrum object can\
-                             be added. Input is type {}'.format(type(spec2)))
+        return new_spec
 
     def best_fit_model(self, modelgrid, report=None):
         """Perform simple fitting of the spectrum to all models in the given
@@ -366,81 +350,6 @@ class Spectrum:
 
         return gstat, ynorm, xnorm
 
-    # def lmfit_modelgrid(self, modelgrid, method='leastsq', verbose=True):
-    #     """Find the best fit model from the given model grid using lmfit
-    #
-    #     Parameters
-    #     ----------
-    #     spectrum: sedkit.spectrum.Spectrum
-    #         The spectrum object
-    #     modelgrid: str
-    #         The model grid to fit
-    #
-    #     Returns
-    #     -------
-    #     lmfit.Model.fit.fit_report
-    #         The results of the fit
-    #     """
-    #     # Initialize lmfit Params object
-    #     initialParams = lmfit.Parameters()
-    #
-    #     # Concatenate the lists of parameters
-    #     all_params = modelgrid.parameters
-    #
-    #     # # Group the different variable types
-    #     # param_list = []
-    #     # indep_vars = {}
-    #     # for param in all_params:
-    #     #     param = list(param)
-    #     #     if param[2] == 'free':
-    #     #         param[2] = True
-    #     #         param_list.append(tuple(param))
-    #     #     elif param[2] == 'fixed':
-    #     #         param[2] = False
-    #     #         param_list.append(tuple(param))
-    #     #     else:
-    #     #         indep_vars[param[0]] = param[1]
-    #     #
-    #     # # Add the time as an independent variable
-    #     # indep_vars['time'] = time
-    #     #
-    #     # # Get values from input parameters.Parameters instances
-    #     # initialParams.add_many(*param_list)
-    #
-    #     # Create the lightcurve model
-    #     model = lmfit.Model(modelgrid.get_spectrum)
-    #     model.independent_vars = indep_vars.keys()
-    #
-    #     # # Set the unc
-    #     # if unc is None:
-    #     #     unc = np.ones(len(data))
-    #
-    #     # Fit light curve model to the simulated data
-    #     result = model.fit(data, weights=1/unc, params=initialParams,
-    #                          method=method, **indep_vars)
-    #     if verbose:
-    #         print(result.fit_report())
-    #
-    #     # # Get the best fit params
-    #     # fit_params = result.__dict__['params']
-    #     # new_params = [(fit_params.get(i).name, fit_params.get(i).value,
-    #     #                fit_params.get(i).vary, fit_params.get(i).min,
-    #     #                fit_params.get(i).max) for i in fit_params]
-    #     #
-    #     # # Create new model with best fit parameters
-    #     # params = Parameters()
-    #     #
-    #     # # Try to store each as an attribute
-    #     # for param in new_params:
-    #     #     setattr(params, param[0], param[1:])
-    #     #
-    #     # # Make a new model instance
-    #     # best_model = copy.copy(model)
-    #     # best_model.name = 'Best Fit'
-    #     # best_model.parameters = params
-    #
-    #     return best_model
-
     def flux_calibrate(self, distance, target_distance=10*q.pc, flux_units=None):
         """Flux calibrate the spectrum from the given distance to the target distance
 
@@ -521,12 +430,15 @@ class Spectrum:
 
         # Calculate the factor for the given units
         m = self.flux_units*self.wave_units
-        val = (np.trapz(self.flux, x=self.wave)*m).to(units)
+
+        # Scrub the spectrum
+        spec = u.scrub(self.data)
+        val = (np.trapz(spec[1], x=spec[0])*m).to(units)
 
         if self.unc is None:
             unc = None
         else:
-            unc = np.sqrt(np.sum((self.unc*np.gradient(self.wave)*m)**2)).to(units)
+            unc = np.sqrt(np.nansum((spec[2]*np.gradient(spec[0])*m)**2)).to(units)
 
         return val, unc
 
@@ -625,7 +537,7 @@ class Spectrum:
             # Check if there is overlap
             if len(data) == 0:
                 if self.verbose:
-                    print('No photometry in the range {} to normalize this spectrum.'.format([self.min, self.max]))
+                    print('No photometry in the range {} to normalize this spectrum.'.format([self.wave_min, self.wave_max]))
 
             # Calculate the weighted normalization
             else:
@@ -644,17 +556,17 @@ class Spectrum:
 
         return Spectrum(*spectrum, name=self.name)
 
-    def norm_to_spec(self, spec, exclude=[], include=[], plot=False):
+    def norm_to_spec(self, spec, add=False, plot=False, **kwargs):
         """Normalize the spectrum to another spectrum
 
         Parameters
         ----------
         spec: sedkit.spectrum.Spectrum
             The spectrum to normalize to
-        exclude: sequence (optional)
-            A list of wavelength ranges to exclude from the normalization
-        include: sequence (optional)
-            A list of wavelength ranges to include in the normalization
+        add: bool
+            Add spec to self after normalization
+        plot: bool
+            Plot the spectra
 
         Returns
         -------
@@ -663,7 +575,7 @@ class Spectrum:
         """
         # Resample self onto spec wavelengths
         w0 = self.wave*self.wave_units.to(spec.wave_units)
-        slf = self.resamp(spec.spectrum[0])
+        slf = self.interpolate(spec) # Should use self.resamp(spec.spectrum[0])
 
         # Trim both to just overlapping wavelengths
         idx = u.idx_overlap(w0, spec.wave, inclusive=True)
@@ -671,7 +583,7 @@ class Spectrum:
         spec1 = spec.data[:, idx]
 
         # Find the normalization factor
-        norm = u.minimize_norm(spec1, spec0)
+        norm = u.minimize_norm(spec1[1], spec0[1], **kwargs)
 
         # Make new spectrum
         spectrum = self.spectrum
@@ -681,6 +593,10 @@ class Spectrum:
 
         # Make the new spectrum
         new_spec =  Spectrum(*spectrum, name=self.name)
+
+        # Add them together if necessary
+        if add:
+            new_spec = new_spec + spec
 
         if plot:
             # Rename and plot each
@@ -749,7 +665,7 @@ class Spectrum:
             return fig
 
     def renormalize(self, mag, bandpass, system='vegamag', force=False, no_spec=False):
-        """Include uncertainties in renorm() method
+        """Renormalize the spectrum to the given magnitude
 
         Parameters
         ----------
@@ -770,7 +686,6 @@ class Spectrum:
             The normalization constant or normalized spectrum object
         """
         # My solution
-        print(u.mag2flux(bandpass, mag)[0], self.synthetic_flux(bandpass, force=force)[0])
         norm = u.mag2flux(bandpass, mag)[0]/self.synthetic_flux(bandpass, force=force)[0]
 
         # Just return the normalization factor
@@ -785,7 +700,6 @@ class Spectrum:
 
         return Spectrum(*spectrum, name=self.name)
 
-        
     def resamp(self, wave=None, resolution=None):
         """Resample the spectrum onto a new wavelength array or to a new
         resolution
@@ -981,6 +895,16 @@ class Spectrum:
                              with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
 
     @property
+    def wave_max(self):
+        """The minimum wavelength"""
+        return max(self.wave)*self.wave_units
+
+    @property
+    def wave_min(self):
+        """The minimum wavelength"""
+        return min(self.wave)*self.wave_units
+
+    @property
     def wave_units(self):
         """A property for wave_units"""
         return self._wave_units
@@ -1000,10 +924,6 @@ class Spectrum:
 
         # Update the wavelength array
         self.wave = self.wave*self.wave_units.to(wave_units)
-
-        # Update min and max
-        self.min = min(self.spectrum[0]).to(wave_units)
-        self.max = max(self.spectrum[0]).to(wave_units)
 
         # Set the wave_units
         self._wave_units = wave_units

@@ -28,7 +28,7 @@ import scipy.optimize as opt
 warnings.simplefilter('ignore')
 
 # Valid dtypes for units
-UNITS = q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit, q.quantity.Quantity
+UNITS = q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit, q.quantity.Quantity, q.core.IrreducibleUnit
 
 # A dict of BDNYCdb band names to work with sedkit
 PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
@@ -385,7 +385,7 @@ def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):
     return f_lam
 
 
-def minimize_norm(arr1, arr2):
+def minimize_norm(arr1, arr2, **kwargs):
     """Minimize the function to find the normalization factor that best
     aligns arr2 with arr1
 
@@ -406,7 +406,7 @@ def minimize_norm(arr1, arr2):
 
     # Initial guess
     p0 = np.nanmean(arr2)/np.nanmean(arr1)
-    norm_factor = opt.fmin(errfunc, p0, args=(arr1, arr2), disp=0)
+    norm_factor = opt.fmin(errfunc, p0, args=(arr1, arr2), disp=0, **kwargs)
 
     return norm_factor
 

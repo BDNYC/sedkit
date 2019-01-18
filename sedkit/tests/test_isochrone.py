@@ -4,6 +4,7 @@ import unittest
 import astropy.units as q
 
 from .. import isochrone as iso
+from .. import utilities as u
 
 
 class TestIsochrone(unittest.TestCase):
@@ -35,7 +36,7 @@ class TestIsochrone(unittest.TestCase):
         """Test that the model isochrone can be interpolated"""
         # Successful interpolation
         result = self.hsa.interpolate(-4, 4*q.Gyr, 'Lbol', 'mass')
-        self.assertTrue(isinstance(result, iso.UNIT_DTYPES))
+        self.assertTrue(isinstance(result, u.UNITS))
 
         # Unsuccessful interpolation
         args = -400000, 4*q.Gyr, 'Lbol', 'mass'

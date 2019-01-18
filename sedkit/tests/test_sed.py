@@ -9,20 +9,21 @@ from .. import sed
 from .. import spectrum as sp
 from .. import modelgrid as mg
 
-WAVE1 = np.linspace(0.8, 2.5, 200)*q.um
-FLUX1 = blackbody_lambda(WAVE1, 3000*q.K)*q.sr
-SPEC1 = [WAVE1, FLUX1, FLUX1/100.]
-WAVE2 = np.linspace(21000, 38000, 150)*q.AA
-FLUX2 = blackbody_lambda(WAVE2, 6000*q.K)*q.sr
-SPEC2 = [WAVE2, FLUX2, FLUX2/100.]
-
 
 class TestSED(unittest.TestCase):
     """Tests for the SED class"""
     def setUp(self):
 
         # Make Spectrum class for testing
+        WAVE1 = np.linspace(0.8, 2.5, 200)*q.um
+        FLUX1 = blackbody_lambda(WAVE1, 3000*q.K)*q.sr
+        SPEC1 = [WAVE1, FLUX1, FLUX1/100.]
         self.spec1 = sp.Spectrum(*SPEC1)
+
+        # Make another
+        WAVE2 = np.linspace(21000, 38000, 150)*q.AA
+        FLUX2 = blackbody_lambda(WAVE2, 6000*q.K)*q.sr
+        SPEC2 = [WAVE2, FLUX2, FLUX2/100.]
         self.spec2 = sp.Spectrum(*SPEC2)
 
         self.sed = sed.SED()

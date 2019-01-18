@@ -164,8 +164,8 @@ class SED:
         self.best_fit = []
 
         # Make empty spectra table
-        spec_cols = ('spectrum', 'wave_min', 'wave_max')
-        spec_typs = ('O', np.float16, np.float16)
+        spec_cols = ('spectrum', 'wave_min', 'wave_max', 'wave_bins', 'resolution')
+        spec_typs = ('O', np.float16, np.float16, int, int)
         self._spectra = at.QTable(names=spec_cols, dtype=spec_typs)
         for col in ['wave_min', 'wave_max']:
             self._spectra[col].unit = self._wave_units
@@ -338,7 +338,10 @@ class SED:
         spec.flux_units = self.flux_units
 
         # Add the spectrum object to the list of spectra
-        self._spectra.add_row([spec, np.nanmin(spec.spectrum[0]).round(3), np.nanmax(spec.spectrum[0]).round(3)])
+        mn = np.nanmin(spec.spectrum[0]).round(3)
+        mx = np.nanmax(spec.spectrum[0]).round(3)
+        res = (mx - mn)/np.mean(np.diff(spec.wave))
+        self._spectra.add_row([spec, mn, mx, spec.wave.size, res])
 
         # Set SED as uncalculated
         self.calculated = False
@@ -516,32 +519,24 @@ class SED:
             # Group overlapping spectra and stitch together where possible
             # to form peacewise spectrum for flux calibration
             self.stitched_spectra = []
-            if len(self.spectra) > 1:
-                groups = self.group_spectra(self.spectra['spectrum'])
-                self.stitched_spectra = [np.sum(group) if len(group) > 1\
-                                         else group[0] for group in groups]
-
-            # If one spectrum, no need to make composite
-            elif len(self.spectra) == 1:
-                self.stitched_spectra = self.spectra['spectrum']
-
-            # If no spectra, forget it
-            else:
-                self.stitched_spectra = []
+            if len(self.spectra) == 0:
                 print('No spectra available for SED.')
+            else:
+                groups = self.group_spectra(self.spectra['spectrum'])
+                for group in groups:
+                    spec = group.pop()
+                    for g in group:
+                        spec = g.norm_to_spec(spec, add=True)
+                    self.stitched_spectra.append(spec)
 
             # Renormalize the stitched spectra
             if len(self.photometry) > 0:
-                self.stitched_spectra = [i.norm_to_mags(self.photometry)\
-                                         for i in self.stitched_spectra]
+                self.stitched_spectra = [i.norm_to_mags(self.photometry) for i in self.stitched_spectra]
 
             # Make apparent spectral SED
-            if len(self.stitched_spectra) > 1:
+            self.app_spec_SED = None
+            if len(self.stitched_spectra) > 0:
                 self.app_spec_SED = np.sum(self.stitched_spectra)
-            elif len(self.stitched_spectra) == 1:
-                self.app_spec_SED = self.stitched_spectra[0]
-            else:
-                self.app_spec_SED = None
 
             # Make absolute spectral SED
             if self.app_spec_SED is not None and self.distance is not None:
@@ -972,8 +967,7 @@ class SED:
 
             # Make the blackbody spectrum
             wav = np.linspace(0.2, 22., 400)*self.wave_units
-            bb = sp.Blackbody(wav, self.Teff_bb*q.K, radius=self.radius,
-                              distance=self.distance)
+            bb = sp.Blackbody(wav, self.Teff_bb*q.K, radius=self.radius, distance=self.distance)
             bb = bb.norm_to_mags(self.photometry[-3:], include=norm_to)
             self.blackbody = bb
 
@@ -1322,7 +1316,7 @@ class SED:
             if N not in idx:
                 group, idx = [S], idx + [N]
                 for n, s in enumerate(spectra):
-                    if n not in idx and any(np.where(np.logical_and(S.wave<s.wave[-1], S.wave>s.wave[0]))[0]):
+                    if n not in idx and any(np.where(np.logical_and(S.wave < s.wave[-1], S.wave > s.wave[0]))[0]):
                         group.append(s), idx.append(n)
                 groups.append(group)
         return groups
@@ -1398,7 +1392,6 @@ class SED:
         # Get synthetic mags
         # self.calculate_synthetic_mags()
 
-        #
         if len(self.stitched_spectra) > 0:
             
             # If photometry and spectra, exclude photometric points with
@@ -1427,8 +1420,7 @@ class SED:
 
         # Make Wein and Rayleigh Jeans tails
         self.make_wein_tail()
-        # self.make_rj_tail()
-        self.rj = None
+        self.make_rj_tail()
 
         # Run the calculation
         self._calculate_sed()
@@ -1769,15 +1761,11 @@ class SED:
         # Plot the blackbody fit
         if blackbody and self.blackbody:
             bb_wav, bb_flx = self.blackbody.data[:2]
-            self.fig.line(bb_wav, bb_flx, line_color='red',
-                          legend='{} K'.format(self.Teff_bb))
+            self.fig.line(bb_wav, bb_flx, line_color='red', legend='{} K'.format(self.Teff_bb))
 
         if best_fit and len(self.best_fit) > 0:
             for bf in self.best_fit:
-                # self.fig.line(bf.spectrum[0], bf.spectrum[1], legend=bf.name)
-                self.fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.3,
-                                         color=next(sp.COLORS),
-                                         legend=bf.label)
+                self.fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.3, color=next(u.COLORS), legend=bf.label)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"

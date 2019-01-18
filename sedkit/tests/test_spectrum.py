@@ -98,6 +98,21 @@ class TestSpectrum(unittest.TestCase):
         spec4 = self.spec + None
         self.assertEqual(spec4.wave.size, self.spec.wave.size)
 
+    def test_integrate(self):
+        """Test that a spectum is integrated properly"""
+        # No nans
+        fbol = self.flat1.integrate()
+        self.assertAlmostEqual(fbol[0].value, 4000, places=1)
+
+        # With nans
+        w1 = np.linspace(0.6, 1, 230)*q.um
+        f1 = np.ones_like(w1.value)*q.erg/q.s/q.cm**2/q.AA
+        f1[100: 150] = np.nan
+        flat1 = sp.Spectrum(w1, f1, f1*0.01)
+        fbol = flat1.integrate()
+        self.assertAlmostEqual(fbol[0].value, 4000, places=1)
+        self.assertNotEqual(str(fbol[1].value), 'nan')
+
     def test_renormalize(self):
         """Test that a spectrum is properly normalized to a given magnitude"""
         # Make a bandpass
