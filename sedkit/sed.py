@@ -164,8 +164,8 @@ class SED:
         self.best_fit = []
 
         # Make empty spectra table
-        spec_cols = ('spectrum', 'wave_min', 'wave_max', 'wave_bins', 'resolution')
-        spec_typs = ('O', np.float16, np.float16, int, int)
+        spec_cols = ('name', 'spectrum', 'wave_min', 'wave_max', 'wave_bins', 'resolution')
+        spec_typs = ('O', 'O', np.float16, np.float16, int, int)
         self._spectra = at.QTable(names=spec_cols, dtype=spec_typs)
         for col in ['wave_min', 'wave_max']:
             self._spectra[col].unit = self._wave_units
@@ -174,9 +174,9 @@ class SED:
         phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc',
                      'app_flux', 'app_flux_unc', 'abs_magnitude',
                      'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc',
-                     'bandpass')
+                     'bandpass', 'ref')
         phot_typs = ('U16', np.float16, np.float16, np.float16, float, float,
-                     np.float16, np.float16, float, float, 'O')
+                     np.float16, np.float16, float, float, 'O', 'O')
         self.reddening = 0
         self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
         for col in ['app_flux', 'app_flux_unc', 'abs_flux', 'abs_flux_unc']:
@@ -266,7 +266,7 @@ class SED:
         # Make a dict for the new point
         new_photometry = {'band': band, 'eff': bp.wave_eff,
                           'app_magnitude': mag, 'app_magnitude_unc': mag_unc,
-                          'bandpass': bp}
+                          'bandpass': bp, 'ref': None}
 
         # Add the kwargs
         new_photometry.update(kwargs)
@@ -318,9 +318,11 @@ class SED:
             A sequence of [W,F] or [W,F,E] with astropy units
             or a Spectrum object
         """
+        # OK if already a Spectrum
         if isinstance(spectrum, sp.Spectrum):
             spec = spectrum
 
+        # or turn it into a Spectrum
         elif isinstance(spectrum, (list, tuple)):
 
             # Create the Spectrum object
@@ -330,6 +332,7 @@ class SED:
             else:
                 raise ValueError('Input spectrum must be [W,F] or [W,F,E].')
 
+        # or it's no good
         else:
             raise TypeError('Must enter [W,F], [W,F,E], or a Spectrum object')
 
@@ -340,17 +343,25 @@ class SED:
         # Add the spectrum object to the list of spectra
         mn = np.nanmin(spec.spectrum[0]).round(3)
         mx = np.nanmax(spec.spectrum[0]).round(3)
-        res = (mx - mn)/np.mean(np.diff(spec.wave))
-        self._spectra.add_row([spec, mn, mx, spec.wave.size, res])
+        res = int(((mx - mn)/np.mean(np.diff(spec.wave))).value)
 
-        # Set SED as uncalculated
-        self.calculated = False
+        # Make sure it's not a duplicate
+        if any([(row['wave_min'] == mn) & (row['wave_max'] == mx) & (row['resolution'] == res) for row in self.spectra]):
+            if self.verbose:
+                print("Looks like that {}-{} spectrum is already added. Skipping...".format(mn, mx))
 
-        # Update spectra max and min wavelengths
-        if self.min_spec is None or np.nanmin(spec.spectrum[0]) < self.min_spec:
-            self.min_spec = np.nanmin(spec.spectrum[0])
-        if self.max_spec is None or np.nanmax(spec.spectrum[0]) > self.max_spec:
-            self.max_spec = np.nanmax(spec.spectrum[0])
+        # If not, add it
+        else:
+            self._spectra.add_row([spec.name, spec, mn, mx, spec.wave.size, res])
+
+            # Set SED as uncalculated
+            self.calculated = False
+
+            # Update spectra max and min wavelengths
+            if self.min_spec is None or np.nanmin(spec.spectrum[0]) < self.min_spec:
+                self.min_spec = np.nanmin(spec.spectrum[0])
+            if self.max_spec is None or np.nanmax(spec.spectrum[0]) > self.max_spec:
+                self.max_spec = np.nanmax(spec.spectrum[0])
 
     def add_spectrum_file(self, file, wave_units=None, flux_units=None, ext=0,
                           survey=None, **kwargs):
@@ -375,7 +386,8 @@ class SED:
                                    ext=ext, survey=survey, **kwargs)
 
         # Add the data to the SED object
-        self.add_spectrum(spectrum, **kwargs)
+        name = spectrum.name if spectrum.name != 'New Spectrum' else os.path.basename(file)
+        self.add_spectrum(spectrum, name=name, **kwargs)
 
     @property
     def age(self):
@@ -569,7 +581,8 @@ class SED:
         # Make sure it's decimal degrees
         self._dec = Angle(dec)
         if self.ra is not None:
-            self.sky_coords = self.ra, self.dec
+            sky_coords = SkyCoord(ra=self.ra, dec=self.dec, unit=(q.hour, q.degree), frame='icrs')
+            self._set_sky_coords(sky_coords, simbad=False)
 
     @property
     def distance(self):
@@ -847,13 +860,14 @@ class SED:
 
             # Grab the record
             rec = viz_cat[0][idx]
+            ref = viz_cat[0].meta['name']
 
             # Pull out the photometry
             for band, viz in zip(target_names, band_names):
                 try:
                     mag, unc = list(rec[[viz, 'e_'+viz]])
                     mag, unc = round(float(mag), 3), round(float(unc), 3)
-                    self.add_photometry(band, mag, unc)
+                    self.add_photometry(band, mag, unc, ref=ref)
                 except IOError:
                     pass
 
@@ -881,16 +895,19 @@ class SED:
             # Search Simbad by sky coords
             rad = search_radius or self.search_radius
             viz_cat = Simbad.query_region(self.sky_coords, radius=rad)
+            crit = self.sky_coords
 
         elif self.name is not None and self.name != 'My Target':
 
             viz_cat = Simbad.query_object(self.name)
+            crit = self.name
 
         else:
             return
 
         # Parse the record and save the names
         if viz_cat is not None:
+
             main_ID = viz_cat[0]['MAIN_ID'].decode("utf-8")
             self.all_names += list(Simbad.query_objectids(main_ID)['ID'])
 
@@ -898,10 +915,19 @@ class SED:
             self.all_names = list(set(self.all_names))
 
             if self.name is None:
-                self.name = main_ID
+                self._name = main_ID
 
             if self.sky_coords is None:
-                self.sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
+                sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
+                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
+                                      unit=(q.hour, q.degree), frame='icrs')
+                self._set_sky_coords(sky_coords, simbad=False)
+
+            # Print info
+            if self.verbose:
+                n_rec = len(viz_cat)
+                print("{} record{} for {} found in Simbad.".format(n_rec, '' if n_rec == 1 else 's', crit))
+                print("Setting name to {} and sky_coords to {}".format(self.name, self.sky_coords))
 
     def find_WISE(self, **kwargs):
         """
@@ -1593,6 +1619,9 @@ class SED:
             # Update the distance
             self._distance = u.pi2pc(*self.parallax)
 
+            if self.verbose:
+                print("Setting parallax to {} and distance to {}.".format(self.parallax, self.distance))
+
         # Try to calculate reddening
         self.get_reddening()
 
@@ -1801,7 +1830,8 @@ class SED:
         # Make sure it's decimal degrees
         self._ra = Angle(ra)
         if self.dec is not None:
-            self.sky_coords = self.ra, self.dec
+            sky_coords = SkyCoord(ra=self.ra, dec=self.dec, unit=q.degree, frame='icrs')
+            self._set_sky_coords(sky_coords, simbad=False)
 
     @property
     def radius(self):
@@ -1952,6 +1982,18 @@ class SED:
             else:
                 raise TypeError("Cannot convert type {} to coordinates.".format(type(sky_coords[0])))
 
+        self._set_sky_coords(sky_coords)
+
+    def _set_sky_coords(self, sky_coords, simbad=True):
+        """Calculate and set attributes from sky coords
+
+        Parameters
+        ----------
+        sky_coords: astropy.coordinates.SkyCoord
+            The sky coordinates
+        simbad: bool
+            Search Simbad by the coordinates
+        """
         # Set the sky coordinates
         self._sky_coords = sky_coords
         self._ra = sky_coords.ra.degree
@@ -1961,7 +2003,8 @@ class SED:
         self.get_reddening()
 
         # Try to find the source in Simbad
-        self.find_SIMBAD()
+        if simbad:
+            self.find_SIMBAD()
 
     @property
     def spectra(self):
