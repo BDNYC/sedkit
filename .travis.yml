@@ -9,4 +9,4 @@ install:
     - pip install pytest pytest-cov coveralls
 
 script:
-    - python -m pytest tests
+    - python -m pytest sedkit/tests
