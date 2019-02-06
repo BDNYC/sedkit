@@ -760,7 +760,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
         raise ValueError("spectres: The new wavelengths specified must fall at\
                           least partially within the range of the old\
                           wavelength values.")
-    new_spec_wavs = new_spec_wavs[idx]
+    spec_wavs = new_spec_wavs[idx]
 
     # Generate arrays of left hand side positions and widths for the old
     # and new bins
@@ -772,30 +772,29 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     spec_lhs[1:] = (old_spec_wavs[1:] + old_spec_wavs[:-1])/2
     spec_widths[:-1] = spec_lhs[1:] - spec_lhs[:-1]
 
-    filter_lhs = np.zeros(new_spec_wavs.shape[0]+1)
-    filter_widths = np.zeros(new_spec_wavs.shape[0])
-    filter_lhs[0] = new_spec_wavs[0] - (new_spec_wavs[1] - new_spec_wavs[0])/2
-    filter_widths[-1] = (new_spec_wavs[-1] - new_spec_wavs[-2])
-    filter_lhs[-1] = new_spec_wavs[-1]+(new_spec_wavs[-1]-new_spec_wavs[-2])/2
-    filter_lhs[1:-1] = (new_spec_wavs[1:] + new_spec_wavs[:-1])/2
+    filter_lhs = np.zeros(spec_wavs.shape[0]+1)
+    filter_widths = np.zeros(spec_wavs.shape[0])
+    filter_lhs[0] = spec_wavs[0] - (spec_wavs[1] - spec_wavs[0])/2
+    filter_widths[-1] = (spec_wavs[-1] - spec_wavs[-2])
+    filter_lhs[-1] = spec_wavs[-1]+(spec_wavs[-1]-spec_wavs[-2])/2
+    filter_lhs[1:-1] = (spec_wavs[1:] + spec_wavs[:-1])/2
     filter_widths[:-1] = filter_lhs[1:-1] - filter_lhs[:-2]
 
     # Generate output arrays to be populated
-    resampled_fluxes = np.zeros(spec_fluxes[..., 0].shape + new_spec_wavs.shape)
+    resampled_fluxes = np.zeros(spec_fluxes[..., 0].shape + spec_wavs.shape)
+    resampled_fluxes_errs = np.zeros_like(resampled_fluxes)
 
     if spec_errs is not None:
         if spec_errs.shape != spec_fluxes.shape:
             raise ValueError("If specified, spec_errs must be the same shape\
                               as spec_fluxes.")
-        else:
-            resampled_fluxes_errs = np.zeros_like(resampled_fluxes)
 
     start = 0
     stop = 0
 
     # Calculate the new spectral flux and uncertainty values, 
     # loop over the new bins
-    for j in range(new_spec_wavs.size):
+    for j in range(spec_wavs.size):
 
         try:
 
@@ -841,12 +840,16 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
             if spec_errs is not None:
                 resampled_fluxes_errs[..., j] = np.nan
 
+    # Interpolate results onto original wavelength basis
+    resampled_fluxes = np.interp(new_spec_wavs, spec_wavs, resampled_fluxes, left=np.nan, right=np.nan)
+
     # If errors were supplied return the resampled_fluxes spectrum and
     # error arrays
     if spec_errs is None:
         return [new_spec_wavs, resampled_fluxes]
 
     else:
+        resampled_fluxes_errs = np.interp(new_spec_wavs, spec_wavs, resampled_fluxes_errs, left=np.nan, right=np.nan)
         return [new_spec_wavs, resampled_fluxes, resampled_fluxes_errs]
 
 

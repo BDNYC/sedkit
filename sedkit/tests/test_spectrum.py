@@ -72,8 +72,7 @@ class TestSpectrum(unittest.TestCase):
 
         # Test fit works as expected by loading a spectrum then fitting for it
         label = 'Opt:L4'
-        model = spl.get_spectrum(label=label)
-        spec = sp.Spectrum(model[0]*spl.wave_units, model[1]*spl.flux_units)
+        spec = spl.get_spectrum(label=label)
         spec.best_fit_model(spl)
         self.assertEqual(spec.best_fit[0]['label'], label)
 

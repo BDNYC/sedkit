@@ -28,7 +28,8 @@ class Spectrum:
     """A spectrum object to add uncertainty handling and spectrum stitching
     to ps.ArraySpectrum
     """
-    def __init__(self, wave, flux, unc=None, snr=None, trim=None, name=None, verbose=False):
+    def __init__(self, wave, flux, unc=None, snr=None, trim=None, name=None,
+                 ref=None, verbose=False):
         """Store the spectrum and units separately
 
         Parameters
@@ -48,6 +49,8 @@ class Spectrum:
             trimming
         name: str
             A name for the spectrum
+        ref: str
+            A reference for the data
         verbose: bool
             Print helpful stuff
         """
@@ -261,12 +264,11 @@ class Spectrum:
             rep.add_tools(hover)
 
             # Plot the fits
-            rep.circle(report, 'gstat', source=best, color='red')
+            rep.circle(report, 'gstat', source=best, color='red', legend=bf['label'])
             rep.circle(report, 'gstat', source=others)
 
-            # Store the plot
+            # Show the plot
             show(rep)
-            
 
         if bf['filepath'] not in [i['filepath'] for i in self.best_fit]:
             self.best_fit.append(bf)
@@ -282,7 +284,7 @@ class Spectrum:
 
         return data
 
-    def fit(self, spec, weights=None, wave_units=None, scale=True):
+    def fit(self, spec, weights=None, wave_units=None, scale=True, plot=False):
         """Determine the goodness of fit between this and another spectrum
 
         Parameters
@@ -330,10 +332,8 @@ class Spectrum:
             raise TypeError("Only an sedkit.spectrum.Spectrum or numpy.ndarray can be fit.")
 
         # Get the self data
-        boolarr = np.array([True if i in wav else False for i in self.wave])
-        idx = np.where(boolarr)
-        flx1 = self.flux[idx]
-        err1 = np.ones_like(flx1) if self.unc is None else self.unc[idx]
+        flx1 = self.flux
+        err1 = np.ones_like(flx1) if self.unc is None else self.unc
 
         # Make default weights the bin widths, excluding gaps in spectra
         if weights is None:
@@ -345,8 +345,12 @@ class Spectrum:
 
         # Run it again with the scaling removed
         if scale:
-            gstat, ynorm1 = u.goodness(flx1, flx2*ynorm, err1, err2*ynorm,
-                                       weights)
+            gstat, _ = u.goodness(flx1, flx2*ynorm, err1, err2*ynorm, weights)
+
+        if plot:
+            fig = self.plot(best_fit=False)
+            fig.line(spec.wave, spec.flux*ynorm, legend='Fit')
+            show(fig)
 
         return gstat, ynorm, xnorm
 
@@ -575,7 +579,7 @@ class Spectrum:
         """
         # Resample self onto spec wavelengths
         w0 = self.wave*self.wave_units.to(spec.wave_units)
-        slf = self.interpolate(spec) # Should use self.resamp(spec.spectrum[0])
+        slf = self.resamp(spec.spectrum[0])
 
         # Trim both to just overlapping wavelengths
         idx = u.idx_overlap(w0, spec.wave, inclusive=True)
@@ -731,22 +735,17 @@ class Spectrum:
 
         # Convert wave to target units
         self.wave_units = wave.unit
-        mn = np.nanmin(self.wave)
-        mx = np.nanmax(self.wave)
         wave = wave.value
 
-        # Trim the wavelength
-        dmn = (self.wave[1]-self.wave[0])/2.
-        dmx = (self.wave[-1]-self.wave[-2])/2.
-        wave = wave[np.logical_and(wave >= mn+dmn, wave <= mx-dmx)]
-
-        # Calculate the new spectrum
+        # Bin the spectrum
         binned = u.spectres(wave, self.wave, self.flux, self.unc)
 
         # Update the spectrum
         spectrum = [i*Q for i, Q in zip(binned, self.units)]
 
-        return Spectrum(*spectrum, name=self.name)
+        spectrum = Spectrum(*spectrum, name=self.name)
+
+        return spectrum
 
     def smooth(self, beta, window=11):
         """
@@ -775,6 +774,11 @@ class Spectrum:
         spectrum[1] = smoothed*self.flux_units
 
         return Spectrum(*spectrum, name=self.name)
+
+    @property
+    def size(self):
+        """The length of the data"""
+        return len(self.wave)
 
     @property
     def spectrum(self):

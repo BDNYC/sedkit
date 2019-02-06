@@ -346,6 +346,7 @@ class ModelGrid:
             return None
         else:
             spec = rows.iloc[0].spectrum
+            name = rows.iloc[0].label
 
             # Trim it
             trim = kwargs.get('trim', self.trim)
@@ -376,15 +377,17 @@ class ModelGrid:
                 # Calculate the new spectrum
                 spec = u.spectres(wave, spec[0], spec[1])
 
-            return spec
+            return Spectrum(spec[0]*self.wave_units, spec[1]*self.flux_units, name=name)
 
-    def plot(self, fig=None, draw=False, **kwargs):
-        """Plot the models with the given parameters
+    def plot(self, fig=None, scale='log', draw=True, **kwargs):
+        """Plot the models using Spectrum.plot() with the given parameters
 
         Parameters
         ----------
         fig: bokeh.figure (optional)
             The figure to plot on
+        scale: str
+            The scale of the x and y axes, ['linear', 'log']
         draw: bool
             Draw the plot rather than just return it
 
@@ -393,27 +396,11 @@ class ModelGrid:
         bokeh.figure
             The figure
         """
-        # Make the figure
-        if fig is None:
-            input_fig = False
-            fig = figure()
-            fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
-            fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
-        else:
-            input_fig = True
-
+        # Get the model
         model = self.get_spectrum(**kwargs)
-        if model is not None:
 
-            # Plot the spectrum
-            fig.line(model[0], model[1])
-
-            if draw:
-                show(fig)
-            else:
-                return fig
-        else:
-            return fig if input_fig else None
+        # Plot or return it
+        return model.plot(fig=fig, scale=scale, draw=draw, **kwargs)
 
     def save(self, file):
         """Save the model grid to file

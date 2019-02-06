@@ -89,6 +89,13 @@ class TestSED(unittest.TestCase):
 
         self.assertIsNotNone(s.Teff)
 
+    def test_find_methods(self):
+        """Test that the find_simbad and find_photometry methods work"""
+        s = sed.SED('trappist-1')
+        s.find_2MASS()
+
+        self.assertNotEqual(len(s.photometry), 0)
+
     def test_fit_spectrum(self):
         """Test that the SED can be fit by a model grid"""
         # Grab the SPL
@@ -97,8 +104,7 @@ class TestSED(unittest.TestCase):
         # Add known spectrum
         s = copy.copy(self.sed)
         label = 'Opt:L4'
-        model = spl.get_spectrum(label=label)
-        spec = sp.Spectrum(model[0]*spl.wave_units, model[1]*spl.flux_units)
+        spec = spl.get_spectrum(label=label)
         s.add_spectrum(spec)
 
         # Fit with SPL

@@ -164,8 +164,9 @@ class SED:
         self.best_fit = []
 
         # Make empty spectra table
-        spec_cols = ('name', 'spectrum', 'wave_min', 'wave_max', 'wave_bins', 'resolution')
-        spec_typs = ('O', 'O', np.float16, np.float16, int, int)
+        spec_cols = ('name', 'spectrum', 'wave_min', 'wave_max', 'wave_bins',
+                     'resolution', 'ref')
+        spec_typs = ('O', 'O', np.float16, np.float16, int, int, 'O')
         self._spectra = at.QTable(names=spec_cols, dtype=spec_typs)
         for col in ['wave_min', 'wave_max']:
             self._spectra[col].unit = self._wave_units
@@ -352,7 +353,17 @@ class SED:
 
         # If not, add it
         else:
-            self._spectra.add_row([spec.name, spec, mn, mx, spec.wave.size, res])
+
+            # Make a dict for the new spectrum
+            new_spectrum = {'name': spec.name, 'spectrum': spec,
+                            'wave_min': mn, 'wave_max': mx, 'resolution': res,
+                            'wave_bins': spec.wave.size, 'ref': None}
+
+            # Add the kwargs
+            new_spectrum.update(kwargs)
+
+            # Add it to the table
+            self._spectra.add_row(new_spectrum)
 
             # Set SED as uncalculated
             self.calculated = False
@@ -1017,11 +1028,11 @@ class SED:
         if self.app_spec_SED is not None:
 
             self.app_spec_SED.best_fit_model(modelgrid)
-            self.best_fit = self.app_spec_SED.best_fit
+            self.best_fit.append(self.app_spec_SED.best_fit[-1])
+            print(self.app_spec_SED.best_fit)
 
             if self.verbose:
-                print('Best fit: ',
-                      self.best_fit[-1][modelgrid.parameters][0])
+                print('Best fit: ', self.best_fit[-1]['label'])
 
         else:
             print("Sorry, could not fit SED to model grid", modelgrid)
@@ -1919,7 +1930,7 @@ class SED:
                   self.__dict__.items() if isinstance(v, ptypes) or
                   (isinstance(v, (list, tuple)) and len(v) == 2)}
         rows = []
-        exclude = ['spectra']
+        exclude = ['spectra', 'best_fit']
         for param in sorted([p for p in params if p not in exclude]):
 
             # Get the values and format

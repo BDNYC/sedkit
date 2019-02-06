@@ -36,13 +36,13 @@ class TestSpectres(unittest.TestCase):
         args = new_wave, self.wave, self.flux
         self.assertRaises(ValueError, u.spectres, *args)
 
-    # def test_complete(self):
-    #     """Complete overlap"""
-    #     #    |----- wave -----|
-    #     # |------ new_wave ------|
-    #     new_wave = np.linspace(0.6, 3, 200)
-    #     binned = u.spectres(new_wave, self.wave, self.flux)
-    #     self.assertEqual(new_wave.size, binned[0].size)
+    def test_complete(self):
+        """Complete overlap"""
+        #    |----- wave -----|
+        # |------ new_wave ------|
+        new_wave = np.linspace(0.6, 3, 200)
+        binned = u.spectres(new_wave, self.wave, self.flux)
+        self.assertEqual(new_wave.size, binned[0].size)
 
     def test_subset(self):
         """Subset overlap"""
@@ -52,21 +52,21 @@ class TestSpectres(unittest.TestCase):
         binned = u.spectres(new_wave, self.wave, self.flux)
         self.assertEqual(new_wave.size, binned[0].size)
 
-    # def test_partial_right(self):
-    #     """Partial overlap"""
-    #     # |--- wave ---|
-    #     #        |--- new_wave ---|
-    #     new_wave = np.linspace(1, 2.7, 200)
-    #     binned = u.spectres(new_wave, self.wave, self.flux)
-    #     self.assertEqual(new_wave.size, binned[0].size)
-    #
-    # def test_partial_left(self):
-    #     """Inverted overlap"""
-    #     #   |--- wave ---|
-    #     # |--- new_wave ---|
-    #     new_wave = np.linspace(0.6, 2.7, 200)
-    #     binned = u.spectres(new_wave, self.wave, self.flux)
-    #     self.assertEqual(new_wave.size, binned[0].size)
+    def test_partial_right(self):
+        """Partial overlap"""
+        # |--- wave ---|
+        #        |--- new_wave ---|
+        new_wave = np.linspace(1, 2.7, 200)
+        binned = u.spectres(new_wave, self.wave, self.flux)
+        self.assertEqual(new_wave.size, binned[0].size)
+
+    def test_partial_left(self):
+        """Inverted overlap"""
+        #   |--- wave ---|
+        # |--- new_wave ---|
+        new_wave = np.linspace(0.6, 2.7, 200)
+        binned = u.spectres(new_wave, self.wave, self.flux)
+        self.assertEqual(new_wave.size, binned[0].size)
 
     def test_uncertainties(self):
         """Test that it works with uncertainties too"""
