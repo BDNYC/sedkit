@@ -12,5 +12,8 @@ sudo: false
 
 install:
   - pip install -r requirements.txt
+  - pip install pytest pytest-cov coveralls
 
-script: pytest
+script:
+  - pytest --cov
+  - coveralls
