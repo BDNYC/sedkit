@@ -107,7 +107,8 @@ class Spectrum:
 
         # Trim manually
         if trim is not None:
-            self.trim(trim)
+            trimmed = self.trim(trim)
+            self.__dict__ = trimmed.__dict__
 
     def __add__(self, spec):
         """Add the spectra of this and another Spectrum object
@@ -338,7 +339,7 @@ class Spectrum:
         # Make default weights the bin widths, excluding gaps in spectra
         if weights is None:
             weights = np.gradient(wav)
-            weights[weights > np.std(weights)] = 1E-6
+            weights[weights > np.std(weights)] = 1
 
         # Run the fitting and get the normalization
         gstat, ynorm = u.goodness(flx1, flx2, err1, err2, weights)
@@ -877,7 +878,7 @@ class Spectrum:
             The (min_wave, max_wave) ranges to trim from the spectrum
         """
         if isinstance(ranges, (list,tuple)):
-            for mn,mx in ranges:
+            for mn, mx in ranges:
                 try:
                     idx, = np.where((self.spectrum[0] < mn) | 
                                     (self.spectrum[0] > mx))
@@ -887,8 +888,8 @@ class Spectrum:
 
                         # Update the object
                         spec = Spectrum(*spectrum, name=self.name)
-                        self.__dict__ = spec.__dict__
-                        del spec
+
+                        return spec
 
                 except TypeError:
                     print("""Please provide a list of (lower,upper) bounds\

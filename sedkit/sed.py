@@ -360,7 +360,8 @@ class SED:
                             'wave_bins': spec.wave.size, 'ref': None}
 
             # Add the kwargs
-            new_spectrum.update(kwargs)
+            override = {key: val for key, val in kwargs.items() if key in new_spectrum}
+            new_spectrum.update(override)
 
             # Add it to the table
             self._spectra.add_row(new_spectrum)
