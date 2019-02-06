@@ -4,16 +4,9 @@ python:
     - 3.5
     - 3.6
 
-# Setting sudo to false opts in to Travis-CI container-based builds.
-sudo:
-    false
-
 install:
     - pip install -r requirements.txt
     - pip install pytest pytest-cov coveralls
 
 script:
-    - pytest --cov
-
-after_success:
-    - coveralls
+    - python -m pytest tests
