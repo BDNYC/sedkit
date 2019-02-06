@@ -187,12 +187,14 @@ class Spectrum:
             o_flux = np.nanmean([o1[1], o2_flux], axis=0)
 
             # Calculate uncertainties if possible
-            if len(s2) == 3:
+            if len(s2) == len(o1) == 3:
                 o2_unc = np.interp(o1[0], s2[0], s2[2])
                 o_unc = np.sqrt(o1[2]**2 + o2_unc**2)
                 overlap = np.array([o1[0], o_flux, o_unc])
             else:
                 overlap = np.array([o1[0], o_flux])
+                left = left[:2]
+                right = right[:2]
 
             # Make sure it is 2D
             if overlap.shape == (3,):

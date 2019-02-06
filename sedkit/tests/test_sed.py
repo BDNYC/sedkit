@@ -103,12 +103,11 @@ class TestSED(unittest.TestCase):
 
         # Add known spectrum
         s = copy.copy(self.sed)
-        label = 'Opt:L4'
-        spec = spl.get_spectrum(label=label)
+        spec = spl.get_spectrum()
         s.add_spectrum(spec)
 
         # Fit with SPL
         s.fit_spectral_type()
 
-        self.assertEqual(s.SpT_fit, label)
+        self.assertEqual(s.SpT_fit, spec.name)
 
