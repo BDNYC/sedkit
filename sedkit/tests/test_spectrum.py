@@ -72,8 +72,7 @@ class TestSpectrum(unittest.TestCase):
 
         # Test fit works as expected by loading a spectrum then fitting for it
         label = 'Opt:L4'
-        model = spl.get_spectrum(label=label)
-        spec = sp.Spectrum(model[0]*spl.wave_units, model[1]*spl.flux_units)
+        spec = spl.get_spectrum(label=label)
         spec.best_fit_model(spl)
         self.assertEqual(spec.best_fit[0]['label'], label)
 
@@ -96,7 +95,22 @@ class TestSpectrum(unittest.TestCase):
 
         # Test that adding None returns the original Spectrum
         spec4 = self.spec + None
-        self.assertEqual(spec4.wave.size, self.spec.wave.size)
+        self.assertEqual(spec4.size, self.spec.size)
+
+    def test_integrate(self):
+        """Test that a spectum is integrated properly"""
+        # No nans
+        fbol = self.flat1.integrate()
+        self.assertAlmostEqual(fbol[0].value, 4000, places=1)
+
+        # With nans
+        w1 = np.linspace(0.6, 1, 230)*q.um
+        f1 = np.ones_like(w1.value)*q.erg/q.s/q.cm**2/q.AA
+        f1[100: 150] = np.nan
+        flat1 = sp.Spectrum(w1, f1, f1*0.01)
+        fbol = flat1.integrate()
+        self.assertAlmostEqual(fbol[0].value, 4000, places=1)
+        self.assertNotEqual(str(fbol[1].value), 'nan')
 
     def test_renormalize(self):
         """Test that a spectrum is properly normalized to a given magnitude"""
@@ -116,13 +130,13 @@ class TestSpectrum(unittest.TestCase):
 
         # Check resampling onto new wavelength array
         new_spec = self.spec.resamp(new_wave)
-        self.assertEqual(new_wave.size, new_spec.wave.size)
+        self.assertEqual(new_wave.size, new_spec.size)
         self.assertEqual(new_wave.unit, new_spec.wave_units)
 
         # Test resampling to new resolution
         new_spec = self.spec.resamp(resolution=100)
         self.assertEqual(self.spec.wave_units, new_spec.wave_units)
-        self.assertNotEqual(self.spec.wave.size, new_spec.wave.size)
+        self.assertNotEqual(self.spec.size, new_spec.size)
 
     def test_norm_to_spec(self):
         """Test that a spectrum is properly normalized to another spectrum"""
@@ -133,8 +147,21 @@ class TestSpectrum(unittest.TestCase):
         # Normalize 1 to 2 and check that they are close
         s3 = s1.norm_to_spec(s2)
         self.assertAlmostEqual(np.nanmean(s2.flux), np.nanmean(s3.flux), places=4)
-        self.assertNotEqual(s2.wave.size, s3.wave.size)
-        self.assertEqual(s1.wave.size, s3.wave.size)
+        self.assertNotEqual(s2.size, s3.size)
+        self.assertEqual(s1.size, s3.size)
+
+    def test_trim(self):
+        """Test that the trim method works"""
+        # Get a flat spectra
+        s1 = self.flat1
+
+        # Successfully trim it
+        trimmed = s1.trim([(0.8*q.um, 2*q.um)])
+        self.assertNotEqual(self.flat1.size, trimmed.size)
+
+        # Unsuccessfully trim it
+        untrimmed = s1.trim([(1.1*q.um, 2*q.um)])
+        self.assertEqual(self.flat1.size, untrimmed.size)
 
 
 class TestVega(unittest.TestCase):

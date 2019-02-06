@@ -28,7 +28,7 @@ import scipy.optimize as opt
 warnings.simplefilter('ignore')
 
 # Valid dtypes for units
-UNITS = q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit, q.quantity.Quantity
+UNITS = q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit, q.quantity.Quantity, q.core.IrreducibleUnit
 
 # A dict of BDNYCdb band names to work with sedkit
 PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
@@ -385,7 +385,7 @@ def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):
     return f_lam
 
 
-def minimize_norm(arr1, arr2):
+def minimize_norm(arr1, arr2, **kwargs):
     """Minimize the function to find the normalization factor that best
     aligns arr2 with arr1
 
@@ -406,7 +406,7 @@ def minimize_norm(arr1, arr2):
 
     # Initial guess
     p0 = np.nanmean(arr2)/np.nanmean(arr1)
-    norm_factor = opt.fmin(errfunc, p0, args=(arr1, arr2), disp=0)
+    norm_factor = opt.fmin(errfunc, p0, args=(arr1, arr2), disp=0, **kwargs)
 
     return norm_factor
 
@@ -760,7 +760,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
         raise ValueError("spectres: The new wavelengths specified must fall at\
                           least partially within the range of the old\
                           wavelength values.")
-    new_spec_wavs = new_spec_wavs[idx]
+    spec_wavs = new_spec_wavs[idx]
 
     # Generate arrays of left hand side positions and widths for the old
     # and new bins
@@ -772,30 +772,29 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     spec_lhs[1:] = (old_spec_wavs[1:] + old_spec_wavs[:-1])/2
     spec_widths[:-1] = spec_lhs[1:] - spec_lhs[:-1]
 
-    filter_lhs = np.zeros(new_spec_wavs.shape[0]+1)
-    filter_widths = np.zeros(new_spec_wavs.shape[0])
-    filter_lhs[0] = new_spec_wavs[0] - (new_spec_wavs[1] - new_spec_wavs[0])/2
-    filter_widths[-1] = (new_spec_wavs[-1] - new_spec_wavs[-2])
-    filter_lhs[-1] = new_spec_wavs[-1]+(new_spec_wavs[-1]-new_spec_wavs[-2])/2
-    filter_lhs[1:-1] = (new_spec_wavs[1:] + new_spec_wavs[:-1])/2
+    filter_lhs = np.zeros(spec_wavs.shape[0]+1)
+    filter_widths = np.zeros(spec_wavs.shape[0])
+    filter_lhs[0] = spec_wavs[0] - (spec_wavs[1] - spec_wavs[0])/2
+    filter_widths[-1] = (spec_wavs[-1] - spec_wavs[-2])
+    filter_lhs[-1] = spec_wavs[-1]+(spec_wavs[-1]-spec_wavs[-2])/2
+    filter_lhs[1:-1] = (spec_wavs[1:] + spec_wavs[:-1])/2
     filter_widths[:-1] = filter_lhs[1:-1] - filter_lhs[:-2]
 
     # Generate output arrays to be populated
-    resampled_fluxes = np.zeros(spec_fluxes[..., 0].shape + new_spec_wavs.shape)
+    resampled_fluxes = np.zeros(spec_fluxes[..., 0].shape + spec_wavs.shape)
+    resampled_fluxes_errs = np.zeros_like(resampled_fluxes)
 
     if spec_errs is not None:
         if spec_errs.shape != spec_fluxes.shape:
             raise ValueError("If specified, spec_errs must be the same shape\
                               as spec_fluxes.")
-        else:
-            resampled_fluxes_errs = np.zeros_like(resampled_fluxes)
 
     start = 0
     stop = 0
 
     # Calculate the new spectral flux and uncertainty values, 
     # loop over the new bins
-    for j in range(new_spec_wavs.size):
+    for j in range(spec_wavs.size):
 
         try:
 
@@ -841,12 +840,16 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
             if spec_errs is not None:
                 resampled_fluxes_errs[..., j] = np.nan
 
+    # Interpolate results onto original wavelength basis
+    resampled_fluxes = np.interp(new_spec_wavs, spec_wavs, resampled_fluxes, left=np.nan, right=np.nan)
+
     # If errors were supplied return the resampled_fluxes spectrum and
     # error arrays
     if spec_errs is None:
         return [new_spec_wavs, resampled_fluxes]
 
     else:
+        resampled_fluxes_errs = np.interp(new_spec_wavs, spec_wavs, resampled_fluxes_errs, left=np.nan, right=np.nan)
         return [new_spec_wavs, resampled_fluxes, resampled_fluxes_errs]
 
 

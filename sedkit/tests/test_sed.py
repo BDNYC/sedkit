@@ -9,20 +9,21 @@ from .. import sed
 from .. import spectrum as sp
 from .. import modelgrid as mg
 
-WAVE1 = np.linspace(0.8, 2.5, 200)*q.um
-FLUX1 = blackbody_lambda(WAVE1, 3000*q.K)*q.sr
-SPEC1 = [WAVE1, FLUX1, FLUX1/100.]
-WAVE2 = np.linspace(21000, 38000, 150)*q.AA
-FLUX2 = blackbody_lambda(WAVE2, 6000*q.K)*q.sr
-SPEC2 = [WAVE2, FLUX2, FLUX2/100.]
-
 
 class TestSED(unittest.TestCase):
     """Tests for the SED class"""
     def setUp(self):
 
         # Make Spectrum class for testing
+        WAVE1 = np.linspace(0.8, 2.5, 200)*q.um
+        FLUX1 = blackbody_lambda(WAVE1, 3000*q.K)*q.sr
+        SPEC1 = [WAVE1, FLUX1, FLUX1/100.]
         self.spec1 = sp.Spectrum(*SPEC1)
+
+        # Make another
+        WAVE2 = np.linspace(21000, 38000, 150)*q.AA
+        FLUX2 = blackbody_lambda(WAVE2, 6000*q.K)*q.sr
+        SPEC2 = [WAVE2, FLUX2, FLUX2/100.]
         self.spec2 = sp.Spectrum(*SPEC2)
 
         self.sed = sed.SED()
@@ -88,6 +89,13 @@ class TestSED(unittest.TestCase):
 
         self.assertIsNotNone(s.Teff)
 
+    def test_find_methods(self):
+        """Test that the find_simbad and find_photometry methods work"""
+        s = sed.SED('trappist-1')
+        s.find_2MASS()
+
+        self.assertNotEqual(len(s.photometry), 0)
+
     def test_fit_spectrum(self):
         """Test that the SED can be fit by a model grid"""
         # Grab the SPL
@@ -95,13 +103,11 @@ class TestSED(unittest.TestCase):
 
         # Add known spectrum
         s = copy.copy(self.sed)
-        label = 'Opt:L4'
-        model = spl.get_spectrum(label=label)
-        spec = sp.Spectrum(model[0]*spl.wave_units, model[1]*spl.flux_units)
+        spec = spl.get_spectrum()
         s.add_spectrum(spec)
 
         # Fit with SPL
         s.fit_spectral_type()
 
-        self.assertEqual(s.SpT_fit, label)
+        self.assertEqual(s.SpT_fit, spec.name)
 

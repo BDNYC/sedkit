@@ -15,7 +15,7 @@ from bokeh.plotting import figure, show
 from bokeh.models import LinearColorMapper, BasicTicker, ColorBar
 import numpy as np
 
-from .utilities import color_gen
+from . import utilities as u
 
 # A dictionary of all supported moving group ages from Bell et al. (2015)
 NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr),
@@ -26,10 +26,6 @@ NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr),
              'Tuc-Hor': (45*q.Myr, 4*q.Myr),
              'TW Hya': (10*q.Myr, 3*q.Myr),
              '32 Ori': (22*q.Myr, 4*q.Myr)}
-
-# A list of supported units types
-UNIT_DTYPES = (q.quantity.Quantity, q.core.PrefixUnit, q.core.Unit,
-               q.core.CompositeUnit, q.core.IrreducibleUnit)
 
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
@@ -96,12 +92,8 @@ class Isochrone:
         unit: astropy.units.quantity.Quantity
             The desired units of the age column
         """
-        # Make sure it's a quantity
-        if not isinstance(unit, UNIT_DTYPES):
-            raise TypeError('Age units must be astropy.units.quantity.Quantity')
-
-        # Make sure the values are in flux density age_units
-        if not unit.is_equivalent(q.Gyr):
+        # Make sure the values are in time units
+        if not u.equivalent(unit, q.Gyr):
             raise TypeError("{}: Age units must be time units, e.g. 'Gyr'".format(unit))
 
         # Define the age_units...
@@ -143,8 +135,11 @@ class Isochrone:
             age = (age, age * 0)
 
         # Make sure the age has units
-        if not isinstance(age[0], UNIT_DTYPES) or not isinstance(age[1], UNIT_DTYPES):
+        if not u.equivalent(age[0], q.Gyr) or not u.equivalent(age[1], q.Gyr):
             raise ValueError("'age' argument only accepts a sequence of the nominal age and associated uncertainty with astropy units of time.")
+
+        # Make sure age uncertainty is the same unit as age
+        age = age[0], age[1].to(age[0].unit)
 
         # Check if the xval has an uncertainty
         if not isinstance(xval, (tuple, list)):
@@ -156,7 +151,8 @@ class Isochrone:
 
         # Test the age range is inbounds
         if age[0] < self.ages.min() or age[0] > self.ages.max():
-            raise ValueError('Please provide an age range within {} and {}'.format(self.ages.min(), self.ages.max()))
+            args = age[0], self.ages.min(), self.ages.max(), yparam, self.name
+            raise ValueError('{}: age must be between {} and {} to infer {} from {} isochrones.'.format(*args))
 
         # Get the lower, nominal, and upper values
         lower = self.interpolate(xval[0] - xval[1], age[0]-age[1], xparam, yparam)
@@ -175,6 +171,10 @@ class Isochrone:
             fig.ellipse(x=xval[0], y=val, width=xval[1]*2, height=err,
                         color='red', alpha=0.1)
             show(fig)
+
+        # Balk at nans
+        if np.isnan(nominal):
+            raise ValueError("I got a nan from {} for some reason.".format(self.name))
 
         return nominal, error
 
@@ -215,7 +215,8 @@ class Isochrone:
         min_x = min(lower_iso[xparam].min(), upper_iso[xparam].min())
         max_x = max(lower_iso[xparam].max(), upper_iso[xparam].max())
         if xval < min_x or xval > max_x:
-            raise ValueError('Please provide a {} range within {} and {}'.format(xparam, min_x, max_x))
+            args = round(xval, 3), xparam, min_x, max_x, yparam, self.name
+            raise ValueError('{}: {} must be between {} and {} to infer {} from {} isochrones.'.format(*args))
 
         # Get the neighboring interpolated values
         lower_val = np.interp(xval, lower_iso[xparam], lower_iso[yparam])
@@ -248,7 +249,7 @@ class Isochrone:
                      **kwargs)
 
         # Generate a colorbar
-        colors = color_gen(colormap='viridis', n=len(self.ages))
+        colors = u.color_gen(colormap='viridis', n=len(self.ages))
         color_mapper = LinearColorMapper(palette='Viridis256',
                                          low=self.ages.min().value,
                                          high=self.ages.max().value)
@@ -284,12 +285,8 @@ class Isochrone:
         unit: astropy.units.quantity.Quantity
             The desired units of the mass column
         """
-        # Make sure it's a quantity
-        if not isinstance(unit, UNIT_DTYPES):
-            raise TypeError('Age units must be astropy.units.quantity.Quantity')
-
-        # Make sure the values are in flux density mass_units
-        if not unit.is_equivalent(q.Msun):
+        # Make sure the values are in mass units
+        if not u.equivalent(unit, q.Msun):
             raise TypeError("{}: Mass units must be mass units, e.g. 'Msun'".format(unit))
 
         # Define the mass_units...
@@ -315,12 +312,8 @@ class Isochrone:
         unit: astropy.units.quantity.Quantity
             The desired units of the radius column
         """
-        # Make sure it's a quantity
-        if not isinstance(unit, UNIT_DTYPES):
-            raise TypeError('Radius units must be astropy.units.quantity.Quantity')
-
-        # Make sure the values are in flux density radius_units
-        if not unit.is_equivalent(q.Rsun):
+        # Make sure the values are in distance units
+        if not u.equivalent(unit, q.Rsun):
             raise TypeError("{}: Radius units must be distance units, e.g. 'Rsun'".format(unit))
 
         # Define the radius_units...
@@ -346,12 +339,8 @@ class Isochrone:
         unit: astropy.units.quantity.Quantity
             The desired units of the teff column
         """
-        # Make sure it's a quantity
-        if not isinstance(unit, UNIT_DTYPES):
-            raise TypeError('Teff units must be astropy.units.quantity.Quantity')
-
-        # Make sure the values are in flux density teff_units
-        if not unit.is_equivalent(q.K):
+        # Make sure the values are in temperature units
+        if not u.equivalent(unit, q.K):
             raise TypeError("{}: Teff units must be temperature units, e.g. 'K'".format(unit))
 
         # Define the teff_units...
