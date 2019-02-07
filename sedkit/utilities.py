@@ -19,6 +19,7 @@ import astropy.table as at
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.modeling import models
 from bokeh.plotting import figure, show
+from bokeh.models import ColumnDataSource, Whisker
 import bokeh.palettes as bpal
 import numpy as np
 import pandas as pd
@@ -411,7 +412,7 @@ def minimize_norm(arr1, arr2, **kwargs):
     return norm_factor
 
 
-def errorbar(fig, x, y, xerr=None, yerr=None, color='black', point_kwargs={}, error_kwargs={}, legend=None):
+def errorbar(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, color='black', point_kwargs={}, error_kwargs={}, legend=None):
     """
     Hack to make errorbar plots in bokeh
 
@@ -434,23 +435,70 @@ def errorbar(fig, x, y, xerr=None, yerr=None, color='black', point_kwargs={}, er
     legend: str
         The text for the legend
     """
-    fig.circle(x, y, color=color, legend=legend, **point_kwargs)
+    # Make into arrays
+    if not isinstance(x, np.ndarray):
+        x = np.array([x])
+    if not isinstance(y, np.ndarray):
+        y = np.array([y])
 
-    if xerr is not None:
-        x_err_x = []
-        x_err_y = []
-        for px, py, err in zip(x, y, xerr):
-            x_err_x.append((px - err, px + err))
-            x_err_y.append((py, py))
-        fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
+    # Make data table
+    points = ColumnDataSource(data=dict(base=x, y=y))
+    ywhis = None
 
-    if yerr is not None:
-        y_err_x = []
-        y_err_y = []
-        for px, py, err in zip(x, y, yerr):
-            y_err_x.append((px, px))
-            y_err_y.append((py - err, py + err))
-        fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
+    # Add y errorbars if possible
+    if yerr is not None or (yupper is not None and ylower is not None):
+
+        # Symmetric uncertainties
+        if yerr is not None:
+            if not isinstance(yerr, np.ndarray):
+                yerr = np.array([yerr])
+            points.data['lower'] = y - yerr
+            points.data['upper'] = y + yerr
+
+        elif yupper is not None and ylower is not None:
+            if not isinstance(yupper, np.ndarray):
+                yupper = np.array([yupper])
+            if not isinstance(ylower, np.ndarray):
+                ylower = np.array([ylower])
+            points.data['lower'] = y - ylower
+            points.data['upper'] = y + yupper
+
+        # Make whiskers
+        ywhis = Whisker(source=points, base="base", upper="upper", lower="lower", line_color=color, **error_kwargs)
+        ywhis.upper_head.line_color = color
+        ywhis.lower_head.line_color = color
+
+    if ywhis is not None:
+        fig.add_layout(ywhis)
+
+    # # Add x errorbars if possible
+    # if xerr is not None or (xupper is not None and xlower is not None):
+    #
+    #     # Sxmmetric uncertainties
+    #     if xerr is not None:
+    #         if not isinstance(xerr, np.ndarrax):
+    #             xerr = np.arrax([xerr])
+    #         points.data['lower'] = x - xerr
+    #         points.data['upper'] = x + xerr
+    #
+    #     elif xupper is not None and xlower is not None:
+    #         if not isinstance(xupper, np.ndarrax):
+    #             xupper = np.arrax([xupper])
+    #         if not isinstance(xlower, np.ndarrax):
+    #             xlower = np.arrax([xlower])
+    #         points.data['lower'] = x - xlower
+    #         points.data['upper'] = x + xupper
+    #
+    #     # Make whiskers
+    #     xwhis = Whisker(source=points, base="base", upper="upper", lower="lower", line_color=color, **error_kwargs)
+    #     xwhis.upper_head.line_color = color
+    #     xwhis.lower_head.line_color = color
+    #
+    # if xwhis is not None:
+    #     fig.add_laxout(xwhis)
+
+    # Plot the points
+    fig.circle(x=x, y=y, color=color, legend=legend, **point_kwargs)
 
 
 def goodness(f1, f2, e1=None, e2=None, weights=None):
