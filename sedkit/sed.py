@@ -1466,7 +1466,7 @@ class SED:
         # If Teff and Lbol have been caluclated, recalculate with 
         # better Blackbody
         if self.Teff_evo is not None:
-            self.make_wein_tail(teff=self.Teff_evo[0])
+            # self.make_wein_tail(teff=self.Teff_evo[0])
             self.make_rj_tail(teff=self.Teff_evo[0])
             self._calculate_sed()
 
@@ -1806,7 +1806,7 @@ class SED:
 
         if best_fit and len(self.best_fit) > 0:
             for bf in self.best_fit:
-                self.fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.3, color=next(u.COLORS), legend=bf.label)
+                self.fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.5, color=next(u.COLORS), legend=bf.label, line_width=2)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"

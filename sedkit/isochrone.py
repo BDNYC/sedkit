@@ -167,9 +167,9 @@ class Isochrone:
             val = nominal.value if hasattr(nominal, 'unit') else nominal
             err = error.value if hasattr(error, 'unit') else error
             fig = self.plot(xparam, yparam)
-            fig.circle(xval[0], val, color='red')
-            fig.ellipse(x=xval[0], y=val, width=xval[1]*2, height=err,
-                        color='red', alpha=0.1)
+            legend = '{} = {:.3f} ({:.3f})'.format(yparam, val, err)
+            u.errorbar(fig, xval[0], val, xerr=xval[1]*2, yerr=err, color='red', legend=legend)
+
             show(fig)
 
         # Balk at nans
