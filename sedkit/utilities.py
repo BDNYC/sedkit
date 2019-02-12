@@ -406,7 +406,7 @@ def minimize_norm(arr1, arr2, **kwargs):
         return np.nansum(abs(a1 - (a2*p)))
 
     # Initial guess
-    p0 = np.nanmean(arr2)/np.nanmean(arr1)
+    p0 = np.nanmean(arr1)/np.nanmean(arr2)
     norm_factor = opt.fmin(errfunc, p0, args=(arr1, arr2), disp=0, **kwargs)
 
     return norm_factor

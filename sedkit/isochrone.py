@@ -66,7 +66,7 @@ class Isochrone:
 
         # Get the units
         if units is None or not isinstance(units, dict):
-            units = {'age': q.Gyr, 'mass': q.Msun, 'teff': q.K, 'radius': q.Rsun}
+            units = {'age': q.Gyr, 'mass': q.Msun, 'Lbol': q.Lsun, 'teff': q.K, 'radius': q.Rsun}
 
         # Set the initial units
         for uname, unit in units.items():
@@ -245,7 +245,15 @@ class Isochrone:
             The figure
         """
         # Make the figure
-        fig = figure(title=self.name, x_axis_label=xparam, y_axis_label=yparam,
+        try:
+            xlabel = '{} [{}]'.format(xparam, getattr(self, '{}_units'.format(xparam)))
+        except AttributeError:
+            xlabel = xparam
+        try:
+            ylabel = '{} [{}]'.format(yparam, getattr(self, '{}_units'.format(yparam)))
+        except AttributeError:
+            ylabel = yparam
+        fig = figure(title=self.name, x_axis_label=xlabel, y_axis_label=ylabel,
                      **kwargs)
 
         # Generate a colorbar

@@ -338,7 +338,7 @@ class Catalog:
 
 
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
-             xlabel=None, ylabel=None, fig=None, **kwargs):
+             xlabel=None, ylabel=None, fig=None, order=None, **kwargs):
         """Plot parameter x versus parameter y
 
         Parameters
@@ -393,6 +393,14 @@ class Catalog:
         marker('x', 'y', source=source, legend=self.name, color=color,
                name='photometry', fill_alpha=0.7, size=8, **kwargs)
 
+        # Fit polynomial
+        if isinstance(order, int):
+            xdata = np.array(xdata.data, dtype=float)
+            ydata = np.array(ydata.data, dtype=float)
+            coeffs = np.polyfit(x=xdata, y=ydata, deg=order)
+            label = 'Order {} fit'.format(order)
+            fig.line(xdata, np.polyval(coeffs, xdata), legend=label)
+
         # Formatting
         fig.legend.location = "top_right"
         fig.legend.click_policy = "hide"
@@ -400,13 +408,17 @@ class Catalog:
         return fig
 
 
-    def plot_SEDs(self, name_or_idx, scale=['log', 'log'], **kwargs):
+    def plot_SEDs(self, name_or_idx, scale=['log', 'log'], normalized=False, **kwargs):
         """Plot the SED for the given object or objects
 
         Parameters
         ----------
         idx_or_name: str, int, sequence
             The name or index of the SED to get
+        scale: sequence
+            The [x, y] scale to plot, ['linear', 'log']
+        normalized: bool
+            Normalize the SEDs to 1
         """
         COLORS = u.color_gen('Category10')
 

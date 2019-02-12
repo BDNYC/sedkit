@@ -24,7 +24,7 @@ from . import utilities as u
 from .spectrum import Spectrum
 
 
-def load_model(file, parameters=None, wl_min=5000, wl_max=50000):
+def load_model(file, parameters=None, wl_min=5000, wl_max=50000, max_points=10000):
     """Load a model from file
 
     Parameters
@@ -37,6 +37,8 @@ def load_model(file, parameters=None, wl_min=5000, wl_max=50000):
         The minimum wavelength
     wl_max: float
         The maximum wavelength
+    max_points: int
+        If too high-res, rebin to this number of points
 
     Returns
     -------
@@ -73,7 +75,15 @@ def load_model(file, parameters=None, wl_min=5000, wl_max=50000):
 
     # Trim and add the data
     spectrum = np.array([list(i) for i in vot.array]).T
-    meta['spectrum'] = spectrum[:, (spectrum[0] >= wl_min) & (spectrum[0] <= wl_max)]
+    spec_data = spectrum[:, (spectrum[0] >= wl_min) & (spectrum[0] <= wl_max)]
+
+    # Rebin if too high resolution
+    if len(spec_data[0]) > max_points:
+        new_w = np.linspace(spec_data[0].min(), spec_data[0].max(), max_points)
+        spec_data = u.spectres(new_w, *spec_data)
+
+    # Store the data
+    meta['spectrum'] = spec_data
     meta['label'] = '/'.join([str(v) for k, v in meta.items() if k not in
                               ['spectrum', 'filepath']])
 

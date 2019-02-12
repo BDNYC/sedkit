@@ -33,6 +33,7 @@ from . import modelgrid as mg
 
 
 Vizier.columns = ["**", "+_r"]
+Simbad.add_votable_fields('parallax', 'sptype', 'diameter', 'ids')
 SptRadius = rel.SpectralTypeRadius()
 
 
@@ -111,7 +112,7 @@ class SED:
     wave_units: astropy.units.quantity.Quantity
         The desired wavelength units
     """
-    def __init__(self, name='My Target', verbose=True, **kwargs):
+    def __init__(self, name='My Target', verbose=True, method_list=None, **kwargs):
         """
         Initialize an SED object
 
@@ -121,6 +122,9 @@ class SED:
             A name for the target
         verbose: bool
             Print some diagnostic stuff
+        method_list: list (optional)
+            Methods to run with arguments as nested dictionaries,
+            e.g. ['find_2MASS', 'find_WISE']
         """
         # Attributes with setters
         self._name = None
@@ -135,10 +139,14 @@ class SED:
         self._sky_coords = None
         self._evo_model = None
         self.evo_model = 'hybrid_solar_age'
+        self.SpT = None
+
+        # Dictionary to keep track of references
+        self.refs = {}
 
         # Static attributes
         self.verbose = verbose
-        self.search_radius = 15*q.arcsec
+        self.search_radius = 20*q.arcsec
 
         # Book keeping
         self.calculated = False
@@ -209,7 +217,6 @@ class SED:
         self.Lbol = None
         self.Mbol = None
         self.Lbol_sun = None
-        self.SpT = None
         self.SpT_fit = None
         self.mass = None
         self.logg = None
@@ -219,6 +226,37 @@ class SED:
         # Default parameters
         if self.age is None:
             self.age = 6*q.Gyr, 4*q.Gyr
+
+        # Run methods
+        if method_list is not None:
+            self.run_methods(method_list)
+
+    def run_methods(self, method_list):
+        """Run the methods listed in order
+
+        Parameters
+        ----------
+        method_list: list
+            A list of methods to run with arguments
+        """
+        # Make into list of lists
+        method_list = [[meth, {}] if isinstance(meth, str) else meth for meth in method_list]
+
+        # Iterate over list
+        for method, args in method_list:
+
+            # Check for valid method
+            if method in dir(self):
+
+                # Check if args are a None, list, or dict
+                args = args or {}
+
+                # Make sure args are a dictionary
+                if not isinstance(args, dict):
+                    raise TypeError("{} arguments must be a dictionary".format(method))
+
+                # Run the method
+                getattr(self, method)(**args)
 
     def add_photometry(self, band, mag, mag_unc=None, **kwargs):
         """Add a photometric measurement to the photometry table
@@ -283,6 +321,11 @@ class SED:
             self.min_phot = bp.wave_eff
         if self.max_phot is None or bp.wave_eff > self.max_phot:
             self.max_phot = bp.wave_eff
+
+        # Add refs to references
+        if 'photometry' not in self.refs:
+            self.refs['photometry'] = {}
+        self.refs['photometry'][band] = new_photometry['ref']
 
     def add_photometry_file(self, file):
         """Add a table of photometry from an ASCII file that
@@ -374,6 +417,11 @@ class SED:
                 self.min_spec = np.nanmin(spec.spectrum[0])
             if self.max_spec is None or np.nanmax(spec.spectrum[0]) > self.max_spec:
                 self.max_spec = np.nanmax(spec.spectrum[0])
+
+            # Add refs to references
+            if 'spectra' not in self.refs:
+                self.refs['spectra'] = {}
+            self.refs['spectra'][spec.name] = new_spectrum['ref']
 
     def add_spectrum_file(self, file, wave_units=None, flux_units=None, ext=0,
                           survey=None, **kwargs):
@@ -482,7 +530,7 @@ class SED:
         self._photometry['abs_magnitude_unc'] = np.nan
         self.abs_phot_SED = None
 
-        if self.photometry is not None and len(self.photometry)>0:
+        if self.photometry is not None and len(self.photometry) > 0:
 
             # Update the photometry
             self._photometry['eff'] = self._photometry['eff'].to(self.wave_units)
@@ -518,7 +566,7 @@ class SED:
             # Make apparent photometric SED with photometry
             app_cols = ['eff', 'app_flux', 'app_flux_unc']
             phot_array = np.array(self.photometry[app_cols])
-            phot_array = phot_array[(self.photometry['app_flux']>0)&(self.photometry['app_flux_unc']>0)]
+            phot_array = phot_array[(self.photometry['app_flux'] > 0) & (self.photometry['app_flux_unc'] > 0)]
             self.app_phot_SED = sp.Spectrum(*[phot_array[i]*Q for i, Q in zip(app_cols, self.units)])
 
             # Make absolute photometric SED with photometry
@@ -773,7 +821,7 @@ class SED:
                              ['2MASS.J', '2MASS.H', '2MASS.Ks'],
                              **kwargs)
 
-    def find_Gaia(self, search_radius=15*q.arcsec, catalog='I/345/gaia2', idx=None):
+    def find_Gaia(self, search_radius=None, catalog='I/345/gaia2', idx=0):
         """
         Search for Gaia data
 
@@ -791,24 +839,36 @@ class SED:
             raise TypeError("Can't find Gaia data without coordinates!")
 
         # Query the catalog
-        radius = search_radius or self.search_radius
-        parallaxes = Vizier.query_region(self.sky_coords, radius=radius, catalog=[catalog])
+        # See if the designation was fetched by Simbad
+        des = [name for name in self.all_names if name.startswith(name)]
+
+        # If search_radius is explicitly set, use that
+        if search_radius is not None:
+            viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius, catalog=[catalog])
+
+        # ...or get photometry using designation...
+        elif len(des) > 0:
+            viz_cat = Vizier.query_object(des[0], catalog=[catalog])
+
+        # ...or from the coordinates
+        else:
+            viz_cat = Vizier.query_region(self.sky_coords, radius=self.search_radius, catalog=[catalog])
 
         # Print info
         if self.verbose:
-            n_rec = len(parallaxes)
+            n_rec = len(viz_cat)
             print("{} record{} found in Gaia DR2.".format(n_rec, '' if n_rec == 1 else 's'))
 
         # Parse the records
-        if parallaxes:
+        if len(viz_cat) > 0:
 
             # Grab the first record
-            parallax = list(parallaxes[0][idx or 0][['Plx', 'e_Plx']])
+            parallax = list(viz_cat[0][idx][['Plx', 'e_Plx']])
             self.parallax = parallax[0]*q.mas, parallax[1]*q.mas
 
             # Get Gband while we're here
             try:
-                mag, unc = list(parallaxes[0][0][['Gmag', 'e_Gmag']])
+                mag, unc = list(viz_cat[0][0][['Gmag', 'e_Gmag']])
                 self.add_photometry('Gaia.G', mag, unc)
             except:
                 pass
@@ -848,14 +908,17 @@ class SED:
         # See if the designation was fetched by Simbad
         des = [name for name in self.all_names if name.startswith(name)]
 
-        # Get photometry using designation...
-        if len(des) > 0:
+        # If search_radius is explicitly set, use that
+        if search_radius is not None:
+            viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius, catalog=[catalog])
+
+        # ...or get photometry using designation...
+        elif len(des) > 0:
             viz_cat = Vizier.query_object(des[0], catalog=[catalog])
 
         # ...or from the coordinates
         else:
-            rad = search_radius or self.search_radius
-            viz_cat = Vizier.query_region(self.sky_coords, radius=rad, catalog=[catalog])
+            viz_cat = Vizier.query_region(self.sky_coords, radius=self.search_radius, catalog=[catalog])
 
         if target_names is None:
             target_names = band_names
@@ -892,14 +955,17 @@ class SED:
                              ['SDSS.u', 'SDSS.g', 'SDSS.r', 'SDSS.i', 'SDSS.z'],
                              **kwargs)
 
-    def find_SIMBAD(self, search_radius=10*q.arcsec):
+    def find_Simbad(self, search_radius=None, idx=0):
         """
-        Search for a SIMBAD record
+        Search for a Simbad record to retrieve designations, coordinates,
+        parallax, radius, and spectral type information
 
         Parameters
         ----------
         search_radius: astropy.units.quantity.Quantity
             The radius for the cone search
+        idx: int
+            The index of the result to use
         """
         # Check for coordinates
         if isinstance(self.sky_coords, SkyCoord):
@@ -918,22 +984,43 @@ class SED:
             return
 
         # Parse the record and save the names
-        if viz_cat is not None:
+        if len(viz_cat) > 0:
+            # Choose the record
+            obj = viz_cat[idx]
 
-            main_ID = viz_cat[0]['MAIN_ID'].decode("utf-8")
-            self.all_names += list(Simbad.query_objectids(main_ID)['ID'])
+            # Get the list of names
+            main_ID = obj['MAIN_ID'].decode("utf-8")
+            self.all_names += obj['IDS'].decode("utf-8").split('|')
 
             # Remove duplicates
             self.all_names = list(set(self.all_names))
 
+            # Set the name
             if self.name is None:
                 self._name = main_ID
 
+            # Save the coordinates
             if self.sky_coords is None:
                 sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
                                       unit=(q.hour, q.degree), frame='icrs')
                 self._set_sky_coords(sky_coords, simbad=False)
+
+            # Check for a parallax
+            if not hasattr(obj['PLX_VALUE'], 'mask'):
+                self.parallax = obj['PLX_VALUE']*q.mas, obj['PLX_ERROR']*q.mas
+                self.refs['parallax'] = obj['PLX_BIBCODE'].decode("utf-8")
+
+            # Check for a spectral type
+            if not hasattr(obj['SP_TYPE'], 'mask'):
+                self.spectral_type = obj['SP_TYPE'].decode("utf-8")
+                self.refs['spectral_type'] = obj['SP_BIBCODE'].decode("utf-8")
+
+            # Check for a radius
+            if not hasattr(obj['Diameter_diameter'], 'mask'):
+                du = q.Unit(obj['Diameter_unit'].decode("utf-8"))
+                self.radius = obj['Diameter_diameter']/2.*du, obj['Diameter_error']*du
+                self.refs['radius'] = obj['Diameter_bibcode'].decode("utf-8")
 
             # Print info
             if self.verbose:
@@ -1030,7 +1117,6 @@ class SED:
 
             self.app_spec_SED.best_fit_model(modelgrid)
             self.best_fit.append(self.app_spec_SED.best_fit[-1])
-            print(self.app_spec_SED.best_fit)
 
             if self.verbose:
                 print('Best fit: ', self.best_fit[-1]['label'])
@@ -1575,7 +1661,7 @@ class SED:
 
     @name.setter
     def name(self, new_name):
-        """A setter for the source name, which looks up metadata given a SIMBAD name
+        """A setter for the source name, which looks up metadata given a Simbad name
 
         Parameters
         ----------
@@ -1585,7 +1671,7 @@ class SED:
         self._name = new_name
 
         # Check for sky coords
-        self.find_SIMBAD()
+        self.find_Simbad()
 
     @property
     def parallax(self):
@@ -1653,7 +1739,7 @@ class SED:
         return self._photometry
 
     def plot(self, app=True, photometry=True, spectra=True, integral=False,
-             syn_photometry=True, blackbody=True, best_fit=True,
+             syn_photometry=False, blackbody=False, best_fit=True,
              scale=['log', 'log'], output=False, fig=None, color=None,
              **kwargs):
         """
@@ -2016,7 +2102,7 @@ class SED:
 
         # Try to find the source in Simbad
         if simbad:
-            self.find_SIMBAD()
+            self.find_Simbad()
 
     @property
     def spectra(self):
@@ -2046,7 +2132,6 @@ class SED:
             The spextral type prefix, ['sd', 'esd']
         """
         if isinstance(spectral_type, str):
-            self.SpT = spectral_type
             spec_type = u.specType(spectral_type)
             spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type
 
@@ -2060,10 +2145,8 @@ class SED:
             if other:
                 prefix = other[0]
 
-            self.SpT = u.specType([spectral_type, spectral_type_unc, prefix, gravity, lum_class or 'V'])
-
         elif isinstance(spectral_type, (float, int)):
-            self.spectral_type = u.specType(spectral_type)
+            pass
 
         else:
             raise TypeError('Please provide a string or tuple to set the spectral type.')
@@ -2073,6 +2156,8 @@ class SED:
         self.luminosity_class = lum_class or 'V'
         self.gravity = gravity or None
         self.prefix = prefix or None
+        self.SpT = u.specType([self.spectral_type[0], self.spectral_type[1],
+                               self.prefix, self.gravity, self.luminosity_class])
 
         # Set the age if not explicitly set
         if self.age is None and self.gravity is not None:
