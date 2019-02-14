@@ -126,6 +126,9 @@ class SED:
             Methods to run with arguments as nested dictionaries,
             e.g. ['find_2MASS', 'find_WISE']
         """
+        # Print stuff
+        self.verbose = verbose
+
         # Attributes with setters
         self._name = None
         self._ra = None
@@ -138,14 +141,14 @@ class SED:
         self._membership = None
         self._sky_coords = None
         self._evo_model = None
-        self.evo_model = 'hybrid_solar_age'
+        self.reddening = 0
+        self.evo_model = 'DUSTY00'
         self.SpT = None
 
         # Dictionary to keep track of references
         self.refs = {}
 
         # Static attributes
-        self.verbose = verbose
         self.search_radius = 20*q.arcsec
 
         # Book keeping
@@ -163,7 +166,6 @@ class SED:
 
         # Attributes of arbitrary length
         self.all_names = []
-        # self._spectra = []
         self.stitched_spectra = []
         self.app_spec_SED = None
         self.abs_spec_SED = None
@@ -186,7 +188,6 @@ class SED:
                      'bandpass', 'ref')
         phot_typs = ('U16', np.float16, np.float16, np.float16, float, float,
                      np.float16, np.float16, float, float, 'O', 'O')
-        self.reddening = 0
         self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
         for col in ['app_flux', 'app_flux_unc', 'abs_flux', 'abs_flux_unc']:
             self._photometry[col].unit = self._flux_units
@@ -747,7 +748,7 @@ class SED:
         if model not in iso.EVO_MODELS:
             raise IOError("Please use an evolutionary model from the list: {}".format(iso.EVO_MODELS))
 
-        self._evo_model = iso.Isochrone(model)
+        self._evo_model = iso.Isochrone(model, verbose=self.verbose)
 
         # Set as uncalculated
         self.calculated = False
@@ -901,24 +902,24 @@ class SED:
         idx: int
             The index of the record to use if multiple Vizier results
         """
-        # Make sure there are coordinates
-        if not isinstance(self.sky_coords, SkyCoord):
-            raise TypeError("Can't find {} photometry without coordinates!".format(name))
-
         # See if the designation was fetched by Simbad
         des = [name for name in self.all_names if name.startswith(name)]
 
         # If search_radius is explicitly set, use that
-        if search_radius is not None:
+        if search_radius is not None and isinstance(self.sky_coords, SkyCoord):
             viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius, catalog=[catalog])
 
         # ...or get photometry using designation...
         elif len(des) > 0:
             viz_cat = Vizier.query_object(des[0], catalog=[catalog])
 
-        # ...or from the coordinates
-        else:
+        # ...or from the coordinates...
+        elif isinstance(self.sky_coords, SkyCoord):
             viz_cat = Vizier.query_region(self.sky_coords, radius=self.search_radius, catalog=[catalog])
+
+        # ...or abort
+        else:
+            viz_cat = None
 
         if target_names is None:
             target_names = band_names
@@ -929,7 +930,7 @@ class SED:
             print("{} record{} found in {}.".format(n_rec, '' if n_rec == 1 else 's', name))
 
         # Parse the record
-        if len(viz_cat) > 0:
+        if viz_cat is not None and len(viz_cat) > 0:
             if len(viz_cat) > 1:
                 print('{} {} records found.'.format(len(viz_cat), name))
 
@@ -984,7 +985,7 @@ class SED:
             return
 
         # Parse the record and save the names
-        if len(viz_cat) > 0:
+        if viz_cat is not None and len(viz_cat) > 0:
             # Choose the record
             obj = viz_cat[idx]
 
@@ -1013,14 +1014,17 @@ class SED:
 
             # Check for a spectral type
             if not hasattr(obj['SP_TYPE'], 'mask'):
-                self.spectral_type = obj['SP_TYPE'].decode("utf-8")
-                self.refs['spectral_type'] = obj['SP_BIBCODE'].decode("utf-8")
+                try:
+                    self.spectral_type = obj['SP_TYPE'].decode("utf-8")
+                    self.refs['spectral_type'] = obj['SP_BIBCODE'].decode("utf-8")
+                except IndexError:
+                    pass
 
             # Check for a radius
             if not hasattr(obj['Diameter_diameter'], 'mask'):
-                du = q.Unit(obj['Diameter_unit'].decode("utf-8"))
+                du = q.Unit(obj['Diameter_unit'])
                 self.radius = obj['Diameter_diameter']/2.*du, obj['Diameter_error']*du
-                self.refs['radius'] = obj['Diameter_bibcode'].decode("utf-8")
+                self.refs['radius'] = obj['Diameter_bibcode']
 
             # Print info
             if self.verbose:
@@ -1410,10 +1414,15 @@ class SED:
 
     def get_reddening(self):
         """Calculate the reddening from the Bayestar17 dust map"""
+        # Check for distance and coordinates
         if self.distance is not None and self.sky_coords is not None:
             gal_coords = SkyCoord(self.sky_coords.galactic, frame='galactic', distance=self.distance[0])
             bayestar = BayestarWebQuery(version='bayestar2017')
-            self.reddening = bayestar(gal_coords, mode='random_sample')
+            red = bayestar(gal_coords, mode='random_sample')
+
+            # Set the attribute
+            if not np.isinf(red) and not np.isnan(red) and red >= 0:
+                self.reddening = red
 
     def get_Teff(self):
         """Calculate the effective temperature
@@ -1460,14 +1469,21 @@ class SED:
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            if self.Lbol_sun[1] is None:
+            # Default
+            logg = None
+
+            # Check for uncertainties
+            if self.verbose and self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
             else:
-                try:
-                    self.logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg', plot=plot)
-                except ValueError as err:
-                    print("Could not calculate surface gravity.")
-                    print(err)
+                logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg', plot=plot)
+
+            # Print a message if None
+            if logg is None and self.verbose:
+                print("Could not calculate surface gravity.")
+
+            # Store the value
+            self.logg = logg
 
         else:
             if self.verbose:
@@ -1505,7 +1521,9 @@ class SED:
         """Construct the SED"""
         # Make sure the is data
         if len(self.spectra) == 0 and len(self.photometry) == 0:
-            raise ValueError('Cannot make the SED without spectra or photometry!')
+            if self.verbose:
+                print('Cannot make the SED without spectra or photometry!')
+            return
 
         # Calculate flux and calibrate
         self._calibrate_photometry()
@@ -1608,15 +1626,21 @@ class SED:
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            if self.Lbol_sun[1] is None:
+            # Default
+            mass = None
+
+            # Check for uncertainties
+            if self.verbose and self.Lbol_sun[1] is None:
                 print('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
             else:
-                try:
-                    self.evo_model.mass_units = mass_units
-                    self.mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', plot=plot)
-                except ValueError as err:
-                    print("Could not calculate mass.")
-                    print(err)
+                mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', plot=plot)
+
+            # Print a message if None
+            if mass is None and self.verbose:
+                print("Could not calculate mass.")
+
+            # Store the value
+            self.mass = mass
 
         else:
             if self.verbose:
@@ -1991,14 +2015,24 @@ class SED:
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            try:
-                self.evo_model.radius_units = radius_units
-                self.radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
-                self.isochrone_radius = True
+            # Default
+            radius = None
 
-            except ValueError as err:
+            # Check for uncertainties
+            if self.verbose and self.Lbol_sun[1] is None:
+                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the radius.'.format(self))
+            else:
+                self.evo_model.radius_units = radius_units
+                radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
+
+            # Print a message if None
+            if radius is None and self.verbose:
                 print("Could not calculate radius.")
-                print(err)
+
+            # Store the value
+            self.radius = radius
+            if radius is not None:
+                self.isochrone_radius = True
 
         else:
             if self.verbose:
@@ -2182,22 +2216,34 @@ class SED:
 
     def teff_from_age(self, teff_units=q.K, plot=False):
         """Estimate the radius from model isochrones given an age and Lbol
+
+        Parameters
+        ----------
+        teff_units: astropy.units.quantity.Quantity
+            The temperature units to use
         """
         if self.age is not None and self.Lbol_sun is not None:
 
-            if self.Lbol_sun[1] is None:
-                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the Teff.'.format(self))
+            # Default
+            teff = None
+
+            # Check for uncertainties
+            if self.verbose and self.Lbol_sun[1] is None:
+                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the teff.'.format(self))
             else:
-                try:
-                    self.evo_model.teff_units = teff_units
-                    self.Teff_evo = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
-                except ValueError as err:
-                    print("Could not calculate Teff.")
-                    print(err)
+                self.evo_model.teff_units = teff_units
+                teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
+
+            # Print a message if None
+            if teff is None and self.verbose:
+                print("Could not calculate teff.")
+
+            # Store the value
+            self.Teff_evo = teff
 
         else:
             if self.verbose:
-                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the Teff.'.format(self))
+                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the teff.'.format(self))
 
     @property
     def wave_units(self):

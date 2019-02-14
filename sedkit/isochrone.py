@@ -33,7 +33,7 @@ EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resourc
 
 class Isochrone:
     """A class to handle model isochrones"""
-    def __init__(self, name, units=None, **kwargs):
+    def __init__(self, name, units=None, verbose=True, **kwargs):
         """Initialize the isochrone object
 
         Parameters
@@ -41,6 +41,7 @@ class Isochrone:
         name: str
             The name of the model set
         """
+        self.verbose = verbose
         if name not in EVO_MODELS:
             raise ValueError(name, 'No evolutionary model by this name. Try', EVO_MODELS)
 
@@ -151,13 +152,24 @@ class Isochrone:
 
         # Test the age range is inbounds
         if age[0] < self.ages.min() or age[0] > self.ages.max():
-            args = age[0], self.ages.min(), self.ages.max(), yparam, self.name
-            raise ValueError('{}: age must be between {} and {} to infer {} from {} isochrones.'.format(*args))
+            if self.verbose:
+                args = age[0], self.ages.min(), self.ages.max(), yparam, self.name
+                print('{}: age must be between {} and {} to infer {} from {} isochrones.'.format(*args))
+            return None
 
         # Get the lower, nominal, and upper values
         lower = self.interpolate(xval[0] - xval[1], age[0]-age[1], xparam, yparam)
         nominal = self.interpolate(xval[0], age[0], xparam, yparam)
         upper = self.interpolate(xval[0] + xval[1], age[0]+age[1], xparam, yparam)
+
+        if nominal is None:
+            return None
+        if lower is None:
+            lower = upper
+        if upper is None:
+            upper = lower
+        if upper is None:
+            return None
 
         # Caluclate the symmetric error
         error = max(abs(nominal - lower), abs(nominal - upper)) * 2
@@ -215,8 +227,10 @@ class Isochrone:
         min_x = min(lower_iso[xparam].min(), upper_iso[xparam].min())
         max_x = max(lower_iso[xparam].max(), upper_iso[xparam].max())
         if xval < min_x or xval > max_x:
-            args = round(xval, 3), xparam, min_x, max_x, yparam, self.name
-            raise ValueError('{}: {} must be between {} and {} to infer {} from {} isochrones.'.format(*args))
+            if self.verbose:
+                args = round(xval, 3), xparam, min_x, max_x, yparam, self.name
+                print('{}: {} must be between {} and {} to infer {} from {} isochrones.'.format(*args))
+            return None
 
         # Get the neighboring interpolated values
         lower_val = np.interp(xval, lower_iso[xparam], lower_iso[yparam])
