@@ -19,7 +19,8 @@ import astropy.table as at
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.modeling import models
 from bokeh.plotting import figure, show
-from bokeh.models import ColumnDataSource, Whisker
+from bokeh.models import ColumnDataSource, Whisker, LassoSelectTool
+from bokeh.layouts import gridplot
 import bokeh.palettes as bpal
 import numpy as np
 import pandas as pd
@@ -710,6 +711,13 @@ def interp_flux(flux, params, values):
         generators.append(interp_f)
 
     return flx, generators
+
+
+def link_plots(plots, **kwargs):
+    """Make linked plots for the given parameters"""
+    for plt in plots:
+        plt.add_tools(LassoSelectTool())
+    return gridplot([[plt] for plt in plots])
 
 
 def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):

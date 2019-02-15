@@ -14,8 +14,9 @@ import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
 import numpy as np
-from bokeh.plotting import figure, show
+from bokeh.layouts import gridplot
 from bokeh.models import HoverTool, ColumnDataSource, LabelSet
+from bokeh.plotting import figure, show
 
 from .sed import SED
 from . import utilities as u
@@ -345,104 +346,160 @@ class Catalog:
 
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
              xlabel=None, ylabel=None, fig=None, order=None, data=None,
-             identify=None, id_color='red', label_points=False, **kwargs):
+             identify=None, id_color='red', label_points=False, exclude=None,
+             **kwargs):
         """Plot parameter x versus parameter y
 
         Parameters
         ----------
         x: str
-            The name of the x axis parameter, e.g. 'SpT'
+             The name of the x axis parameter, e.g. 'SpT'
         y: str
-            The name of the y axis parameter, e.g. 'Teff'
+             The name of the y axis parameter, e.g. 'Teff'
         marker: str (optional)
-            The name of the method for the desired marker
+             The name of the method for the desired marker
         color: str (optional)
-            The color to use for the points
+             The color to use for the points
         scale: sequence
-            The (x,y) scale for the plot
+             The (x,y) scale for the plot
         xlabel: str
-            The label for the x-axis
+             The label for the x-axis
         ylable : str
-            The label for the y-axis 
+             The label for the y-axis 
         fig: bokeh.plotting.figure (optional)
-            The figure to plot on
+             The figure to plot on
         order: int
-            The polynomial order to fit
+             The polynomial order to fit
         data: dict
-            Additional data to add to the plot
+             Additional data to add to the plot
         identify: idx, str, sequence
-            Names of sources to highlight in the plot
+             Names of sources to highlight in the plot
         id_color: str
-            The color of the identified points
+             The color of the identified points
+        label_points: bool
+             Print the name of the object next to the point
+
+        Returns
+        -------
+        bokeh.plotting.figure.Figure
+             The figure object
         """
+        # Grab the source and valid params
+        source = copy(self.source)
+        params = [k for k in source.column_names if not k.endswith('_unc')]
+
+        # Check if the x parameter is a color
+        if '-' in x and all([i in params for i in x.split('-')]):
+            colordata = self.get_data(x)[0]
+            if len(colordata) == 3:
+                _ = source.add(colordata[0], x)
+                _ = source.add(colordata[1], '{}_unc'.format(x))
+                params.append(x)
+
+        # Check if the y parameter is a color
+        if '-' in y and all([i in params for i in y.split('-')]):
+            colordata = self.get_data(y)[0]
+            if len(colordata) == 3:
+                _ = source.add(colordata[0], y)
+                _ = source.add(colordata[1], '{}_unc'.format(y))
+                params.append(y)
+
+        # Check the params are in the table
+        if x not in params:
+            raise Exception("'{}' is not a valid x parameter. Please choose from {}".format(x, params))
+        if y not in params:
+            raise Exception("'{}' is not a valid y parameter. Please choose from {}".format(y, params))
+
         # Make the figure
         if fig is None:
 
+            # Tooltip names can't have '.' or '-'
+            xname = source.add(source.data[x], x.replace('.', '_').replace('-', '_'))
+            yname = source.add(source.data[y], y.replace('.', '_').replace('-', '_'))
+
             # Set up hover tool
-            tips = [('Name', '@desc'), (x, '@x'), (y, '@y')]
+            tips = [('Name', '@name'), (x, '@{}'.format(xname)), (y, '@{}'.format(yname))]
             hover = HoverTool(tooltips=tips, names=['points'])
 
             # Make the plot
             TOOLS = ['pan', 'reset', 'box_zoom', 'save', hover]
-            title = '{} v {}'.format(x,y)
+            title = '{} v {}'.format(x, y)
             fig = figure(plot_width=800, plot_height=500, title=title, 
                          y_axis_type=scale[1], x_axis_type=scale[0], 
                          tools=TOOLS)
 
-        # Make sure marker is legit
+        # # Exclude sources
+        # if exclude is not None:
+        #     exc_idx = [i for i, v in enumerate(source.data['name']) if v in exclude]
+        #     patches = {x : [(i, np.nan) for i in exc_idx],
+        #                y : [(i, np.nan) for i in exc_idx]}
+        #
+        #     source.patch(patches)
+
+        # Get marker class
         size = kwargs.get('size', 8)
         kwargs['size'] = size
         marker = getattr(fig, marker or self.marker)
         color = color or self.color
+        marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
 
-        # Get manually input data
-        if isinstance(data, dict):
-            names = data['name']
-            xdata = data[x]
-            xerror = data.get('{}_unc'.format(x), np.zeros(len(xdata)))
-            xunit = data.get('{}_unit'.format(x))
-            ydata = data[y]
-            yerror = data.get('{}_unc'.format(y), np.zeros(len(ydata)))
-            yunit = data.get('{}_unit'.format(y))
+        # Plot y errorbars
+        yval, yerr = source.data[y], source.data['{}_unc'.format(y)]
+        yval[yval == None] = np.nan
+        yerr[yerr == None] = np.nan
+        y_err_x = [(i, i) for i in source.data[x]]
+        y_err_y = [(i, j) for i, j in zip(yval - yerr, yval + yerr)]
+        fig.multi_line(y_err_x, y_err_y, color=color)
 
-        # Or catalog data
-        else:
-            # Get the data
-            (xdata, xerror, xunit), (ydata, yerror, yunit) = self.get_data(x, y)
-
-            # Get the source names
-            names = self.results['name'] 
-
-        # Set axis labels
-        fig.xaxis.axis_label = '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
-        fig.yaxis.axis_label = '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
-
-        # Plot points with tips
-        source = ColumnDataSource(data=dict(x=xdata, y=ydata, desc=names))
-        marker('x', 'y', source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
-
-        # Add errorbars
-        u.errorbars(fig, xdata, ydata, xerr=xerror, yerr=yerror, color=color)
+        # Plot x errorbars
+        xval, xerr = source.data[x], source.data['{}_unc'.format(x)]
+        xval[xval == None] = np.nan
+        xerr[xerr == None] = np.nan
+        x_err_y = [(i, i) for i in source.data[y]]
+        x_err_x = [(i, j) for i, j in zip(xval - xerr, xval + xerr)]
+        fig.multi_line(x_err_x, x_err_y, color=color)
 
         # Label points
         if label_points:
-            labels = LabelSet(x='x', y='y', text='desc', level='glyph', x_offset=5, y_offset=5, source=source, render_mode='canvas')
+            labels = LabelSet(x=x, y=y, text='name', level='glyph', x_offset=5, y_offset=5, source=source, render_mode='canvas')
             fig.add_layout(labels)
 
         # Fit polynomial
         if isinstance(order, int):
-            # Make into arrays
-            idx = [n for n, (i, j, k) in enumerate(zip(xdata.data, ydata.data, yerror.data)) if not hasattr(i, 'mask') and not hasattr(j, 'mask') and not hasattr(k, 'mask')]
-            xdata = np.array(xdata.data, dtype=float)[idx]
-            ydata = np.array(ydata.data, dtype=float)[idx]
-            yerror = np.array(yerror.data, dtype=float)[idx]
+
+            # Only fit valid values
+            idx = [n for n, (i, j) in enumerate(zip(xval, yval)) if not hasattr(i, 'mask') and not np.isnan(i) and not hasattr(j, 'mask') and not np.isnan(j)]
+            xd = np.array(xval, dtype=float)[idx]
+            yd = np.array(yval, dtype=float)[idx]
+            ye = np.array(yerr, dtype=float)[idx]
+
+            # Plot data
+            label = 'Order {} fit'.format(order)
+            xaxis = np.linspace(min(xd), max(xd), 100)
+            coeffs = None
 
             # Fit the polynomial
-            coeffs = np.polyfit(x=xdata, y=ydata, deg=order, w=1/yerror)
-            label = 'Order {} fit'.format(order)
-            xaxis = np.linspace(min(xdata), max(xdata), 100)
-            yaxis = np.polyval(coeffs, xaxis)
-            fig.line(xaxis, yaxis, legend=label, color=color)
+            try:
+                coeffs = np.polyfit(x=xd, y=yd, deg=order, w=1./ye)
+            except Exception:
+                try:
+                    print(xd, yd)
+                    coeffs = np.polyfit(x=xd, y=yd, deg=order)
+                except:
+                    pass
+
+            # Plot the line
+            if coeffs is None or any([np.isnan(i) for i in coeffs]):
+                print("Could not fit that data with an order {} polynomial".format(order))
+            else:
+                yaxis = np.polyval(coeffs, xaxis)
+                fig.line(xaxis, yaxis, legend=label, color=color)
+
+        # Set axis labels
+        xunit = source.data[x].unit
+        yunit = source.data[y].unit
+        fig.xaxis.axis_label = '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
+        fig.yaxis.axis_label = '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
 
         # Formatting
         fig.legend.location = "top_right"
@@ -542,3 +599,14 @@ class Catalog:
             f.close()
 
             print('Catalog saved to',file)
+
+    @property
+    def source(self):
+        """Generates a ColumnDataSource from the results table"""
+        # Copy the results table
+        table = copy(self.results)
+
+        # Remove the SED column
+        del table['SED']
+
+        return ColumnDataSource(data=dict(table))

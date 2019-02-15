@@ -180,7 +180,8 @@ class Isochrone:
             err = error.value if hasattr(error, 'unit') else error
             fig = self.plot(xparam, yparam)
             legend = '{} = {:.3f} ({:.3f})'.format(yparam, val, err)
-            u.errorbar(fig, xval[0], val, xerr=xval[1]*2, yerr=err, color='red', legend=legend)
+            fig.circle(xval[0], val, color='red', legend=legend)
+            u.errorbars(fig, [xval[0]], [val], xerr=[xval[1]*2], yerr=[err], color='red')
 
             show(fig)
 
