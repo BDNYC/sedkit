@@ -17,6 +17,7 @@ import numpy as np
 from bokeh.layouts import gridplot
 from bokeh.models import HoverTool, ColumnDataSource, LabelSet
 from bokeh.plotting import figure, show
+from bokeh.models.glyphs import Patch
 
 from .sed import SED
 from . import utilities as u
@@ -24,9 +25,10 @@ from . import utilities as u
 
 class Catalog:
     """An object to collect SED results for plotting and analysis"""
-    def __init__(self, name='SED Catalog', marker='circle', color='blue', **kwargs):
+    def __init__(self, name='SED Catalog', marker='circle', color='blue', verbose=True,  **kwargs):
         """Initialize the Catalog object"""
         # Metadata
+        self.verbose = verbose
         self.name = name
         self.marker = marker
         self.color = color
@@ -165,6 +167,9 @@ class Catalog:
         else:
             self.results = at.vstack([self.results, table])
 
+        if self.verbose:
+            print("Successfully added SED '{}'".format(sed.name))
+
     def export(self, parentdir='.', dirname=None, format='ipac',
                sources=True, zipped=False):
         """
@@ -252,20 +257,23 @@ class Catalog:
 
         return cat
 
-    def from_file(self, filepath, methods_list=['find_2MASS'], delimiter=','):
+    def from_file(self, filepath, run_methods=['find_2MASS'], delimiter=','):
         """Generate a catalog from a file of source names and coordinates
 
         Parameters
         ----------
         filepath: str
             The path to an ASCII file
-        methods_list: list
+        run_methods: list
             A list of methods to run
         delimiter: str
             The column delimiter of the ASCII file
         """
         # Get the table of sources
         data = ascii.read(filepath, delimiter=delimiter)
+
+        if self.verbose:
+            print("Generating SEDs for {} sources from {}".format(len(data), filepath))
 
         # Iterate over table
         for row in data:
@@ -276,7 +284,7 @@ class Catalog:
                 s.sky_coords = row['ra']*q.deg, row['dec']*q.deg
 
             # Run the desired methods
-            s.run_methods(methods_list)
+            s.run_methods(run_methods)
 
             # Add it to the catalog
             self.add_SED(s)
@@ -326,7 +334,8 @@ class Catalog:
             return copy(self.results[name_or_idx]['SED'])
 
         else:
-            print('Could not retrieve SED', name_or_idx)
+            if self.verbose:
+                print('Could not retrieve SED', name_or_idx)
 
             return
 
@@ -480,20 +489,32 @@ class Catalog:
 
             # Fit the polynomial
             try:
-                coeffs = np.polyfit(x=xd, y=yd, deg=order, w=1./ye)
+                coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, w=1./ye, cov=True)
             except Exception:
                 try:
-                    print(xd, yd)
-                    coeffs = np.polyfit(x=xd, y=yd, deg=order)
+                    coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, cov=True)
                 except:
                     pass
 
             # Plot the line
             if coeffs is None or any([np.isnan(i) for i in coeffs]):
-                print("Could not fit that data with an order {} polynomial".format(order))
+                if self.verbose:
+                    print("Could not fit that data with an order {} polynomial".format(order))
             else:
-                yaxis = np.polyval(coeffs, xaxis)
-                fig.line(xaxis, yaxis, legend=label, color=color)
+
+                # Calculate values and 1-sigma
+                TT = np.vstack([xaxis**(order-i) for i in range(order+1)]).T
+                yaxis = np.dot(TT, coeffs)
+                C_yi = np.dot(TT, np.dot(cov, TT.T))
+                sig = np.sqrt(np.diag(C_yi))
+
+                # Plot the line and shaded error
+                fig.line(xaxis, yaxis, legend=label, color=color, line_alpha=0.3)
+                xpat = np.hstack((xaxis, xaxis[::-1]))
+                ypat = np.hstack((yaxis+sig, (yaxis-sig)[::-1]))
+                err_source = ColumnDataSource(dict(xaxis=xpat, yaxis=ypat))
+                glyph = Patch(x='xaxis', y='yaxis', fill_color=color, line_color=None, fill_alpha=0.1)
+                fig.add_glyph(err_source, glyph)
 
         # Set axis labels
         xunit = source.data[x].unit
@@ -503,7 +524,6 @@ class Catalog:
 
         # Formatting
         fig.legend.location = "top_right"
-        fig.legend.click_policy = "hide"
 
         # Identify sources
         if isinstance(identify, list):
@@ -573,7 +593,8 @@ class Catalog:
             self.results.remove_row([name_or_idx])
 
         else:
-            print('Could not remove SED', name_or_idx)
+            if self.verbose:
+                print('Could not remove SED', name_or_idx)
 
             return
 
@@ -598,7 +619,8 @@ class Catalog:
             pickle.dump(self.results, f, pickle.HIGHEST_PROTOCOL)
             f.close()
 
-            print('Catalog saved to',file)
+            if self.verbose:
+                print('Catalog saved to',file)
 
     @property
     def source(self):
