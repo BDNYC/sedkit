@@ -7,6 +7,7 @@ dependencies:
 - astroquery==0.3.9
 - scipy==1.1.0
 - pandas==0.23.4
+- lmfit==0.9.12
 - pip:
   - svo_filters==0.2.16
-  - pysynphot>=0.9.8.5
+  - dustmaps==1.0
