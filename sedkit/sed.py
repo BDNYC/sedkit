@@ -159,10 +159,10 @@ class SED:
         self._wave_units = q.um
         self._flux_units = q.erg/q.s/q.cm**2/q.AA
         self.units = [self._wave_units, self._flux_units, self._flux_units]
-        self.min_phot = 999*q.um
-        self.max_phot = 0*q.um
-        self.min_spec = 999*q.um
-        self.max_spec = 0*q.um
+        self.min_phot = (999*q.um).to(self.wave_units)
+        self.max_phot = (0*q.um).to(self.wave_units)
+        self.min_spec = (999*q.um).to(self.wave_units)
+        self.max_spec = (0*q.um).to(self.wave_units)
 
         # Attributes of arbitrary length
         self.all_names = []
@@ -318,10 +318,7 @@ class SED:
         self.calculated = False
 
         # Update photometry max and min wavelengths
-        if self.min_phot is None or bp.wave_eff < self.min_phot:
-            self.min_phot = bp.wave_eff
-        if self.max_phot is None or bp.wave_eff > self.max_phot:
-            self.max_phot = bp.wave_eff
+        self._calculate_phot_lims()
 
         # Add refs to references
         if 'photometry' not in self.refs:
@@ -414,10 +411,7 @@ class SED:
             self.calculated = False
 
             # Update spectra max and min wavelengths
-            if self.min_spec is None or np.nanmin(spec.spectrum[0]) < self.min_spec:
-                self.min_spec = np.nanmin(spec.spectrum[0])
-            if self.max_spec is None or np.nanmax(spec.spectrum[0]) > self.max_spec:
-                self.max_spec = np.nanmax(spec.spectrum[0])
+            self._calculate_spec_lims()
 
             # Add refs to references
             if 'spectra' not in self.refs:
@@ -492,6 +486,30 @@ class SED:
 
         # Calculate Fundamental Params
         self.fundamental_params()
+
+    def _calculate_phot_lims(self):
+        """Calculate the minimum and maximum wavelengths of the photometry"""
+        # If photometry, grab the max and min
+        if len(self.photometry) > 0:
+            self.min_phot = np.nanmin(self.photometry['eff']).to(self.wave_units)
+            self.max_phot = np.nanmax(self.photometry['eff']).to(self.wave_units)
+
+        # Otherwise reset to infs
+        else:
+            self.min_phot = (999*q.um).to(self.wave_units)
+            self.max_phot = (0*q.um).to(self.wave_units)
+
+    def _calculate_spec_lims(self):
+        """Calculate the minimum and maximum wavelengths of the spectra"""
+        # If spectra, grab the max and min
+        if len(self.spectra) > 0:
+            self.min_spec = np.nanmin([np.nanmin(i.wave) for i in self.spectra['spectrum']])*self.wave_units
+            self.max_spec = np.nanmax([np.nanmax(i.wave) for i in self.spectra['spectrum']])*self.wave_units
+
+        # Otherwise reset to infs
+        else:
+            self.min_spec = (999*q.um).to(self.wave_units)
+            self.max_spec = (0*q.um).to(self.wave_units)
 
     def calculate_synthetic_mags(self):
         """Calculate synthetic magnitudes of all stitched spectra"""
@@ -580,7 +598,8 @@ class SED:
     def _calibrate_spectra(self):
         """Create composite spectra and flux calibrate
         """
-        # Reset absolute spectra
+        # Reset spectra
+        self.app_spec_SED = None
         self.abs_spec_SED = None
 
         if len(self.spectra) > 0:
@@ -607,7 +626,6 @@ class SED:
                 self.stitched_spectra = [i.norm_to_mags(self.photometry) for i in self.stitched_spectra]
 
             # Make apparent spectral SED
-            self.app_spec_SED = None
             if len(self.stitched_spectra) > 0:
                 self.app_spec_SED = np.sum(self.stitched_spectra)
 
@@ -709,11 +727,15 @@ class SED:
         band: str, int
             The bandpass name or index to drop
         """
+        # Remove the row
         if isinstance(band, str) and band in self.photometry['band']:
             band = self._photometry.remove_row(np.where(self._photometry['band'] == band)[0][0])
 
         if isinstance(band, int) and band <= len(self._photometry):
             self._photometry.remove_row(band)
+
+        # Update photometry max and min wavelengths
+        self._calculate_phot_lims()
 
         # Set SED as uncalculated
         self.calculated = False
@@ -726,7 +748,11 @@ class SED:
         idx: int
             The index of the spectrum to drop
         """
+        # Remove the row
         self._spectra.remove_row(idx)
+
+        # Update spectra max and min wavelengths
+        self._calculate_spec_lims()
 
         # Set SED as uncalculated
         self.calculated = False
