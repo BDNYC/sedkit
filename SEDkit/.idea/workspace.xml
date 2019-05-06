@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="d0014980-b391-4344-ad1e-07ec9da226cb" name="Default" comment="">
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/SEDs.py" afterPath="$PROJECT_DIR$/SEDs.py" />
     </list>
     <ignored path="SEDkit.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -29,7 +28,7 @@
       <file leaf-file-name="SEDs.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/SEDs.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="514">
+            <state relative-caret-position="503">
               <caret line="154" column="9" lean-forward="true" selection-start-line="154" selection-start-column="9" selection-end-line="154" selection-end-column="9" />
               <folding />
             </state>
@@ -323,7 +322,14 @@
       <option name="project" value="LOCAL" />
       <updated>1555618126679</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Made rounding for Lbol out to 4 digits">
+      <created>1557160071153</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1557160071155</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="ToolWindowManager">
@@ -396,7 +402,8 @@
     <MESSAGE value="Added pan-starrs griyz photometry to filters" />
     <MESSAGE value="Updated NYMG ages" />
     <MESSAGE value="Made rounding for Lbol out to more digits" />
-    <option name="LAST_COMMIT_MESSAGE" value="Made rounding for Lbol out to more digits" />
+    <MESSAGE value="Made rounding for Lbol out to 4 digits" />
+    <option name="LAST_COMMIT_MESSAGE" value="Made rounding for Lbol out to 4 digits" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager />
@@ -630,7 +637,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/SEDs.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="514">
+        <state relative-caret-position="503">
           <caret line="154" column="9" lean-forward="true" selection-start-line="154" selection-start-column="9" selection-end-line="154" selection-end-column="9" />
           <folding />
         </state>
