@@ -161,8 +161,8 @@ def get_Lbol(spectrum, d, sig_d, solar_units=False):
     sig_fbol = np.sqrt(np.sum((spectrum[2] * np.gradient(spectrum[0])).to(q.erg / q.s / q.cm ** 2).value ** 2))
     Lbol = (4 * np.pi * fbol * d ** 2).to(q.erg / q.s)
     sig_Lbol = Lbol * np.sqrt((sig_fbol / fbol).value ** 2 + (2 * sig_d / d).value ** 2)
-    return [round(np.log10((Lbol / ac.L_sun).decompose().value), 5),
-            round(abs(sig_Lbol / (Lbol * np.log(10))).value, 5)] if solar_units else [Lbol, sig_Lbol]
+    return [round(np.log10((Lbol / ac.L_sun).decompose().value), 4),
+            round(abs(sig_Lbol / (Lbol * np.log(10))).value, 4)] if solar_units else [Lbol, sig_Lbol]
 
 
 def get_Mbol(spectrum, d, sig_d, app=False):
