@@ -7,22 +7,28 @@ A module to produce a catalog of spectral energy distributions
 """
 import os
 import pickle
+from copy import copy
 
+from astropy.io import ascii
 import astropy.table as at
 import astropy.units as q
 import astropy.constants as ac
 import numpy as np
+from bokeh.layouts import gridplot
+from bokeh.models import HoverTool, ColumnDataSource, LabelSet
 from bokeh.plotting import figure, show
-from bokeh.models import HoverTool, ColumnDataSource
+from bokeh.models.glyphs import Patch
 
 from .sed import SED
 from . import utilities as u
 
+
 class Catalog:
     """An object to collect SED results for plotting and analysis"""
-    def __init__(self, name='SED Catalog', marker='circle', color='blue'):
+    def __init__(self, name='SED Catalog', marker='circle', color='blue', verbose=True,  **kwargs):
         """Initialize the Catalog object"""
         # Metadata
+        self.verbose = verbose
         self.name = name
         self.marker = marker
         self.color = color
@@ -64,6 +70,9 @@ class Catalog:
         self.results['Teff_evo'].unit = q.K
         self.results['Teff_evo_unc'].unit = q.K
 
+        # Try to set attributes from kwargs
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     def __add__(self, other):
         """Add two catalogs together
@@ -88,7 +97,6 @@ class Catalog:
         new_cat.results = at.vstack([self.results, other.results])
 
         return new_cat
-
 
     def add_SED(self, sed):
         """Add an SED to the catalog
@@ -159,6 +167,8 @@ class Catalog:
         else:
             self.results = at.vstack([self.results, table])
 
+        if self.verbose:
+            print("Successfully added SED '{}'".format(sed.name))
 
     def export(self, parentdir='.', dirname=None, format='ipac',
                sources=True, zipped=False):
@@ -223,7 +233,6 @@ class Catalog:
             resultspath = dirpath+'_results.txt'
             final.write(resultspath, format=format)
 
-
     def filter(self, param, value):
         """Retrieve the filtered rows
 
@@ -248,31 +257,37 @@ class Catalog:
 
         return cat
 
-
-    def from_file(self, coords):
-        """Generate a catalog from a list of coordinates
+    def from_file(self, filepath, run_methods=['find_2MASS'], delimiter=','):
+        """Generate a catalog from a file of source names and coordinates
 
         Parameters
         ----------
-        coords: str
-            The path to the two-column file of ra, dec values
+        filepath: str
+            The path to an ASCII file
+        run_methods: list
+            A list of methods to run
+        delimiter: str
+            The column delimiter of the ASCII file
         """
-        data = np.genfromtxt(coords)
+        # Get the table of sources
+        data = ascii.read(filepath, delimiter=delimiter)
 
-        for ra, dec, *k in data:
+        if self.verbose:
+            print("Generating SEDs for {} sources from {}".format(len(data), filepath))
+
+        # Iterate over table
+        for row in data:
 
             # Make the SED
-            s = SED()
-            s.verbose = False
-            s.sky_coords = ra*q.deg, dec*q.deg
-            s.find_Gaia()
-            s.find_2MASS()
-            s.find_WISE()
-            s.make_sed()
+            s = SED(row['name'], verbose=False)
+            if 'ra' in row and 'dec' in row:
+                s.sky_coords = row['ra']*q.deg, row['dec']*q.deg
+
+            # Run the desired methods
+            s.run_methods(run_methods)
 
             # Add it to the catalog
             self.add_SED(s)
-
 
     def get_data(self, *args):
         """Fetch the data for the given columns
@@ -284,19 +299,21 @@ class Catalog:
             # Get the data
             if '-' in x:
                 x1, x2 = x.split('-')
-                if self.results[x1].unit!=self.results[x2].unit:
+                if self.results[x1].unit != self.results[x2].unit:
                     raise TypeError('Columns must be the same units.')
 
                 xunit = self.results[x1].unit
-                xdata = self.results[x1]-self.results[x2]
+                xdata = self.results[x1] - self.results[x2]
+                xerror = np.sqrt(self.results['{}_unc'.format(x1)]**2 + self.results['{}_unc'.format(x2)]**2)
             else:
                 xunit = self.results[x].unit
                 xdata = self.results[x]
+                xerror = self.results['{}_unc'.format(x)]
 
-            results.append([xdata, xunit])
+            # Append to results
+            results.append([xdata, xerror, xunit])
 
         return results
-
 
     def get_SED(self, name_or_idx):
         """Retrieve the SED for the given object
@@ -311,16 +328,16 @@ class Catalog:
 
         # Get the rows
         if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
-            return self.results.loc[name_or_idx]['SED']
+            return copy(self.results.loc[name_or_idx]['SED'])
 
         elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
-            return self.results[name_or_idx]['SED']
+            return copy(self.results[name_or_idx]['SED'])
 
         else:
-            print('Could not retrieve SED', name_or_idx)
+            if self.verbose:
+                print('Could not retrieve SED', name_or_idx)
 
             return
-
 
     def load(self, file):
         """Load a saved Catalog"""
@@ -336,77 +353,199 @@ class Catalog:
 
             self.results = cat
 
-
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
-             xlabel=None, ylabel=None, fig=None, **kwargs):
+             xlabel=None, ylabel=None, fig=None, order=None, data=None,
+             identify=None, id_color='red', label_points=False, exclude=None,
+             **kwargs):
         """Plot parameter x versus parameter y
 
         Parameters
         ----------
         x: str
-            The name of the x axis parameter, e.g. 'SpT'
+             The name of the x axis parameter, e.g. 'SpT'
         y: str
-            The name of the y axis parameter, e.g. 'Teff'
+             The name of the y axis parameter, e.g. 'Teff'
         marker: str (optional)
-            The name of the method for the desired marker
+             The name of the method for the desired marker
         color: str (optional)
-            The color to use for the points
+             The color to use for the points
         scale: sequence
-            The (x,y) scale for the plot
+             The (x,y) scale for the plot
         xlabel: str
-            The label for the x-axis
+             The label for the x-axis
         ylable : str
-            The label for the y-axis 
+             The label for the y-axis 
         fig: bokeh.plotting.figure (optional)
-            The figure to plot on
+             The figure to plot on
+        order: int
+             The polynomial order to fit
+        data: dict
+             Additional data to add to the plot
+        identify: idx, str, sequence
+             Names of sources to highlight in the plot
+        id_color: str
+             The color of the identified points
+        label_points: bool
+             Print the name of the object next to the point
+
+        Returns
+        -------
+        bokeh.plotting.figure.Figure
+             The figure object
         """
+        # Grab the source and valid params
+        source = copy(self.source)
+        params = [k for k in source.column_names if not k.endswith('_unc')]
+
+        # Check if the x parameter is a color
+        if '-' in x and all([i in params for i in x.split('-')]):
+            colordata = self.get_data(x)[0]
+            if len(colordata) == 3:
+                _ = source.add(colordata[0], x)
+                _ = source.add(colordata[1], '{}_unc'.format(x))
+                params.append(x)
+
+        # Check if the y parameter is a color
+        if '-' in y and all([i in params for i in y.split('-')]):
+            colordata = self.get_data(y)[0]
+            if len(colordata) == 3:
+                _ = source.add(colordata[0], y)
+                _ = source.add(colordata[1], '{}_unc'.format(y))
+                params.append(y)
+
+        # Check the params are in the table
+        if x not in params:
+            raise Exception("'{}' is not a valid x parameter. Please choose from {}".format(x, params))
+        if y not in params:
+            raise Exception("'{}' is not a valid y parameter. Please choose from {}".format(y, params))
+
         # Make the figure
         if fig is None:
+
+            # Tooltip names can't have '.' or '-'
+            xname = source.add(source.data[x], x.replace('.', '_').replace('-', '_'))
+            yname = source.add(source.data[y], y.replace('.', '_').replace('-', '_'))
+
+            # Set up hover tool
+            tips = [('Name', '@name'), (x, '@{}'.format(xname)), (y, '@{}'.format(yname))]
+            hover = HoverTool(tooltips=tips, names=['points'])
+
             # Make the plot
-            TOOLS = ['pan', 'reset', 'box_zoom', 'save']
-            title = '{} v {}'.format(x,y)
+            TOOLS = ['pan', 'reset', 'box_zoom', 'save', hover]
+            title = '{} v {}'.format(x, y)
             fig = figure(plot_width=800, plot_height=500, title=title, 
                          y_axis_type=scale[1], x_axis_type=scale[0], 
                          tools=TOOLS)
 
-        # Make sure marker is legit
+        # # Exclude sources
+        # if exclude is not None:
+        #     exc_idx = [i for i, v in enumerate(source.data['name']) if v in exclude]
+        #     patches = {x : [(i, np.nan) for i in exc_idx],
+        #                y : [(i, np.nan) for i in exc_idx]}
+        #
+        #     source.patch(patches)
+
+        # Get marker class
+        size = kwargs.get('size', 8)
+        kwargs['size'] = size
         marker = getattr(fig, marker or self.marker)
         color = color or self.color
+        marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
 
-        # Get the source names
-        names = self.results['name'] 
+        # Plot y errorbars
+        yval, yerr = source.data[y], source.data['{}_unc'.format(y)]
+        yval[yval == None] = np.nan
+        yerr[yerr == None] = np.nan
+        y_err_x = [(i, i) for i in source.data[x]]
+        y_err_y = [(i, j) for i, j in zip(yval - yerr, yval + yerr)]
+        fig.multi_line(y_err_x, y_err_y, color=color)
 
-        # Get the data
-        (xdata, xunit), (ydata, yunit) = self.get_data(x, y)
+        # Plot x errorbars
+        xval, xerr = source.data[x], source.data['{}_unc'.format(x)]
+        xval[xval == None] = np.nan
+        xerr[xerr == None] = np.nan
+        x_err_y = [(i, i) for i in source.data[y]]
+        x_err_x = [(i, j) for i, j in zip(xval - xerr, xval + xerr)]
+        fig.multi_line(x_err_x, x_err_y, color=color)
+
+        # Label points
+        if label_points:
+            labels = LabelSet(x=x, y=y, text='name', level='glyph', x_offset=5, y_offset=5, source=source, render_mode='canvas')
+            fig.add_layout(labels)
+
+        # Fit polynomial
+        if isinstance(order, int):
+
+            # Only fit valid values
+            idx = [n for n, (i, j) in enumerate(zip(xval, yval)) if not hasattr(i, 'mask') and not np.isnan(i) and not hasattr(j, 'mask') and not np.isnan(j)]
+            xd = np.array(xval, dtype=float)[idx]
+            yd = np.array(yval, dtype=float)[idx]
+            ye = np.array(yerr, dtype=float)[idx]
+
+            # Plot data
+            label = 'Order {} fit'.format(order)
+            xaxis = np.linspace(min(xd), max(xd), 100)
+            coeffs = None
+
+            # Fit the polynomial
+            try:
+                coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, w=1./ye, cov=True)
+            except Exception:
+                try:
+                    coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, cov=True)
+                except:
+                    pass
+
+            # Plot the line
+            if coeffs is None or any([np.isnan(i) for i in coeffs]):
+                if self.verbose:
+                    print("Could not fit that data with an order {} polynomial".format(order))
+            else:
+
+                # Calculate values and 1-sigma
+                TT = np.vstack([xaxis**(order-i) for i in range(order+1)]).T
+                yaxis = np.dot(TT, coeffs)
+                C_yi = np.dot(TT, np.dot(cov, TT.T))
+                sig = np.sqrt(np.diag(C_yi))
+
+                # Plot the line and shaded error
+                fig.line(xaxis, yaxis, legend=label, color=color, line_alpha=0.3)
+                xpat = np.hstack((xaxis, xaxis[::-1]))
+                ypat = np.hstack((yaxis+sig, (yaxis-sig)[::-1]))
+                err_source = ColumnDataSource(dict(xaxis=xpat, yaxis=ypat))
+                glyph = Patch(x='xaxis', y='yaxis', fill_color=color, line_color=None, fill_alpha=0.1)
+                fig.add_glyph(err_source, glyph)
 
         # Set axis labels
+        xunit = source.data[x].unit
+        yunit = source.data[y].unit
         fig.xaxis.axis_label = '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
         fig.yaxis.axis_label = '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
 
-        # Set up hover tool
-        tips = [( 'Name', '@desc'), (x, '@x'), (y, '@y')]
-        hover = HoverTool(tooltips=tips)
-        fig.add_tools(hover)
-
-        # Plot points with tips
-        source = ColumnDataSource(data=dict(x=xdata, y=ydata, desc=names))
-        marker('x', 'y', source=source, legend=self.name, color=color,
-               name='photometry', fill_alpha=0.7, size=8, **kwargs)
-
         # Formatting
         fig.legend.location = "top_right"
-        fig.legend.click_policy = "hide"
+
+        # Identify sources
+        if isinstance(identify, list):
+            id_cat = Catalog('Identified')
+            for obj_id in identify:
+                id_cat.add_SED(self.get_SED(obj_id))
+            fig = id_cat.plot(x, y, fig=fig, size=size+5, marker='circle', line_color=id_color, fill_color=None, line_width=2, label_points=True)
+            del id_cat
 
         return fig
 
-
-    def plot_SEDs(self, name_or_idx, scale=['log', 'log'], **kwargs):
+    def plot_SEDs(self, name_or_idx, scale=['log', 'log'], normalized=False, **kwargs):
         """Plot the SED for the given object or objects
 
         Parameters
         ----------
         idx_or_name: str, int, sequence
             The name or index of the SED to get
+        scale: sequence
+            The [x, y] scale to plot, ['linear', 'log']
+        normalized: bool
+            Normalize the SEDs to 1
         """
         COLORS = u.color_gen('Category10')
 
@@ -431,10 +570,9 @@ class Catalog:
         for obj in name_or_idx:
             c = next(COLORS)
             targ = self.get_SED(obj)
-            fig = targ.plot(fig=fig, color=c, output=True, **kwargs)
+            fig = targ.plot(fig=fig, color=c, output=True, legend=targ.name, **kwargs)
 
         return fig
-
 
     def remove_SED(self, name_or_idx):
         """Remove an SED from the catalog
@@ -455,10 +593,10 @@ class Catalog:
             self.results.remove_row([name_or_idx])
 
         else:
-            print('Could not remove SED', name_or_idx)
+            if self.verbose:
+                print('Could not remove SED', name_or_idx)
 
             return
-
 
     def save(self, file):
         """Save the serialized data
@@ -481,4 +619,16 @@ class Catalog:
             pickle.dump(self.results, f, pickle.HIGHEST_PROTOCOL)
             f.close()
 
-            print('Catalog saved to',file)
+            if self.verbose:
+                print('Catalog saved to',file)
+
+    @property
+    def source(self):
+        """Generates a ColumnDataSource from the results table"""
+        # Copy the results table
+        table = copy(self.results)
+
+        # Remove the SED column
+        del table['SED']
+
+        return ColumnDataSource(data=dict(table))

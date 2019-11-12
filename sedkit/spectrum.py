@@ -140,7 +140,10 @@ class Spectrum:
 
         # Determine if overlapping
         overlap = True
-        if s1[0][-1] > s1[0][0] > s2[0][-1] or s2[0][-1] > s2[0][0] > s1[0][-1]:
+        try:
+            if s1[0][-1] > s1[0][0] > s2[0][-1] or s2[0][-1] > s2[0][0] > s1[0][-1]:
+                overlap = False
+        except IndexError:
             overlap = False
 
         # Concatenate and order two segments if no overlap

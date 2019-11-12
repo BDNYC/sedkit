@@ -8,7 +8,7 @@ from .. import utilities as u
 
 
 class TestIsochrone(unittest.TestCase):
-    """Tests for the PARSEC model isochrones"""
+    """Tests for the hybrid_solar_age model isochrones"""
     def setUp(self):
         # Make Spectrum class for testing
         self.hsa = iso.Isochrone('hybrid_solar_age')
@@ -39,8 +39,8 @@ class TestIsochrone(unittest.TestCase):
         self.assertTrue(isinstance(result, u.UNITS))
 
         # Unsuccessful interpolation
-        args = -400000, 4*q.Gyr, 'Lbol', 'mass'
-        self.assertRaises(ValueError, self.hsa.interpolate, *args)
+        val = self.hsa.interpolate(-400000, 4*q.Gyr, 'Lbol', 'mass')
+        self.assertIsNone(val)
 
     def test_age_units(self):
         """Test the unit conversions"""

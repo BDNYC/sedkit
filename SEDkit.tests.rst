@@ -1,29 +1,29 @@
-SEDkit.tests package
+sedkit.tests package
 ====================
 
 Submodules
 ----------
 
-SEDkit.tests.setup_package module
+sedkit.tests.setup_package module
 ---------------------------------
 
-.. automodule:: SEDkit.tests.setup_package
+.. automodule:: sedkit.tests.setup_package
     :members:
     :undoc-members:
     :show-inheritance:
 
-SEDkit.tests.test_sed module
+sedkit.tests.test_sed module
 ----------------------------
 
-.. automodule:: SEDkit.tests.test_sed
+.. automodule:: sedkit.tests.test_sed
     :members:
     :undoc-members:
     :show-inheritance:
 
-SEDkit.tests.test_spectrum module
+sedkit.tests.test_spectrum module
 ---------------------------------
 
-.. automodule:: SEDkit.tests.test_spectrum
+.. automodule:: sedkit.tests.test_spectrum
     :members:
     :undoc-members:
     :show-inheritance:
@@ -32,7 +32,7 @@ SEDkit.tests.test_spectrum module
 Module contents
 ---------------
 
-.. automodule:: SEDkit.tests
+.. automodule:: sedkit.tests
     :members:
     :undoc-members:
     :show-inheritance:
