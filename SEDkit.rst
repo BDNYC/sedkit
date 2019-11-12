@@ -1,4 +1,4 @@
-SEDkit package
+sedkit package
 ==============
 
 Subpackages
@@ -6,63 +6,63 @@ Subpackages
 
 .. toctree::
 
-    SEDkit.tests
+    sedkit.tests
 
 Submodules
 ----------
 
-SEDkit.catalog module
+sedkit.catalog module
 ---------------------
 
-.. automodule:: SEDkit.catalog
+.. automodule:: sedkit.catalog
     :members:
     :undoc-members:
     :show-inheritance:
 
-SEDkit.cmds module
+sedkit.cmds module
 ------------------
 
-.. automodule:: SEDkit.cmds
+.. automodule:: sedkit.cmds
     :members:
     :undoc-members:
     :show-inheritance:
 
-SEDkit.isochrone module
+sedkit.isochrone module
 -----------------------
 
-.. automodule:: SEDkit.isochrone
+.. automodule:: sedkit.isochrone
     :members:
     :undoc-members:
     :show-inheritance:
 
-SEDkit.sed module
+sedkit.sed module
 -----------------
 
-.. automodule:: SEDkit.sed
+.. automodule:: sedkit.sed
     :members:
     :undoc-members:
     :show-inheritance:
 
-SEDkit.spectrum module
+sedkit.spectrum module
 ----------------------
 
-.. automodule:: SEDkit.spectrum
+.. automodule:: sedkit.spectrum
     :members:
     :undoc-members:
     :show-inheritance:
 
-SEDkit.synphot module
+sedkit.synphot module
 ---------------------
 
-.. automodule:: SEDkit.synphot
+.. automodule:: sedkit.synphot
     :members:
     :undoc-members:
     :show-inheritance:
 
-SEDkit.utilities module
+sedkit.utilities module
 -----------------------
 
-.. automodule:: SEDkit.utilities
+.. automodule:: sedkit.utilities
     :members:
     :undoc-members:
     :show-inheritance:
@@ -71,7 +71,7 @@ SEDkit.utilities module
 Module contents
 ---------------
 
-.. automodule:: SEDkit
+.. automodule:: sedkit
     :members:
     :undoc-members:
     :show-inheritance:

@@ -9,5 +9,5 @@ dependencies:
 - pandas==0.23.4
 - lmfit==0.9.12
 - pip:
-  - svo_filters==0.2.16
+  - svo_filters==0.2.19
   - dustmaps==1.0
