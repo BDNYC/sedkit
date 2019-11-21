@@ -114,11 +114,11 @@ COLORS = color_gen('Category10')
 
 
 def equivalent(value, units):
-    """Function to test if value is equivalent to gievn units
+    """Function to test equivalence of value(s) to gievn units
 
     Parameters
     ----------
-    value: array-like
+    value: astropy.units.quantity.Quantity, sequence
         The value to check
     units: astropy.units.core.PrefixUnit, astropy.units.core.Unit, astropy.units.core.CompositeUnit
         The units to test for equivalency
@@ -128,17 +128,31 @@ def equivalent(value, units):
     bool
         Equivalent or not
     """
-    # Ensure the units aren't bare
-    value *= 1
+    eq = True
 
-    # Assert units exist AND they are the RIGHT units
-    if isinstance(value, UNITS):
-        if value.unit.is_equivalent(units):
-            return True
-        else:
-            return False
+    # Check if it's a list or tuple
+    if isinstance(value, (tuple, list)):
+        for val in value:
+            try:
+                val *= 1
+                if isinstance(val, UNITS):
+                    if not val.unit.is_equivalent(units):
+                        eq = False
+                else:
+                    eq = False
+            except TypeError:
+                eq = False
+
+    # Otherwise array or astropy quantity
     else:
-        return False
+        if isinstance(value, UNITS):
+            value *= 1
+            if not value.unit.is_equivalent(units):
+                eq = False
+        else:
+            eq = False
+
+    return eq
 
 
 def isnumber(s):
@@ -156,6 +170,50 @@ def isnumber(s):
         The boolean result
     """
     return s.replace('.', '').replace('-', '').replace('+', '').isnumeric()
+
+
+def issequence(seq, length=None):
+    """
+    Tests to see if the given input is a sequence of a given length
+
+    Parameters
+    ----------
+    seq: sequence
+        The sequence to test
+    length: int, sequence
+        The desired length(s) of the sequence
+
+    Returns
+    -------
+    bool
+        The boolean result
+    """
+    # Acceptible dtypes
+    typs = (tuple, list, np.ndarray)
+
+    # Strip units if necessary
+    if hasattr(seq, 'unit'):
+        seq = seq.value
+
+    # Check dtype
+    isseq = False
+    if isinstance(seq, typs):
+
+        # Any length
+        if length is None:
+            isseq = True
+
+        # Single length
+        elif isinstance(length, int):
+            if len(seq) == length:
+                isseq = True
+
+        # Multiple lengths
+        elif isinstance(length, typs):
+            if len(seq) in length:
+                isseq = True
+
+    return isseq
 
 
 def filter_table(table, **kwargs):
