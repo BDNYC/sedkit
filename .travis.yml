@@ -10,7 +10,7 @@ install:
 
 # command to run tests, e.g. python setup.py test
 script:
-  - pytest --cov=awesimsoss/
+  - pytest --cov=sedkit/
 
 after_success:
   - coveralls
