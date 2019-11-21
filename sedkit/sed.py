@@ -452,22 +452,25 @@ class SED:
     @age.setter
     def age(self, age):
         """A setter for age"""
-        # Make sure it's a sequence
-        if not isinstance(age, (tuple, list, np.ndarray))\
-        or len(age) not in [2, 3]:
-            raise TypeError('Age must be a sequence of (value, error) or\
-                            (value, lower_error, upper_error).')
+        if age is None:
 
-        # Make sure the values are in time units
-        if not age[0].unit.is_equivalent(q.Gyr):
-            raise TypeError("Age values must be time units of\
-                             astropy.units.quantity.Quantity, e.g. 'Gyr'")
+            self._age = None
 
-        # Set the age!
-        self._age = age
+        else:
 
-        if self.verbose:
-            print('Setting age to', self.age)
+            # Make sure it's a sequence
+            if not u.issequence(age, length=[2, 3]):
+                raise TypeError('Age must be a sequence of (value, error) or (value, lower_error, upper_error).')
+
+            # Make sure it's a quantity
+            if not u.equivalent(age[0], q.Gyr):
+                raise TypeError("Age values must be time units of astropy.units.quantity.Quantity, e.g. 'Gyr'")
+
+            # Set the age!
+            self._age = age
+
+            if self.verbose:
+                print('Setting age to', self.age)
 
         # Set SED as uncalculated
         self.calculated = False
@@ -690,12 +693,11 @@ class SED:
 
         else:
             # Make sure it's a sequence
-            typs = (tuple, list, np.ndarray)
-            if not isinstance(distance, typs) or len(distance) not in [2, 3]:
+            if not u.issequence(distance, length=[2, 3]):
                 raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
 
             # Make sure the values are in time units
-            if not distance[0].unit.is_equivalent(q.pc):
+            if not u.equivalent(distance[0], q.pc):
                 raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
 
             # Set the distance
@@ -772,7 +774,7 @@ class SED:
             The evolutionary model name
         """
         if model not in iso.EVO_MODELS:
-            raise IOError("Please use an evolutionary model from the list: {}".format(iso.EVO_MODELS))
+            raise ValueError("Please use an evolutionary model from the list: {}".format(iso.EVO_MODELS))
 
         self._evo_model = iso.Isochrone(model, verbose=self.verbose)
 
@@ -1179,14 +1181,8 @@ class SED:
         flux_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
-        # Make sure it's a quantity
-        if not isinstance(flux_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
-            raise TypeError('flux_units must be astropy.units.quantity.Quantity')
-
-        # Make sure the values are in length units
-        try:
-            flux_units.to(q.erg/q.s/q.cm**2/q.AA)
-        except:
+        # Make sure it's a flux density
+        if not u.equivalent(flux_units, q.erg/q.s/q.cm**2/q.AA):
             raise TypeError("flux_units must be a unit of flux density, e.g. 'erg/s/cm2/A'")
 
         # fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA)
@@ -1751,15 +1747,12 @@ class SED:
         else:
 
             # Make sure it's a sequence
-            typs = (tuple, list, np.ndarray)
-            if not isinstance(parallax, typs) or len(parallax) not in [2, 3]:
-                raise TypeError("""'parallax' must be a sequence of (value, error) \
-                                   or (value, lower_error, upper_error).""")
+            if not u.issequence(parallax, length=[2, 3]):
+                raise TypeError('Parallax must be a sequence of (value, error) or (value, lower_error, upper_error).')
 
             # Make sure the values are in time units
-            if not parallax[0].unit.is_equivalent(q.mas):
-                raise TypeError("""'parallax' values must be parallax units of \
-                                   astropy.units.quantity.Quantity, e.g. 'mas'""")
+            if not u.equivalent(parallax[0], q.mas):
+                raise TypeError("Parallax values must be angular units of astropy.units.quantity.Quantity, e.g. 'mas'")
 
             # Set the parallax
             self._parallax = parallax
@@ -1999,13 +1992,14 @@ class SED:
             self._radius = None
 
         else:
+
             # Make sure it's a sequence
-            if not isinstance(radius, (tuple, list, np.ndarray)) or len(radius) not in [2, 3]:
+            if not u.issequence(radius, length=[2, 3]):
                 raise TypeError('Radius must be a sequence of (value, error) or (value, lower_error, upper_error).')
 
-            # Make sure the values are in length units
-            if not radius[0].unit.is_equivalent(q.m):
-                raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'Rjup'")
+            # Make sure the values are in distance units
+            if not u.equivalent(radius[0], q.R_sun):
+                raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'R_sun'")
 
             # Set the radius!
             self._radius = radius
@@ -2285,15 +2279,9 @@ class SED:
         wave_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
-        # Make sure it's a quantity
-        if not isinstance(wave_units, (q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit)):
-            raise TypeError('wave_units must be astropy.units.quantity.Quantity')
-
         # Make sure the values are in length units
-        try:
-            wave_units.to(q.um)
-        except:
-            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
+        if not u.equivalent(wave_units, q.um):
+            raise TypeError("wave_units  must be length units of astropy.units.quantity.Quantity, e.g. 'um'")
 
         # Set the wave_units!
         self._wave_units = wave_units

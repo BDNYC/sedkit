@@ -10,14 +10,27 @@ from .. import utilities as u
 
 def test_equivalent():
     """Test for equivalent function"""
-    # Positive test
+    # Positive tests
     assert u.equivalent(np.arange(10)*q.um, q.cm)
+    assert u.equivalent(2*q.um, q.cm)
+    assert u.equivalent([2*q.um, 0.1*q.m], q.cm)
 
     # Negative units test
     assert not u.equivalent(np.arange(10)*q.um, q.Jy)
+    assert not u.equivalent(np.arange(10), q.Jy)
+    assert not u.equivalent(1, q.Jy)
+    assert not u.equivalent([2*q.um, 2], q.Jy)
 
-    # Negative dtype test
-    assert not u.equivalent(np.arange(10), q.um)
+
+def test_issequence():
+    """Test for proper sequence"""
+    # Positive tests
+    assert u.issequence((2, 3))
+    assert u.issequence([2, 3, 4], length=3)
+
+    # Negative tests
+    assert not u.issequence(1)
+    assert not u.issequence((1, 2, 3), length=4)
 
 
 class TestSpectres(unittest.TestCase):

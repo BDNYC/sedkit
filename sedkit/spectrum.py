@@ -942,44 +942,54 @@ class Spectrum:
 
 class Blackbody(Spectrum):
     """A spectrum object specifically for blackbodies"""
-    def __init__(self, wavelength, Teff, radius=None, distance=None, **kwargs):
+    def __init__(self, wavelength, teff, radius=None, distance=None, **kwargs):
         """
         Given a wavelength array and temperature, returns an array of Planck
         function values in [erg s-1 cm-2 A-1]
 
         Parameters
         ----------
-        lam: array-like
+        wavelength: array-like
             The array of wavelength values to evaluate the Planck function
-        Teff: astropy.unit.quantity.Quantity
-            The effective temperature
-        Teff_unc: astropy.unit.quantity.Quantity
-            The effective temperature uncertainty
+        teff: astropy.unit.quantity.Quantity, sequence
+            The effective temperature and (optional) uncertainty
+        radius: astropy.unit.quantity.Quantity, sequence
+            The radius and (optional) uncertainty
+        distance: astropy.unit.quantity.Quantity, sequence
+            The distance and (optional) uncertainty
         """
-        try:
-            wavelength.to(q.um)
-        except:
-            raise TypeError("Wavelength must be in astropy units, e.g. 'um'")
+        # Check wavelength units
+        if not u.equivalent(wavelength, q.um):
+            raise TypeError("Wavelength must be in astropy units of length, e.g. 'um'")
 
-        # Store parameters
-        if not isinstance(Teff, (q.quantity.Quantity, tuple, list)):
-            if not isinstance(Teff[0], q.quantity.Quantity):
-                raise TypeError("Teff must be in astropy units, eg. 'K'")
+        # Check teff
+        if not u.issequence(teff, length=2):
+            teff = teff, None
+        if not u.equivalent(teff[0], q.K):
+            raise TypeError("teff must be in astropy units of temperature, eg. 'K'")
+        if not u.equivalent(teff[1], q.K) and teff[1] is not None:
+            raise TypeError("teff_unc must be in astropy units of temperature, eg. 'K'")
+        self.teff, self.teff_unc = teff
 
-        if isinstance(Teff, (tuple, list)):
-            self.Teff, self.Teff_unc = Teff
-        else:
-            self.Teff, self.Teff_unc = Teff, None
+        # Check radius
+        if not u.issequence(radius, length=2):
+            radius = radius, None
+        if not u.equivalent(radius[0], q.R_jup) and radius[0] is not None:
+            raise TypeError("radius must be in astropy units of length, eg. 'R_jup'")
+        if not u.equivalent(radius[1], q.R_jup) and radius[1] is not None:
+            raise TypeError("radius_unc must be in astropy units of length, eg. 'R_jup'")
+        self.radius, self.radius_unc = radius
 
-        if isinstance(radius, (tuple, list)):
-            self.radius, self.radius_unc = radius
-        else:
-            self.radius, self.radius_unc = radius, None
-
-        if isinstance(distance, (tuple, list)):
-            self.distance, self.distance_unc, *_ = distance
-        else:
-            self.distance, self.distance_unc = distance, None
+        # Check distance
+        if u.issequence(distance, length=3):
+            distance = distance[:2]
+        if not u.issequence(distance):
+            distance = distance, None
+        if not u.equivalent(distance[0], q.pc) and distance[0] is not None:
+            raise TypeError("distance must be in astropy units of length, eg. 'pc'")
+        if not u.equivalent(distance[1], q.pc) and distance[1] is not None:
+            raise TypeError("distance_unc must be in astropy units of length, eg. 'pc'")
+        self.distance, self.distance_unc = distance
 
         # Evaluate
         I, I_unc = self.eval(wavelength)
@@ -987,7 +997,7 @@ class Blackbody(Spectrum):
         # Inherit from Spectrum
         super().__init__(wavelength, I, I_unc, **kwargs)
 
-        self.name = '{} Blackbody'.format(Teff)
+        self.name = '{} Blackbody'.format(teff)
 
     def eval(self, wavelength, Flam=False):
         """Evaluate the blackbody at the given wavelengths
@@ -1002,9 +1012,7 @@ class Blackbody(Spectrum):
         list
             The blackbody flux and uncertainty arrays
         """
-        try:
-            wavelength.to(q.um)
-        except:
+        if not u.equivalent(wavelength, q.um):
             raise TypeError("Wavelength must be in astropy units, e.g. 'um'")
 
         units = q.erg/q.s/q.cm**2/(1 if Flam else q.AA)
@@ -1018,7 +1026,7 @@ class Blackbody(Spectrum):
         # Get numerator and denominator
         const = ac.h*ac.c/(wavelength*ac.k_B)
         numer = 2*np.pi*ac.h*ac.c**2*scale/(wavelength**(4 if Flam else 5))
-        denom = np.exp((const/self.Teff)).decompose()
+        denom = np.exp((const/self.teff)).decompose()
 
         # Calculate intensity
         I = (numer/(denom-1.)).to(units)
@@ -1036,8 +1044,8 @@ class Blackbody(Spectrum):
             dIdd = 0.*units
 
         # Calculate dI/dT
-        if self.Teff is not None and self.Teff_unc is not None:
-            dIdT = (self.Teff_unc*I*ac.h*ac.c/wavelength/ac.k_B/self.Teff**2).to(units)
+        if self.teff is not None and self.teff_unc is not None:
+            dIdT = (self.teff_unc*I*ac.h*ac.c/wavelength/ac.k_B/self.teff**2).to(units)
         else:
             dIdT = 0.*units
 
