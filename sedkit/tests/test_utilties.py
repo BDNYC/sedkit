@@ -4,6 +4,8 @@ import pytest
 
 import numpy as np
 import astropy.units as q
+import astropy.table as at
+from svo_filters import Filter
 
 from .. import utilities as u
 
@@ -119,6 +121,46 @@ def test_idx_overlap():
     idx = u.idx_overlap(arr, np.arange(10, 20))
     assert len(idx) == 0
 
+
+def test_filter_table():
+    """Test filter_table function"""
+    # Test table
+    table = at.Table([[1, 2, 3], [4, 5, 6], [7, 8, 9]], names=('a', 'b', 'c'))
+
+    # Successful number search
+    _ = u.filter_table(table, a=1)
+    _ = u.filter_table(table, a='>1')
+    _ = u.filter_table(table, a='<3')
+    _ = u.filter_table(table, a='>=1')
+    _ = u.filter_table(table, a='<=3')
+
+
+def test_flux2mag():
+    """Test flux2mag function"""
+    # Test data
+    flux = np.random.normal(loc=1E-14, scale=1E-15, size=10)*q.erg/q.s/q.cm**2/q.AA
+    unc = flux/100.
+    filt = Filter('2MASS.J')
+
+    # Functions
+    mag = u.flux2mag(flux, filt)
+    mag = u.flux2mag([flux, unc], filt)
+
+
+def test_fnu2flam():
+    """Test fnu2flam function"""
+    # Test data
+    fnu = np.random.normal(loc=1E-14, scale=1E-15, size=10)*q.Jy
+    lam = 1*q.um
+
+    # Functions
+    flam = u.fnu2flam(fnu, lam)
+
+
+def test_str2Q():
+    """Test str2Q function"""
+    qnt = u.str2Q('um', target='A')
+    qnt = u.str2Q(None)
 
 # class TestSpectres(unittest.TestCase):
 #     """Tests for the spectres function"""
