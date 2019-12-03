@@ -1,8 +1,8 @@
 import unittest
 import copy
-from pkg_resources import resource_filename
+import os
 
-import numpy as np
+import astropy.units as q
 
 from .. import sed
 from .. import catalog
@@ -18,6 +18,23 @@ class TestCatalog(unittest.TestCase):
         # Make SEDs
         self.vega = sed.VegaSED()
 
+    def test_add(self):
+        """Test catalog adding works"""
+        # First catalog
+        cat1 = catalog.Catalog("Cat 1")
+        cat1.add_SED(self.vega)
+
+        # Second catalog
+        cat2 = catalog.Catalog("Cat 2")
+        cat2.add_SED(self.vega)
+
+        # Add and check
+        cat3 = cat1 + cat2
+        self.assertEqual(len(cat3.results), 2)
+
+        # Bad catalog add
+        self.assertRaises(TypeError, cat1.__add__, 'foo')
+
     def test_add_SED(self):
         """Test that an SED is added properly"""
         cat = copy.copy(self.cat)
@@ -29,3 +46,110 @@ class TestCatalog(unittest.TestCase):
         # Remove the SED
         cat.remove_SED('Vega')
         self.assertEqual(len(cat.results), 0)
+
+    def test_export(self):
+        """Test that export works"""
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+
+        # Test export
+        cat.export()
+        os.system('rm -R {}'.format('Test_Catalog'))
+        cat.export(zipped=True)
+        os.system('rm {}'.format('Test_Catalog.zip'))
+
+        # Bad dir
+        self.assertRaises(IOError, cat.export, 'foo')
+
+    def test_filter(self):
+        """Test filter method"""
+        # Make the catalog
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+
+        # Add another
+        s = copy.copy(self.vega)
+        s.spectral_type = 50
+        cat.add_SED(s)
+
+        # Check there are two SEDs
+        self.assertEqual(len(cat.results), 2)
+
+        # Filter so there is only one result
+        f_cat = cat.filter('spectral_type', '>30')
+        self.assertEqual(len(f_cat.results), 1)
+
+    def test_get_data(self):
+        """Test get_data method"""
+        # Make the catalog
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+        cat.add_SED(self.vega)
+
+        # Get the data
+        vals = len(cat.get_data('WISE.W1-WISE.W2', 'spectral_type', 'parallax'))
+        self.assertEqual(vals, 3)
+
+    def test_get_SED(self):
+        """Test get_SED method"""
+        # Make the catalog
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+
+        # Get the SED
+        s = cat.get_SED('Vega')
+
+        self.assertEqual(type(s), type(self.vega))
+
+    def test_plot(self):
+        """Test plot method"""
+        # Make the catalog
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+
+        # Simple plot
+        plt = cat.plot('spectral_type', 'parallax')
+        self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
+
+        # Color-color plot
+        plt = cat.plot('WISE.W1-WISE.W2', 'WISE.W1-WISE.W2')
+        self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
+
+        # Bad columns
+        self.assertRaises(ValueError, cat.plot, 'spectral_type', 'foo')
+        self.assertRaises(ValueError, cat.plot, 'foo', 'parallax')
+
+        # Fit polynomial
+        cat.plot('spectral_type', 'parallax', order=1)
+
+        # Identify sources
+        cat.plot('spectral_type', 'parallax', identify=['Vega'])
+
+    def test_plot_SEDs(self):
+        """Test plot_SEDs method"""
+        # Make the catalog
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+        v1 = copy.copy(self.vega)
+        v1.name = 'foo'
+        cat.add_SED(v1)
+
+        # Plot the SEDs
+        cat.plot_SEDs(['Vega', 'foo'])
+        cat.plot_SEDs('*')
+
+    def test_save(self):
+        """Test save method"""
+        # Make the catalog
+        cat = copy.copy(self.cat)
+        cat.save('test.p')
+        os.system('rm test.p')
+
+    def test_source(self):
+        """Test source attribute"""
+        # Make the catalog
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+
+        # Check the source
+        self.assertEqual(str(type(cat.source)), "<class 'bokeh.models.sources.ColumnDataSource'>")
