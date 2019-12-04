@@ -7,3 +7,4 @@ lmfit==0.9.12
 pandas==0.23.4
 dustmaps==1.0
 svo_filters==0.2.19
+selenium
