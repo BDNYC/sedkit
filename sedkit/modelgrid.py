@@ -127,6 +127,8 @@ class ModelGrid:
         ----------
         name: str
             The name of the model grid
+        parameters: sequence
+            The list of parameters (column names) to include in the grid
         wave_units: astropy.units.quantity.Quantity
             The wavelength units
         flux_units: astropy.units.quantity.Quantity
