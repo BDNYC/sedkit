@@ -8,6 +8,7 @@ A module to produce a catalog of spectral energy distributions
 import os
 import pickle
 from copy import copy
+import shutil
 
 from astropy.io import ascii
 import astropy.table as at
@@ -74,7 +75,7 @@ class Catalog:
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-    def __add__(self, other):
+    def __add__(self, other, name=None):
         """Add two catalogs together
 
         Parameters
@@ -87,11 +88,11 @@ class Catalog:
         sedkit.catalog.Catalog
             The combined catalog
         """
-        if not type(other)==type(self):
+        if not type(other) == type(self):
             raise TypeError('Cannot add object of type', type(other))
 
         # Make a new catalog
-        new_cat = Catalog()
+        new_cat = Catalog(name=name or self.name)
 
         # Combine results
         new_cat.results = at.vstack([self.results, other.results])
@@ -162,7 +163,7 @@ class Catalog:
             table.add_column(at.Column([row['abs_magnitude_unc']], name='M_'+row['band']+'_unc'))
 
         # Stack with current table
-        if len(self.results)==0:
+        if len(self.results) == 0:
             self.results = table
         else:
             self.results = at.vstack([self.results, table])
@@ -415,9 +416,9 @@ class Catalog:
 
         # Check the params are in the table
         if x not in params:
-            raise Exception("'{}' is not a valid x parameter. Please choose from {}".format(x, params))
+            raise ValueError("'{}' is not a valid x parameter. Please choose from {}".format(x, params))
         if y not in params:
-            raise Exception("'{}' is not a valid y parameter. Please choose from {}".format(y, params))
+            raise ValueError("'{}' is not a valid y parameter. Please choose from {}".format(y, params))
 
         # Make the figure
         if fig is None:
@@ -529,7 +530,11 @@ class Catalog:
         if isinstance(identify, list):
             id_cat = Catalog('Identified')
             for obj_id in identify:
-                id_cat.add_SED(self.get_SED(obj_id))
+                obj_result = self.get_SED(obj_id)
+                if str(type(obj_result)) != "<class 'astropy.table.column.Column'>":
+                    obj_result = [obj_result]
+                for obj in obj_result:
+                    id_cat.add_SED(obj)
             fig = id_cat.plot(x, y, fig=fig, size=size+5, marker='circle', line_color=id_color, fill_color=None, line_width=2, label_points=True)
             del id_cat
 

@@ -870,7 +870,7 @@ class Spectrum:
         flx = self.synthetic_flux(bandpass, force=force)
 
         # Calculate the magnitude
-        mag = syn.flux2mag(flx, bandpass)
+        mag = u.flux2mag(flx, bandpass)
 
         return mag
 
