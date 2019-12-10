@@ -25,10 +25,13 @@ Contents
    :maxdepth: 4
    
 .. automodule:: sedkit.catalog
+.. automodule:: sedkit.fitting
+.. automodule:: sedkit.helpers
 .. automodule:: sedkit.isochrone
+.. automodule:: sedkit.modelgrid
+.. automodule:: sedkit.relations
 .. automodule:: sedkit.sed
 .. automodule:: sedkit.spectrum
-.. automodule:: sedkit.synphot
 .. automodule:: sedkit.utilities
 
 Indices and tables
