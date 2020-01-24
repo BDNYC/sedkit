@@ -3,7 +3,7 @@
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
 #!python3
 """
-Make nicer spectrum objects to pass around SED class
+Make nice spectrum objects to pass around SED class
 """
 import copy
 import lmfit
@@ -25,21 +25,21 @@ from . import utilities as u
 
 
 class Spectrum:
-    """A spectrum object to add uncertainty handling and spectrum stitching
-    to ps.ArraySpectrum
+    """
+    A class to store, calibrate, fit, and plot a single spectrum
     """
     def __init__(self, wave, flux, unc=None, snr=None, trim=None, name=None,
                  ref=None, verbose=False):
-        """Store the spectrum and units separately
+        """Initialize the Spectrum object
 
         Parameters
         ----------
-        wave: np.ndarray
+        wave: astropy.units.quantity.Quantity
             The wavelength array
-        flux: np.ndarray
-            The flux array
+        flux: astropy.units.quantity.Quantity
+            The flux density array
         unc: np.ndarray
-            The uncertainty array
+            The flux density uncertainty array
         snr: float (optional)
             A value to override spectrum SNR
         snr_trim: float (optional)
@@ -57,17 +57,17 @@ class Spectrum:
         # Meta
         self.verbose = verbose
         self.name = name or 'New Spectrum'
+        self.ref = ref
 
         # Make sure the arrays are the same shape
         if not wave.shape == flux.shape and ((unc is None) or not (unc.shape == flux.shape)):
             raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
 
-        # Check wave units and convert to Angstroms if necessary to work
-        # with pysynphot
+        # Check wave units are length
         if not u.equivalent(wave, q.um):
             raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
 
-        # Check flux units
+        # Check flux units are flux density
         if not u.equivalent(flux, q.erg/q.s/q.cm**2/q.AA):
             raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 

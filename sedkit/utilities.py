@@ -157,19 +157,27 @@ def equivalent(value, units):
 
 def isnumber(s):
     """
-    Tests to see if the given string is an int, float, or exponential
+    Tests to see if the input is an int, float, or exponential
 
     Parameters
     ----------
-    s: str
-        The string to test
+    s: str, int, float
+        The input to test
 
     Returns
     -------
     bool
         The boolean result
     """
-    return s.replace('.', '').replace('-', '').replace('+', '').isnumeric()
+    # 
+    if isinstance(s, (str, bytes)):
+        return s.replace('.', '').replace('-', '').replace('+', '').isnumeric()
+
+    elif isinstance(s, (int, float, np.float32)):
+        return True
+
+    else:
+        return False
 
 
 def issequence(seq, length=None):
