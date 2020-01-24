@@ -441,8 +441,7 @@ class SED:
                                    ext=ext, survey=survey, **kwargs)
 
         # Add the data to the SED object
-        name = spectrum.name if spectrum.name != 'New Spectrum' else os.path.basename(file)
-        self.add_spectrum(spectrum, name=name, **kwargs)
+        self.add_spectrum(spectrum, **kwargs)
 
     @property
     def age(self):

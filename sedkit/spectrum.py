@@ -92,10 +92,6 @@ class Spectrum:
         self.units += [self._flux_units] if unc is not None else []
         spectrum = [i.value for i in spectrum]
 
-        # Set the name
-        if name is not None:
-            self.name = name
-
         # Add the data
         self.wave = spectrum[0]
         self.flux = spectrum[1]
