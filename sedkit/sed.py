@@ -2224,6 +2224,9 @@ class SED:
         if self.spectral_type is not None and self.radius is None:
             self.radius_from_spectral_type()
 
+        if self.verbose:
+            print("Setting spectral_type to {}.".format((self.spectral_type[0], self.spectral_type[1], self.luminosity_class, self.gravity, self.prefix)))
+
         # Set SED as uncalculated
         self.calculated = False
 
