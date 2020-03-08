@@ -616,7 +616,7 @@ class Spectrum:
 
         return new_spec
 
-    def plot(self, fig=None, components=False, best_fit=True, scale='log', draw=False, **kwargs):
+    def plot(self, fig=None, components=False, best_fit=True, scale='log', draw=False, const=1., **kwargs):
         """Plot the spectrum
 
         Parameters
@@ -645,24 +645,24 @@ class Spectrum:
 
         # Plot the spectrum
         c = kwargs.get('color', next(u.COLORS))
-        fig.line(self.wave, self.flux, color=c, alpha=0.8, legend=self.name)
+        fig.line(self.wave, self.flux*const, color=c, alpha=0.8, legend=self.name)
 
         # Plot the uncertainties
         if self.unc is not None:
             band_x = np.append(self.wave, self.wave[::-1])
-            band_y = np.append(self.flux-self.unc, (self.flux+self.unc)[::-1])
+            band_y = np.append((self.flux-self.unc)*const, (self.flux+self.unc)[::-1]*const)
             fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
 
         # Plot the components
         if components and self.components is not None:
             for spec in self.components:
-                fig.line(spec.wave, spec.flux, color=next(u.COLORS),
+                fig.line(spec.wave, spec.flux*const, color=next(u.COLORS),
                          legend=spec.name)
 
         # Plot the best fit
         if best_fit and len(self.best_fit) > 0:
             for bf in self.best_fit:
-                fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.3,
+                fig.line(bf.spectrum[0], bf.spectrum[1]*const, alpha=0.3,
                          color=next(u.COLORS), legend=bf.label)
 
         if draw:

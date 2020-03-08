@@ -540,7 +540,7 @@ class Catalog:
 
         return fig
 
-    def plot_SEDs(self, name_or_idx, scale=['log', 'log'], normalized=False, **kwargs):
+    def plot_SEDs(self, name_or_idx, scale=['log', 'log'], normalize=None, **kwargs):
         """Plot the SED for the given object or objects
 
         Parameters
@@ -575,7 +575,7 @@ class Catalog:
         for obj in name_or_idx:
             c = next(COLORS)
             targ = self.get_SED(obj)
-            fig = targ.plot(fig=fig, color=c, output=True, legend=targ.name, **kwargs)
+            fig = targ.plot(fig=fig, color=c, output=True, normalize=normalize, legend=targ.name, **kwargs)
 
         return fig
 

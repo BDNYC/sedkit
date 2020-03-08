@@ -479,80 +479,79 @@ def minimize_norm(arr1, arr2, **kwargs):
     return norm_factor
 
 
-# def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, color='red', point_kwargs={}, error_kwargs={}):
-#     """
-#     Hack to make errorbar plots in bokeh
-#
-#     Parameters
-#     ----------
-#     x: sequence
-#         The x axis data
-#     y: sequence
-#         The y axis data
-#     xerr: sequence (optional)
-#         The x axis errors
-#     yerr: sequence (optional)
-#         The y axis errors
-#     color: str
-#         The marker and error bar color
-#     point_kwargs: dict
-#         kwargs for the point styling
-#     error_kwargs: dict
-#         kwargs for the error bar styling
-#     legend: str
-#         The text for the legend
-#     """
-#     # Add x errorbars if possible
-#     if xerr is not None or (xupper is not None and xlower is not None):
-#         x_err_x = []
-#         x_err_y = []
-#
-#         # Symmetric uncertainties
-#         if xerr is not None:
-#             for px, py, err in zip(x, y, xerr):
-#                 try:
-#                     x_err_x.append((px - err, px + err))
-#                     x_err_y.append((py, py))
-#                 except TypeError:
-#                     pass
-#
-#         # Asymmetric uncertainties
-#         elif xupper is not None and xlower is not None:
-#             for px, py, lower, upper in zip(x, y, xlower, xupper):
-#                 try:
-#                     x_err_x.append((px - lower, px + upper))
-#                     x_err_y.append((py, py))
-#                 except TypeError:
-#                     pass
-#
-#         fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
-#
-#     # Add y errorbars if possible
-#     if yerr is not None or (yupper is not None and ylower is not None):
-#         y_err_x = []
-#         y_err_y = []
-#
-#         # Symmetric uncertainties
-#         if yerr is not None:
-#             for px, py, err in zip(x, y, yerr):
-#                 try:
-#                     y_err_y.append((py - err, py + err))
-#                     y_err_x.append((px, px))
-#                 except TypeError:
-#                     pass
-#
-#         # Asymmetric uncertainties
-#         elif yupper is not None and ylower is not None:
-#             for px, py, lower, upper in zip(x, y, ylower, yupper):
-#                 try:
-#                     y_err_y.append((py - lower, py + upper))
-#                     y_err_x.append((px, px))
-#                 except TypeError:
-#                     pass
-#
-#         fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
-#
-#
+def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, color='red', point_kwargs={}, error_kwargs={}):
+    """
+    Hack to make errorbar plots in bokeh
+
+    Parameters
+    ----------
+    x: sequence
+        The x axis data
+    y: sequence
+        The y axis data
+    xerr: sequence (optional)
+        The x axis errors
+    yerr: sequence (optional)
+        The y axis errors
+    color: str
+        The marker and error bar color
+    point_kwargs: dict
+        kwargs for the point styling
+    error_kwargs: dict
+        kwargs for the error bar styling
+    legend: str
+        The text for the legend
+    """
+    # Add x errorbars if possible
+    if xerr is not None or (xupper is not None and xlower is not None):
+        x_err_x = []
+        x_err_y = []
+
+        # Symmetric uncertainties
+        if xerr is not None:
+            for px, py, err in zip(x, y, xerr):
+                try:
+                    x_err_x.append((px - err, px + err))
+                    x_err_y.append((py, py))
+                except TypeError:
+                    pass
+
+        # Asymmetric uncertainties
+        elif xupper is not None and xlower is not None:
+            for px, py, lower, upper in zip(x, y, xlower, xupper):
+                try:
+                    x_err_x.append((px - lower, px + upper))
+                    x_err_y.append((py, py))
+                except TypeError:
+                    pass
+
+        fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
+
+    # Add y errorbars if possible
+    if yerr is not None or (yupper is not None and ylower is not None):
+        y_err_x = []
+        y_err_y = []
+
+        # Symmetric uncertainties
+        if yerr is not None:
+            for px, py, err in zip(x, y, yerr):
+                try:
+                    y_err_y.append((py - err, py + err))
+                    y_err_x.append((px, px))
+                except TypeError:
+                    pass
+
+        # Asymmetric uncertainties
+        elif yupper is not None and ylower is not None:
+            for px, py, lower, upper in zip(x, y, ylower, yupper):
+                try:
+                    y_err_y.append((py - lower, py + upper))
+                    y_err_x.append((px, px))
+                except TypeError:
+                    pass
+
+        fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
+
 # def whiskers(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, color='black', cap_color=None, legend=None, **kwargs):
 #     """
 #     Hack to make errorbar plots in bokeh
@@ -687,7 +686,7 @@ def goodness(f1, f2, e1=None, e2=None, weights=None):
 
 def group_spectra(spectra):
     """
-    Puts a list of *spectra* into groups with overlapping wavelength arrays
+    Put a list of *spectra* into groups with overlapping wavelength arrays
     """
     groups, idx, i = [], [], 'wavelength' if isinstance(spectra[0], dict) else 0
     for N, S in enumerate(spectra):
@@ -701,29 +700,58 @@ def group_spectra(spectra):
 
 
 def idx_exclude(x, exclude):
+    """
+    Return the indexes of the array that exclude the given ranges
+
+    Parameters
+    ----------
+    x: array-like
+        The array to slice
+    exclude: sequence
+        The list of ranges to exclude
+
+    Returns
+    -------
+    np.ndarray
+        The indexes that satisfy the criteria
+    """
     try:
-        return np.where(~np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))[0]
+        return np.where(~np.array(list(map(bool, list(map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))))[0]
     except TypeError:
         try:
-            return \
-            np.where(~np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))[0]
+            return np.where(~np.array(list(map(bool, list(map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))))[0]
         except TypeError:
             return range(len(x))
 
 
 def idx_include(x, include):
+    """
+    Return the indexes of the array that include the given ranges
+
+    Parameters
+    ----------
+    x: array-like
+        The array to slice
+    include: sequence
+        The list of ranges to include
+
+    Returns
+    -------
+    np.ndarray
+        The indexes that satisfy the criteria
+    """
     try:
-        return np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in include])))))[0]
+        return np.where(np.array(list(map(bool, list(map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in include])))))))[0]
     except TypeError:
         try:
-            return \
-            np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in [include]])))))[0]
+            return np.where(np.array(list(map(bool, list(map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in [include]])))))))[0]
         except TypeError:
             return range(len(x))
 
 
 def idx_overlap(s1, s2, inclusive=False):
-    """Returns the indices of s2 that overlap with s1
+    """
+    Return the indices of s2 that overlap with s1
 
     Paramters
     ---------
