@@ -71,7 +71,7 @@ trap1.evo_model = ‘DUSTY00’
 trap1.mass_from_age()
 ```
 
-<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_mass.png" height="300">
+<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_mass.png" height="400">
 
 A variety or atmospheric model grids can be fit to the data,
 
@@ -94,11 +94,11 @@ trap1.results
 trap1.plot()
 ```
 
-<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/sed_plot.png" height="300">
+<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/sed_plot.png" height="500">
 
 Entire catalogs of `SED` objects can also be created and their properties can be arbitrarily compared and analyzed with the `sedkit.catalog.Catalog()` object.
 
-<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_SpT.png" height="300">
+<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_SpT.png" height="500">
 
 Please read the full documentation for details on this functionality and much more.
 
