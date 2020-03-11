@@ -70,7 +70,7 @@ A variety of evolutionary model grids can be used to infer fundamental parameter
 trap1.evo_model = ‘DUSTY00’
 trap1.mass_from_age()
 ```
-![Lbol v. mass](/sedkit/data/figures/Lbol_v_mass.png)
+![Lbol v. mass](/sedkit/data/figures/Lbol_v_mass.png){:height="300px"}
 
 A variety or atmospheric model grids can be fit to the data,
 
@@ -93,11 +93,11 @@ trap1.results
 trap1.plot()
 ```
 
-![SED for Trappist-1](/sedkit/data/figures/sed_plot_.png)
+![SED for Trappist-1](/sedkit/data/figures/sed_plot.png){:height="300px"}
 
 Entire catalogs of `SED` objects can also be created and their properties can be arbitrarily compared and analyzed with the `sedkit.catalog.Catalog()` object.
 
-![Lbol v. Spectral Type for a Catalog](/sedkit/data/figures/Lbol_v_SpT.png)
+![Lbol v. Spectral Type for a Catalog](/sedkit/data/figures/Lbol_v_SpT.png){:height="300px"}
 
 Please read the full documentation for details on this functionality and much more.
 
