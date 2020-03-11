@@ -1,26 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
-#!python3
 """
 Some utilities to accompany sedkit
 """
 import copy
-import glob
 import itertools
 import os
 import re
 import warnings
 
-from astropy.io import fits, ascii
-import astropy.units as q
 import astropy.constants as ac
-import astropy.table as at
+from astropy.io import fits, ascii
 from astropy.modeling.blackbody import blackbody_lambda
 from astropy.modeling import models
-from bokeh.plotting import figure, show
-from bokeh.models import ColumnDataSource, Whisker, LassoSelectTool
-from bokeh.layouts import gridplot
+import astropy.table as at
+import astropy.units as q
 import bokeh.palettes as bpal
 import numpy as np
 import pandas as pd
@@ -69,9 +64,9 @@ def blackbody(wavelength, temperature=2000):
     """
     wavelength = q.Quantity(wavelength, "um")
     temperature = q.Quantity(temperature, "K")
-    max_val = blackbody_lambda((ac.b_wien/temperature).to(q.um), temperature).value
+    max_val = blackbody_lambda((ac.b_wien / temperature).to(q.um), temperature).value
 
-    return blackbody_lambda(wavelength, temperature).value/max_val
+    return blackbody_lambda(wavelength, temperature).value / max_val
 
 
 def color_gen(colormap='viridis', key=None, n=10):
@@ -157,19 +152,26 @@ def equivalent(value, units):
 
 def isnumber(s):
     """
-    Tests to see if the given string is an int, float, or exponential
+    Tests to see if the input is an int, float, or exponential
 
     Parameters
     ----------
-    s: str
-        The string to test
+    s: str, int, float
+        The input to test
 
     Returns
     -------
     bool
         The boolean result
     """
-    return s.replace('.', '').replace('-', '').replace('+', '').isnumeric()
+    if isinstance(s, (str, bytes)):
+        return s.replace('.', '').replace('-', '').replace(' + ', '').isnumeric()
+
+    elif isinstance(s, (int, float, np.float32)):
+        return True
+
+    else:
+        return False
 
 
 def issequence(seq, length=None):
@@ -226,9 +228,9 @@ def filter_table(table, **kwargs):
     param: str
         The parameter to filter by, e.g. 'Teff'
     value: str, float, int, sequence
-        The criteria to filter by, 
+        The criteria to filter by,
         which can be single valued like 1400
-        or a range with operators [<, <=, >, >=], 
+        or a range with operators [<, <=, >, >=],
         e.g. ('>1200', '<=1400')
 
     Returns
@@ -254,9 +256,9 @@ def filter_table(table, **kwargs):
             data = np.array(table[param])
 
             if not value.startswith('*'):
-                value = '^'+value
+                value = '^' + value
             if not value.endswith('*'):
-                value = value+'$'
+                value = value + '$'
 
             # Strip souble quotes
             value = value.replace("'", '').replace('"', '').replace('*', '(.*)')
@@ -282,7 +284,7 @@ def filter_table(table, **kwargs):
 
                 # Assume eqality if no operator
                 else:
-                    value = ['== '+value]
+                    value = ['== ' + value]
 
             # Turn numbers into strings
             if isinstance(value, (int, float)) or (isinstance(value, str) and isnumber(value)):
@@ -299,22 +301,22 @@ def filter_table(table, **kwargs):
                 # Less than or equal
                 elif cond.startswith('<='):
                     v = cond.replace('<=', '')
-                    table = table[table[param]<=eval(v)]
+                    table = table[table[param] <= eval(v)]
 
                 # Less than
                 elif cond.startswith('<'):
                     v = cond.replace('<', '')
-                    table = table[table[param]<eval(v)]
+                    table = table[table[param] < eval(v)]
 
                 # Greater than or equal
                 elif cond.startswith('>='):
                     v = cond.replace('>=', '')
-                    table = table[table[param]>=eval(v)]
+                    table = table[table[param] >= eval(v)]
 
                 # Greater than
                 elif cond.startswith('>'):
                     v = cond.replace('>', '')
-                    table = table[table[param]>eval(v)]
+                    table = table[table[param] > eval(v)]
 
                 else:
                     raise ValueError("'{}' operator not understood.".format(cond))
@@ -325,7 +327,7 @@ def filter_table(table, **kwargs):
     return table
 
 
-def finalize_spec(spec, wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA):
+def finalize_spec(spec, wave_units=q.um, flux_units=q.erg / q.s / q.cm**2 / q.AA):
     """
     Sort by wavelength and remove nans, negatives and zeroes
 
@@ -340,10 +342,10 @@ def finalize_spec(spec, wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA):
         The cleaned and ordered [W, F, E]
     """
     spec = list(zip(*sorted(zip(*map(list, [[i.value if hasattr(i, 'unit') else i for i in j] for j in spec])), key=lambda x: x[0])))
-    return scrub([spec[0]*wave_units, spec[1]*flux_units, spec[2]*flux_units])
+    return scrub([spec[0] * wave_units, spec[1] * flux_units, spec[2] * flux_units])
 
 
-def flux_calibrate(mag, dist, sig_m=None, sig_d=None, scale_to=10*q.pc):
+def flux_calibrate(mag, dist, sig_m=None, sig_d=None, scale_to=10 * q.pc):
     """
     Flux calibrate a magnitude to be at the distance *scale_to*
 
@@ -370,11 +372,11 @@ def flux_calibrate(mag, dist, sig_m=None, sig_d=None, scale_to=10*q.pc):
         if isinstance(dist, q.quantity.Quantity):
 
             # Mag = mag - 2.5*np.log10(dist/scale_to)**2
-            Mag = mag - 5*np.log10(dist.value) + 5*np.log10(scale_to.value)
+            Mag = mag - 5 * np.log10(dist.value) + 5 * np.log10(scale_to.value)
             Mag = Mag.round(3)
 
-            if isinstance(sig_d, q.quantity.Quantity) and sig_m is not None: 
-                Mag_unc = np.sqrt(sig_m**2 + (2.5*sig_d/(np.log(10)*dist))**2)
+            if isinstance(sig_d, q.quantity.Quantity) and sig_m is not None:
+                Mag_unc = np.sqrt(sig_m**2 + (2.5 * sig_d / (np.log(10) * dist))**2)
                 Mag_unc = Mag_unc.round(3).value
 
             else:
@@ -404,7 +406,7 @@ def flux2mag(flx, bandpass):
         The bandpass to use
     """
     if isinstance(flx, UNITS):
-        flx = flx, np.nan*flx.unit
+        flx = flx, np.nan * flx.unit
 
     # Calculate the magnitude
     eff = bandpass.wave_eff
@@ -413,20 +415,20 @@ def flux2mag(flx, bandpass):
     unit = flx.unit
 
     # Convert energy units to photon counts
-    flx = (flx*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
-    zp = (zp*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
-    unc = (unc*(eff/(ac.h*ac.c)).to(1/q.erg)).to(unit/q.erg)
+    flx = (flx * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(unit / q.erg)
+    zp = (zp * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(unit / q.erg)
+    unc = (unc * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(unit / q.erg)
 
     # Calculate magnitude
-    m = -2.5*np.log10((flx/zp).value)
-    m_unc = (2.5/np.log(10))*(unc/flx).value
+    m = -2.5 * np.log10((flx / zp).value)
+    m_unc = (2.5 / np.log(10)) * (unc / flx).value
 
     return m, m_unc
 
 
-def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):
+def fnu2flam(f_nu, lam, units=q.erg / q.s / q.cm**2 / q.AA):
     """
-    Convert a flux density as a function of frequency 
+    Convert a flux density as a function of frequency
     into a function of wavelength
 
     Parameters
@@ -440,7 +442,7 @@ def fnu2flam(f_nu, lam, units=q.erg/q.s/q.cm**2/q.AA):
     """
     # ergs_per_photon = (ac.h*ac.c/lam).to(q.erg)
 
-    f_lam = (f_nu*ac.c/lam**2).to(units)
+    f_lam = (f_nu * ac.c / lam**2).to(units)
 
     return f_lam
 
@@ -462,182 +464,87 @@ def minimize_norm(arr1, arr2, **kwargs):
         The normalization constant
     """
     def errfunc(p, a1, a2):
-        return np.nansum(abs(a1 - (a2*p)))
+        return np.nansum(abs(a1 - (a2 * p)))
 
     # Initial guess
-    p0 = np.nanmean(arr1)/np.nanmean(arr2)
+    p0 = np.nanmean(arr1) / np.nanmean(arr2)
     norm_factor = opt.fmin(errfunc, p0, args=(arr1, arr2), disp=0, **kwargs)
 
     return norm_factor
 
 
-# def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, color='red', point_kwargs={}, error_kwargs={}):
-#     """
-#     Hack to make errorbar plots in bokeh
-#
-#     Parameters
-#     ----------
-#     x: sequence
-#         The x axis data
-#     y: sequence
-#         The y axis data
-#     xerr: sequence (optional)
-#         The x axis errors
-#     yerr: sequence (optional)
-#         The y axis errors
-#     color: str
-#         The marker and error bar color
-#     point_kwargs: dict
-#         kwargs for the point styling
-#     error_kwargs: dict
-#         kwargs for the error bar styling
-#     legend: str
-#         The text for the legend
-#     """
-#     # Add x errorbars if possible
-#     if xerr is not None or (xupper is not None and xlower is not None):
-#         x_err_x = []
-#         x_err_y = []
-#
-#         # Symmetric uncertainties
-#         if xerr is not None:
-#             for px, py, err in zip(x, y, xerr):
-#                 try:
-#                     x_err_x.append((px - err, px + err))
-#                     x_err_y.append((py, py))
-#                 except TypeError:
-#                     pass
-#
-#         # Asymmetric uncertainties
-#         elif xupper is not None and xlower is not None:
-#             for px, py, lower, upper in zip(x, y, xlower, xupper):
-#                 try:
-#                     x_err_x.append((px - lower, px + upper))
-#                     x_err_y.append((py, py))
-#                 except TypeError:
-#                     pass
-#
-#         fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
-#
-#     # Add y errorbars if possible
-#     if yerr is not None or (yupper is not None and ylower is not None):
-#         y_err_x = []
-#         y_err_y = []
-#
-#         # Symmetric uncertainties
-#         if yerr is not None:
-#             for px, py, err in zip(x, y, yerr):
-#                 try:
-#                     y_err_y.append((py - err, py + err))
-#                     y_err_x.append((px, px))
-#                 except TypeError:
-#                     pass
-#
-#         # Asymmetric uncertainties
-#         elif yupper is not None and ylower is not None:
-#             for px, py, lower, upper in zip(x, y, ylower, yupper):
-#                 try:
-#                     y_err_y.append((py - lower, py + upper))
-#                     y_err_x.append((px, px))
-#                 except TypeError:
-#                     pass
-#
-#         fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
-#
-#
-# def whiskers(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, color='black', cap_color=None, legend=None, **kwargs):
-#     """
-#     Hack to make errorbar plots in bokeh
-#
-#     Parameters
-#     ----------
-#     x: sequence
-#         The x axis data
-#     y: sequence
-#         The y axis data
-#     xerr: sequence (optional)
-#         The x axis errors
-#     yerr: sequence (optional)
-#         The y axis errors
-#     color: str
-#         The marker and error bar color
-#     point_kwargs: dict
-#         kwargs for the point styling
-#     error_kwargs: dict
-#         kwargs for the error bar styling
-#     legend: str
-#         The text for the legend
-#     """
-#     # Make into arrays
-#     if not isinstance(x, np.ndarray):
-#         x = np.array([x])
-#     if not isinstance(y, np.ndarray):
-#         y = np.array([y])
-#
-#     # Get non-NULL indexes
-#     idx = np.where((x.data is not None) & (y.data is not None))[0]
-#     x = x[idx]
-#     y = y[idx]
-#
-#     # Make data table
-#     points = ColumnDataSource(data=dict(base=x[idx], y=y[idx]))
-#     ywhis = None
-#
-#     # Add y errorbars if possible
-#     if yerr is not None or (yupper is not None and ylower is not None):
-#
-#         # Symmetric uncertainties
-#         if yerr is not None:
-#             if not isinstance(yerr, np.ndarray):
-#                 yerr = np.array([yerr])
-#             yerr = yerr[idx]
-#             points.data['lower'] = y - yerr
-#             points.data['upper'] = y + yerr
-#
-#         # Asymmetric uncertainties
-#         elif yupper is not None and ylower is not None:
-#             if not isinstance(yupper, np.ndarray):
-#                 yupper = np.array([yupper])
-#             if not isinstance(ylower, np.ndarray):
-#                 ylower = np.array([ylower])
-#             ylower = ylower[idx]
-#             yupper = yupper[idx]
-#             points.data['lower'] = y - ylower
-#             points.data['upper'] = y + yupper
-#
-#         # Make whiskers
-#         ywhis = Whisker(source=points, base="base", upper="upper", lower="lower", line_color=color, **kwargs)
-#         ywhis.upper_head.line_color = cap_color
-#         ywhis.lower_head.line_color = cap_color
-#
-#     if ywhis is not None:
-#         fig.add_layout(ywhis)
-#
-#     # # Add x errorbars if possible
-#     # if xerr is not None or (xupper is not None and xlower is not None):
-#     #
-#     #     # Sxmmetric uncertainties
-#     #     if xerr is not None:
-#     #         if not isinstance(xerr, np.ndarray):
-#     #             xerr = np.array([xerr])
-#     #         points.data['lower'] = x - xerr
-#     #         points.data['upper'] = x + xerr
-#     #
-#     #     elif xupper is not None and xlower is not None:
-#     #         if not isinstance(xupper, np.ndarray):
-#     #             xupper = np.array([xupper])
-#     #         if not isinstance(xlower, np.ndarray):
-#     #             xlower = np.array([xlower])
-#     #         points.data['lower'] = x - xlower
-#     #         points.data['upper'] = x + xupper
-#     #
-#     #     # Make whiskers
-#     #     xwhis = Whisker(source=points, base="base", upper="upper", lower="lower", line_color=color, angle=90, **error_kwargs)
-#     #     xwhis.upper_head.line_color = cap_color
-#     #     xwhis.lower_head.line_color = cap_color
-#     #
-#     # if xwhis is not None:
-#     #     fig.add_laxout(xwhis)
+def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, color='red', point_kwargs={}, error_kwargs={}):
+    """
+    Hack to make errorbar plots in bokeh
+
+    Parameters
+    ----------
+    x: sequence
+        The x axis data
+    y: sequence
+        The y axis data
+    xerr: sequence (optional)
+        The x axis errors
+    yerr: sequence (optional)
+        The y axis errors
+    color: str
+        The marker and error bar color
+    point_kwargs: dict
+        kwargs for the point styling
+    error_kwargs: dict
+        kwargs for the error bar styling
+    legend: str
+        The text for the legend
+    """
+    # Add x errorbars if possible
+    if xerr is not None or (xupper is not None and xlower is not None):
+        x_err_x = []
+        x_err_y = []
+
+        # Symmetric uncertainties
+        if xerr is not None:
+            for px, py, err in zip(x, y, xerr):
+                try:
+                    x_err_x.append((px - err, px + err))
+                    x_err_y.append((py, py))
+                except TypeError:
+                    pass
+
+        # Asymmetric uncertainties
+        elif xupper is not None and xlower is not None:
+            for px, py, lower, upper in zip(x, y, xlower, xupper):
+                try:
+                    x_err_x.append((px - lower, px + upper))
+                    x_err_y.append((py, py))
+                except TypeError:
+                    pass
+
+        fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
+
+    # Add y errorbars if possible
+    if yerr is not None or (yupper is not None and ylower is not None):
+        y_err_x = []
+        y_err_y = []
+
+        # Symmetric uncertainties
+        if yerr is not None:
+            for px, py, err in zip(x, y, yerr):
+                try:
+                    y_err_y.append((py - err, py + err))
+                    y_err_x.append((px, px))
+                except TypeError:
+                    pass
+
+        # Asymmetric uncertainties
+        elif yupper is not None and ylower is not None:
+            for px, py, lower, upper in zip(x, y, ylower, yupper):
+                try:
+                    y_err_y.append((py - lower, py + upper))
+                    y_err_x.append((px, px))
+                except TypeError:
+                    pass
+
+        fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
 
 
 def goodness(f1, f2, e1=None, e2=None, weights=None):
@@ -671,15 +578,15 @@ def goodness(f1, f2, e1=None, e2=None, weights=None):
     errsq = e1**2 + e2**2
     numerator = np.nansum(weights * f1 * f2 / errsq)
     denominator = np.nansum(weights * f2 ** 2 / errsq)
-    norm = numerator/denominator
-    gstat = np.nansum(weights*(f1-f2*norm)**2/errsq)
+    norm = numerator / denominator
+    gstat = np.nansum(weights * (f1 - f2 * norm)**2 / errsq)
 
     return gstat, norm
 
 
 def group_spectra(spectra):
     """
-    Puts a list of *spectra* into groups with overlapping wavelength arrays
+    Put a list of *spectra* into groups with overlapping wavelength arrays
     """
     groups, idx, i = [], [], 'wavelength' if isinstance(spectra[0], dict) else 0
     for N, S in enumerate(spectra):
@@ -693,29 +600,59 @@ def group_spectra(spectra):
 
 
 def idx_exclude(x, exclude):
+    """
+    Return the indexes of the array that exclude the given ranges
+
+    Parameters
+    ----------
+    x: array-like
+        The array to slice
+    exclude: sequence
+        The list of ranges to exclude
+
+    Returns
+    -------
+    np.ndarray
+        The indexes that satisfy the criteria
+    """
     try:
-        return np.where(~np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))[0]
+        return np.where(~np.array(list(map(bool, list(map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))))[0]
+
     except TypeError:
         try:
-            return \
-            np.where(~np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in exclude])))))[0]
+            return np.where(~np.logical_and(x > exclude[0], x < exclude[1]))[0]
         except TypeError:
-            return range(len(x))
+            return np.array(range(len(x)))
 
 
 def idx_include(x, include):
+    """
+    Return the indexes of the array that include the given ranges
+
+    Parameters
+    ----------
+    x: array-like
+        The array to slice
+    include: sequence
+        The list of ranges to include
+
+    Returns
+    -------
+    np.ndarray
+        The indexes that satisfy the criteria
+    """
     try:
-        return np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in include])))))[0]
+        return np.where(np.array(list(map(bool, list(map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in include])))))))[0]
     except TypeError:
         try:
-            return \
-            np.where(np.array(map(bool, map(sum, zip(*[np.logical_and(x > i[0], x < i[1]) for i in [include]])))))[0]
+            return np.where(np.logical_and(x > include[0], x < include[1]))[0]
         except TypeError:
-            return range(len(x))
+            return np.array(range(len(x)))
 
 
 def idx_overlap(s1, s2, inclusive=False):
-    """Returns the indices of s2 that overlap with s1
+    """
+    Return the indices of s2 that overlap with s1
 
     Paramters
     ---------
@@ -735,50 +672,7 @@ def idx_overlap(s1, s2, inclusive=False):
         return np.where((s2 > s1[0]) & (s2 < s1[-1]))[0]
 
 
-def interp_flux(flux, params, values):
-    """
-    Interpolate a cube of synthetic spectra for a
-    given index of mu
-
-    Parameters
-    ----------
-    mu: int
-        The index of the (Teff, logg, FeH, *mu*, wavelength)
-        data cube to interpolate
-    flux: np.ndarray
-        The data array
-    params: list
-        A list of each free parameter range
-    values: list
-        A list of each free parameter values
-
-    Returns
-    -------
-    tu
-        The array of new flux values
-    """
-    # Iterate over each wavelength (-1 index of flux array)
-    shp = flux.shape[-1]
-    flx = np.zeros(shp)
-    generators = []
-    for lam in range(shp):
-        interp_f = RegularGridInterpolator(params, flux[:, :, :, lam])
-        f, = interp_f(values)
-
-        flx[lam] = f
-        generators.append(interp_f)
-
-    return flx, generators
-
-
-def link_plots(plots, **kwargs):
-    """Make linked plots for the given parameters"""
-    for plt in plots:
-        plt.add_tools(LassoSelectTool())
-    return gridplot([[plt] for plt in plots])
-
-
-def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
+def mag2flux(band, mag, sig_m='', units=q.erg / q.s / q.cm**2 / q.AA):
     """
     Caluclate the flux for a given magnitude
 
@@ -801,17 +695,17 @@ def mag2flux(band, mag, sig_m='', units=q.erg/q.s/q.cm**2/q.AA):
             sig_m = sig_m.value
 
         # Calculate the flux density
-        f = (band.zp*10**(mag/-2.5)).to(units)
+        f = (band.zp * 10**(mag / -2.5)).to(units)
 
         if isinstance(sig_m, str):
             sig_m = np.nan
 
-        sig_f = (f*sig_m*np.log(10)/2.5).to(units)
+        sig_f = (f * sig_m * np.log(10) / 2.5).to(units)
 
-        return np.array([f.value, sig_f.value])*units
+        return np.array([f.value, sig_f.value]) * units
 
     except IOError:
-        return np.array([np.nan, np.nan])*units
+        return np.array([np.nan, np.nan]) * units
 
 
 def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, pc2pi=False):
@@ -830,13 +724,13 @@ def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, p
     unit = pi_unit if pc2pi else dist_unit
 
     if unc_lower is None:
-        unc_lower = 0*dist.unit
+        unc_lower = 0 * dist.unit
     if unc_upper is None:
-        unc_upper = 0*dist.unit
+        unc_upper = 0 * dist.unit
 
-    val = ((1*q.pc*q.arcsec)/dist).to(unit).round(2)
-    low = (unc_lower*val/dist).to(unit).round(2)
-    upp = (unc_upper*val/dist).to(unit).round(2)
+    val = ((1 * q.pc * q.arcsec) / dist).to(unit).round(2)
+    low = (unc_lower * val / dist).to(unit).round(2)
+    upp = (unc_upper * val / dist).to(unit).round(2)
 
     if unc_lower is not None and unc_upper is not None:
         return val, low, upp
@@ -883,36 +777,6 @@ def scrub(raw_data, fill_value=None):
     return data
 
 
-def set_resolution(spec, resolution):
-    """Rebin the spectrum to the given resolution
-
-    Parameters
-    ----------
-    spec: sequence
-        The spectrum to set the resolution for
-    resolution: float, int
-        The desired resolution
-
-    Return
-    ------
-    sequence
-        The new spectrum
-    """
-    # Make the wavelength array
-    mn = np.nanmin(spec[0])
-    mx = np.nanmax(spec[0])
-    d_lam = (mx-mn)/resolution
-    wave = np.arange(mn, mx, d_lam)
-
-    # Trim the wavelength
-    dmn = (spec[0][1]-spec[0][0])/2.
-    dmx = (spec[0][-1]-spec[0][-2])/2.
-    wave = wave[np.logical_and(wave >= mn+dmn, wave <= mx-dmx)]
-
-    # Calculate the new spectrum
-    spec = spectres(wave, spec[0], spec[1])
-
-
 def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     """
     Function for resampling spectra (and optionally associated uncertainties)
@@ -929,7 +793,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     spec_fluxes : numpy.ndarray
         Array containing spectral fluxes at the wavelengths specified in
         old_spec_wavs, last dimension must correspond to the shape of
-        old_spec_wavs. Extra dimensions before this may be used to include 
+        old_spec_wavs. Extra dimensions before this may be used to include
         multiple spectra.
     spec_errs : numpy.ndarray (optional)
         Array of the same shape as spec_fluxes containing uncertainties
@@ -961,17 +825,17 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     spec_lhs = np.zeros(old_spec_wavs.shape[0])
     spec_widths = np.zeros(old_spec_wavs.shape[0])
     spec_lhs = np.zeros(old_spec_wavs.shape[0])
-    spec_lhs[0] = old_spec_wavs[0] - (old_spec_wavs[1] - old_spec_wavs[0])/2
+    spec_lhs[0] = old_spec_wavs[0] - (old_spec_wavs[1] - old_spec_wavs[0]) / 2
     spec_widths[-1] = (old_spec_wavs[-1] - old_spec_wavs[-2])
-    spec_lhs[1:] = (old_spec_wavs[1:] + old_spec_wavs[:-1])/2
+    spec_lhs[1:] = (old_spec_wavs[1:] + old_spec_wavs[:-1]) / 2
     spec_widths[:-1] = spec_lhs[1:] - spec_lhs[:-1]
 
-    filter_lhs = np.zeros(spec_wavs.shape[0]+1)
+    filter_lhs = np.zeros(spec_wavs.shape[0] + 1)
     filter_widths = np.zeros(spec_wavs.shape[0])
-    filter_lhs[0] = spec_wavs[0] - (spec_wavs[1] - spec_wavs[0])/2
+    filter_lhs[0] = spec_wavs[0] - (spec_wavs[1] - spec_wavs[0]) / 2
     filter_widths[-1] = (spec_wavs[-1] - spec_wavs[-2])
-    filter_lhs[-1] = spec_wavs[-1]+(spec_wavs[-1]-spec_wavs[-2])/2
-    filter_lhs[1:-1] = (spec_wavs[1:] + spec_wavs[:-1])/2
+    filter_lhs[-1] = spec_wavs[-1] + (spec_wavs[-1] - spec_wavs[-2]) / 2
+    filter_lhs[1:-1] = (spec_wavs[1:] + spec_wavs[:-1]) / 2
     filter_widths[:-1] = filter_lhs[1:-1] - filter_lhs[:-2]
 
     # Generate output arrays to be populated
@@ -986,18 +850,18 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     start = 0
     stop = 0
 
-    # Calculate the new spectral flux and uncertainty values, 
+    # Calculate the new spectral flux and uncertainty values,
     # loop over the new bins
     for j in range(spec_wavs.size):
 
         try:
 
             # Find the first old bin which is partially covered by the new bin
-            while spec_lhs[start+1] <= filter_lhs[j]:
+            while spec_lhs[start + 1] <= filter_lhs[j]:
                 start += 1
 
             # Find the last old bin which is partially covered by the new bin
-            while spec_lhs[stop+1] < filter_lhs[j+1]:
+            while spec_lhs[stop + 1] < filter_lhs[j + 1]:
                 stop += 1
 
             # If the new bin falls entirely within one old bin they are the same
@@ -1008,28 +872,27 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
                 if spec_errs is not None:
                     resampled_fluxes_errs[..., j] = spec_errs[..., start]
 
-            # Otherwise multiply the first and last old bin widths by P_ij, 
+            # Otherwise multiply the first and last old bin widths by P_ij,
             # all the ones in between have P_ij = 1
             else:
 
-                start_factor = (spec_lhs[start+1] - filter_lhs[j])/(spec_lhs[start+1] - spec_lhs[start])
-                end_factor = (filter_lhs[j+1] - spec_lhs[stop])/(spec_lhs[stop+1] - spec_lhs[stop])
+                start_factor = (spec_lhs[start + 1] - filter_lhs[j]) / (spec_lhs[start + 1] - spec_lhs[start])
+                end_factor = (filter_lhs[j + 1] - spec_lhs[stop]) / (spec_lhs[stop + 1] - spec_lhs[stop])
 
                 spec_widths[start] *= start_factor
                 spec_widths[stop] *= end_factor
 
                 # Populate the resampled_fluxes spectrum and uncertainty arrays
-                resampled_fluxes[..., j] = np.sum(spec_widths[start:stop+1]*spec_fluxes[..., start:stop+1], axis=-1)/np.sum(spec_widths[start:stop+1])
+                resampled_fluxes[..., j] = np.sum(spec_widths[start:stop + 1] * spec_fluxes[..., start:stop + 1], axis=-1) / np.sum(spec_widths[start:stop + 1])
 
                 if spec_errs is not None:
-                    resampled_fluxes_errs[..., j] = np.sqrt(np.sum((spec_widths[start:stop+1]*spec_errs[..., start:stop+1])**2, axis=-1))/np.sum(spec_widths[start:stop+1])
+                    resampled_fluxes_errs[..., j] = np.sqrt(np.sum((spec_widths[start:stop + 1] * spec_errs[..., start:stop + 1])**2, axis=-1)) / np.sum(spec_widths[start:stop + 1])
 
                 # Put back the old bin widths to their initial values for later use
                 spec_widths[start] /= start_factor
                 spec_widths[stop] /= end_factor
 
         except IndexError:
-            
             resampled_fluxes[..., j] = np.nan
             if spec_errs is not None:
                 resampled_fluxes_errs[..., j] = np.nan
@@ -1083,7 +946,7 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
                 val = float(re.findall(r'[0-9]\.?[0-9]?', suf)[0])
 
                 # Add the class value
-                val += types.index(MK)*10
+                val += types.index(MK) * 10
 
                 # See if low SNR
                 if ': :' in suf:
@@ -1129,11 +992,11 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
                 SpT = [SpT]
 
             # Get the MK class
-            MK = ''.join(types)[int(SpT[0]//10)]
-            num = int(SpT[0]%10) if SpT[0]%10 == int(SpT[0]%10) else SpT[0]%10
+            MK = ''.join(types)[int(SpT[0] // 10)]
+            num = int(SpT[0] % 10) if SpT[0] % 10 == int(SpT[0] % 10) else SpT[0] % 10
 
             # Get the uncertainty
-            if len(SpT)>1:
+            if len(SpT) > 1:
                 if SpT[1] == ': ' or SpT[1] == 1:
                     unc = ': '
                 elif SpT[1] == ': :' or SpT[1] == 2:
@@ -1144,19 +1007,19 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
                 unc = ''
 
             # Get the prefix
-            if len(SpT)>2 and SpT[2]:
+            if len(SpT) > 2 and SpT[2]:
                 pre = str(SpT[2])
             else:
                 pre = ''
 
             # Get the gravity
-            if len(SpT)>3 and SpT[3]:
+            if len(SpT) > 3 and SpT[3]:
                 grv = str(SpT[3])
             else:
                 grv = ''
 
             # Get the luminosity class
-            if len(SpT)>4 and SpT[4]:
+            if len(SpT) > 4 and SpT[4]:
                 LC = str(SpT[4])
             else:
                 LC = ''
@@ -1166,11 +1029,12 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
         # Bogus input
         else:
             if verbose:
-                print('Spectral type', SpT, 'must be a float between 0 and', len(types)*10, 'or a string of class', types)
+                print('Spectral type', SpT, 'must be a float between 0 and', len(types) * 10, 'or a string of class', types)
             return
 
     except IOError:
         return
+
 
 def str2Q(x, target=''):
     """
@@ -1185,10 +1049,10 @@ def str2Q(x, target=''):
     if x:
         def Q(IN):
             OUT = 1
-            text = ['Jy', 'erg', '/s', 's-1', 's', '/um', 'um-1', 'um', '/nm', 'nm-1', 'nm', '/cm2', 'cm-2', 'cm2', 
+            text = ['Jy', 'erg', '/s', 's-1', 's', '/um', 'um-1', 'um', '/nm', 'nm-1', 'nm', '/cm2', 'cm-2', 'cm2',
                     '/cm', 'cm-1', 'cm', '/A', 'A-1', 'A', 'W', '/m2', 'm-2', 'm2', '/m', 'm-1', 'm', '/Hz', 'Hz-1']
-            vals = [q.Jy, q.erg, q.s ** -1, q.s ** -1, q.s, q.um ** -1, q.um ** -1, q.um, q.nm ** -1, q.nm ** -1, q.nm, 
-                    q.cm ** -2, q.cm ** -2, q.cm ** 2, q.cm ** -1, q.cm ** -1, q.cm, q.AA ** -1, q.AA ** -1, q.AA, q.W, 
+            vals = [q.Jy, q.erg, q.s ** -1, q.s ** -1, q.s, q.um ** -1, q.um ** -1, q.um, q.nm ** -1, q.nm ** -1, q.nm,
+                    q.cm ** -2, q.cm ** -2, q.cm ** 2, q.cm ** -1, q.cm ** -1, q.cm, q.AA ** -1, q.AA ** -1, q.AA, q.W,
                     q.m ** -2, q.m ** -2, q.m ** 2, q.m ** -1, q.m ** -1, q.m, q.Hz ** -1, q.Hz ** -1]
             for t, v in zip(text, vals):
                 if t in IN:
@@ -1208,26 +1072,6 @@ def str2Q(x, target=''):
     else:
         return q.Unit('')
 
-def trim_spectrum(spectrum, regions=None, wave_min=0*q.um, wave_max=40*q.um, smooth_edges=False):
-    regions = regions or []
-    trimmed_spec = [i[idx_exclude(spectrum[0], regions)] for i in spectrum]
-    if smooth_edges:
-        for r in regions:
-            try:
-                if any(spectrum[0][spectrum[0] > r[1]]):
-                    trimmed_spec = inject_average(trimmed_spec, r[1], 'right', n=smooth_edges)
-            except:
-                pass
-            try:
-                if any(spectrum[0][spectrum[0] < r[0]]):
-                    trimmed_spec = inject_average(trimmed_spec, r[0], 'left', n=smooth_edges)
-            except:
-                pass
-
-    # Get indexes to keep
-    trimmed_spec = [i[idx_exclude(trimmed_spec[0], [(wave_min, wave_max)])] for i in spectrum]
-
-    return trimmed_spec
 
 def spectrum_from_fits(File, ext=0, verbose=False):
     """
@@ -1265,19 +1109,20 @@ def spectrum_from_fits(File, ext=0, verbose=False):
         else:
             downloaded_file = File
 
-        try:  # Try FITS files first
+        # Try FITS files first
+        try:
 
             # Get the data
             spectrum, header = fits.getdata(downloaded_file, cache=True, header=True, ext=ext)
 
             # Check the key type
-            KEY_TYPE = ['CTYPE1']
-            setType = set(KEY_TYPE).intersection(set(header.keys()))
-            if len(setType) == 0:
-                isLinear = True
-            else:
-                valType = header[setType.pop()]
-                isLinear = valType.strip().upper() == 'LINEAR'
+            # KEY_TYPE = ['CTYPE1']
+            # setType = set(KEY_TYPE).intersection(set(header.keys()))
+            # if len(setType) == 0:
+            #     isLinear = True
+            # if len(setType) != 0:
+            #     valType = header[setType.pop()]
+            #     isLinear = valType.strip().upper() == 'LINEAR'
 
             # Get wl, flux & error data from fits file
             spectrum = __get_spec(spectrum, header, File)
@@ -1297,21 +1142,24 @@ def spectrum_from_fits(File, ext=0, verbose=False):
             if not isinstance(spectrum[0], np.ndarray):
                 spectrum = None
 
-            if verbose: print('Read as FITS...')
+            if verbose:
+                print('Read as FITS...')
 
         except (IOError, KeyError):
 
             # Check if the FITS file is just Numpy arrays
             try:
                 spectrum, header = fits.getdata(downloaded_file, cache=True, header=True, ext=ext)
-                if verbose: print('Read as FITS Numpy array...')
+                if verbose:
+                    print('Read as FITS Numpy array...')
 
             except (IOError, KeyError):
 
                 try:  # Try ascii
-                    spectrum = ii.read(downloaded_file)
+                    spectrum = ascii.read(downloaded_file)
                     spectrum = np.array([np.asarray(spectrum.columns[n]) for n in range(len(spectrum.columns))])
-                    if verbose: print('Read as ascii...')
+                    if verbose:
+                        print('Read as ascii...')
 
                     txt, header = open(downloaded_file), []
                     for i in txt:
@@ -1319,7 +1167,7 @@ def spectrum_from_fits(File, ext=0, verbose=False):
                             header.append(i.replace('\n', ''))
                     txt.close()
 
-                except:
+                except (IOError, KeyError, TypeError):
                     pass
 
     if spectrum == '':
@@ -1331,6 +1179,9 @@ def spectrum_from_fits(File, ext=0, verbose=False):
 
 
 def __create_waxis(fitsHeader, lenData, fileName, wlog=False, verb=True):
+    """
+    Create wavelength array from fits header information
+    """
     # Define key names in
     KEY_MIN = ['COEFF0', 'CRVAL1']  # Min wl
     KEY_DELT = ['COEFF1', 'CDELT1', 'CD1_1']  # Delta of wl
@@ -1356,7 +1207,7 @@ def __create_waxis(fitsHeader, lenData, fileName, wlog=False, verb=True):
             valOff = fitsHeader[nameOff]
 
         # generate wl axis
-        if nameMin == 'COEFF0' or wlog == True:
+        if nameMin == 'COEFF0' or wlog is True:
             # SDSS fits files
             wAxis = 10 ** (np.arange(lenData) * valDelt + valMin)
         else:
@@ -1369,7 +1220,11 @@ def __create_waxis(fitsHeader, lenData, fileName, wlog=False, verb=True):
 
     return wAxis
 
+
 def __get_spec(fitsData, fitsHeader, fileName, verb=True):
+    """
+    Generate a spectrum from fits file data
+    """
     validData = [None] * 3
 
     # Identify number of data sets in fits file

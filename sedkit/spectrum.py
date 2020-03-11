@@ -3,7 +3,7 @@
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
 #!python3
 """
-Make nicer spectrum objects to pass around SED class
+Make nice spectrum objects to pass around SED class
 """
 import copy
 import lmfit
@@ -25,21 +25,21 @@ from . import utilities as u
 
 
 class Spectrum:
-    """A spectrum object to add uncertainty handling and spectrum stitching
-    to ps.ArraySpectrum
+    """
+    A class to store, calibrate, fit, and plot a single spectrum
     """
     def __init__(self, wave, flux, unc=None, snr=None, trim=None, name=None,
                  ref=None, verbose=False):
-        """Store the spectrum and units separately
+        """Initialize the Spectrum object
 
         Parameters
         ----------
-        wave: np.ndarray
+        wave: astropy.units.quantity.Quantity
             The wavelength array
-        flux: np.ndarray
-            The flux array
+        flux: astropy.units.quantity.Quantity
+            The flux density array
         unc: np.ndarray
-            The uncertainty array
+            The flux density uncertainty array
         snr: float (optional)
             A value to override spectrum SNR
         snr_trim: float (optional)
@@ -57,17 +57,17 @@ class Spectrum:
         # Meta
         self.verbose = verbose
         self.name = name or 'New Spectrum'
+        self.ref = ref
 
         # Make sure the arrays are the same shape
         if not wave.shape == flux.shape and ((unc is None) or not (unc.shape == flux.shape)):
             raise TypeError("Wavelength, flux and uncertainty arrays must be the same shape.")
 
-        # Check wave units and convert to Angstroms if necessary to work
-        # with pysynphot
+        # Check wave units are length
         if not u.equivalent(wave, q.um):
             raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
 
-        # Check flux units
+        # Check flux units are flux density
         if not u.equivalent(flux, q.erg/q.s/q.cm**2/q.AA):
             raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 
@@ -91,10 +91,6 @@ class Spectrum:
         self.units = [self._wave_units, self._flux_units]
         self.units += [self._flux_units] if unc is not None else []
         spectrum = [i.value for i in spectrum]
-
-        # Set the name
-        if name is not None:
-            self.name = name
 
         # Add the data
         self.wave = spectrum[0]
@@ -620,7 +616,7 @@ class Spectrum:
 
         return new_spec
 
-    def plot(self, fig=None, components=False, best_fit=True, scale='log', draw=False, **kwargs):
+    def plot(self, fig=None, components=False, best_fit=True, scale='log', draw=False, const=1., **kwargs):
         """Plot the spectrum
 
         Parameters
@@ -649,24 +645,24 @@ class Spectrum:
 
         # Plot the spectrum
         c = kwargs.get('color', next(u.COLORS))
-        fig.line(self.wave, self.flux, color=c, alpha=0.8, legend=self.name)
+        fig.line(self.wave, self.flux*const, color=c, alpha=0.8, legend=self.name)
 
         # Plot the uncertainties
         if self.unc is not None:
             band_x = np.append(self.wave, self.wave[::-1])
-            band_y = np.append(self.flux-self.unc, (self.flux+self.unc)[::-1])
+            band_y = np.append((self.flux-self.unc)*const, (self.flux+self.unc)[::-1]*const)
             fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
 
         # Plot the components
         if components and self.components is not None:
             for spec in self.components:
-                fig.line(spec.wave, spec.flux, color=next(u.COLORS),
+                fig.line(spec.wave, spec.flux*const, color=next(u.COLORS),
                          legend=spec.name)
 
         # Plot the best fit
         if best_fit and len(self.best_fit) > 0:
             for bf in self.best_fit:
-                fig.line(bf.spectrum[0], bf.spectrum[1], alpha=0.3,
+                fig.line(bf.spectrum[0], bf.spectrum[1]*const, alpha=0.3,
                          color=next(u.COLORS), legend=bf.label)
 
         if draw:
