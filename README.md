@@ -26,7 +26,7 @@ python sedkit/setup.py install
 
 An SED can be constructed by importing and initializing an `SED` object
 
-```
+```python
 from sedkit import SED
 trap1 = SED(name='Trappist-1')
 ```
@@ -35,7 +35,7 @@ The `name` argument triggers a lookup in the Simbad database for meta, astrometr
 
 Photometry can be added manually...
 
-```
+```python
 trap1.add_photometry('Johnson.V', 18.798, 0.082)
 trap1.add_photometry('Cousins.R', 16.466, 0.065)
 trap1.add_photometry('Cousins.I', 14.024, 0.115)
@@ -43,21 +43,21 @@ trap1.add_photometry('Cousins.I', 14.024, 0.115)
 
 ...and/or retrieved from catalogs.
 
-```
+```python
 trap1.find_2MASS()
 ```
 
 Spectrum arrays or files can also be added to the SED data.
 
-```
+```python
 from pkg_resources import resource_filename
 spec_file = resource_filename('sedkit', 'data/Trappist-1_NIR.fits')
 trap1.add_spectrum_file(spec_file)
 ```
 
-Other data which may affect the inferred fundamantal parameters can be set as well.
+Other data which may affect the calculated and inferred fundamantal parameters can be set at any time.
 
-```
+```python
 import astropy.units as u
 trap1.spectral_type = 'M8'
 trap1.age = 7.6*u.Gyr, 2.2*u.Gyr
@@ -66,30 +66,30 @@ trap1.radius = 0.121*u.R_sun, 0.003*u.R_sun
 
 A variety of evolutionary model grids can be used to infer fundamental parameters,
 
-```
+```python
 trap1.evo_model = ‘DUSTY00’
 trap1.mass_from_age()
 ```
 
 <img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_mass.png" height="400">
 
-A variety or atmospheric model grids can be fit to the data,
+A variety of atmospheric model grids can be fit to the data,
 
-```
+```python
 from sedkit import BTSettl
 trap1.fit_modelgrid(BTSettl())
 ```
 
 And any arbitrary atlas of models can be applied as well.
 
-```
+```python
 from sedkit import SpexPrismLibrary
 trap1.fit_modelgrid(SpexPrismLibrary())
 ```
 
 Then the results can be printed and plotted.
 
-```
+```python
 trap1.results
 trap1.plot()
 ```
