@@ -79,6 +79,9 @@ class TestSED(unittest.TestCase):
         """Test that the attributes are properly set"""
         s = copy.copy(self.sed)
 
+        # Name
+        s.name = b'Gl 752B'
+
         # Age
         s.age = 4*q.Gyr, 0.1*q.Gyr
         self.assertRaises(TypeError, setattr, s, 'age', 'foo')
