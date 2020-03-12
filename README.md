@@ -70,7 +70,8 @@ Results can be calculated at any time by checking the `results` property.
 trap1.results
 ```
 
-<table style="font-size:0.5em">
+<font size="2">
+<table style="width:100%">
  <thead>
   <tr>
    <th>param</th>
@@ -236,6 +237,7 @@ trap1.results
   <td>--</td>
  </tr>
 </table>
+</font>
 
 A variety of evolutionary model grids can be used to infer fundamental parameters,
 
