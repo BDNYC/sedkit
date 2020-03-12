@@ -953,7 +953,7 @@ class SED:
 
         # Print info
         if self.verbose:
-            n_rec = len(viz_cat)
+            n_rec = 0 if viz_cat is None else len(viz_cat)
             print("{} record{} found in {}.".format(n_rec, '' if n_rec == 1 else 's', name))
 
         # Parse the record
@@ -1713,6 +1713,11 @@ class SED:
         new_name: str
             The name
         """
+        # Convert to string
+        if isinstance(new_name, bytes):
+            new_name = new_name.decode("utf-8")
+
+        # Set the attribute
         self._name = new_name
 
         # Check for sky coords
