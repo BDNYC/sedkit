@@ -260,7 +260,7 @@ from sedkit import SpexPrismLibrary
 trap1.fit_modelgrid(SpexPrismLibrary())
 ```
 
-Inspect the results any time with the interactive plotting method.
+Inspect the SED at any time with the interactive plotting method.
 
 ```python
 trap1.plot()
