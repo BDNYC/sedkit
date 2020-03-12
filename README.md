@@ -67,7 +67,7 @@ trap1.radius = 0.121*u.R_sun, 0.003*u.R_sun
 A variety of evolutionary model grids can be used to infer fundamental parameters,
 
 ```python
-trap1.evo_model = ‘DUSTY00’
+trap1.evo_model = 'DUSTY00'
 trap1.mass_from_age()
 ```
 
