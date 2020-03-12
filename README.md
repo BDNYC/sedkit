@@ -1,4 +1,4 @@
-# SEDkit
+# Introduction
 
 [![Powered by Astropy](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org)
 [![Build Status](https://travis-ci.org/hover2pi/sedkit.svg?branch=master)](https://travis-ci.org/hover2pi/sedkit)
@@ -24,7 +24,7 @@ python sedkit/setup.py install
 
 ## Demo
 
-An SED can be constructed by importing and initializing an `SED` object
+An SED can be constructed by importing and initializing an `SED` object.
 
 ```python
 from sedkit import SED
@@ -41,13 +41,13 @@ trap1.add_photometry('Cousins.R', 16.466, 0.065)
 trap1.add_photometry('Cousins.I', 14.024, 0.115)
 ```
 
-...and/or retrieved from catalogs.
+...and/or retrieved from Vizier catalogs with built-in methods.
 
 ```python
 trap1.find_2MASS()
 ```
 
-Spectrum arrays or files can also be added to the SED data.
+Spectrum arrays or ASCII/FITS files can also be added to the SED data.
 
 ```python
 from pkg_resources import resource_filename
