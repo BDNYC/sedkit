@@ -70,7 +70,7 @@ Results can be calculated at any time by checking the `results` property.
 trap1.results
 ```
 
-<table style="font-size:0.9em">
+<table style="font-size:0.5em">
  <thead>
   <tr>
    <th>param</th>
