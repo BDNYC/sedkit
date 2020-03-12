@@ -64,6 +64,179 @@ trap1.age = 7.6*u.Gyr, 2.2*u.Gyr
 trap1.radius = 0.121*u.R_sun, 0.003*u.R_sun
 ```
 
+Results can be calculated at any time by checking the `results` property.
+
+```python
+trap1.results
+```
+
+<table>
+ <thead>
+  <tr>
+   <th>param</th>
+   <th>value</th>
+   <th>unc</th>
+   <th>units</th>
+  </tr>
+ </thead>
+ <tr>
+  <td>Lbol</td>
+  <td>2.24e+30</td>
+  <td>6.49e+28</td>
+  <td>erg / s</td>
+ </tr>
+ <tr>
+  <td>Lbol_sun</td>
+  <td>-3.23</td>
+  <td>0.013</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>Mbol</td>
+  <td>12.836</td>
+  <td>0.031</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>SpT</td>
+  <td>M8V</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>SpT_fit</td>
+  <td>--</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>Teff</td>
+  <td>2581</td>
+  <td>37</td>
+  <td>K</td>
+ </tr>
+ <tr>
+  <td>Teff_bb</td>
+  <td>--</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>Teff_evo</td>
+  <td>2658.0666666666666</td>
+  <td>22.96666666666715</td>
+  <td>K</td>
+ </tr>
+ <tr>
+  <td>age</td>
+  <td>7.6</td>
+  <td>2.2</td>
+  <td>Gyr</td>
+ </tr>
+ <tr>
+  <td>bb_source</td>
+  <td>--</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>blackbody</td>
+  <td>--</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>dec</td>
+  <td>-5.0413974999999995</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>fbol</td>
+  <td>1.21e-10</td>
+  <td>3.49e-12</td>
+  <td>erg / (cm2 s)</td>
+ </tr>
+ <tr>
+  <td>gravity</td>
+  <td>--</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>logg</td>
+  <td>5.281466666666667</td>
+  <td>0.005382456140353042</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>luminosity_class</td>
+  <td>V</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>mass</td>
+  <td>0.0921333333333333</td>
+  <td>0.0013456140350877333</td>
+  <td>solMass</td>
+ </tr>
+ <tr>
+  <td>mbol</td>
+  <td>13.308</td>
+  <td>0.031</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>membership</td>
+  <td>--</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>name</td>
+  <td>Trappist-1</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>parallax</td>
+  <td>80.4512</td>
+  <td>0.12110000103712082</td>
+  <td>mas</td>
+ </tr>
+ <tr>
+  <td>prefix</td>
+  <td>--</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>ra</td>
+  <td>346.6223683333333</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>radius</td>
+  <td>0.121</td>
+  <td>0.003</td>
+  <td>solRad</td>
+ </tr>
+ <tr>
+  <td>reddening</td>
+  <td>9.259104263037443e-05</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>spectral_type</td>
+  <td>68.0</td>
+  <td>0.5</td>
+  <td>--</td>
+ </tr>
+</table>
+
 A variety of evolutionary model grids can be used to infer fundamental parameters,
 
 ```python
@@ -87,10 +260,9 @@ from sedkit import SpexPrismLibrary
 trap1.fit_modelgrid(SpexPrismLibrary())
 ```
 
-Then the results can be printed and plotted.
+Inspect the results any time with the interactive plotting method.
 
 ```python
-trap1.results
 trap1.plot()
 ```
 
