@@ -10,7 +10,7 @@
 
 ## Installation
 
-Install via PYPI with
+Install via PyPI with
 
 ```
 pip install sedkit
