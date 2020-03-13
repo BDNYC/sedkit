@@ -1,4 +1,6 @@
-# Introduction
+# `sedkit`
+
+## Introduction
 
 [![Powered by Astropy](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org)
 [![Build Status](https://travis-ci.org/hover2pi/sedkit.svg?branch=master)](https://travis-ci.org/hover2pi/sedkit)
