@@ -200,12 +200,16 @@ class DwarfSequence(Relation):
         file = resource_filename('sedkit', 'data/dwarf_sequence.txt')
 
         # Replace '...' with NaN
-        fill_values = [('...', np.nan)]
+        fill_values = [('...', np.nan), ('....', np.nan), ('.....', np.nan)]
 
         # Initialize Relation object
         super().__init__(file, fill_values=fill_values, **kwargs)
 
+        # Add numerical spectral type column
         self.add_column('spt', [u.specType(i)[0] for i in self.data['SpT']])
+
+        # Add J-Ks color column
+        self.add_column('J-Ks', self.data['J-H'] + self.data['H-Ks'])
 
 
 class SpectralTypeRadius:
