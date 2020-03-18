@@ -17,6 +17,197 @@ from . import utilities as u
 V = Vizier(columns=["**"])
 
 
+class Relation:
+    """A base class to store raw data, fit a polynomial, and evaluate quickly"""
+    def __init__(self, file, xparam=None, yparam=None, order=None, add_columns=None, **kwargs):
+        """Load the data
+
+        Parameters
+        ----------
+        file: str
+            The file to load
+        """
+        # Load the file into a table
+        self.data = ii.read(file, **kwargs)
+
+        # Add additional columns
+        if isinstance(add_columns, dict):
+            for colname, values in add_columns.items():
+                self.add_column(colname, values)
+
+        # Set attributes
+        self.xparam = xparam
+        self.yparam = yparam
+        self.order = order
+        self.x = None
+        self.y = None
+        self.coeffs = None
+        self.C_p = None
+        self.matrix = None
+        self.yi = None
+        self.C_yi = None
+        self.sig_yi = None
+        self.derived = False
+
+        # Try to derive
+        if self.xparam is not None and self.yparam is not None and self.order is not None:
+            self.derive(self.xparam, self.yparam, self.order)
+
+    def add_column(self, colname, values):
+        """
+        Add the values to the data table
+
+        Parameters
+        ----------
+        colname: str
+            The column name
+        values: sequence
+            The values for the column
+        """
+        # Check the colname
+        if colname in self.data.colnames:
+            raise KeyError("{}: column name already exists!".format(colname))
+
+        # Check the length
+        if len(values) != len(self.data):
+            raise ValueError("{} != {}: number of values must match number of data rows.".format(len(values), len(self.data)))
+
+        # Add the column
+        self.data[colname] = values
+
+    def derive(self, xparam, yparam, order):
+        """
+        Create a polynomial of the given *order* for *yparam* as a function of *xparam*
+        which can be evaluated at any x value
+
+        Parameters
+        ----------
+        xparam: str
+            The x-axis parameter
+        yparam: str
+            The y-axis parameter
+        order: int
+            The order of the polynomial fit
+        """
+        # Make sure params are in the table
+        if xparam not in self.data.colnames or yparam not in self.data.colnames:
+            raise NameError("{}, {}: Make sure both parameters are in the data, {}".format(xparam, yparam, self.data.colnames))
+
+        # Grab data
+        self.xparam = xparam
+        self.yparam = yparam
+        self.order = order
+        self.x = self.data[xparam]
+        self.y = self.data[yparam]
+
+        # Remove masked values
+        self.x, self.y = np.asarray([(x, y) for x, y in zip(self.x, self.y) if not hasattr(x, 'mask') and not hasattr(y, 'mask')]).T
+
+        # Set weighting
+        self.weight = np.ones_like(self.x)
+        if '{}_unc'.format(yparam) in self.data.colnames:
+            self.weight = 1./self.data['{}_unc'.format(yparam)]
+
+        # Fit polynomial
+        self.coeffs, self.C_p = np.polyfit(self.x, self.y, self.order, w=self.weight, cov=True)
+
+        # Matrix with rows 1, spt, spt**2, ...
+        self.matrix = np.vstack([self.x**(order-i) for i in range(order+1)]).T
+
+        # Matrix multiplication calculates the polynomial values
+        self.yi = np.dot(self.matrix, self.coeffs)
+
+        # C_y = TT*C_z*TT.T
+        self.C_yi = np.dot(self.matrix, np.dot(self.C_p, self.matrix.T))
+
+        # Standard deviations are sqrt of diagonal
+        self.sig_yi = np.sqrt(np.diag(self.C_yi))
+
+        # Set as derived
+        self.derived = True
+
+    def evaluate(self, x_val, plot=False):
+        """
+        Evaluate the derived polynomial at the given xval
+
+        Parameters
+        ----------
+        x_val: float, int
+            The xvalue to evaluate
+
+        Returns
+        -------
+        y_val, y_unc
+            The value and uncertainty
+        """
+        # Check to see if the polynomial has been derived
+        if not self.derived:
+            print("Please run the derive method before trying to evaluate.")
+            return
+
+        # Evaluate the polynomial
+        y_val = np.polyval(self.coeffs, x_val)
+        y_unc = np.interp(x_val, self.x, self.sig_yi)
+
+        if plot:
+            plt = self.plot()
+            plt.circle([x_val], [y_val], color='red')
+            show(plt)
+
+        return y_val, y_unc
+
+    def plot(self, xparam=None, yparam=None, **kwargs):
+        """
+        Plot the data for the given parameters
+        """
+        # If no param, use stored
+        if xparam is None:
+            xparam = self.xparam
+
+        if yparam is None:
+            yparam = self.yparam
+
+        # Make sure there is data to plot
+        if xparam is None or yparam is None:
+            raise ValueError("{}, {}: Not enough data to plot.".format(xparam, yparam))
+
+        # Make the figure
+        fig = figure(x_axis_label=xparam, y_axis_label=yparam)
+        fig.circle(self.data[xparam], self.data[yparam], **kwargs)
+
+        if self.derived and xparam == self.xparam and yparam == self.yparam:
+
+            # Plot polynomial values
+            xaxis = np.linspace(self.x.min(), self.x.max(), 100)
+            evals = [self.evaluate(i)[0] for i in xaxis]
+            fig.line(xaxis, evals, color='black')
+
+            # Plot polynomial uncertainties
+            xunc = np.append(xaxis, xaxis[::-1])
+            yunc = np.append(self.yi-self.sig_yi, (self.yi+self.sig_yi)[::-1])
+            fig.patch(xunc, yunc, fill_alpha=0.1, line_alpha=0, color='black')
+
+        return fig
+
+
+class DwarfSequence(Relation):
+    """A class to evaluate the Main Sequence in arbitrary parameter spaces"""
+    def __init__(self, **kwargs):
+        """
+        Initialize a Relation object with the Dwarf Sequence data
+        """
+        # Get the file
+        file = resource_filename('sedkit', 'data/dwarf_sequence.txt')
+
+        # Replace '...' with NaN
+        fill_values = [('...', np.nan)]
+
+        # Initialize Relation object
+        super().__init__(file, fill_values=fill_values, **kwargs)
+
+        self.add_column('spt', [u.specType(i)[0] for i in self.data['SpT']])
+
+
 class SpectralTypeRadius:
     def __init__(self, orders=(5, 3), name='Spectral Type vs. Radius'):
         """Initialize the object
@@ -69,7 +260,8 @@ class SpectralTypeRadius:
         return radius, radius_unc
 
     def generate(self, orders):
-        """Generate a polynomial that describes the radius as a function of
+        """
+        Generate a polynomial that describes the radius as a function of
         spectral type for empirically measured AFGKM main sequence stars
         (Boyajian+ 2012b, 2013) and MLTY model isochrone interpolated stars
         (Filippazzoet al. 2015, 2016)
