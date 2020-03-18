@@ -151,7 +151,7 @@ class Relation:
 
         if plot:
             plt = self.plot()
-            plt.circle([x_val], [y_val], color='red')
+            plt.circle([x_val], [y_val], color='red', size=10, legend='f({})'.format(x_val))
             show(plt)
 
         return y_val, y_unc
@@ -173,17 +173,17 @@ class Relation:
 
         # Make the figure
         fig = figure(x_axis_label=xparam, y_axis_label=yparam)
-        fig.circle(self.data[xparam], self.data[yparam], **kwargs)
+        fig.circle(self.data[xparam], self.data[yparam], legend='Data', **kwargs)
 
         if self.derived and xparam == self.xparam and yparam == self.yparam:
 
             # Plot polynomial values
             xaxis = np.linspace(self.x.min(), self.x.max(), 100)
             evals = [self.evaluate(i)[0] for i in xaxis]
-            fig.line(xaxis, evals, color='black')
+            fig.line(xaxis, evals, color='black', legend='Fit')
 
             # Plot polynomial uncertainties
-            xunc = np.append(xaxis, xaxis[::-1])
+            xunc = np.append(self.x, self.x[::-1])
             yunc = np.append(self.yi-self.sig_yi, (self.yi+self.sig_yi)[::-1])
             fig.patch(xunc, yunc, fill_alpha=0.1, line_alpha=0, color='black')
 

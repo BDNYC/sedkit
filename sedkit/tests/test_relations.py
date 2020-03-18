@@ -117,6 +117,9 @@ class TestRelation(unittest.TestCase):
         # Evaluate
         self.assertTrue(isinstance(r.evaluate(5), tuple))
 
+        # Evaluate with plot
+        self.assertTrue(isinstance(r.evaluate(5, plot=True), tuple))
+
     def test_plot(self):
         """Test plot method"""
         # Generate object
