@@ -2192,7 +2192,7 @@ class SED:
 
         # Unsmooth the spectrum
         if beta is None:
-            spectrum = Spectrum(*spectrum.raw)
+            spectrum = sp.Spectrum(*spectrum.raw)
         elif isinstance(beta, int):
             spectrum = spectrum.smooth(beta, window)
         else:
