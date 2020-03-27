@@ -175,8 +175,8 @@ class SED:
 
         # Make empty spectra table
         spec_cols = ('name', 'spectrum', 'wave_min', 'wave_max', 'wave_bins',
-                     'resolution', 'ref')
-        spec_typs = ('O', 'O', np.float16, np.float16, int, int, 'O')
+                     'resolution', 'smoothing', 'ref')
+        spec_typs = ('O', 'O', np.float16, np.float16, int, int, 'O', 'O')
         self._spectra = at.QTable(names=spec_cols, dtype=spec_typs)
         for col in ['wave_min', 'wave_max']:
             self._spectra[col].unit = self._wave_units
@@ -396,7 +396,7 @@ class SED:
         else:
 
             # Make a dict for the new spectrum
-            new_spectrum = {'name': spec.name, 'spectrum': spec,
+            new_spectrum = {'name': spec.name, 'spectrum': spec, 'smoothing': spec.smoothing,
                             'wave_min': mn, 'wave_max': mx, 'resolution': res,
                             'wave_bins': spec.wave.size, 'ref': None}
 
@@ -1318,15 +1318,25 @@ class SED:
             for row in spec:
 
                 # Make the Spectrum object
+                name = row['filename']
                 wav, flx, unc = row['spectrum'].data
                 wave_unit = u.str2Q(row['wavelength_units'])
-                if row['flux_units'].startswith('norm'):
+
+                # Guess the wave unit if missing
+                if str(wave_unit) == '':
+                    wave_unit = q.AA if np.nanmean(wav) > 100 else q.um
+
+                if row['flux_units'].startswith('norm') or row['flux_units'] == '':
                     flux_unit = self.flux_units
                 else:
                     flux_unit = u.str2Q(row['flux_units'])
 
                 # Add the spectrum to the object
-                self.add_spectrum([wav*wave_unit, flx*flux_unit, unc*flux_unit])
+                spectrum = [wav*wave_unit, flx*flux_unit]
+                if np.all([np.isnan(i) for i in unc]):
+                    self.add_spectrum(spectrum, snr=50, name=name)
+                else:
+                    self.add_spectrum(spectrum + [unc*flux_unit], name=name)
 
     def fundamental_params(self, **kwargs):
         """
@@ -2159,6 +2169,39 @@ class SED:
         # Try to find the source in Simbad
         if simbad:
             self.find_Simbad()
+
+    def smooth_spectrum(self, idx, beta, window=11):
+        """Smooth or unsmooth a spectrum
+
+        Parameters
+        ----------
+        idx: int
+            The index of the spectrum to smooth
+        beta: float, int
+            The narrowness of the window
+        window: int
+            The length of the window
+        """
+        # Fetch the spectrum
+        spectrum = self._spectra[idx]['spectrum']
+
+        # Unsmooth the spectrum
+        if beta is None:
+            spectrum = Spectrum(*spectrum.raw)
+        elif isinstance(beta, int):
+            spectrum = spectrum.smooth(beta, window)
+        else:
+            raise ValueError("{}: beta value must be integer or None".format(beta))
+
+        # Recalculate spec params for SED
+        self._calculate_spec_lims()
+
+        # Replace the spectrum
+        self.drop_spectrum(idx)
+        self.add_spectrum(spectrum)
+
+        # Set SED as uncalculated
+        self.calculated = False
 
     @property
     def spectra(self):
