@@ -1319,7 +1319,12 @@ class SED:
 
                 # Make the Spectrum object
                 name = row['filename']
-                wav, flx, unc = row['spectrum'].data
+                dat = row['spectrum'].data
+                if len(dat) == 3:
+                    wav, flx, unc = dat
+                else:
+                    wav, flx, *other = dat
+                    unc = np.ones_like(wav)*np.nan
                 wave_unit = u.str2Q(row['wavelength_units'])
 
                 # Guess the wave unit if missing
