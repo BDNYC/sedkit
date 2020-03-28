@@ -225,7 +225,7 @@ class TestSED(unittest.TestCase):
         s.smooth_spectrum(0, None)
 
         # Bad beta
-        self.assertRaises(ValueError, s.smooth_spectrum, 'foo')
+        self.assertRaises(ValueError, s.smooth_spectrum, idx=0, beta='foo')
 
     def test_fit_blackbody(self):
         """Test that the SED can be fit by a blackbody"""
