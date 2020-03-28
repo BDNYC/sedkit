@@ -1515,7 +1515,7 @@ class SED:
                 print("Could not calculate surface gravity.")
 
             # Store the value
-            self.logg = logg
+            self.logg = [i.round(2) for i in logg] if logg is not None else logg
 
         else:
             if self.verbose:
@@ -1672,7 +1672,7 @@ class SED:
                 print("Could not calculate mass.")
 
             # Store the value
-            self.mass = mass
+            self.mass = [i.round(3) for i in mass] if mass is not None else mass
 
         else:
             if self.verbose:
@@ -2063,7 +2063,7 @@ class SED:
                 print("Could not calculate radius.")
 
             # Store the value
-            self.radius = radius
+            self.radius = [i.round(3) for i in radius] if radius is not None else radius
             if radius is not None:
                 self.isochrone_radius = True
 
@@ -2078,14 +2078,32 @@ class SED:
         if not self.calculated:
             self.make_sed()
 
-        # Get the results
-        ptypes = (float, bytes, str, type(None), q.quantity.Quantity)
-        params = {k[1:] if k.startswith('_') else k for k, v in
-                  self.__dict__.items() if isinstance(v, ptypes) or
-                  (isinstance(v, (list, tuple)) and len(v) == 2)}
+        # Params to list in order
+        params = ['name',
+                  'ra',
+                  'dec',
+                  'age',
+                  'membership',
+                  'distance',
+                  'parallax',
+                  'SpT',
+                  'spectral_type',
+                  'fbol',
+                  'mbol',
+                  'Lbol',
+                  'Lbol_sun',
+                  'Mbol',
+                  'Teff',
+                  'Teff_evo',
+                  'Teff_bb',
+                  'logg',
+                  'mass',
+                  'radius',
+                  'SpT_fit']
+
+        # Get the params
         rows = []
-        exclude = ['spectra', 'best_fit']
-        for param in sorted([p for p in params if p not in exclude]):
+        for param in params:
 
             # Get the values and format
             attr = getattr(self, param, None)
@@ -2308,7 +2326,7 @@ class SED:
                 print("Could not calculate teff.")
 
             # Store the value
-            self.Teff_evo = teff
+            self.Teff_evo = [i.round(0) for i in teff] if teff is not None else teff
 
         else:
             if self.verbose:
