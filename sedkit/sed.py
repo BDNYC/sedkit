@@ -1231,8 +1231,7 @@ class SED:
                 raise TypeError("'source_id' must be an integer")
 
             self.source_id = kwargs['source_id']
-            source = db.query("SELECT * FROM sources WHERE id=?",
-                              (self.source_id, ), fmt='dict', fetch='one')
+            source = db.query("SELECT * FROM sources WHERE id=?", (self.source_id, ), fmt='dict', fetch='one')
 
             # Set the name
             self.name = source.get('designation', source.get('names', self.name))
@@ -1264,8 +1263,7 @@ class SED:
                 if row['band'] in rename_bands:
                     row['band'] = rename_bands.get(row['band'])
 
-                self.add_photometry(row['band'], row['magnitude'],
-                                    row['magnitude_unc'])
+                self.add_photometry(row['band'], row['magnitude'], row['magnitude_unc'])
 
         # Get the parallax
         if 'parallax' in kwargs:
@@ -1273,8 +1271,7 @@ class SED:
             if not isinstance(kwargs['parallax'], int):
                 raise TypeError("'parallax' must be an integer")
 
-            plx = db.query("SELECT * FROM parallaxes WHERE id=?",
-                           (kwargs['parallax'], ), fmt='dict', fetch='one')
+            plx = db.query("SELECT * FROM parallaxes WHERE id=?", (kwargs['parallax'], ), fmt='dict', fetch='one')
 
             # Add it to the object
             self.parallax = plx['parallax']*q.mas, plx['parallax_unc']*q.mas
@@ -1286,8 +1283,7 @@ class SED:
                 raise TypeError("'spectral_type' must be an integer")
 
             spt_id = kwargs['spectral_type']
-            spt = db.query("SELECT * FROM spectral_types WHERE id=?",
-                           (spt_id, ), fmt='dict', fetch='one')
+            spt = db.query("SELECT * FROM spectral_types WHERE id=?", (spt_id, ), fmt='dict', fetch='one')
 
             # Add it to the object
             spectral_type = spt.get('spectral_type')

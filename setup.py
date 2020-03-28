@@ -13,7 +13,7 @@ from os import path
 
 setup(
     name='sedkit',
-    version='1.0.0',
+    version='1.0.1',
     description='Spectral energy distribution construction and analysis tools',
     url='https://github.com/hover2pi/sedkit',
     author='Joe Filippazzo',
