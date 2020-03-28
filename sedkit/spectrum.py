@@ -6,7 +6,6 @@
 Make nice spectrum objects to pass around SED class
 """
 import copy
-import lmfit
 from pkg_resources import resource_filename
 
 import astropy.constants as ac
