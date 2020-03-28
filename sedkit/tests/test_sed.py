@@ -213,6 +213,20 @@ class TestSED(unittest.TestCase):
 
         self.assertEqual(s.SpT_fit, spec.name)
 
+    def test_smooth_spectrum(self):
+        """Test the smooth_spectrum method"""
+        s = copy.copy(self.sed)
+        s.add_spectrum(self.spec1)
+
+        # Smooth it
+        s.smooth_spectrum(0, 5)
+
+        # Unsmooth it
+        s.smooth_spectrum(0, None)
+
+        # Bad beta
+        self.assertRaises(ValueError, s.smooth_spectrum, idx=0, beta='foo')
+
     def test_fit_blackbody(self):
         """Test that the SED can be fit by a blackbody"""
         # Grab the SPL

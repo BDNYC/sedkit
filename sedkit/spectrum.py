@@ -29,7 +29,7 @@ class Spectrum:
     A class to store, calibrate, fit, and plot a single spectrum
     """
     def __init__(self, wave, flux, unc=None, snr=None, trim=None, name=None,
-                 ref=None, verbose=False):
+                 ref=None, verbose=False, **kwargs):
         """Initialize the Spectrum object
 
         Parameters
@@ -85,6 +85,10 @@ class Spectrum:
         spectrum += [unc] if unc is not None else []
         spectrum = u.scrub(spectrum, fill_value=np.nan)
 
+        # Store smoothing info and raw data
+        self.smoothing = None
+        self.raw = spectrum
+
         # Strip and store units
         self._wave_units = wave.unit
         self._flux_units = flux.unit
@@ -105,6 +109,10 @@ class Spectrum:
         if trim is not None:
             trimmed = self.trim(trim)
             self.__dict__ = trimmed.__dict__
+
+        # Store kwargs
+        for key, val in kwargs.items():
+            setattr(self, key, val)
 
     def __add__(self, spec):
         """Add the spectra of this and another Spectrum object
@@ -745,9 +753,7 @@ class Spectrum:
         # Update the spectrum
         spectrum = [i*Q for i, Q in zip(binned, self.units)]
 
-        spectrum = Spectrum(*spectrum, name=self.name)
-
-        return spectrum
+        return Spectrum(*spectrum, name=self.name)
 
     def smooth(self, beta, window=11):
         """
@@ -773,9 +779,9 @@ class Spectrum:
 
         # Replace with smoothed spectrum
         spectrum = self.spectrum
-        spectrum[1] = smoothed*self.flux_units
+        spectrum[1] = smoothed * self.flux_units
 
-        return Spectrum(*spectrum, name=self.name)
+        return Spectrum(*spectrum, name=self.name, smoothing=(beta, window))
 
     @property
     def size(self):
@@ -821,14 +827,17 @@ class Spectrum:
             # Caluclate the bits
             wav = bandpass.wave[0]
             rsr = bandpass.throughput
-            erg = (wav/(ac.h*ac.c)).to(1/q.erg)
+            erg = (wav / (ac.h * ac.c)).to(1 / q.erg)
             grad = np.gradient(wav).value
 
             # Interpolate the spectrum to the filter wavelengths
             f = np.interp(wav, self.wave, self.flux, left=0, right=0)*self.flux_units
 
+            # Filter out NaNs
+            idx = np.where([not np.isnan(i) for i in f])[0]
+
             # Calculate the flux
-            flx = (np.trapz(f*rsr, x=wav)/np.trapz(rsr, x=wav)).to(self.flux_units)
+            flx = (np.trapz(f[idx] * rsr[0][idx], x=wav[idx]) / np.trapz(rsr[0][idx], x=wav[idx])).to(self.flux_units)
 
             # Calculate uncertainty
             if self.unc is not None:
