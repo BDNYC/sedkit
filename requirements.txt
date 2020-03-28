@@ -6,3 +6,4 @@ scipy==1.4.1
 pandas==0.23.4
 svo_filters==0.2.19
 dustmaps==1.0
+selenium==2.49.2
