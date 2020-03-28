@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
-#!python3
+# !python3
 """
 Make nice spectrum objects to pass around SED class
 """
@@ -11,10 +11,9 @@ from pkg_resources import resource_filename
 import astropy.constants as ac
 import astropy.units as q
 import astropy.io.votable as vo
-import astropy.table as at
 from astropy.io import fits
-from bokeh.plotting import figure, output_file, show, save
-from bokeh.models import ColumnDataSource, HoverTool, TapTool, Range1d
+from bokeh.plotting import figure, show
+from bokeh.models import ColumnDataSource, HoverTool
 from functools import partial
 from multiprocessing import Pool
 import numpy as np
@@ -67,16 +66,16 @@ class Spectrum:
             raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
 
         # Check flux units are flux density
-        if not u.equivalent(flux, q.erg/q.s/q.cm**2/q.AA):
+        if not u.equivalent(flux, q.erg / q.s / q.cm**2 / q.AA):
             raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 
         # Generate uncertainty array
         if unc is None and isinstance(snr, (int, float)):
-            unc = flux/snr
+            unc = flux / snr
 
         # Make sure the uncertainty array is in the correct units
         if unc is not None:
-            if not u.equivalent(unc, q.erg/q.s/q.cm**2/q.AA):
+            if not u.equivalent(unc, q.erg / q.s / q.cm**2 / q.AA):
                 raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 
         # Replace negatives, zeros, and infs with nans
@@ -102,7 +101,7 @@ class Spectrum:
 
         # Store components if added
         self.components = None
-        self.best_fit = []
+        self.best_fit = {}
 
         # Trim manually
         if trim is not None:
@@ -179,8 +178,8 @@ class Spectrum:
             o2 = s2[:, np.where((s2[0] < right[0][0]) & (s2[0] > left[0][-1]))].squeeze()
 
             # Get the resolutions
-            r1 = s1.shape[1]/(max(s1[0])-min(s1[0]))
-            r2 = s2.shape[1]/(max(s2[0])-min(s2[0]))
+            r1 = s1.shape[1] / (max(s1[0]) - min(s1[0]))
+            r2 = s2.shape[1] / (max(s2[0]) - min(s2[0]))
 
             # Make higher resolution s1
             if r1 < r2:
@@ -212,7 +211,7 @@ class Spectrum:
             new_spec = np.concatenate([left, overlap, right], axis=1)
 
         # Add units
-        new_spec = [i*Q for i,Q in zip(new_spec, self.units)]
+        new_spec = [i * Q for i, Q in zip(new_spec, self.units)]
 
         # Make the new spectrum object
         new_spec = Spectrum(*new_spec)
@@ -222,7 +221,7 @@ class Spectrum:
 
         return new_spec
 
-    def best_fit_model(self, modelgrid, report=None):
+    def best_fit_model(self, modelgrid, report=None, name=None):
         """Perform simple fitting of the spectrum to all models in the given
         modelgrid and store the best fit
 
@@ -233,6 +232,8 @@ class Spectrum:
         report: str
             The name of the parameter to plot versus the
             Goodness-of-fit statistic
+        name: str
+            A name for the fit
         """
         # Prepare data
         spectrum = Spectrum(*self.spectrum)
@@ -259,17 +260,14 @@ class Spectrum:
 
             # Configure plot
             tools = "pan, wheel_zoom, box_zoom, reset"
-            rep = figure(tools=tools, x_axis_label=report,
-                         y_axis_label='Goodness-of-fit',
-                         plot_width=600, plot_height=400)
+            rep = figure(tools=tools, x_axis_label=report, y_axis_label='Goodness-of-fit', plot_width=600, plot_height=400)
 
             # Single out best fit
             best = ColumnDataSource(data=models.iloc[:1])
             others = ColumnDataSource(data=models.iloc[1:])
 
             # Add hover tool
-            hover = HoverTool(tooltips=[('label', '@label'),
-                                        ('gstat', '@gstat')])
+            hover = HoverTool(tooltips=[('label', '@label'), ('gstat', '@gstat')])
             rep.add_tools(hover)
 
             # Plot the fits
@@ -279,8 +277,10 @@ class Spectrum:
             # Show the plot
             show(rep)
 
-        if bf['filepath'] not in [i['filepath'] for i in self.best_fit]:
-            self.best_fit.append(bf)
+        if bf['filepath'] in [i['filepath'] for n, i in self.best_fit.items()]:
+            print('{}: model has already been fit'.format(bf['filepath']))
+        else:
+            self.best_fit[name] = bf
 
     @property
     def data(self):
@@ -329,7 +329,7 @@ class Spectrum:
             # Convert A to um
             if wave_units is not None:
                 xnorm = q.Unit(wave_units).to(self.wave_units)
-                spec2[0] = spec2[0]*xnorm
+                spec2[0] = spec2[0] * xnorm
 
             # Resample spec onto self wavelength
             spec2 = u.spectres(self.wave, *spec2)
@@ -354,16 +354,16 @@ class Spectrum:
 
         # Run it again with the scaling removed
         if scale:
-            gstat, _ = u.goodness(flx1, flx2*ynorm, err1, err2*ynorm, weights)
+            gstat, _ = u.goodness(flx1, flx2 * ynorm, err1, err2 * ynorm, weights)
 
         if plot:
             fig = self.plot(best_fit=False)
-            fig.line(spec.wave, spec.flux*ynorm, legend='Fit')
+            fig.line(spec.wave, spec.flux * ynorm, legend='Fit')
             show(fig)
 
         return gstat, ynorm, xnorm
 
-    def flux_calibrate(self, distance, target_distance=10*q.pc, flux_units=None):
+    def flux_calibrate(self, distance, target_distance=10 * q.pc, flux_units=None):
         """Flux calibrate the spectrum from the given distance to the target distance
 
         Parameters
@@ -380,14 +380,14 @@ class Spectrum:
             flux_units = self.flux_units
 
         # Calculate the scaled flux
-        flux = (self.spectrum[1]*(distance[0]/target_distance)**2).to(flux_units)
+        flux = (self.spectrum[1] * (distance[0] / target_distance)**2).to(flux_units)
 
         # Calculate the scaled uncertainty
         if self.unc is None:
             unc = None
         else:
-            term1 = (self.spectrum[2]*distance[0]/target_distance).to(flux_units)
-            term2 = (2*self.spectrum[1]*(distance[1]*distance[0]/target_distance**2)).to(flux_units)
+            term1 = (self.spectrum[2] * distance[0] / target_distance).to(flux_units)
+            term2 = (2 * self.spectrum[1] * (distance[1] * distance[0] / target_distance**2)).to(flux_units)
             unc = np.sqrt(term1**2 + term2**2)
 
         return Spectrum(self.spectrum[0], flux, unc, name=self.name)
@@ -407,13 +407,13 @@ class Spectrum:
             The astropy units of the SED wavelength
         """
         # Check the units
-        if not u.equivalent(flux_units, q.erg/q.s/q.cm**2/q.AA):
+        if not u.equivalent(flux_units, q.erg / q.s / q.cm**2 / q.AA):
             raise TypeError("flux_units must be in flux density units, e.g. 'erg/s/cm2/A'")
 
         # Update the flux and unc arrays
-        self.flux = self.flux*self.flux_units.to(flux_units)
+        self.flux = self.flux * self.flux_units.to(flux_units)
         if self.unc is not None:
-            self.unc = self.unc*self.flux_units.to(flux_units)
+            self.unc = self.unc * self.flux_units.to(flux_units)
 
         # Set the flux_units
         self._flux_units = flux_units
@@ -424,7 +424,7 @@ class Spectrum:
         self.units = [self._wave_units, self._flux_units]
         self.units += [self._flux_units] if self.unc is not None else []
 
-    def integrate(self, units=q.erg/q.s/q.cm**2):
+    def integrate(self, units=q.erg / q.s / q.cm**2):
         """Calculate the area under the spectrum
 
         Parameters
@@ -438,20 +438,20 @@ class Spectrum:
             The integrated flux and uncertainty
         """
         # Make sure the target units are flux units
-        if not u.equivalent(units, q.erg/q.s/q.cm**2):
+        if not u.equivalent(units, q.erg / q.s / q.cm**2):
             raise TypeError("units must be in flux units, e.g. 'erg/s/cm2'")
 
         # Calculate the factor for the given units
-        m = self.flux_units*self.wave_units
+        m = self.flux_units * self.wave_units
 
         # Scrub the spectrum
         spec = u.scrub(self.data)
-        val = (np.trapz(spec[1], x=spec[0])*m).to(units)
+        val = (np.trapz(spec[1], x=spec[0]) * m).to(units)
 
         if self.unc is None:
             unc = None
         else:
-            unc = np.sqrt(np.nansum((spec[2]*np.gradient(spec[0])*m)**2)).to(units)
+            unc = np.sqrt(np.nansum((spec[2] * np.gradient(spec[0]) * m)**2)).to(units)
 
         return val, unc
 
@@ -477,12 +477,12 @@ class Spectrum:
             raise ValueError("New wavelength array must be in units of length.")
 
         # Get the data and make into same wavelength units
-        w0 = self.wave*self.wave_units.to(wave.unit)
+        w0 = self.wave * self.wave_units.to(wave.unit)
         f0, e0 = self.spectrum[1:]
 
         # Interpolate self to new wavelengths
-        f1 = np.interp(wave, w0, f0, left=np.nan, right=np.nan)*self.flux_units
-        e1 = np.interp(wave, w0, e0, left=np.nan, right=np.nan)*self.flux_units
+        f1 = np.interp(wave, w0, f0, left=np.nan, right=np.nan) * self.flux_units
+        e1 = np.interp(wave, w0, e0, left=np.nan, right=np.nan) * self.flux_units
 
         return Spectrum(wave, f1, e1, name=self.name)
 
@@ -587,7 +587,7 @@ class Spectrum:
           The normalized spectrum
         """
         # Resample self onto spec wavelengths
-        w0 = self.wave*self.wave_units.to(spec.wave_units)
+        w0 = self.wave * self.wave_units.to(spec.wave_units)
         slf = self.resamp(spec.spectrum[0])
 
         # Trim both to just overlapping wavelengths
@@ -605,7 +605,7 @@ class Spectrum:
             spectrum[2] *= norm
 
         # Make the new spectrum
-        new_spec =  Spectrum(*spectrum, name=self.name)
+        new_spec = Spectrum(*spectrum, name=self.name)
 
         # Add them together if necessary
         if add:
@@ -652,24 +652,24 @@ class Spectrum:
 
         # Plot the spectrum
         c = kwargs.get('color', next(u.COLORS))
-        fig.line(self.wave, self.flux*const, color=c, alpha=0.8, legend=self.name)
+        fig.line(self.wave, self.flux * const, color=c, alpha=0.8, legend=self.name)
 
         # Plot the uncertainties
         if self.unc is not None:
             band_x = np.append(self.wave, self.wave[::-1])
-            band_y = np.append((self.flux-self.unc)*const, (self.flux+self.unc)[::-1]*const)
+            band_y = np.append((self.flux - self.unc) * const, (self.flux + self.unc)[::-1] * const)
             fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
 
         # Plot the components
         if components and self.components is not None:
             for spec in self.components:
-                fig.line(spec.wave, spec.flux*const, color=next(u.COLORS),
+                fig.line(spec.wave, spec.flux * const, color=next(u.COLORS),
                          legend=spec.name)
 
         # Plot the best fit
-        if best_fit and len(self.best_fit) > 0:
-            for bf in self.best_fit:
-                fig.line(bf.spectrum[0], bf.spectrum[1]*const, alpha=0.3,
+        if best_fit:
+            for name, bf in self.best_fit.items():
+                fig.line(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3,
                          color=next(u.COLORS), legend=bf.label)
 
         if draw:
@@ -699,7 +699,7 @@ class Spectrum:
             The normalization constant or normalized spectrum object
         """
         # My solution
-        norm = u.mag2flux(bandpass, mag)[0]/self.synthetic_flux(bandpass, force=force)[0]
+        norm = u.mag2flux(bandpass, mag)[0] / self.synthetic_flux(bandpass, force=force)[0]
 
         # Just return the normalization factor
         if no_spec:
@@ -736,8 +736,8 @@ class Spectrum:
             # Make the wavelength array
             mn = np.nanmin(self.wave)
             mx = np.nanmax(self.wave)
-            d_lam = (mx-mn)/resolution
-            wave = np.arange(mn, mx, d_lam)*self.wave_units
+            d_lam = (mx - mn) / resolution
+            wave = np.arange(mn, mx, d_lam) * self.wave_units
 
         if not u.equivalent(wave, q.um):
             raise TypeError("wave must be in length units")
@@ -750,7 +750,7 @@ class Spectrum:
         binned = u.spectres(wave, self.wave, self.flux, self.unc)
 
         # Update the spectrum
-        spectrum = [i*Q for i, Q in zip(binned, self.units)]
+        spectrum = [i * Q for i, Q in zip(binned, self.units)]
 
         return Spectrum(*spectrum, name=self.name)
 
@@ -791,7 +791,7 @@ class Spectrum:
     def spectrum(self):
         """Store the spectrum with units
         """
-        return [i*Q for i,Q in zip(self.data, self.units)]
+        return [i * Q for i, Q in zip(self.data, self.units)]
 
     def synthetic_flux(self, bandpass, force=False, plot=False):
         """
@@ -826,11 +826,10 @@ class Spectrum:
             # Caluclate the bits
             wav = bandpass.wave[0]
             rsr = bandpass.throughput
-            erg = (wav / (ac.h * ac.c)).to(1 / q.erg)
             grad = np.gradient(wav).value
 
             # Interpolate the spectrum to the filter wavelengths
-            f = np.interp(wav, self.wave, self.flux, left=0, right=0)*self.flux_units
+            f = np.interp(wav, self.wave, self.flux, left=0, right=0) * self.flux_units
 
             # Filter out NaNs
             idx = np.where([not np.isnan(i) for i in f])[0]
@@ -840,8 +839,8 @@ class Spectrum:
 
             # Calculate uncertainty
             if self.unc is not None:
-                sig_f = np.interp(wav, self.wave, self.unc, left=0, right=0)*self.flux_units
-                unc = np.sqrt(np.sum(((sig_f*rsr*grad)**2).to(self.flux_units**2)))
+                sig_f = np.interp(wav, self.wave, self.unc, left=0, right=0) * self.flux_units
+                unc = np.sqrt(np.sum(((sig_f * rsr * grad)**2).to(self.flux_units**2)))
             else:
                 unc = None
 
@@ -886,11 +885,10 @@ class Spectrum:
         ranges: sequence
             The (min_wave, max_wave) ranges to trim from the spectrum
         """
-        if isinstance(ranges, (list,tuple)):
+        if isinstance(ranges, (list, tuple)):
             for mn, mx in ranges:
                 try:
-                    idx, = np.where((self.spectrum[0] < mn) | 
-                                    (self.spectrum[0] > mx))
+                    idx, = np.where((self.spectrum[0] < mn) | (self.spectrum[0] > mx))
 
                     if len(idx) > 0:
                         spectrum = [i[idx] for i in self.spectrum]
@@ -911,12 +909,12 @@ class Spectrum:
     @property
     def wave_max(self):
         """The minimum wavelength"""
-        return max(self.wave)*self.wave_units
+        return max(self.wave) * self.wave_units
 
     @property
     def wave_min(self):
         """The minimum wavelength"""
-        return min(self.wave)*self.wave_units
+        return min(self.wave) * self.wave_units
 
     @property
     def wave_units(self):
@@ -937,7 +935,7 @@ class Spectrum:
             raise TypeError("wave_units must be a unit of length, e.g. 'um'")
 
         # Update the wavelength array
-        self.wave = self.wave*self.wave_units.to(wave_units)
+        self.wave = self.wave * self.wave_units.to(wave_units)
 
         # Set the wave_units
         self._wave_units = wave_units
@@ -1019,39 +1017,39 @@ class Blackbody(Spectrum):
         if not u.equivalent(wavelength, q.um):
             raise TypeError("Wavelength must be in astropy units, e.g. 'um'")
 
-        units = q.erg/q.s/q.cm**2/(1 if Flam else q.AA)
+        units = q.erg / q.s / q.cm**2 / (1 if Flam else q.AA)
 
         # Check for radius and distance
         if self.radius is not None and self.distance is not None:
-            scale = (self.radius**2/self.distance**2).decompose()
+            scale = (self.radius**2 / self.distance**2).decompose()
         else:
             scale = 1.
 
         # Get numerator and denominator
-        const = ac.h*ac.c/(wavelength*ac.k_B)
-        numer = 2*np.pi*ac.h*ac.c**2*scale/(wavelength**(4 if Flam else 5))
-        denom = np.exp((const/self.teff)).decompose()
+        const = ac.h * ac.c / (wavelength * ac.k_B)
+        numer = 2 * np.pi * ac.h * ac.c**2 * scale / (wavelength**(4 if Flam else 5))
+        denom = np.exp((const / self.teff)).decompose()
 
         # Calculate intensity
-        I = (numer/(denom-1.)).to(units)
+        I = (numer / (denom - 1.)).to(units)
 
         # Calculate dI/dr
         if self.radius is not None and self.radius_unc is not None:
-            dIdr = (self.radius_unc*2*I/self.radius).to(units)
+            dIdr = (self.radius_unc * 2 * I / self.radius).to(units)
         else:
-            dIdr = 0.*units
+            dIdr = 0. * units
 
         # Calculate dI/dd
         if self.distance is not None and self.distance_unc is not None:
-            dIdd = (self.distance_unc*2*I/self.distance).to(units)
+            dIdd = (self.distance_unc * 2 * I / self.distance).to(units)
         else:
-            dIdd = 0.*units
+            dIdd = 0. * units
 
         # Calculate dI/dT
         if self.teff is not None and self.teff_unc is not None:
-            dIdT = (self.teff_unc*I*ac.h*ac.c/wavelength/ac.k_B/self.teff**2).to(units)
+            dIdT = (self.teff_unc * I * ac.h * ac.c / wavelength / ac.k_B / self.teff**2).to(units)
         else:
-            dIdT = 0.*units
+            dIdT = 0. * units
 
         # Calculate sigma_I from derivative terms
         I_unc = np.sqrt(dIdT**2 + dIdr**2 + dIdd**2)
@@ -1087,9 +1085,10 @@ class FileSpectrum(Spectrum):
 
             elif survey == 'SDSS':
                 head = fits.getheader(file)
-                flux_units = 1E-17*q.erg/q.s/q.cm**2/q.AA
+                raw = fits.getdata(file)
+                flux_units = 1E-17 * q.erg / q.s / q.cm**2 / q.AA
                 wave_units = q.AA
-                log_w = head['COEFF0']+head['COEFF1']*np.arange(len(raw.flux))
+                log_w = head['COEFF0'] + head['COEFF1'] * np.arange(len(raw.flux))
                 data = [10**log_w, raw.flux, raw.ivar]
 
             # Check if it is a recarray
@@ -1116,10 +1115,10 @@ class FileSpectrum(Spectrum):
             raise IOError('The file needs to be ASCII, XML, or FITS.')
 
         # Apply units
-        wave = data[0]*wave_units
-        flux = data[1]*flux_units
+        wave = data[0] * wave_units
+        flux = data[1] * flux_units
         if len(data) > 2:
-            unc = data[2]*flux_units
+            unc = data[2] * flux_units
         else:
             unc = None
 
@@ -1131,7 +1130,7 @@ class FileSpectrum(Spectrum):
 
 class Vega(Spectrum):
     """A Spectrum object of Vega"""
-    def __init__(self, wave_units=q.AA, flux_units=q.erg/q.s/q.cm**2/q.AA,
+    def __init__(self, wave_units=q.AA, flux_units=q.erg / q.s / q.cm**2 / q.AA,
                  **kwargs):
         """Initialize the Spectrum object
 
@@ -1146,7 +1145,7 @@ class Vega(Spectrum):
         vega_file = resource_filename('sedkit', 'data/STScI_Vega.txt')
         wave, flux = np.genfromtxt(vega_file, unpack=True)
         wave *= q.AA
-        flux *= q.erg/q.s/q.cm**2/q.AA
+        flux *= q.erg / q.s / q.cm**2 / q.AA
 
         # Convert to target units
         wave = wave.to(wave_units)
@@ -1175,7 +1174,7 @@ def fit_model(row, fitspec):
     """
     try:
         gstat, yn, xn = list(fitspec.fit(row['spectrum'], wave_units='AA'))
-        spectrum = np.array([row['spectrum'][0]*xn, row['spectrum'][1]*yn])
+        spectrum = np.array([row['spectrum'][0] * xn, row['spectrum'][1] * yn])
         row['spectrum'] = spectrum
         row['gstat'] = gstat
 

@@ -211,8 +211,6 @@ class TestSED(unittest.TestCase):
         # Fit with SPL
         s.fit_spectral_type()
 
-        self.assertEqual(s.SpT_fit, spec.name)
-
     def test_smooth_spectrum(self):
         """Test the smooth_spectrum method"""
         s = copy.copy(self.sed)

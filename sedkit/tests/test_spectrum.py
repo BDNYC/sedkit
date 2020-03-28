@@ -63,7 +63,7 @@ class TestSpectrum(unittest.TestCase):
     def test_model_fit(self):
         """Test that a model grid can be fit"""
         # Empty fit results
-        self.spec.best_fit = []
+        self.spec.best_fit = {}
 
         # Grab the SPL and fit
         spl = mg.SpexPrismLibrary()
@@ -73,8 +73,8 @@ class TestSpectrum(unittest.TestCase):
         # Test fit works as expected by loading a spectrum then fitting for it
         label = 'Opt:L4'
         spec = spl.get_spectrum(label=label)
-        spec.best_fit_model(spl)
-        self.assertEqual(spec.best_fit[0]['label'], label)
+        spec.best_fit_model(spl, name='Test')
+        self.assertEqual(spec.best_fit['Test']['label'], label)
 
     def test_addition(self):
         """Test that spectra are normalized and combined properly"""
