@@ -1,13 +1,12 @@
 name: py35
 dependencies:
-- numpy==1.16.1
-- astropy==3.0.3
-- python>=3.5
-- bokeh==1.0.4
-- astroquery==0.3.9
-- scipy==1.1.0
+- numpy==1.16.2
+- astropy==3.0.4
+- python>=3.5.3
+- bokeh==1.4.0
+- astroquery==0.4
+- scipy==1.4.1
 - pandas==0.23.4
-- lmfit==0.9.12
 - pip:
   - svo_filters==0.2.19
   - dustmaps==1.0
