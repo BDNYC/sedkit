@@ -73,7 +73,7 @@ class TestSpectrum(unittest.TestCase):
         # Test fit works as expected by loading a spectrum then fitting for it
         label = 'Opt:L4'
         spec = spl.get_spectrum(label=label)
-        spec.best_fit_model(spl, name='Test')
+        spec.best_fit_model(spl, name='Test', report='SpT')
         self.assertEqual(spec.best_fit['Test']['label'], label)
 
     def test_addition(self):
@@ -112,6 +112,14 @@ class TestSpectrum(unittest.TestCase):
         self.assertAlmostEqual(fbol[0].value, 4000, places=1)
         self.assertNotEqual(str(fbol[1].value), 'nan')
 
+    def test_interpolate(self):
+        """Test interpolate method"""
+        spec1 = self.flat1
+        spec2 = self.flat2.interpolate(spec1)
+
+        # Check wavelength is updated
+        self.assertTrue(np.all(spec1.wave == spec2.wave))
+
     def test_renormalize(self):
         """Test that a spectrum is properly normalized to a given magnitude"""
         # Make a bandpass
@@ -145,7 +153,7 @@ class TestSpectrum(unittest.TestCase):
         s2 = self.flat2
 
         # Normalize 1 to 2 and check that they are close
-        s3 = s1.norm_to_spec(s2)
+        s3 = s1.norm_to_spec(s2, plot=True)
         self.assertAlmostEqual(np.nanmean(s2.flux), np.nanmean(s3.flux), places=4)
         self.assertNotEqual(s2.size, s3.size)
         self.assertEqual(s1.size, s3.size)
