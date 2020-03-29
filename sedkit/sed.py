@@ -171,20 +171,15 @@ class SED:
         self.best_fit = {}
 
         # Make empty spectra table
-        spec_cols = ('name', 'spectrum', 'wave_min', 'wave_max', 'wave_bins',
-                     'resolution', 'smoothing', 'ref')
+        spec_cols = ('name', 'spectrum', 'wave_min', 'wave_max', 'wave_bins', 'resolution', 'history', 'ref')
         spec_typs = ('O', 'O', np.float16, np.float16, int, int, 'O', 'O')
         self._spectra = at.QTable(names=spec_cols, dtype=spec_typs)
         for col in ['wave_min', 'wave_max']:
             self._spectra[col].unit = self._wave_units
 
         # Make empty photometry table
-        phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc',
-                     'app_flux', 'app_flux_unc', 'abs_magnitude',
-                     'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc',
-                     'bandpass', 'ref')
-        phot_typs = ('U16', np.float16, np.float16, np.float16, float, float,
-                     np.float16, np.float16, float, float, 'O', 'O')
+        phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc', 'app_flux', 'app_flux_unc', 'abs_magnitude', 'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc', 'bandpass', 'ref')
+        phot_typs = ('U16', np.float16, np.float16, np.float16, float, float, np.float16, np.float16, float, float, 'O', 'O')
         self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
         for col in ['app_flux', 'app_flux_unc', 'abs_flux', 'abs_flux_unc']:
             self._photometry[col].unit = self._flux_units
@@ -391,7 +386,7 @@ class SED:
         else:
 
             # Make a dict for the new spectrum
-            new_spectrum = {'name': spec.name, 'spectrum': spec, 'smoothing': spec.smoothing,
+            new_spectrum = {'name': spec.name, 'spectrum': spec, 'history': spec.history,
                             'wave_min': mn, 'wave_max': mx, 'resolution': res,
                             'wave_bins': spec.wave.size, 'ref': None}
 
@@ -771,6 +766,79 @@ class SED:
 
         # Update spectra max and min wavelengths
         self._calculate_spec_lims()
+
+        # Set SED as uncalculated
+        self.calculated = False
+
+    def edit_spectrum(self, idx, plot=True, restore=False, **kwargs):
+        """
+        Edit a spectrum inplace by applying sedkit.spectrum.Spectrum methods,
+        e.g. smooth, interpolate, trim
+
+        Parameters
+        ----------
+        idx: int
+            The index of the spectrum to edit
+        plot: bool
+            Plot the old and new spectra
+        restore: bool
+            Restore the spectrum to the original data
+        """
+        # Fetch the spectrum
+        spec_old = self._spectra[idx]['spectrum']
+
+        # Restore to original data
+        if restore:
+             spec_new = sp.Spectrum(*spec_old.raw, name=spec_old.name)
+
+        # Or apply some methods
+        else:
+
+            # New spectrum
+            spec_new = sp.Spectrum(*spec_old.spectrum, name='Edited')
+
+            # Apply keywords as methods with dict values as kwargs
+            for method, args in kwargs.items():
+
+                # Check for valid method
+                if method in dir(spec_new):
+
+                    # Check if args are a None, list, or dict
+                    args = args or {}
+
+                    # Make sure args are a dictionary
+                    if not isinstance(args, dict):
+                        raise TypeError("{} arguments must be a dictionary".format(method))
+
+                    # Run the method
+                    spec_new = getattr(spec_new, method)(**args)
+
+                    # Update the history
+                    spec_new.history = spec_old.history
+                    spec_new.history.update({method: args})
+
+        if plot:
+
+            # Plot original spectrum
+            fig = spec_old.plot(color='blue', alpha=0.5)
+
+            # Plot new spectrum
+            fig = spec_new.plot(fig=fig, color='red', alpha=0.5)
+
+            show(fig)
+
+        # Recalculate spec params for SED
+        self._calculate_spec_lims()
+
+        # Replace the spectrum
+        self.drop_spectrum(idx)
+        spec_new.name = spec_old.name
+        self.add_spectrum(spec_new)
+
+        # Rearrange spectra
+        n_spec = len(self.spectra) - 1
+        idx = list(range(0, idx)) + [n_spec] + list(range(idx, n_spec))
+        self._spectra = self._spectra[idx]
 
         # Set SED as uncalculated
         self.calculated = False
@@ -2257,40 +2325,6 @@ class SED:
         # Try to find the source in Simbad
         if simbad:
             self.find_Simbad()
-
-    def smooth_spectrum(self, idx, beta, window=11):
-        """
-        Smooth or unsmooth a spectrum
-
-        Parameters
-        ----------
-        idx: int
-            The index of the spectrum to smooth
-        beta: float, int
-            The narrowness of the window
-        window: int
-            The length of the window
-        """
-        # Fetch the spectrum
-        spectrum = self._spectra[idx]['spectrum']
-
-        # Unsmooth the spectrum
-        if beta is None:
-            spectrum = sp.Spectrum(*spectrum.raw)
-        elif isinstance(beta, int):
-            spectrum = spectrum.smooth(beta, window)
-        else:
-            raise ValueError("{}: beta value must be integer or None".format(beta))
-
-        # Recalculate spec params for SED
-        self._calculate_spec_lims()
-
-        # Replace the spectrum
-        self.drop_spectrum(idx)
-        self.add_spectrum(spectrum)
-
-        # Set SED as uncalculated
-        self.calculated = False
 
     @property
     def spectra(self):

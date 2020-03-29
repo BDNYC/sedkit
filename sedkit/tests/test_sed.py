@@ -190,6 +190,20 @@ class TestSED(unittest.TestCase):
 
         self.assertIsNotNone(s.Teff)
 
+    def test_edit_spectrum(self):
+        """Test the edit_spectrum method"""
+        s = copy.copy(self.sed)
+        s.add_spectrum(self.spec1)
+
+        # Smooth it
+        s.edit_spectrum(0, smooth={'beta': 5}, plot=True)
+
+        # Unsmooth it
+        s.edit_spectrum(0, restore=True)
+
+        # Bad beta
+        self.assertRaises((ValueError, TypeError), s.edit_spectrum, idx=0, smooth={'beta': 'foo'})
+
     def test_find_methods(self):
         """Test that the find_simbad and find_photometry methods work"""
         s = sed.SED('trappist-1')
@@ -210,20 +224,6 @@ class TestSED(unittest.TestCase):
 
         # Fit with SPL
         s.fit_spectral_type()
-
-    def test_smooth_spectrum(self):
-        """Test the smooth_spectrum method"""
-        s = copy.copy(self.sed)
-        s.add_spectrum(self.spec1)
-
-        # Smooth it
-        s.smooth_spectrum(0, 5)
-
-        # Unsmooth it
-        s.smooth_spectrum(0, None)
-
-        # Bad beta
-        self.assertRaises(ValueError, s.smooth_spectrum, idx=0, beta='foo')
 
     def test_fit_blackbody(self):
         """Test that the SED can be fit by a blackbody"""

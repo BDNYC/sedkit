@@ -146,6 +146,17 @@ class TestSpectrum(unittest.TestCase):
         self.assertEqual(self.spec.wave_units, new_spec.wave_units)
         self.assertNotEqual(self.spec.size, new_spec.size)
 
+    def test_restore(self):
+        """Test restore method"""
+        # Smooth the spectrum
+        edited_spec = self.spec.smooth(5)
+
+        # Restore it
+        restored_spec = edited_spec.restore()
+
+        # Make sure it matched the original
+        self.assertTrue(np.all(self.spec.wave == restored_spec.wave))
+
     def test_norm_to_spec(self):
         """Test that a spectrum is properly normalized to another spectrum"""
         # Get two flat spectra

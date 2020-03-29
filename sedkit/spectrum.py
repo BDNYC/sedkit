@@ -6,6 +6,7 @@
 Make nice spectrum objects to pass around SED class
 """
 import copy
+from functools import wraps
 from pkg_resources import resource_filename
 
 import astropy.constants as ac
@@ -20,6 +21,23 @@ import numpy as np
 from pandas import DataFrame
 
 from . import utilities as u
+
+
+def copy_raw(func):
+    """A wrapper to copy the raw data to the new Spectrum object"""
+    @wraps(func)
+    def _copy_raw(*args, **kwargs):
+        """Run the function then update the raw data attribute"""
+        # Grab the original data
+        raw = args[0].raw or args[0].spectrum
+
+        # Run the function and update the raw attribute
+        new_spec = func(*args, **kwargs)
+        new_spec.raw = raw
+
+        return new_spec
+
+    return _copy_raw
 
 
 class Spectrum:
@@ -83,9 +101,9 @@ class Spectrum:
         spectrum += [unc] if unc is not None else []
         spectrum = u.scrub(spectrum, fill_value=np.nan)
 
-        # Store smoothing info and raw data
-        self.smoothing = None
-        self.raw = spectrum
+        # Store history info and raw data
+        self.history = {}
+        self.raw = None
 
         # Strip and store units
         self._wave_units = wave.unit
@@ -112,6 +130,7 @@ class Spectrum:
         for key, val in kwargs.items():
             setattr(self, key, val)
 
+    @copy_raw
     def __add__(self, spec):
         """Add the spectra of this and another Spectrum object
 
@@ -363,6 +382,7 @@ class Spectrum:
 
         return gstat, ynorm, xnorm
 
+    @copy_raw
     def flux_calibrate(self, distance, target_distance=10 * q.pc, flux_units=None):
         """Flux calibrate the spectrum from the given distance to the target distance
 
@@ -455,6 +475,7 @@ class Spectrum:
 
         return val, unc
 
+    @copy_raw
     def interpolate(self, wave):
         """Interpolate the spectrum to another wavelength array
 
@@ -486,6 +507,7 @@ class Spectrum:
 
         return Spectrum(wave, f1, e1, name=self.name)
 
+    @copy_raw
     def norm_to_mags(self, photometry, force=False, exclude=[], include=[]):
         """
         Normalize the spectrum to the given bandpasses
@@ -569,6 +591,7 @@ class Spectrum:
 
         return Spectrum(*spectrum, name=self.name)
 
+    @copy_raw
     def norm_to_spec(self, spec, add=False, plot=False, **kwargs):
         """Normalize the spectrum to another spectrum
 
@@ -713,6 +736,7 @@ class Spectrum:
 
         return Spectrum(*spectrum, name=self.name)
 
+    @copy_raw
     def resamp(self, wave=None, resolution=None):
         """Resample the spectrum onto a new wavelength array or to a new
         resolution
@@ -754,6 +778,13 @@ class Spectrum:
 
         return Spectrum(*spectrum, name=self.name)
 
+    def restore(self):
+        """
+        Restore the spectrum to the original raw data
+        """
+        return Spectrum(*(self.raw or self.spectrum), name=self.name)
+
+    @copy_raw
     def smooth(self, beta, window=11):
         """
         Smooths the spectrum using a Kaiser-Bessel smoothing window of
@@ -780,7 +811,7 @@ class Spectrum:
         spectrum = self.spectrum
         spectrum[1] = smoothed * self.flux_units
 
-        return Spectrum(*spectrum, name=self.name, smoothing=(beta, window))
+        return Spectrum(*spectrum, name=self.name)
 
     @property
     def size(self):
@@ -877,6 +908,7 @@ class Spectrum:
 
         return mag
 
+    @copy_raw
     def trim(self, ranges):
         """Trim the spectrum in the given wavelength ranges
 
@@ -885,26 +917,24 @@ class Spectrum:
         ranges: sequence
             The (min_wave, max_wave) ranges to trim from the spectrum
         """
+        # Iterate over trim ranges
         if isinstance(ranges, (list, tuple)):
             for mn, mx in ranges:
                 try:
                     idx, = np.where((self.spectrum[0] < mn) | (self.spectrum[0] > mx))
 
                     if len(idx) > 0:
+
+                        # Trim the data
                         spectrum = [i[idx] for i in self.spectrum]
 
-                        # Update the object
-                        spec = Spectrum(*spectrum, name=self.name)
-
-                        return spec
+                        return Spectrum(*spectrum, name=self.name)
 
                 except TypeError:
-                    print("""Please provide a list of (lower,upper) bounds\
-                             with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
+                    print("""Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
 
         else:
-            raise TypeError("""Please provide a list of (lower,upper) bounds\
-                             with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
+            raise TypeError("""Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
 
     @property
     def wave_max(self):
