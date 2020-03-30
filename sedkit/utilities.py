@@ -414,6 +414,9 @@ def flux2mag(flx, bandpass):
     flx, unc = flx
     unit = flx.unit
 
+    # Set uncertainty
+    unc = unc or np.nan * unit
+
     # Convert energy units to photon counts
     flx = (flx * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(unit / q.erg)
     zp = (zp * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(unit / q.erg)

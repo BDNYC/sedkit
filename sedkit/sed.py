@@ -386,9 +386,7 @@ class SED:
         else:
 
             # Make a dict for the new spectrum
-            new_spectrum = {'name': spec.name, 'spectrum': spec, 'history': spec.history,
-                            'wave_min': mn, 'wave_max': mx, 'resolution': res,
-                            'wave_bins': spec.wave.size, 'ref': None}
+            new_spectrum = {'name': spec.name, 'spectrum': spec, 'history': spec.history, 'wave_min': mn, 'wave_max': mx, 'resolution': res, 'wave_bins': spec.wave.size, 'ref': None}
 
             # Add the kwargs
             override = {key: val for key, val in kwargs.items() if key in new_spectrum}
@@ -426,9 +424,7 @@ class SED:
             The name of the survey
         """
         # Generate a FileSpectrum
-        spectrum = sp.FileSpectrum(file, wave_units=wave_units,
-                                   flux_units=flux_units,
-                                   ext=ext, survey=survey, **kwargs)
+        spectrum = sp.FileSpectrum(file, wave_units=wave_units, flux_units=flux_units, ext=ext, survey=survey, **kwargs)
 
         # Add the data to the SED object
         self.add_spectrum(spectrum, **kwargs)
@@ -516,9 +512,9 @@ class SED:
             self.min_spec = (999 * q.um).to(self.wave_units)
             self.max_spec = (0 * q.um).to(self.wave_units)
 
-    def calculate_synthetic_mags(self):
+    def _calculate_synthetic_photometry(self, bandpasses=None):
         """
-        Calculate synthetic magnitudes of all stitched spectra
+        Calculate synthetic photometry of all stitched spectra
         """
         if len(self.stitched_spectra) > 0:
 
@@ -526,76 +522,79 @@ class SED:
             for spec in self.stitched_spectra:
 
                 # and over bandpasses
-                for band in svo.filters()['Band']:
+                for band in bandpasses or svo.filters()['Band']:
 
                     # Get the bandpass
                     bp = svo.Filter(band)
 
-                    # Check for overlap before calculating
-                    if bp.overlap(spec) in ['full', 'partial']:
+                    # Calculate the magnitiude
+                    mag, mag_unc = spec.synthetic_magnitude(bp)
 
-                        # Calculate the magnitiude
-                        mag, mag_unc = spec.synthetic_mag(bp)
+                    if mag is not None:
 
                         # Make a dict for the new point
-                        new_photometry = {'band': band, 'eff': bp.eff, 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc}
+                        new_photometry = {'band': band, 'eff': bp.wave_eff, 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc}
 
                         # Add it to the table
                         self._synthetic_photometry.add_row(new_photometry)
 
-    def _calibrate_photometry(self):
+    def _calibrate_photometry(self, name='photometry'):
         """
         Calculate the absolute magnitudes and flux values of all rows in the photometry table
         """
-        # Reset absolute photometry
-        self._photometry['abs_flux'] = np.nan
-        self._photometry['abs_flux_unc'] = np.nan
-        self._photometry['abs_magnitude'] = np.nan
-        self._photometry['abs_magnitude_unc'] = np.nan
-        self.abs_phot_SED = None
+        # Fetch the table (photometry or synthetic_photometry)
+        table = getattr(self, '_{}'.format(name))
 
-        if self.photometry is not None and len(self.photometry) > 0:
+        # Reset absolute photometry
+        table['abs_flux'] = np.nan
+        table['abs_flux_unc'] = np.nan
+        table['abs_magnitude'] = np.nan
+        table['abs_magnitude_unc'] = np.nan
+
+        if getattr(self, name) is not None and len(getattr(self, name)) > 0:
 
             # Update the photometry
-            self._photometry['eff'] = self._photometry['eff'].to(self.wave_units)
-            self._photometry['app_flux'] = self._photometry['app_flux'].to(self.flux_units)
-            self._photometry['app_flux_unc'] = self._photometry['app_flux_unc'].to(self.flux_units)
-            self._photometry['abs_flux'] = self._photometry['abs_flux'].to(self.flux_units)
-            self._photometry['abs_flux_unc'] = self._photometry['abs_flux_unc'].to(self.flux_units)
+            table['eff'] = table['eff'].to(self.wave_units)
+            table['app_flux'] = table['app_flux'].to(self.flux_units)
+            table['app_flux_unc'] = table['app_flux_unc'].to(self.flux_units)
+            table['abs_flux'] = table['abs_flux'].to(self.flux_units)
+            table['abs_flux_unc'] = table['abs_flux_unc'].to(self.flux_units)
 
             # Get the app_mags
-            m = np.array(self._photometry)['app_magnitude']
-            m_unc = np.array(self._photometry)['app_magnitude_unc']
+            m = np.array(table)['app_magnitude']
+            m_unc = np.array(table)['app_magnitude_unc']
 
             # Calculate app_flux values
-            for n, row in enumerate(self._photometry):
+            for n, row in enumerate(table):
                 app_flux, app_flux_unc = u.mag2flux(row['bandpass'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
-                self._photometry['app_flux'][n] = app_flux.to(self.flux_units)
-                self._photometry['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
+                table['app_flux'][n] = app_flux.to(self.flux_units)
+                table['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
 
             # Calculate absolute mags
             if self.distance is not None:
 
                 # Calculate abs_mags
                 M, M_unc = u.flux_calibrate(m, self.distance[0], m_unc, self.distance[1])
-                self._photometry['abs_magnitude'] = M
-                self._photometry['abs_magnitude_unc'] = M_unc
+                table['abs_magnitude'] = M
+                table['abs_magnitude_unc'] = M_unc
 
                 # Calculate abs_flux values
-                for n, row in enumerate(self._photometry):
+                for n, row in enumerate(table):
                     abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
-                    self._photometry['abs_flux'][n] = abs_flux.to(self.flux_units)
-                    self._photometry['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
+                    table['abs_flux'][n] = abs_flux.to(self.flux_units)
+                    table['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
 
-            # Make apparent photometric SED with photometry
-            app_cols = ['eff', 'app_flux', 'app_flux_unc']
-            phot_array = np.array(self.photometry[app_cols])
-            phot_array = phot_array[(self.photometry['app_flux'] > 0) & (self.photometry['app_flux_unc'] > 0)]
-            self.app_phot_SED = sp.Spectrum(*[phot_array[i] * Q for i, Q in zip(app_cols, self.units)])
+            if name == 'photometry':
 
-            # Make absolute photometric SED with photometry
-            if self.distance is not None:
-                self.abs_phot_SED = self.app_phot_SED.flux_calibrate(self.distance)
+                # Make apparent photometric SED with photometry
+                app_cols = ['eff', 'app_flux', 'app_flux_unc']
+                phot_array = np.array(getattr(self, name)[app_cols])
+                phot_array = phot_array[(getattr(self, name)['app_flux'] > 0) & (getattr(self, name)['app_flux_unc'] > 0)]
+                self.app_phot_SED = sp.Spectrum(*[phot_array[i] * Q for i, Q in zip(app_cols, self.units)])
+
+                # Make absolute photometric SED with photometry
+                if self.distance is not None:
+                    self.abs_phot_SED = self.app_phot_SED.flux_calibrate(self.distance)
 
         # Set SED as uncalculated
         self.calculated = False
@@ -638,6 +637,10 @@ class SED:
             # Make absolute spectral SED
             if self.app_spec_SED is not None and self.distance is not None:
                 self.abs_spec_SED = self.app_spec_SED.flux_calibrate(self.distance)
+
+            # Get synthetic magnitudes
+            self._calculate_synthetic_photometry()
+            self._calibrate_photometry('synthetic_photometry')
 
         # Set SED as uncalculated
         self.calculated = False
@@ -1674,8 +1677,6 @@ class SED:
         # Combine spectra and flux calibrate
         self._calibrate_spectra()
 
-        # Get synthetic mags
-        # self.calculate_synthetic_mags()
 
         if len(self.stitched_spectra) > 0:
 
@@ -1919,7 +1920,7 @@ class SED:
         return self._photometry
 
     def plot(self, app=True, photometry=True, spectra=True, integral=False,
-             syn_photometry=False, blackbody=False, best_fit=True, normalize=None,
+             synthetic_photometry=False, blackbody=False, best_fit=True, normalize=None,
              scale=['log', 'log'], output=False, fig=None, color=None,
              **kwargs):
         """
@@ -1935,7 +1936,7 @@ class SED:
             Plot the spectra
         integrals: bool
             Plot the curve used to calculate fbol
-        syn_photometry: bool
+        synthetic_photometry: bool
             Plot the synthetic photometry
         blackbody: bool
             Plot the blackbody fit
@@ -2054,7 +2055,25 @@ class SED:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
                 self.fig.circle('x', 'y', source=source, legend='Nondetection', name='nondetection', color=color, fill_alpha=0, size=8)
 
-        # TODO: Plot synthetic photometry
+        # Plot photometry
+        if synthetic_photometry and self.synthetic_photometry is not None:
+
+            # Set up hover tool
+            phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
+            hover = HoverTool(names=['synthetic photometry', 'nondetection'], tooltips=phot_tips, mode='vline')
+            self.fig.add_tools(hover)
+
+            # Plot points with errors
+            pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.synthetic_photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if not any([np.isnan(i) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
+            if len(pts) > 0:
+                source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
+                self.fig.square('x', 'y', source=source, legend='Synthetic Photometry', name='synthetic photometry', color=color, fill_alpha=0.7, size=8)
+                y_err_x = []
+                y_err_y = []
+                for name, px, py, err in pts:
+                    y_err_x.append((px, px))
+                    y_err_y.append((py - err, py + err))
+                self.fig.multi_line(y_err_x, y_err_y, color=color)
 
         # Plot the SED with linear interpolation completion
         if integral:
@@ -2473,33 +2492,6 @@ class SED:
         self._calibrate_photometry()
         self._calibrate_spectra()
 
-    # def get_syn_photometry(self, bands=[], plot=False):
-    #     """
-    #     Calculate the synthetic magnitudes
-    #
-    #     Parameters
-    #     ----------
-    #     bands: sequence
-    #         The list of bands to calculate
-    #     plot: bool
-    #         Plot the synthetic mags
-    #     """
-    #     try:
-    #         if not any(bands):
-    #             bands = BANDPASSES['Band']
-    #
-    #         # Only get mags in regions with spectral coverage
-    #         syn_mags = []
-    #         for spec in [i.as_void() for i in self.piecewise]:
-    #             spec = [Q * (i.value if hasattr(i, 'unit') else i) for i, Q in zip(spec, [self.wave_units, self.flux_units, self.flux_units])]
-    #             syn_mags.append(s.all_mags(spec, bands=bands, plot=plot))
-    #
-    #         # Stack the tables
-    #         self.syn_photometry = at.vstack(syn_mags)
-    #
-    #     except:
-    #         print('No spectral coverage to calculate synthetic photometry.')
-
 
 class VegaSED(SED):
     """
@@ -2514,12 +2506,10 @@ class VegaSED(SED):
         self.find_SDSS()
         self.find_2MASS()
         self.find_WISE()
-        self.parallax = 130.23 * q.mas, 0.36 * q.mas
         self.radius = 2.818 * q.Rsun, 0.008 * q.Rsun
-        self.spectral_type = 'A0'
 
         # Get the spectrum
-        self.add_spectrum(sp.Vega())
+        self.add_spectrum(sp.Vega(snr=100))
 
         # Calculate
         self.make_sed()

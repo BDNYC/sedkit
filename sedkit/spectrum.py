@@ -1160,8 +1160,7 @@ class FileSpectrum(Spectrum):
 
 class Vega(Spectrum):
     """A Spectrum object of Vega"""
-    def __init__(self, wave_units=q.AA, flux_units=q.erg / q.s / q.cm**2 / q.AA,
-                 **kwargs):
+    def __init__(self, wave_units=q.AA, flux_units=q.erg / q.s / q.cm**2 / q.AA, **kwargs):
         """Initialize the Spectrum object
 
         Parameters
