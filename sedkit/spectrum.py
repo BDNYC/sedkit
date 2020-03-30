@@ -323,7 +323,7 @@ class Spectrum:
             The path for the exported file
         """
         # Get target directory
-        dirname = os.path.dirname(filepath)
+        dirname = os.path.dirname(filepath) or '.'
         name = self.name.replace(' ', '_')
 
         # Check the parent directory
