@@ -97,6 +97,14 @@ class TestSpectrum(unittest.TestCase):
         spec4 = self.spec + None
         self.assertEqual(spec4.size, self.spec.size)
 
+    def test_export(self):
+        """Test export method"""
+        # Good export
+        self.flat1.export('test.txt', header='Foo')
+
+        # Bad dirname
+        self.assertRaises(IOError, self.flat1.export, '/foo/bar/baz.txt')
+
     def test_integrate(self):
         """Test that a spectum is integrated properly"""
         # No nans
