@@ -4,6 +4,7 @@ and calculate fundamental and atmospheric parameters
 
 Author: Joe Filippazzo, jfilippazzo@stsci.edu
 """
+from copy import copy
 import os
 import shutil
 
@@ -512,10 +513,22 @@ class SED:
             self.min_spec = (999 * q.um).to(self.wave_units)
             self.max_spec = (0 * q.um).to(self.wave_units)
 
-    def _calculate_synthetic_photometry(self, bandpasses=None):
+    def calculate_synthetic_photometry(self, bandpasses=None):
         """
         Calculate synthetic photometry of all stitched spectra
+
+        Parameters
+        ----------
+        bandpasses: sequence
+            A list of the bandpasses to calculate
         """
+        # Clear table
+        self._synthetic_photometry = self._synthetic_photometry[:0]
+
+        # Make sure spectra are calibrated
+        if not self.calculated:
+            self.make_sed()
+
         if len(self.stitched_spectra) > 0:
 
             # Iterate over spectra
@@ -530,13 +543,18 @@ class SED:
                     # Calculate the magnitiude
                     mag, mag_unc = spec.synthetic_magnitude(bp)
 
-                    if mag is not None:
+                    if mag is not None and not np.isnan(mag):
 
                         # Make a dict for the new point
                         new_photometry = {'band': band, 'eff': bp.wave_eff, 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc}
 
                         # Add it to the table
                         self._synthetic_photometry.add_row(new_photometry)
+
+            # Calibrate the synthetic photometry
+            self._calibrate_photometry('synthetic_photometry')
+
+        return self.synthetic_photometry
 
     def _calibrate_photometry(self, name='photometry'):
         """
@@ -551,7 +569,7 @@ class SED:
         table['abs_magnitude'] = np.nan
         table['abs_magnitude_unc'] = np.nan
 
-        if getattr(self, name) is not None and len(getattr(self, name)) > 0:
+        if len(table) > 0:
 
             # Update the photometry
             table['eff'] = table['eff'].to(self.wave_units)
@@ -637,10 +655,6 @@ class SED:
             # Make absolute spectral SED
             if self.app_spec_SED is not None and self.distance is not None:
                 self.abs_spec_SED = self.app_spec_SED.flux_calibrate(self.distance)
-
-            # Get synthetic magnitudes
-            self._calculate_synthetic_photometry()
-            self._calibrate_photometry('synthetic_photometry')
 
         # Set SED as uncalculated
         self.calculated = False
@@ -902,20 +916,23 @@ class SED:
         if self.app_spec_SED is not None:
             specpath = os.path.join(dirpath, '{}_apparent_SED.txt'.format(name))
             header = '{} apparent spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(name)
-            spec_data = self.app_spec_SED.spectrum
-            np.savetxt(specpath, np.asarray(spec_data).T, header=header)
+            self.app_spec_SED.export(specpath, header=header)
 
         # Absolute spectral SED
         if self.abs_spec_SED is not None:
             specpath = os.path.join(dirpath, '{}_absolute_SED.txt'.format(name))
             header = '{} absolute spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(name)
-            spec_data = self.abs_spec_SED.spectrum
-            np.savetxt(specpath, np.asarray(spec_data).T, header=header)
+            self.abs_spec_SED.export(specpath, header=header)
 
         # All photometry
         if self.photometry is not None:
             photpath = os.path.join(dirpath, '{}_photometry.txt'.format(name))
             self.photometry.write(photpath, format='ipac')
+
+        # All synthetic photometry
+        if self.synthetic_photometry is not None:
+            synpath = os.path.join(dirpath, '{}_synthetic_photometry.txt'.format(name))
+            self.synthetic_photometry.write(synpath, format='ipac')
 
         # All results
         resultspath = os.path.join(dirpath, '{}_results.txt'.format(name))
@@ -1677,7 +1694,6 @@ class SED:
         # Combine spectra and flux calibrate
         self._calibrate_spectra()
 
-
         if len(self.stitched_spectra) > 0:
 
             # If photometry and spectra, exclude photometric points with
@@ -2030,7 +2046,7 @@ class SED:
                 self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, legend='Spectrum')
 
         # Plot photometry
-        if photometry and self.photometry is not None:
+        if photometry and len(self.photometry) > 0:
 
             # Set up hover tool
             phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
@@ -2056,7 +2072,7 @@ class SED:
                 self.fig.circle('x', 'y', source=source, legend='Nondetection', name='nondetection', color=color, fill_alpha=0, size=8)
 
         # Plot photometry
-        if synthetic_photometry and self.synthetic_photometry is not None:
+        if synthetic_photometry and len(self.synthetic_photometry) > 0:
 
             # Set up hover tool
             phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
@@ -2428,7 +2444,12 @@ class SED:
         """
         A property for synthetic photometry
         """
-        self._synthetic_photometry.sort('eff')
+        if len(self._synthetic_photometry) == 0:
+            print("No synthetic photometry. Run `calculate_synthetic_photometry()` to generate.")
+
+        # Sort by wavelength
+        # self._synthetic_photometry.sort('eff')
+
         return self._synthetic_photometry
 
     def teff_from_age(self, teff_units=q.K, plot=False):

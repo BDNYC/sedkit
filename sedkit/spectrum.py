@@ -7,6 +7,7 @@ Make nice spectrum objects to pass around SED class
 """
 import copy
 from functools import wraps
+import os
 from pkg_resources import resource_filename
 
 import astropy.constants as ac
@@ -311,6 +312,30 @@ class Spectrum:
             data = np.stack([self.wave, self.flux, self.unc])
 
         return data
+
+    def export(self, filepath, header=None):
+        """
+        Export the spectrum to file
+
+        Parameters
+        ----------
+        filepath: str
+            The path for the exported file
+        """
+        # Get target directory
+        dirname = os.path.dirname(filepath)
+        name = self.name.replace(' ', '_')
+
+        # Check the parent directory
+        if not os.path.exists(dirname):
+            raise IOError('{}: No such directory'.format(dirname))
+
+        # Write the file with a header
+        head = '{}\nWavelength [{}], Flux Density [{}]'.format(name, self.wave_units, self.flux_units)
+        if isinstance(header, str):
+            head += '\n{}'.format(header)
+        t_data = np.asarray(self.spectrum).T
+        np.savetxt(filepath, t_data, header=head)
 
     def fit(self, spec, weights=None, wave_units=None, scale=True, plot=False):
         """Determine the goodness of fit between this and another spectrum
@@ -901,12 +926,14 @@ class Spectrum:
         tuple
             The flux and uncertainty
         """
-        flx = self.synthetic_flux(bandpass, force=force)
+        flx, flx_unc = self.synthetic_flux(bandpass, force=force)
 
         # Calculate the magnitude
-        mag = u.flux2mag(flx, bandpass)
+        mag, mag_unc = None, None
+        if flx is not None:
+            mag, mag_unc = u.flux2mag((flx, flx_unc), bandpass)
 
-        return mag
+        return mag, mag_unc
 
     @copy_raw
     def trim(self, ranges):
