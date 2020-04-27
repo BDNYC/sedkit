@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="d0014980-b391-4344-ad1e-07ec9da226cb" name="Default" comment="">
-      <change type="DELETED" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
     </list>
     <ignored path="SEDkit.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -399,7 +399,14 @@
       <option name="project" value="LOCAL" />
       <updated>1588019376895</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="removing .xml .idea">
+      <created>1588019486196</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1588019486197</updated>
+    </task>
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="ToolWindowManager">
@@ -467,7 +474,8 @@
     <MESSAGE value="Made rounding for dist out to 3 digits" />
     <MESSAGE value="Removed .idea files" />
     <MESSAGE value="Pushing PAN-STAARS data files." />
-    <option name="LAST_COMMIT_MESSAGE" value="Pushing PAN-STAARS data files." />
+    <MESSAGE value="removing .xml .idea" />
+    <option name="LAST_COMMIT_MESSAGE" value="removing .xml .idea" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager />
