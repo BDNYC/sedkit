@@ -1,16 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="AnalysisUIOptions">
-    <option name="SCOPE_TYPE" value="3" />
-  </component>
   <component name="ChangeListManager">
     <list default="true" id="d0014980-b391-4344-ad1e-07ec9da226cb" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Data/Filters/PAN-STARRS/PS_g.txt" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Data/Filters/PAN-STARRS/PS_i.txt" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Data/Filters/PAN-STARRS/PS_r.txt" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Data/Filters/PAN-STARRS/PS_y.txt" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/Data/Filters/PAN-STARRS/PS_z.txt" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="" />
     </list>
     <ignored path="SEDkit.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -20,9 +12,6 @@
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
-  </component>
-  <component name="CreatePatchCommitExecutor">
-    <option name="PATCH_PATH" value="" />
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="default_target" />
   <component name="FavoritesManager">
@@ -61,15 +50,6 @@
         </entry>
       </file>
     </leaf>
-  </component>
-  <component name="FindInProjectRecents">
-    <findStrings>
-      <find>evo</find>
-      <find>funda</find>
-      <find>fun</find>
-      <find>fundamental</find>
-      <find>get</find>
-    </findStrings>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
@@ -327,12 +307,6 @@
   <component name="ShelveChangesManager" show_recycled="false">
     <option name="remove_strategy" value="false" />
   </component>
-  <component name="StructureViewFactory">
-    <option name="ACTIVE_ACTIONS" value=",SHOW_INHERITED" />
-  </component>
-  <component name="SvnConfiguration">
-    <configuration />
-  </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
       <changelist id="d0014980-b391-4344-ad1e-07ec9da226cb" name="Default" comment="" />
@@ -418,7 +392,14 @@
       <option name="project" value="LOCAL" />
       <updated>1563813062343</updated>
     </task>
-    <option name="localTasksCounter" value="12" />
+    <task id="LOCAL-00012" summary="Pushing PAN-STAARS data files.">
+      <created>1588019376895</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1588019376895</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="ToolWindowManager">
@@ -470,14 +451,6 @@
       </map>
     </option>
   </component>
-  <component name="Vcs.Log.UiProperties">
-    <option name="RECENTLY_FILTERED_USER_GROUPS">
-      <collection />
-    </option>
-    <option name="RECENTLY_FILTERED_BRANCH_GROUPS">
-      <collection />
-    </option>
-  </component>
   <component name="VcsContentAnnotationSettings">
     <option name="myLimit" value="2678400000" />
   </component>
@@ -493,7 +466,8 @@
     <MESSAGE value="Made rounding for Lbol out to 4 digits" />
     <MESSAGE value="Made rounding for dist out to 3 digits" />
     <MESSAGE value="Removed .idea files" />
-    <option name="LAST_COMMIT_MESSAGE" value="Removed .idea files" />
+    <MESSAGE value="Pushing PAN-STAARS data files." />
+    <option name="LAST_COMMIT_MESSAGE" value="Pushing PAN-STAARS data files." />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager />
@@ -798,20 +772,5 @@
         </state>
       </provider>
     </entry>
-  </component>
-  <component name="masterDetails">
-    <states>
-      <state key="ScopeChooserConfigurable.UI">
-        <settings>
-          <splitter-proportions>
-            <option name="proportions">
-              <list>
-                <option value="0.2" />
-              </list>
-            </option>
-          </splitter-proportions>
-        </settings>
-      </state>
-    </states>
   </component>
 </project>
