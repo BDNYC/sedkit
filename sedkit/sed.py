@@ -1574,7 +1574,7 @@ class SED:
         # Check for distance and coordinates
         if self.distance is not None and self.sky_coords is not None:
             gal_coords = SkyCoord(self.sky_coords.galactic, frame='galactic', distance=self.distance[0])
-            bayestar = BayestarWebQuery(version='bayestar2017')
+            bayestar = BayestarWebQuery(version='bayestar2019')
             red = bayestar(gal_coords, mode='random_sample')
 
             # Set the attribute
