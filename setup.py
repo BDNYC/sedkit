@@ -8,8 +8,6 @@ except ImportError:
     from distutils.core import setup
     setup
 
-from codecs import open
-from os import path
 
 setup(
     name='sedkit',
