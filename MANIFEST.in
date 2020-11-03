@@ -5,11 +5,13 @@ include LICENSE
 include README.rst
 
 recursive-include tests *
+recursive-include data *
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
 
 recursive-include docs *.rst conf.py Makefile make.bat *.jpg *.png *.gif
 
 graft sedkit/data
+graft data
 
 global-exclude *.pyc
