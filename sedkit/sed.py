@@ -296,7 +296,7 @@ class SED:
         mag -= bp.ext_vector * self.reddening
 
         # Make a dict for the new point
-        new_photometry = {'band': band, 'eff': bp.wave_eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': None}
+        new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': None}
 
         # Add the kwargs
         new_photometry.update(kwargs)

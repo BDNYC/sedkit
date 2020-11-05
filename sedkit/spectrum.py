@@ -879,13 +879,13 @@ class Spectrum:
             # Convert self to bandpass units
             self.wave_units = bandpass.wave_units
 
-            # Caluclate the bits
+            # Calculate the bits
             wav = bandpass.wave[0]
             rsr = bandpass.throughput
             grad = np.gradient(wav).value
 
             # Interpolate the spectrum to the filter wavelengths
-            f = np.interp(wav, self.wave, self.flux, left=0, right=0) * self.flux_units
+            f = np.interp(wav.value, self.wave, self.flux, left=0, right=0) * self.flux_units
 
             # Filter out NaNs
             idx = np.where([not np.isnan(i) for i in f])[0]
@@ -895,7 +895,7 @@ class Spectrum:
 
             # Calculate uncertainty
             if self.unc is not None:
-                sig_f = np.interp(wav, self.wave, self.unc, left=0, right=0) * self.flux_units
+                sig_f = np.interp(wav.value, self.wave, self.unc, left=0, right=0) * self.flux_units
                 unc = np.sqrt(np.sum(((sig_f * rsr * grad)**2).to(self.flux_units**2)))
             else:
                 unc = None
