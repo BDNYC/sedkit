@@ -8,7 +8,7 @@ svo_filters==0.2.19
 dustmaps==1.0
 selenium==2.49.2
 
-pytest==5.4.3
+pytest==6.1.2
 pytest-runner==4.2
 pip==20.2.3
 bumpversion==0.5.3
