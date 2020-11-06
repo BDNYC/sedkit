@@ -6,9 +6,9 @@ import numpy as np
 import astropy.units as q
 from svo_filters import Filter
 
-from .. import modelgrid as mg
-from .. import spectrum as sp
-from .. import utilities as u
+from sedkit import modelgrid as mg
+from sedkit import spectrum as sp
+from sedkit import utilities as u
 
 
 class TestSpectrum(unittest.TestCase):
@@ -16,19 +16,19 @@ class TestSpectrum(unittest.TestCase):
     def setUp(self):
         """Setup the tests"""
         # Make 'real' spectrum
-        wave = np.linspace(0.8, 2.5, 200)*q.um
-        flux = u.blackbody_lambda(wave, 3000*q.K)*q.sr
-        self.spec = sp.Spectrum(wave, flux, flux/100.)
+        wave = np.linspace(0.8, 2.5, 200) * q.um
+        flux = u.blackbody_lambda(wave, 3000 * q.K) * q.sr
+        self.spec = sp.Spectrum(wave, flux, flux / 100.)
 
         # Make a flat spectrum
-        w1 = np.linspace(0.6, 1, 230)*q.um
-        f1 = np.ones_like(w1.value)*q.erg/q.s/q.cm**2/q.AA
-        self.flat1 = sp.Spectrum(w1, f1, f1*0.01)
+        w1 = np.linspace(0.6, 1, 230) * q.um
+        f1 = np.ones_like(w1.value) * q.erg / q.s / q.cm**2 / q.AA
+        self.flat1 = sp.Spectrum(w1, f1, f1 * 0.01)
 
         # Make another flat spectrum
-        w2 = np.linspace(0.8, 2, 300)*q.um
-        f2 = np.ones_like(w2.value)*q.erg/q.s/q.cm**2/q.AA
-        self.flat2 = sp.Spectrum(w2, f2*3, f2*0.03)
+        w2 = np.linspace(0.8, 2, 300) * q.um
+        f2 = np.ones_like(w2.value) * q.erg / q.s / q.cm**2 / q.AA
+        self.flat2 = sp.Spectrum(w2, f2 * 3, f2 * 0.03)
 
     def test_data(self):
         """Test that Spectrum is initialized properly"""
@@ -40,7 +40,7 @@ class TestSpectrum(unittest.TestCase):
         self.assertRaises(TypeError, sp.Spectrum, *args)
 
         # Test that unequal size arrays fail as well
-        args = np.arange(10)*q.um, np.arange(9)*q.erg/q.s/q.cm**2/q.AA
+        args = np.arange(10) * q.um, np.arange(9) * q.erg / q.s / q.cm**2 / q.AA
         self.assertRaises(TypeError, sp.Spectrum, *args)
 
     def test_units(self):
@@ -52,7 +52,7 @@ class TestSpectrum(unittest.TestCase):
         s.wave_units = wu
         
         # Change the flux units
-        fu = q.W/q.m**2/q.um
+        fu = q.W / q.m**2 / q.um
         s.flux_units = fu
 
         # Make sure the units are being updated
@@ -112,10 +112,10 @@ class TestSpectrum(unittest.TestCase):
         self.assertAlmostEqual(fbol[0].value, 4000, places=1)
 
         # With nans
-        w1 = np.linspace(0.6, 1, 230)*q.um
-        f1 = np.ones_like(w1.value)*q.erg/q.s/q.cm**2/q.AA
+        w1 = np.linspace(0.6, 1, 230) * q.um
+        f1 = np.ones_like(w1.value) * q.erg / q.s / q.cm**2 / q.AA
         f1[100: 150] = np.nan
-        flat1 = sp.Spectrum(w1, f1, f1*0.01)
+        flat1 = sp.Spectrum(w1, f1, f1 * 0.01)
         fbol = flat1.integrate()
         self.assertAlmostEqual(fbol[0].value, 4000, places=1)
         self.assertNotEqual(str(fbol[1].value), 'nan')
@@ -142,7 +142,7 @@ class TestSpectrum(unittest.TestCase):
     def test_resamp(self):
         """Test that the spectrum can be interpolated to new wavelengths"""
         # New wavelength array
-        new_wave = np.linspace(9000, 11000, 123)*q.AA
+        new_wave = np.linspace(9000, 11000, 123) * q.AA
 
         # Check resampling onto new wavelength array
         new_spec = self.spec.resamp(new_wave)
@@ -183,11 +183,11 @@ class TestSpectrum(unittest.TestCase):
         s1 = self.flat1
 
         # Successfully trim it
-        trimmed = s1.trim([(0.8*q.um, 2*q.um)])
+        trimmed = s1.trim([(0.8 * q.um, 2 * q.um)])
         self.assertNotEqual(self.flat1.size, trimmed.size)
 
         # Unsuccessfully trim it
-        untrimmed = s1.trim([(1.1*q.um, 2*q.um)])
+        untrimmed = s1.trim([(1.1 * q.um, 2 * q.um)])
         self.assertEqual(self.flat1.size, untrimmed.size)
 
 
