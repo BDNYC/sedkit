@@ -515,7 +515,7 @@ class Spectrum:
             The interpolated spectrum object
         """
         # Pull out wave if its a Spectrum object
-        if isinstance(type(wave), type(Spectrum)):
+        if hasattr(wave, 'spectrum'):
             wave = wave.spectrum[0]
 
         # Test units
@@ -524,11 +524,15 @@ class Spectrum:
 
         # Get the data and make into same wavelength units
         w0 = self.wave * self.wave_units.to(wave.unit)
-        f0, e0 = self.spectrum[1:]
+        f0 = self.spectrum[1]
+        if len(self.spectrum) > 2:
+            e0 = self.spectrum[2]
+        else:
+            e0 = np.zeros_like(f0)
 
         # Interpolate self to new wavelengths
-        f1 = np.interp(wave, w0, f0, left=np.nan, right=np.nan) * self.flux_units
-        e1 = np.interp(wave, w0, e0, left=np.nan, right=np.nan) * self.flux_units
+        f1 = np.interp(wave.value, w0, f0.value, left=np.nan, right=np.nan) * self.flux_units
+        e1 = np.interp(wave.value, w0, e0.value, left=np.nan, right=np.nan) * self.flux_units
 
         return Spectrum(wave, f1, e1, name=self.name)
 
