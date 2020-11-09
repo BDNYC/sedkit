@@ -296,7 +296,7 @@ class SED:
         mag -= bp.ext_vector * self.reddening
 
         # Make a dict for the new point
-        new_photometry = {'band': band, 'eff': bp.wave_eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': None}
+        new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': None}
 
         # Add the kwargs
         new_photometry.update(kwargs)
@@ -374,9 +374,9 @@ class SED:
         spec.flux_units = self.flux_units
 
         # Add the spectrum object to the list of spectra
-        mn = np.nanmin(spec.spectrum[0]).round(3)
-        mx = np.nanmax(spec.spectrum[0]).round(3)
-        res = int(((mx - mn) / np.mean(np.diff(spec.wave))).value)
+        mn = spec.wave_min.astype(np.float16)
+        mx = spec.wave_max.astype(np.float16)
+        res = int(((mx - mn) / np.nanmean(np.diff(spec.wave))).value)
 
         # Make sure it's not a duplicate
         if any([(row['wave_min'] == mn) & (row['wave_max'] == mx) & (row['resolution'] == res) for row in self.spectra]):
@@ -1574,7 +1574,7 @@ class SED:
         # Check for distance and coordinates
         if self.distance is not None and self.sky_coords is not None:
             gal_coords = SkyCoord(self.sky_coords.galactic, frame='galactic', distance=self.distance[0])
-            bayestar = BayestarWebQuery(version='bayestar2017')
+            bayestar = BayestarWebQuery(version='bayestar2019')
             red = bayestar(gal_coords, mode='random_sample')
 
             # Set the attribute

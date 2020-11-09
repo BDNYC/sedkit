@@ -63,6 +63,8 @@ target/
 .ipynb_checkpoints/
 .ipynb_checkpoints
 *checkpoint.ipynb
+.idea/
+.idea/*
 
 # RTD
 _build
