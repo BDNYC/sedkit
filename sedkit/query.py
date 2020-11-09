@@ -7,7 +7,6 @@ Interface with astroquery to fetch data
 """
 from astropy.coordinates import Angle, SkyCoord
 import astropy.units as q
-from astroquery.simbad import Simbad
 from astroquery.vizier import Vizier
 
 from . import utilities as u

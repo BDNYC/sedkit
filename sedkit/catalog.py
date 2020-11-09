@@ -13,9 +13,7 @@ import shutil
 from astropy.io import ascii
 import astropy.table as at
 import astropy.units as q
-import astropy.constants as ac
 import numpy as np
-from bokeh.layouts import gridplot
 from bokeh.models import HoverTool, ColumnDataSource, LabelSet
 from bokeh.plotting import figure, show
 from bokeh.models.glyphs import Patch

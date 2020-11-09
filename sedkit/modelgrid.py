@@ -8,17 +8,13 @@ import glob
 import pickle
 from copy import copy
 from functools import partial
-from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool
 from pkg_resources import resource_filename
 
-import astropy.io.ascii as ii
-import astropy.table as at
 import astropy.units as q
 import astropy.io.votable as vo
 import numpy as np
 import pandas as pd
-from bokeh.plotting import figure, output_file, show, save
 
 from . import utilities as u
 from .spectrum import Spectrum

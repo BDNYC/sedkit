@@ -1,5 +1,4 @@
 import unittest
-import copy
 import os
 from pkg_resources import resource_filename
 
