@@ -6,6 +6,7 @@ import unittest
 
 import astropy.units as q
 import astropy.table as at
+from bokeh.plotting import figure
 import numpy as np
 from svo_filters import Filter
 
@@ -24,6 +25,28 @@ def test_equivalent():
     assert not u.equivalent(np.arange(10), q.Jy)
     assert not u.equivalent(1, q.Jy)
     assert not u.equivalent([2*q.um, 2], q.Jy)
+
+
+def test_errorbars():
+    """Test for errorbars function"""
+    # Make figure
+    fig = figure()
+
+    # Data
+    x = np.arange(10)
+    y = np.arange(10)
+
+    # Test symmetric x errors
+    _ = u.errorbars(fig, x, y, xerr=x / 10.)
+
+    # Test symmetric y errors
+    _ = u.errorbars(fig, x, y, yerr=y / 10.)
+
+    # Test asymmetric x errors
+    _ = u.errorbars(fig, x, y, xlower=x / 10., xupper=x / 11.)
+
+    # Test asymmetric y errors
+    _ = u.errorbars(fig, x, y, ylower=y / 10., yupper=y / 11.)
 
 
 def test_isnumber():
