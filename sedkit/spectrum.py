@@ -515,7 +515,7 @@ class Spectrum:
             The interpolated spectrum object
         """
         # Pull out wave if its a Spectrum object
-        if hasattr(wave, 'spectrum'):
+        if isinstance(type(wave), (Spectrum, Vega)):
             wave = wave.spectrum[0]
 
         # Test units

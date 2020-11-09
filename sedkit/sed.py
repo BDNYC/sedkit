@@ -374,9 +374,9 @@ class SED:
         spec.flux_units = self.flux_units
 
         # Add the spectrum object to the list of spectra
-        mn = np.nanmin(spec.spectrum[0]).round(3)
-        mx = np.nanmax(spec.spectrum[0]).round(3)
-        res = int(((mx - mn) / np.mean(np.diff(spec.wave))).value)
+        mn = spec.wave_min.astype(np.float16)
+        mx = spec.wave_max.astype(np.float16)
+        res = int(((mx - mn) / np.nanmean(np.diff(spec.wave))).value)
 
         # Make sure it's not a duplicate
         if any([(row['wave_min'] == mn) & (row['wave_max'] == mx) & (row['resolution'] == res) for row in self.spectra]):
