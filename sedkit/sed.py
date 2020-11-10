@@ -1,10 +1,14 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Author: Joe Filippazzo, jfilippazzo@stsci.edu
+# !python3
 """
 A module to produce spectral energy distributions
 and calculate fundamental and atmospheric parameters
 
 Author: Joe Filippazzo, jfilippazzo@stsci.edu
 """
-from copy import copy
+
 import os
 import shutil
 

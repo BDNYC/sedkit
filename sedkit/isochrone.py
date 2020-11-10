@@ -1,10 +1,11 @@
-# !/usr/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
 # !python3
 """
 A module to estimate fundamental parameters from model isochrones
 """
+
 import os
 import glob
 from pkg_resources import resource_filename

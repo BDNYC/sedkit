@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Author: Joe Filippazzo, jfilippazzo@stsci.edu
+# !python3
 """
 Some utilities to accompany sedkit
 """
+
 import copy
 import itertools
 import os

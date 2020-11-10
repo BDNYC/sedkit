@@ -1,5 +1,11 @@
-"""This module is a collection of functions used to homogenize models for
-sedkit ingestion"""
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Author: Joe Filippazzo, jfilippazzo@stsci.edu
+# !python3
+"""
+This module is a collection of functions used to homogenize models for
+sedkit ingestion
+"""
 
 from glob import glob
 import os
@@ -7,6 +13,7 @@ from pkg_resources import resource_filename
 
 from astropy.io import ascii
 import astropy.tables as at
+
 
 def process_dmestar(dir=None, filename='dmestar_solar.txt'):
     """Combine all DMESTAR isochrones into one text file"""

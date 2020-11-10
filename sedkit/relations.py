@@ -1,3 +1,7 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Author: Joe Filippazzo, jfilippazzo@stsci.edu
+# !python3
 """
 This is the code used to generate the polynomial relations
 used in sedkit's calculations

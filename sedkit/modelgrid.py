@@ -1,8 +1,11 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Author: Joe Filippazzo, jfilippazzo@stsci.edu
+# !python3
 """
 A module to generate a grid of model spectra
-
-Author: Joe Filippazzo, jfilippazzo@stsci.edu
 """
+
 import os
 import glob
 import pickle

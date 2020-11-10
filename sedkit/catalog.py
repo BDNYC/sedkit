@@ -5,6 +5,7 @@
 """
 A module to produce a catalog of spectral energy distributions
 """
+
 import os
 import pickle
 from copy import copy
