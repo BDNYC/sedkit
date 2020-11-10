@@ -271,11 +271,11 @@ class SED:
         """
         # Make sure the magnitudes are floats
         if not isinstance(mag, float):
-            raise TypeError("Magnitude must be a float.")
+            raise TypeError("{}: Magnitude must be a float.".format(type(mag)))
 
         # Check the uncertainty
-        if not isinstance(mag, (float, None)):
-            raise TypeError("Magnitude uncertainty must be a float, NaN, or None.")
+        if not isinstance(mag_unc, (float, None)):
+            raise TypeError("{}: Magnitude uncertainty must be a float, NaN, or None.".format(type(mag_unc)))
 
         # Make NaN if 0
         if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, np.ma.core.MaskedConstant):
@@ -287,7 +287,7 @@ class SED:
         elif isinstance(band, svo.Filter):
             bp, band = band, band.name
         else:
-            print('Not a recognized bandpass:', band)
+            print('Not a recognized bandpass: {}'.format(band))
 
         # Convert bandpass to desired units
         bp.wave_units = self.wave_units
@@ -334,7 +334,7 @@ class SED:
         # Test to see if columns are present
         cols = ['band', 'magnitude', 'uncertainty']
         if not all([i in table.colnames for i in cols]):
-            raise ValueError('File must contain columns', cols)
+            raise ValueError('File must contain columns {}'.format(cols))
 
         # Keep relevant cols
         table = table[cols]
@@ -685,12 +685,12 @@ class SED:
             The reference frame
         """
         if not isinstance(dec, (q.quantity.Quantity, str)):
-            raise TypeError("Cannot interpret dec :", dec)
+            raise TypeError("{}: Cannot interpret dec".format(dec))
 
         # Make sure it's decimal degrees
         self._dec = Angle(dec)
         if self.ra is not None:
-            sky_coords = SkyCoord(ra=self.ra, dec=self.dec, unit=(q.hour, q.degree), frame='icrs')
+            sky_coords = SkyCoord(ra=self.ra, dec=self.dec, unit=(q.degree, q.degree), frame='icrs')
             self._set_sky_coords(sky_coords, simbad=False)
 
     @property
@@ -905,7 +905,7 @@ class SED:
         """
         # Check the parent directory
         if not os.path.exists(parentdir):
-            raise IOError('No such target directory', parentdir)
+            raise IOError('{}: No such target directory'.format(parentdir))
 
         # Check the target directory
         name = self.name.replace(' ', '_')
@@ -914,7 +914,7 @@ class SED:
         if not os.path.exists(dirpath):
             os.system('mkdir {}'.format(dirpath))
         else:
-            raise IOError('Directory already exists:', dirpath)
+            raise IOError('{}: Directory already exists'.format(dirpath))
 
         # Apparent spectral SED
         if self.app_spec_SED is not None:
@@ -1142,8 +1142,7 @@ class SED:
             # Save the coordinates
             if self.sky_coords is None:
                 sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
-                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
-                                      unit=(q.hour, q.degree), frame='icrs')
+                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame='icrs')
                 self._set_sky_coords(sky_coords, simbad=False)
 
             # Check for a parallax
@@ -1305,7 +1304,7 @@ class SED:
         """
         # Make sure it's a flux density
         if not u.equivalent(flux_units, q.erg / q.s / q.cm**2 / q.AA):
-            raise TypeError("flux_units must be a unit of flux density, e.g. 'erg/s/cm2/A'")
+            raise TypeError("{}: flux_units must be a unit of flux density, e.g. 'erg/s/cm2/A'".format(flux_units))
 
         # fnu2flam(f_nu, lam, units=q.erg / q.s / q.cm**2 / q.AA)
 
@@ -1344,8 +1343,7 @@ class SED:
         """
         # Check that astrodbkit is imported
         if not hasattr(db, 'query'):
-            raise TypeError("Please provide an astrodbkit.astrodb.Database\
-                             object to query.")
+            raise TypeError("Please provide an astrodbkit.astrodb.Database object to query.")
 
         # Get the metadata
         if 'source_id' in kwargs:
@@ -2141,7 +2139,7 @@ class SED:
             The reference frame
         """
         if not isinstance(ra, (q.quantity.Quantity, str)):
-            raise TypeError("Cannot interpret ra :", ra)
+            raise TypeError("{}: Cannot interpret ra".format(ra))
 
         # Make sure it's decimal degrees
         self._ra = Angle(ra)
@@ -2330,12 +2328,10 @@ class SED:
         if isinstance(sky_coords, tuple) and len(sky_coords) == 2:
 
             if isinstance(sky_coords[0], str):
-                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
-                                      unit=(q.hour, q.degree), frame=frame)
+                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame=frame)
 
             elif isinstance(sky_coords[0], (float, Angle, q.quantity.Quantity)):
-                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1],
-                                      unit=q.degree, frame=frame)
+                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=q.degree, frame=frame)
 
             else:
                 raise TypeError("Cannot convert type {} to coordinates.".format(type(sky_coords[0])))
@@ -2415,15 +2411,14 @@ class SED:
             pass
 
         else:
-            raise TypeError('Please provide a string or tuple to set the spectral type.')
+            raise TypeError('{}: Please provide a string or tuple to set the spectral type.'.format(spectral_type))
 
         # Set the spectral_type
         self._spectral_type = spectral_type, spectral_type_unc or 0.5
         self.luminosity_class = lum_class or 'V'
         self.gravity = gravity or None
         self.prefix = prefix or None
-        self.SpT = u.specType([self.spectral_type[0], self.spectral_type[1],
-                               self.prefix, self.gravity, self.luminosity_class])
+        self.SpT = u.specType([self.spectral_type[0], self.spectral_type[1], self.prefix, self.gravity, self.luminosity_class])
 
         # Set the age if not explicitly set
         if self.age is None and self.gravity is not None:
@@ -2507,7 +2502,7 @@ class SED:
         """
         # Make sure the values are in length units
         if not u.equivalent(wave_units, q.um):
-            raise TypeError("wave_units  must be length units of astropy.units.quantity.Quantity, e.g. 'um'")
+            raise TypeError("{}: wave_units must be length units of astropy.units.quantity.Quantity, e.g. 'um'".format(wave_units))
 
         # Set the wave_units!
         self._wave_units = wave_units
