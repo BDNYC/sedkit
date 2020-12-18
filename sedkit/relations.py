@@ -124,25 +124,32 @@ class Relation:
         if '{}_unc'.format(yparam) in self.data.colnames:
             self.weight = 1. / self.data['{}_unc'.format(yparam)]
 
-        # Fit polynomial
-        self.coeffs, self.C_p = np.polyfit(self.x, self.y, self.order, w=self.weight, cov=True)
+        # Try to fit a polynomial
+        try:
 
-        # Matrix with rows 1, spt, spt**2, ...
-        self.matrix = np.vstack([self.x**(order-i) for i in range(order + 1)]).T
+            # Fit polynomial
+            self.coeffs, self.C_p = np.polyfit(self.x, self.y, self.order, w=self.weight, cov=True)
 
-        # Matrix multiplication calculates the polynomial values
-        self.yi = np.dot(self.matrix, self.coeffs)
+            # Matrix with rows 1, spt, spt**2, ...
+            self.matrix = np.vstack([self.x**(order-i) for i in range(order + 1)]).T
 
-        # C_y = TT*C_z*TT.T
-        self.C_yi = np.dot(self.matrix, np.dot(self.C_p, self.matrix.T))
+            # Matrix multiplication calculates the polynomial values
+            self.yi = np.dot(self.matrix, self.coeffs)
 
-        # Standard deviations are sqrt of diagonal
-        self.sig_yi = np.sqrt(np.diag(self.C_yi))
+            # C_y = TT*C_z*TT.T
+            self.C_yi = np.dot(self.matrix, np.dot(self.C_p, self.matrix.T))
 
-        # Set as derived
-        self.derived = True
+            # Standard deviations are sqrt of diagonal
+            self.sig_yi = np.sqrt(np.diag(self.C_yi))
 
-    def estimate(selfself, xval, plot=False):
+            # Set as derived
+            self.derived = True
+
+        except Exception as exc:
+            print(exc)
+            print("Could not fit a polynomial to [{}, {}, {}, {}]. Try different values.".format(xparam, yparam, order, xrange))
+
+    def estimate(self, xval, plot=False):
         """
         Estimate the y-value given the xvalue
 

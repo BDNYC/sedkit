@@ -277,7 +277,7 @@ class SED:
             raise TypeError("{}: Magnitude must be a float.".format(type(mag)))
 
         # Check the uncertainty
-        if not isinstance(mag_unc, (float, None)):
+        if not isinstance(mag_unc, (float, type(None))):
             raise TypeError("{}: Magnitude uncertainty must be a float, NaN, or None.".format(type(mag_unc)))
 
         # Make NaN if 0
@@ -1928,6 +1928,10 @@ class SED:
         new_name: str
             The name
         """
+        # Convert from bytes if necessary
+        if isinstance(new_name, bytes):
+            new_name = new_name.decode('UTF-8')
+
         # Make sure it's a string
         if not isinstance(new_name, str):
             raise TypeError("{}: Name must be a string, not {}".format(new_name, type(new_name)))
@@ -2109,7 +2113,7 @@ class SED:
                     self.fig = spec.plot(fig=self.fig, components=True, const=const)
 
             else:
-                self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, legend='Spectrum')
+                self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, legend_label='Spectrum')
 
         # Plot photometry
         if photometry and len(self.photometry) > 0:
@@ -2123,7 +2127,7 @@ class SED:
             pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if not any([np.isnan(i) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
-                self.fig.circle('x', 'y', source=source, legend='Photometry', name='photometry', color=color, fill_alpha=0.7, size=8)
+                self.fig.circle('x', 'y', source=source, legend_label='Photometry', name='photometry', color=color, fill_alpha=0.7, size=8)
                 y_err_x = []
                 y_err_y = []
                 for name, px, py, err in pts:
@@ -2135,7 +2139,7 @@ class SED:
             pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if np.isnan(err) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
-                self.fig.circle('x', 'y', source=source, legend='Nondetection', name='nondetection', color=color, fill_alpha=0, size=8)
+                self.fig.circle('x', 'y', source=source, legend_label='Nondetection', name='nondetection', color=color, fill_alpha=0, size=8)
 
         # Plot photometry
         if synthetic_photometry and len(self.synthetic_photometry) > 0:
@@ -2149,7 +2153,7 @@ class SED:
             pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.synthetic_photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if not any([np.isnan(i) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
-                self.fig.square('x', 'y', source=source, legend='Synthetic Photometry', name='synthetic photometry', color=color, fill_alpha=0.7, size=8)
+                self.fig.square('x', 'y', source=source, legend_label='Synthetic Photometry', name='synthetic photometry', color=color, fill_alpha=0.7, size=8)
                 y_err_x = []
                 y_err_y = []
                 for name, px, py, err in pts:
@@ -2160,16 +2164,16 @@ class SED:
         # Plot the SED with linear interpolation completion
         if integral:
             label = str(self.Teff[0]) if self.Teff is not None else 'Integral'
-            self.fig.line(full_SED.wave, full_SED.flux * const, line_color=color if one_color else 'black', alpha=0.3, legend=label)
+            self.fig.line(full_SED.wave, full_SED.flux * const, line_color=color if one_color else 'black', alpha=0.3, legend_label=label)
 
         # Plot the blackbody fit
         if blackbody and self.blackbody:
             bb_wav, bb_flx = self.blackbody.data[:2]
-            self.fig.line(bb_wav, bb_flx * const, line_color=color if one_color else 'red', legend='{} K'.format(self.Teff_bb))
+            self.fig.line(bb_wav, bb_flx * const, line_color=color if one_color else 'red', legend_label='{} K'.format(self.Teff_bb))
 
         if best_fit and len(self.best_fit) > 0:
             for bf, mod_fit in self.best_fit.items():
-                self.fig.line(mod_fit.spectrum[0]*(1E-4 if mod_fit.spectrum[0].min() > 100 else 1), mod_fit.spectrum[1] * const, alpha=0.3, color=color, legend=mod_fit.label, line_width=2)
+                self.fig.line(mod_fit.spectrum[0]*(1E-4 if mod_fit.spectrum[0].min() > 100 else 1), mod_fit.spectrum[1] * const, alpha=0.3, color=color, legend_label=mod_fit.label, line_width=2)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
