@@ -10,5 +10,5 @@ Author: Joe Filippazzo, jfilippazzo@stsci.edu
 
 from .catalog import Catalog
 from .sed import SED, VegaSED
-from .spectrum import Spectrum, FileSpectrum, Vega, Blackbody
+from .spectrum import Spectrum, FileSpectrum, Vega, Blackbody, ModelSpectrum
 from .modelgrid import ModelGrid, BTSettl, SpexPrismLibrary
