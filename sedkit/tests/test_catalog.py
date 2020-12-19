@@ -145,11 +145,16 @@ class TestCatalog(unittest.TestCase):
         cat.plot_SEDs(['Vega', 'foo'])
         cat.plot_SEDs('*')
 
-    def test_save(self):
-        """Test save method"""
+    def test_save_and_load(self):
+        """Test save and load methods"""
         # Make the catalog
         cat = copy.copy(self.cat)
         cat.save('test.p')
+
+        # Try to load it
+        new_cat = catalog.Catalog("Loaded Catalog")
+        new_cat.load('test.p')
+
         os.system('rm test.p')
 
     def test_source(self):
