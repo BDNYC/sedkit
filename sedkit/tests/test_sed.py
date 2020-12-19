@@ -5,6 +5,7 @@ from pkg_resources import resource_filename
 import numpy as np
 import astropy.units as q
 from astropy.modeling.blackbody import blackbody_lambda
+from astropy.coordinates import SkyCoord
 
 from .. import sed
 from .. import spectrum as sp
@@ -27,7 +28,7 @@ class TestSED(unittest.TestCase):
         SPEC2 = [WAVE2, FLUX2, FLUX2/100.]
         self.spec2 = sp.Spectrum(*SPEC2)
 
-        self.sed = sed.SED(verbose=True)
+        self.sed = sed.SED(verbose=True, foo=123)
 
     def test_add_photometry(self):
         """Test that photometry is added properly"""
@@ -95,6 +96,12 @@ class TestSED(unittest.TestCase):
         # RA
         s.ra = 1.2345*q.deg
         self.assertRaises(TypeError, setattr, s, 'ra', 1.2345)
+
+        # Sky coords
+        s.sky_coords = 1.2345*q.deg, 1.2345*q.deg
+        s.sky_coords = '1.2345', '1.2345'
+        self.assertRaises(TypeError, setattr, s, 'sky_coords', 'foo')
+        self.assertRaises(TypeError, setattr, s, 'sky_coords', None)
 
         # Distance
         s.distance = None
@@ -209,6 +216,12 @@ class TestSED(unittest.TestCase):
         s = sed.SED('trappist-1')
         s.find_2MASS()
         s.find_Gaia()
+
+        self.assertNotEqual(len(s.photometry), 0)
+
+    def test_run_methods(self):
+        """Test that the method_list argument works"""
+        s = sed.SED('trappist-1', method_list=['find_2MASS'])
 
         self.assertNotEqual(len(s.photometry), 0)
 

@@ -99,10 +99,10 @@ def query_vizier(catalog, target=None, sky_coords=None, cols=None, wildcards=['e
 
         # Pull out the photometry
         for name, viz in zip(names, cols):
-            fetch = [viz]+[wc.replace('*', viz) for wc in wildcards]
+            fetch = [viz] + [wc.replace('*', viz) for wc in wildcards]
             if all([i in rec.columns for i in fetch]):
                 data = [round(val, places) if u.isnumber(val) else val for val in rec[fetch]]
-                results.append([name]+data+[ref])
+                results.append([name] + data + [ref])
             else:
                 print("{}: Could not find all those columns".format(fetch))
 

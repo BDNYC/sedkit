@@ -9,7 +9,7 @@ dependencies:
   - python>=3.6.8
   - bokeh>=1.4.0
   - astroquery>=0.4.1
-  - scipy>=1.2.1
+  - scipy>=1.4.1
   - pandas>=0.23.4
   - pip>=20.3.3
   - selenium>=2.49.2
@@ -19,5 +19,4 @@ dependencies:
   - pip:
     - svo-filters==0.2.19
     - dustmaps==1.0.4
-    - astroquery==0.4.1
     - numpydoc==0.8.0
