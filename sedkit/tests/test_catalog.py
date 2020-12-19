@@ -1,8 +1,8 @@
+"""A suite of tests for the catalog.py module"""
 import unittest
 import copy
 import os
-
-import astropy.units as q
+from pkg_resources import resource_filename
 
 from .. import sed
 from .. import catalog
@@ -78,6 +78,13 @@ class TestCatalog(unittest.TestCase):
         # Filter so there is only one result
         f_cat = cat.filter('spectral_type', '>30')
         self.assertEqual(len(f_cat.results), 1)
+
+    def test_from_file(self):
+        """Test from_file method"""
+        cat = self.cat
+        file = resource_filename('sedkit', 'data/sources.txt')
+        cat.from_file(file)
+        self.assertTrue(len(cat.results) > 0)
 
     def test_get_data(self):
         """Test get_data method"""
