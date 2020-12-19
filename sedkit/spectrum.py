@@ -296,7 +296,7 @@ class Spectrum:
             rep.add_tools(hover)
 
             # Plot the fits
-            rep.circle(report, 'gstat', source=best, color='red', legend=bf['label'])
+            rep.circle(report, 'gstat', source=best, color='red', legend_label=bf['label'])
             rep.circle(report, 'gstat', source=others)
 
             # Show the plot
@@ -434,7 +434,7 @@ class Spectrum:
 
         if plot:
             fig = self.plot(best_fit=False)
-            fig.line(spec.wave, spec.flux * ynorm, legend='Fit')
+            fig.line(spec.wave, spec.flux * ynorm, legend_label='Fit')
             show(fig)
 
         return gstat, ynorm, xnorm
@@ -740,7 +740,7 @@ class Spectrum:
 
         # Plot the spectrum
         c = kwargs.get('color', next(u.COLORS))
-        fig.line(self.wave, self.flux * const, color=c, alpha=0.8, legend=self.name)
+        fig.line(self.wave, self.flux * const, color=c, alpha=0.8, legend_label=self.name)
 
         # Plot the uncertainties
         if self.unc is not None:
@@ -751,12 +751,12 @@ class Spectrum:
         # Plot the components
         if components and self.components is not None:
             for spec in self.components:
-                fig.line(spec.wave, spec.flux * const, color=next(u.COLORS), legend=spec.name)
+                fig.line(spec.wave, spec.flux * const, color=next(u.COLORS), legend_label=spec.name)
 
         # Plot the best fit
         if best_fit:
             for name, bf in self.best_fit.items():
-                fig.line(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3, color=next(u.COLORS), legend=bf.label)
+                fig.line(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3, color=next(u.COLORS), legend_label=bf.label)
 
         if draw:
             show(fig)
@@ -942,7 +942,7 @@ class Spectrum:
             if plot:
                 fig = figure()
                 fig.line(self.wave, self.flux, color='navy')
-                fig.circle([bandpass.eff], [flx], color='red')
+                fig.circle([bandpass.wave_eff], [flx], color='red')
                 show(fig)
 
         return flx, unc
