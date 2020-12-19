@@ -16,11 +16,14 @@ Install via PyPI with
 pip install sedkit
 ```
 
-or via Github with
+or via `conda` with
 
 ```
 git clone https://github.com/hover2pi/sedkit.git
-python sedkit/setup.py install
+cd sedkit
+conda env create -f environment.yml --force
+conda activate sedkit
+python setup.py install
 ```
 
 ## Demo
