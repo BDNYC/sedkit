@@ -219,7 +219,7 @@ class TestSED(unittest.TestCase):
 
         # Add known spectrum
         s = copy.copy(self.sed)
-        spec = spl.get_spectrum()
+        spec = spl.get_spectrum(snr=100)
         s.add_spectrum(spec)
 
         # Fit with SPL

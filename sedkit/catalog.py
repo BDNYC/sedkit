@@ -36,7 +36,7 @@ class Catalog:
         self.flux_units = q.erg/q.s/q.cm**2/q.AA
 
         # List all the results columns
-        self.cols = ['name', 'age', 'age_unc', 'distance', 'distance_unc',
+        self.cols = ['name', 'ra', 'dec', 'age', 'age_unc', 'distance', 'distance_unc',
                      'parallax', 'parallax_unc', 'radius', 'radius_unc',
                      'spectral_type', 'spectral_type_unc', 'SpT',
                      'membership', 'reddening', 'fbol', 'fbol_unc', 'mbol',
@@ -46,29 +46,7 @@ class Catalog:
                      'Teff_evo_unc', 'Teff_bb', 'SED']
 
         # A master table of all SED results
-        self.results = at.QTable(names=self.cols, dtype=['O']*len(self.cols))
-        self.results.add_index('name')
-
-        # Set the units
-        self.results['age'].unit = q.Gyr
-        self.results['age_unc'].unit = q.Gyr
-        self.results['distance'].unit = q.pc
-        self.results['distance_unc'].unit = q.pc
-        self.results['parallax'].unit = q.mas
-        self.results['parallax_unc'].unit = q.mas
-        self.results['radius'].unit = q.Rsun
-        self.results['radius_unc'].unit = q.Rsun
-        self.results['fbol'].unit = q.erg/q.s/q.cm**2
-        self.results['fbol_unc'].unit = q.erg/q.s/q.cm**2
-        self.results['Lbol'].unit = q.erg/q.s
-        self.results['Lbol_unc'].unit = q.erg/q.s
-        self.results['mass'].unit = q.Msun
-        self.results['mass_unc'].unit = q.Msun
-        self.results['Teff'].unit = q.K
-        self.results['Teff_unc'].unit = q.K
-        self.results['Teff_bb'].unit = q.K
-        self.results['Teff_evo'].unit = q.K
-        self.results['Teff_evo_unc'].unit = q.K
+        self.results = self.make_results_table(self)
 
         # Try to set attributes from kwargs
         for k, v in kwargs.items():
@@ -88,13 +66,14 @@ class Catalog:
             The combined catalog
         """
         if not type(other) == type(self):
-            raise TypeError('Cannot add object of type', type(other))
+            raise TypeError('Cannot add object of type {}'.format(type(other)))
 
         # Make a new catalog
         new_cat = Catalog(name=name or self.name)
 
         # Combine results
-        new_cat.results = at.vstack([self.results, other.results])
+        new_results = at.vstack([at.Table(self.results), at.Table(other.results)])
+        new_cat.results = new_results
 
         return new_cat
 
@@ -117,10 +96,10 @@ class Catalog:
         sed.make_sed()
 
         # Add the values and uncertainties if applicable
-        results = []
+        new_row = {}
         for col in self.cols[:-1]:
 
-            if col+'_unc' in self.cols:
+            if col + '_unc' in self.cols:
                 if isinstance(getattr(sed, col), tuple):
                     val = getattr(sed, col)[0]
                 else:
@@ -133,45 +112,42 @@ class Catalog:
             else:
                 val = getattr(sed, col)
 
-            val = val.to(self.results[col.replace('_unc','')].unit).value if hasattr(val, 'unit') else val
+            val = val.to(self.results[col.replace('_unc', '')].unit).value if hasattr(val, 'unit') else val
 
-            results.append(val)
+            new_row[col] = val
 
         # Add the SED
-        results.append(sed)
-
-        # Make the table
-        cat = Catalog()
-        table = cat.results
-        table.add_row(results)
-        table = at.Table(table)
+        new_row['SED'] = sed
 
         # Append apparent and absolute photometry
         for row in sed.photometry:
 
+            # Add the column to the results table
+            if row['band'] not in self.results.colnames:
+                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name=row['band']))
+                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name=row['band'] + '_unc'))
+                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name='M_' + row['band']))
+                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name='M_' + row['band'] + '_unc'))
+
             # Add the apparent magnitude
-            table.add_column(at.Column([row['app_magnitude']], name=row['band']))
+            new_row[row['band']] = row['app_magnitude']
 
             # Add the apparent uncertainty
-            table.add_column(at.Column([row['app_magnitude_unc']], name=row['band']+'_unc'))
+            new_row[row['band'] + '_unc'] = row['app_magnitude_unc']
 
             # Add the absolute magnitude
-            table.add_column(at.Column([row['abs_magnitude']], name='M_'+row['band']))
+            new_row['M_' + row['band']] = row['abs_magnitude']
 
             # Add the absolute uncertainty
-            table.add_column(at.Column([row['abs_magnitude_unc']], name='M_'+row['band']+'_unc'))
+            new_row['M_' + row['band'] + '_unc'] = row['abs_magnitude_unc']
 
-        # Stack with current table
-        if len(self.results) == 0:
-            self.results = table
-        else:
-            self.results = at.vstack([self.results, table])
+        # Add the new row
+        self.results.add_row(new_row)
 
         if self.verbose:
             print("Successfully added SED '{}'".format(sed.name))
 
-    def export(self, parentdir='.', dirname=None, format='ipac',
-               sources=True, zipped=False):
+    def export(self, parentdir='.', dirname=None, format='ipac', sources=True, zipped=False):
         """
         Exports the results table and a directory of all SEDs
 
@@ -198,7 +174,7 @@ class Catalog:
         dirpath = os.path.join(parentdir, dirname)
 
         # Remove '.' from column names
-        final = self.results.filled(np.nan)
+        final = at.Table(self.results).filled(np.nan)
         for col in final.colnames:
             final.rename_column(col, col.replace('.', '_'))
 
@@ -212,7 +188,7 @@ class Catalog:
                 raise IOError('Directory already exists:', dirpath)
 
             # Export the results table
-            resultspath = os.path.join(dirpath,'{}_results.txt'.format(name))
+            resultspath = os.path.join(dirpath, '{}_results.txt'.format(name))
             final.write(resultspath, format=format)
 
             # Make a sources directory
@@ -230,7 +206,7 @@ class Catalog:
 
         # ...or just write the results table
         else:
-            resultspath = dirpath+'_results.txt'
+            resultspath = dirpath + '_results.txt'
             final.write(resultspath, format=format)
 
     def filter(self, param, value):
@@ -305,6 +281,7 @@ class Catalog:
                 xunit = self.results[x1].unit
                 xdata = self.results[x1] - self.results[x2]
                 xerror = np.sqrt(self.results['{}_unc'.format(x1)]**2 + self.results['{}_unc'.format(x2)]**2)
+
             else:
                 xunit = self.results[x].unit
                 xdata = self.results[x]
@@ -335,7 +312,7 @@ class Catalog:
 
         else:
             if self.verbose:
-                print('Could not retrieve SED', name_or_idx)
+                print('Could not retrieve SED {}'.format(name_or_idx))
 
             return
 
@@ -352,6 +329,35 @@ class Catalog:
             f.close()
 
             self.results = cat
+
+    @staticmethod
+    def make_results_table(self):
+        """Generate blank results table"""
+        results = at.QTable(names=self.cols, dtype=['O'] * len(self.cols))
+        results.add_index('name')
+
+        # Set the units
+        results['age'].unit = q.Gyr
+        results['age_unc'].unit = q.Gyr
+        results['distance'].unit = q.pc
+        results['distance_unc'].unit = q.pc
+        results['parallax'].unit = q.mas
+        results['parallax_unc'].unit = q.mas
+        results['radius'].unit = q.Rsun
+        results['radius_unc'].unit = q.Rsun
+        results['fbol'].unit = q.erg / q.s / q.cm ** 2
+        results['fbol_unc'].unit = q.erg / q.s / q.cm ** 2
+        results['Lbol'].unit = q.erg / q.s
+        results['Lbol_unc'].unit = q.erg / q.s
+        results['mass'].unit = q.Msun
+        results['mass_unc'].unit = q.Msun
+        results['Teff'].unit = q.K
+        results['Teff_unc'].unit = q.K
+        results['Teff_bb'].unit = q.K
+        results['Teff_evo'].unit = q.K
+        results['Teff_evo_unc'].unit = q.K
+
+        return results
 
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
              xlabel=None, ylabel=None, fig=None, order=None, data=None,
@@ -433,9 +439,7 @@ class Catalog:
             # Make the plot
             TOOLS = ['pan', 'reset', 'box_zoom', 'save', hover]
             title = '{} v {}'.format(x, y)
-            fig = figure(plot_width=800, plot_height=500, title=title, 
-                         y_axis_type=scale[1], x_axis_type=scale[0], 
-                         tools=TOOLS)
+            fig = figure(plot_width=800, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
 
         # # Exclude sources
         # if exclude is not None:
@@ -562,7 +566,7 @@ class Catalog:
             name_or_idx = [name_or_idx]
 
         # Make the plot
-        TOOLS = ['pan', 'reset', 'box_zoom', 'save']
+        TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
         title = self.name
         fig = figure(plot_width=800, plot_height=500, title=title,
                      y_axis_type=scale[1], x_axis_type=scale[0],
@@ -598,7 +602,7 @@ class Catalog:
 
         else:
             if self.verbose:
-                print('Could not remove SED', name_or_idx)
+                print('Could not remove SED {}'.format(name_or_idx))
 
             return
 
@@ -624,15 +628,12 @@ class Catalog:
             f.close()
 
             if self.verbose:
-                print('Catalog saved to',file)
+                print('Catalog saved to {}'.format(file))
 
     @property
     def source(self):
         """Generates a ColumnDataSource from the results table"""
-        # Copy the results table
-        table = copy(self.results)
+        # Remove SED column
+        results_dict = {key: val for key, val in dict(self.results).items() if key != 'SED'}
 
-        # Remove the SED column
-        del table['SED']
-
-        return ColumnDataSource(data=dict(table))
+        return ColumnDataSource(data=results_dict)

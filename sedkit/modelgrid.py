@@ -7,6 +7,7 @@ A module to generate a grid of model spectra
 """
 
 import os
+import fileinput
 import glob
 import pickle
 from copy import copy
@@ -202,8 +203,7 @@ class ModelGrid:
 
         # Store the parameter ranges
         for param in self.parameters:
-            setattr(self, '{}_vals'.format(param),
-                    np.asarray(np.unique(self.index[param])))
+            setattr(self, '{}_vals'.format(param), np.asarray(np.unique(self.index[param])))
 
     def index_models(self, parameters=None, wl_min=0.3*q.um, wl_max=25*q.um):
         """Generate model index file for faster reading
@@ -216,14 +216,11 @@ class ModelGrid:
         # Get the files
         files = glob.glob(os.path.join(self.path, '*.xml'))
         self.n_models = len(files)
-        print("Indexing {} models for {} grid...".format(self.n_models,
-                                                         self.name))
+        print("Indexing {} models for {} grid...".format(self.n_models, self.name))
 
         # Grab the parameters and the filepath for each
         pool = Pool(8)
-        func = partial(load_model, parameters=parameters,
-                       wl_min=wl_min.to(self.wave_units).value,
-                       wl_max=wl_max.to(self.wave_units).value)
+        func = partial(load_model, parameters=parameters, wl_min=wl_min.to(self.wave_units).value, wl_max=wl_max.to(self.wave_units).value)
         all_meta = pool.map(func, files)
         pool.close()
         pool.join()
@@ -234,8 +231,7 @@ class ModelGrid:
 
         # Update attributes
         if parameters is None:
-            parameters = [col for col in self.index.columns if col not in
-                          ['filepath', 'spectrum', 'label']]
+            parameters = [col for col in self.index.columns if col not in ['filepath', 'spectrum', 'label']]
         self.parameters = parameters
 
     def filter(self, **kwargs):
@@ -249,8 +245,38 @@ class ModelGrid:
         # Get the relevant table rows
         return u.filter_table(self.index, **kwargs)
 
-    def get_spectrum(self, **kwargs):
+    @staticmethod
+    def closest_value(input_value, possible_values):
+        """
+        This function calculates, given an input_value and an array of possible_values,
+        the closest value to input_value in the array.
+
+        Parameters
+        ----------
+        input_value: double
+             Input value to compare against possible_values.
+        possible_values: np.ndarray
+             Array of possible values to compare against input_value.
+
+        Returns
+        -------
+        double
+            Closest value on possible_values to input_value.
+        """
+        distance = np.abs(possible_values - input_value)
+        idx = np.where(distance == np.min(distance))[0]
+
+        return possible_values[idx[0]]
+
+    def get_spectrum(self, closest=False, snr=None, **kwargs):
         """Retrieve the first model with the specified parameters
+
+        Parameters
+        ----------
+        closest: bool
+            Rounds to closest effective temperature
+        snr: int (optional)
+            The SNR to generate for the spectrum
 
         Returns
         -------
@@ -260,6 +286,12 @@ class ModelGrid:
         # Get the row index and filepath
         rows = copy(self.index)
         for arg, val in kwargs.items():
+
+            if closest:
+                old_val = copy(val)
+                val = self.closest_value(old_val, rows[arg])
+                print('Teff = {} rounded to {}'.format(old_val, val))
+
             rows = rows.loc[rows[arg] == val]
 
         if rows.empty:
@@ -274,8 +306,7 @@ class ModelGrid:
             if trim is not None:
 
                 # Get indexes to keep
-                idx, = np.where((spec[0]*self.wave_units > trim[0]) &
-                                (spec[0]*self.wave_units < trim[1]))
+                idx, = np.where((spec[0] * self.wave_units > trim[0]) & (spec[0] * self.wave_units < trim[1]))
 
                 if len(idx) > 0:
                     spec = [i[idx] for i in spec]
@@ -287,18 +318,18 @@ class ModelGrid:
                 # Make the wavelength array
                 mn = np.nanmin(spec[0])
                 mx = np.nanmax(spec[0])
-                d_lam = (mx-mn)/resolution
+                d_lam = (mx - mn) / resolution
                 wave = np.arange(mn, mx, d_lam)
 
                 # Trim the wavelength
-                dmn = (spec[0][1]-spec[0][0])/2.
-                dmx = (spec[0][-1]-spec[0][-2])/2.
-                wave = wave[np.logical_and(wave >= mn+dmn, wave <= mx-dmx)]
+                dmn = (spec[0][1] - spec[0][0]) / 2.
+                dmx = (spec[0][-1] - spec[0][-2]) / 2.
+                wave = wave[np.logical_and(wave >= mn + dmn, wave <= mx - dmx)]
 
                 # Calculate the new spectrum
                 spec = u.spectres(wave, spec[0], spec[1])
 
-            return Spectrum(spec[0]*self.wave_units, spec[1]*self.flux_units, name=name)
+            return Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, **kwargs)
 
     def plot(self, fig=None, scale='log', draw=True, **kwargs):
         """Plot the models using Spectrum.plot() with the given parameters

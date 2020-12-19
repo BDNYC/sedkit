@@ -41,6 +41,7 @@ PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
                 'MKO_J': 'NSFCam.J', 'MKO_Y': 'Wircam.Y',
                 'MKO_H': 'NSFCam.H', 'MKO_K': 'NSFCam.K',
                 "MKO_L'": 'NSFCam.Lp', "MKO_M'": 'NSFCam.Mp',
+                'Johnson_U': 'Johnson.U', 'Johnson_B': 'Johnson.B',
                 'Johnson_V': 'Johnson.V', 'Cousins_R': 'Cousins.R',
                 'Cousins_I': 'Cousins.I', 'FourStar_J': 'FourStar.J',
                 'FourStar_J1': 'FourStar.J1', 'FourStar_J2': 'FourStar.J2',
@@ -110,8 +111,42 @@ def color_gen(colormap='viridis', key=None, n=10):
 COLORS = color_gen('Category10')
 
 
+def convert_mag(band, mag, mag_unc, old='AB', new='Vega'):
+    """Convert between magnitude systems (Blanton et al. 2007)
+
+    Parameters
+    ----------
+    band: str
+        The bandpass name
+    mag: float
+        The magnitude
+    mag_unc: float
+        The magnitude uncertainty
+    old: str
+        The system the input magnitude is in, ['Vega', 'AB']
+    new: str
+        The target mag system, ['Vega', 'AB']
+    """
+    # TODO: Add other system conversions
+    # TODO: Add other bandpasses
+    AB_to_Vega = {'Johnson.U': 0.79, 'Johnson.B': -0.09, 'Johnson.V': 0.02, 'Cousins.R': 0.21, 'Cousins.I': 0.45,
+                  '2MASS.J': 0.91, '2MASS.H': 1.39, '2MASS.Ks': 1.85,
+                  'SDSS.u': 0.91, 'SDSS.g': -0.08, 'SDSS.r': 0.16, 'SDSS.i': 0.37, 'SDSS.z': 0.54}
+
+    if old == 'AB' and new == 'Vega':
+        corr = AB_to_Vega.get(band, 0)
+        return mag - corr, mag_unc
+
+    elif old == 'Vega' and new == 'AB':
+        corr = AB_to_Vega.get(band, 0)
+        return mag + corr, mag_unc
+
+    else:
+        return mag, mag_unc
+
+
 def equivalent(value, units):
-    """Function to test equivalence of value(s) to gievn units
+    """Function to test equivalence of value(s) to given units
 
     Parameters
     ----------
@@ -713,6 +748,26 @@ def mag2flux(band, mag, sig_m='', units=q.erg / q.s / q.cm**2 / q.AA):
         return np.array([np.nan, np.nan]) * units
 
 
+def monotonic(x):
+    """
+    Determine if a sequence is monotonic
+
+    Parameters
+    ----------
+    x: array-like
+        The array to test
+
+    Returns
+    -------
+    bool
+        Result of boolean test
+    """
+    # Get diff of array
+    dx = np.diff(x)
+
+    return np.all(dx <= 0) or np.all(dx >= 0)
+
+
 def pi2pc(dist, unc_lower=None, unc_upper=None, pi_unit=q.mas, dist_unit=q.pc, pc2pi=False):
     """
     Calculate the parallax from a distance or vice versa
@@ -820,9 +875,7 @@ def spectres(new_spec_wavs, old_spec_wavs, spec_fluxes, spec_errs=None):
     # Trim new_spec_wavs so they are completely covered by old_spec_wavs
     idx = idx_overlap(old_spec_wavs, new_spec_wavs)
     if not any(idx):
-        raise ValueError("spectres: The new wavelengths specified must fall at\
-                          least partially within the range of the old\
-                          wavelength values.")
+        raise ValueError("spectres: The new wavelengths specified must fall at least partially within the range of the old wavelength values.")
     spec_wavs = new_spec_wavs[idx]
 
     # Generate arrays of left hand side positions and widths for the old
@@ -1179,7 +1232,6 @@ def spectrum_from_fits(File, ext=0, verbose=False):
         print('Could not retrieve spectrum at {}.'.format(File))
         return File
     else:
-        # spectrum = Spectrum(spectrum, header, File)
         return spectrum
 
 

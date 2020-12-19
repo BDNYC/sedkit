@@ -34,6 +34,9 @@ class Relation:
         # Load the file into a table
         self.data = ii.read(file, **kwargs)
 
+        # Fill in masked values
+        self.data = self.data.filled(np.nan)
+
         # Add additional columns
         if isinstance(add_columns, dict):
             for colname, values in add_columns.items():
@@ -79,7 +82,7 @@ class Relation:
         # Add the column
         self.data[colname] = values
 
-    def derive(self, xparam, yparam, order):
+    def derive(self, xparam, yparam, order, xrange=None):
         """
         Create a polynomial of the given *order* for *yparam* as a function of *xparam*
         which can be evaluated at any x value
@@ -104,31 +107,77 @@ class Relation:
         self.x = self.data[xparam]
         self.y = self.data[yparam]
 
-        # Remove masked values
-        self.x, self.y = np.asarray([(x, y) for x, y in zip(self.x, self.y) if not hasattr(x, 'mask') and not hasattr(y, 'mask')]).T
+        # Set x range for fit
+        if xrange is not None:
+            idx = np.where(np.logical_and(self.x > xrange[0], self.x < xrange[1]))
+            self.x = self.x[idx]
+            self.y = self.y[idx]
+
+        # Remove masked and NaN values
+        self.x, self.y = np.asarray([(x, y) for x, y in zip(self.x, self.y) if not hasattr(x, 'mask') and not np.isnan(x) and not hasattr(y, 'mask') and not np.isnan(y)]).T
+
+        # Determine monotonicity
+        self.monotonic = u.monotonic(self.x)
 
         # Set weighting
         self.weight = np.ones_like(self.x)
         if '{}_unc'.format(yparam) in self.data.colnames:
-            self.weight = 1./self.data['{}_unc'.format(yparam)]
+            self.weight = 1. / self.data['{}_unc'.format(yparam)]
 
-        # Fit polynomial
-        self.coeffs, self.C_p = np.polyfit(self.x, self.y, self.order, w=self.weight, cov=True)
+        # Try to fit a polynomial
+        try:
 
-        # Matrix with rows 1, spt, spt**2, ...
-        self.matrix = np.vstack([self.x**(order-i) for i in range(order+1)]).T
+            # Fit polynomial
+            self.coeffs, self.C_p = np.polyfit(self.x, self.y, self.order, w=self.weight, cov=True)
 
-        # Matrix multiplication calculates the polynomial values
-        self.yi = np.dot(self.matrix, self.coeffs)
+            # Matrix with rows 1, spt, spt**2, ...
+            self.matrix = np.vstack([self.x**(order-i) for i in range(order + 1)]).T
 
-        # C_y = TT*C_z*TT.T
-        self.C_yi = np.dot(self.matrix, np.dot(self.C_p, self.matrix.T))
+            # Matrix multiplication calculates the polynomial values
+            self.yi = np.dot(self.matrix, self.coeffs)
 
-        # Standard deviations are sqrt of diagonal
-        self.sig_yi = np.sqrt(np.diag(self.C_yi))
+            # C_y = TT*C_z*TT.T
+            self.C_yi = np.dot(self.matrix, np.dot(self.C_p, self.matrix.T))
 
-        # Set as derived
-        self.derived = True
+            # Standard deviations are sqrt of diagonal
+            self.sig_yi = np.sqrt(np.diag(self.C_yi))
+
+            # Set as derived
+            self.derived = True
+
+        except Exception as exc:
+            print(exc)
+            print("Could not fit a polynomial to [{}, {}, {}, {}]. Try different values.".format(xparam, yparam, order, xrange))
+
+    def estimate(self, xval, plot=False):
+        """
+        Estimate the y-value given the xvalue
+
+        Parameters
+        ----------
+        x_val: float, int
+            The xvalue to evaluate
+
+        Returns
+        -------
+        y_val, y_unc
+            The value and uncertainty
+        """
+        # Check to see if the polynomial has been derived
+        if not self.derived:
+            print("Please run the derive method before trying to evaluate.")
+            return
+
+        # Find the nearest
+        y_val = np.polyval(self.coeffs, x_val)
+        y_unc = np.interp(x_val, self.x, self.sig_yi)
+
+        if plot:
+            plt = self.plot()
+            plt.circle([x_val], [y_val], color='red', size=10, legend='f({})'.format(x_val))
+            show(plt)
+
+        return y_val, y_unc
 
     def evaluate(self, x_val, plot=False):
         """
@@ -204,7 +253,7 @@ class DwarfSequence(Relation):
         file = resource_filename('sedkit', 'data/dwarf_sequence.txt')
 
         # Replace '...' with NaN
-        fill_values = [('...', np.nan)]
+        fill_values = [('...', np.nan), ('....', np.nan), ('.....', np.nan)]
 
         # Initialize Relation object
         super().__init__(file, fill_values=fill_values, **kwargs)
@@ -351,11 +400,7 @@ class SpectralTypeRadius:
             container['rng'] = rng
 
             # Fit polynomial
-            container['coeffs'], container['C_p'] = np.polyfit(data['spt'],
-                                                               data['radius'],
-                                                               order,
-                                                               w=1./data['radius_unc'],
-                                                               cov=True)
+            container['coeffs'], container['C_p'] = np.polyfit(data['spt'], data['radius'], order, w=1./data['radius_unc'], cov=True)
 
             # Do the interpolation for plotting
             container['spt'] = np.arange(np.nanmin(data['spt'])-3, np.nanmax(data['spt'])+1)
