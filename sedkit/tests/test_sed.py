@@ -5,6 +5,7 @@ from pkg_resources import resource_filename
 import numpy as np
 import astropy.units as q
 from astropy.modeling.blackbody import blackbody_lambda
+from astropy.coordinates import SkyCoord
 
 from .. import sed
 from .. import spectrum as sp
@@ -95,6 +96,12 @@ class TestSED(unittest.TestCase):
         # RA
         s.ra = 1.2345*q.deg
         self.assertRaises(TypeError, setattr, s, 'ra', 1.2345)
+
+        # Sky coords
+        s.sky_coords = 1.2345*q.deg, 1.2345*q.deg
+        s.sky_coords = '1.2345', '1.2345'
+        self.assertRaises(TypeError, setattr, s, 'sky_coords', 'foo')
+        self.assertRaises(TypeError, setattr, s, 'sky_coords', None)
 
         # Distance
         s.distance = None
