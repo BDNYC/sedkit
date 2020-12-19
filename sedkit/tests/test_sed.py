@@ -27,7 +27,7 @@ class TestSED(unittest.TestCase):
         SPEC2 = [WAVE2, FLUX2, FLUX2/100.]
         self.spec2 = sp.Spectrum(*SPEC2)
 
-        self.sed = sed.SED(verbose=True)
+        self.sed = sed.SED(verbose=True, foo=123)
 
     def test_add_photometry(self):
         """Test that photometry is added properly"""
@@ -209,6 +209,12 @@ class TestSED(unittest.TestCase):
         s = sed.SED('trappist-1')
         s.find_2MASS()
         s.find_Gaia()
+
+        self.assertNotEqual(len(s.photometry), 0)
+
+    def test_run_methods(self):
+        """Test that the method_list argument works"""
+        s = sed.SED('trappist-1', method_list=['find_2MASS'])
 
         self.assertNotEqual(len(s.photometry), 0)
 
