@@ -658,7 +658,7 @@ class SED:
                 for group in groups:
                     spec = group.pop()
                     for g in group:
-                        spec = g.norm_to_spec(spec, add=True, plot=True)
+                        spec = g.norm_to_spec(spec, add=True)
                     self.stitched_spectra.append(spec)
 
             # Make apparent spectral SED
@@ -958,8 +958,12 @@ class SED:
 
         # The SED plot
         if self.fig is not None:
-            pltopath = os.path.join(dirpath, '{}_plot.png'.format(name))
-            export_png(self.fig, filename=pltopath)
+            try:
+                pltopath = os.path.join(dirpath, '{}_plot.png'.format(name))
+                export_png(self.fig, filename=pltopath)
+            except:
+                # Bokeh dropped support for PhantomJS so image saving is now browser dependent and fails occasionally
+                print("Could not export SED for {}".format(self.name))
 
         # zip if desired
         if zipped:

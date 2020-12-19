@@ -268,8 +268,15 @@ class ModelGrid:
 
         return possible_values[idx[0]]
 
-    def get_spectrum(self, closest=False, **kwargs):
+    def get_spectrum(self, closest=False, snr=None, **kwargs):
         """Retrieve the first model with the specified parameters
+
+        Parameters
+        ----------
+        closest: bool
+            Rounds to closest effective temperature
+        snr: int (optional)
+            The SNR to generate for the spectrum
 
         Returns
         -------
@@ -299,7 +306,7 @@ class ModelGrid:
             if trim is not None:
 
                 # Get indexes to keep
-                idx, = np.where((spec[0]*self.wave_units > trim[0]) & (spec[0]*self.wave_units < trim[1]))
+                idx, = np.where((spec[0] * self.wave_units > trim[0]) & (spec[0] * self.wave_units < trim[1]))
 
                 if len(idx) > 0:
                     spec = [i[idx] for i in spec]
@@ -311,18 +318,18 @@ class ModelGrid:
                 # Make the wavelength array
                 mn = np.nanmin(spec[0])
                 mx = np.nanmax(spec[0])
-                d_lam = (mx-mn)/resolution
+                d_lam = (mx - mn) / resolution
                 wave = np.arange(mn, mx, d_lam)
 
                 # Trim the wavelength
-                dmn = (spec[0][1]-spec[0][0])/2.
-                dmx = (spec[0][-1]-spec[0][-2])/2.
-                wave = wave[np.logical_and(wave >= mn+dmn, wave <= mx-dmx)]
+                dmn = (spec[0][1] - spec[0][0]) / 2.
+                dmx = (spec[0][-1] - spec[0][-2]) / 2.
+                wave = wave[np.logical_and(wave >= mn + dmn, wave <= mx - dmx)]
 
                 # Calculate the new spectrum
                 spec = u.spectres(wave, spec[0], spec[1])
 
-            return Spectrum(spec[0]*self.wave_units, spec[1]*self.flux_units, name=name)
+            return Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, **kwargs)
 
     def plot(self, fig=None, scale='log', draw=True, **kwargs):
         """Plot the models using Spectrum.plot() with the given parameters

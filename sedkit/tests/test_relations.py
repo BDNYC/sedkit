@@ -54,19 +54,21 @@ class TestRelation(unittest.TestCase):
 
     def test_init(self):
         """Test class initialization"""
+        fill_values = [('...', np.nan), ('....', np.nan), ('.....', np.nan)]
+
         # Just the file
-        r = rel.Relation(self.file, fill_values=[('...', np.nan)])
+        r = rel.Relation(self.file, fill_values=fill_values)
         self.assertIsNotNone(r.data)
         self.assertIsNone(r.coeffs)
 
         # Auto-derive
-        r = rel.Relation(self.file, xparam='logL', yparam='Mbol', order=1, fill_values=[('...', np.nan)])
+        r = rel.Relation(self.file, xparam='logL', yparam='Mbol', order=1, fill_values=fill_values)
         self.assertIsNotNone(r.data)
         self.assertIsNotNone(r.coeffs)
 
         # Add_columns
         columns = {'spt': np.ones_like(r.data['SpT'])}
-        r = rel.Relation(self.file, fill_values=[('...', np.nan)], add_columns=columns)
+        r = rel.Relation(self.file, fill_values=fill_values, add_columns=columns)
         self.assertTrue('spt' in r.data.colnames)
 
     def test_derive(self):

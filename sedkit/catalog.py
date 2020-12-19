@@ -72,7 +72,8 @@ class Catalog:
         new_cat = Catalog(name=name or self.name)
 
         # Combine results
-        new_cat.results = at.vstack([self.results, other.results])
+        new_results = at.vstack([at.Table(self.results), at.Table(other.results)])
+        new_cat.results = new_results
 
         return new_cat
 
@@ -173,7 +174,7 @@ class Catalog:
         dirpath = os.path.join(parentdir, dirname)
 
         # Remove '.' from column names
-        final = self.results.filled(np.nan)
+        final = at.Table(self.results).filled(np.nan)
         for col in final.colnames:
             final.rename_column(col, col.replace('.', '_'))
 

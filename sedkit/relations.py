@@ -113,8 +113,8 @@ class Relation:
             self.x = self.x[idx]
             self.y = self.y[idx]
 
-        # Remove masked values
-        self.x, self.y = np.asarray([(x, y) for x, y in zip(self.x, self.y) if not hasattr(x, 'mask') and not hasattr(y, 'mask')]).T
+        # Remove masked and NaN values
+        self.x, self.y = np.asarray([(x, y) for x, y in zip(self.x, self.y) if not hasattr(x, 'mask') and not np.isnan(x) and not hasattr(y, 'mask') and not np.isnan(y)]).T
 
         # Determine monotonicity
         self.monotonic = u.monotonic(self.x)
@@ -400,11 +400,7 @@ class SpectralTypeRadius:
             container['rng'] = rng
 
             # Fit polynomial
-            container['coeffs'], container['C_p'] = np.polyfit(data['spt'],
-                                                               data['radius'],
-                                                               order,
-                                                               w=1./data['radius_unc'],
-                                                               cov=True)
+            container['coeffs'], container['C_p'] = np.polyfit(data['spt'], data['radius'], order, w=1./data['radius_unc'], cov=True)
 
             # Do the interpolation for plotting
             container['spt'] = np.arange(np.nanmin(data['spt'])-3, np.nanmax(data['spt'])+1)
