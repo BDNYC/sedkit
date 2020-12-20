@@ -12,7 +12,7 @@ import os
 from pkg_resources import resource_filename
 
 from astropy.io import ascii
-import astropy.tables as at
+import astropy.table as at
 
 
 def process_dmestar(dir=None, filename='dmestar_solar.txt'):
@@ -37,7 +37,11 @@ def process_dmestar(dir=None, filename='dmestar_solar.txt'):
         
         tables.append(t)
 
-    table = at.vstack(tables)
-    table.meta = None
-    path = resource_filename('sedkit', 'data/models/evolutionary/')
-    table.write(os.path.join(path, filename), format='csv')
+    if len(tables) > 0:
+        table = at.vstack(tables)
+        table.meta = None
+        path = resource_filename('sedkit', 'data/models/evolutionary/')
+        table.write(os.path.join(path, filename), format='csv')
+
+    else:
+        print('No DMEStar files to process at {}'.format(dir))
