@@ -13,6 +13,23 @@ from svo_filters import Filter
 from .. import utilities as u
 
 
+def test_convert_mag():
+    """Test the convert_mag function"""
+    mag, mag_unc = 12.3, 0.1
+
+    # AB to Vega
+    corr, corr_unc = u.convert_mag('2MASS.J', mag, mag_unc, old='AB', new='Vega')
+    assert corr < mag
+
+    # Vega to AB
+    corr, corr_unc = u.convert_mag('2MASS.J', mag, mag_unc, old='Vega', new='AB')
+    assert corr > mag
+
+    # Other
+    corr, corr_unc = u.convert_mag('2MASS.J', mag, mag_unc, old='ST', new='SDSS')
+    assert corr == mag
+
+
 def test_equivalent():
     """Test for equivalent function"""
     # Positive tests

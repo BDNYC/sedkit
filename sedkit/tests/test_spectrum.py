@@ -1,6 +1,7 @@
 """A suite of tests for the spectrum.py module"""
 import unittest
 import copy
+from pkg_resources import resource_filename
 
 import numpy as np
 import astropy.units as q
@@ -97,6 +98,16 @@ class TestSpectrum(unittest.TestCase):
         spec4 = self.spec + None
         self.assertEqual(spec4.size, self.spec.size)
 
+    def test_convolve_filter(self):
+        """Test convolve_filter method"""
+        # Spectrum and filter
+        spec = self.spec
+
+        # Convolve them
+        new_spec = spec.convolve_filter('2MASS.J')
+
+        self.assertNotEqual(spec.data.shape, new_spec.data.shape)
+
     def test_export(self):
         """Test export method"""
         # Good export
@@ -139,6 +150,9 @@ class TestSpectrum(unittest.TestCase):
         norm = s.renormalize(mag, bp, no_spec=True)
         self.assertIsInstance(norm, float)
 
+        # Return Spectrum object
+        spec = s.renormalize(mag, bp, no_spec=False)
+
     def test_resamp(self):
         """Test that the spectrum can be interpolated to new wavelengths"""
         # New wavelength array
@@ -165,6 +179,28 @@ class TestSpectrum(unittest.TestCase):
         # Make sure it matched the original
         self.assertTrue(np.all(self.spec.wave == restored_spec.wave))
 
+    def test_synthetic_mag(self):
+        """Test the synthetic_magniture and synthetic_flux methods"""
+        # Get a spectrum
+        s1 = self.spec
+
+        # Test mag
+        filt = Filter('2MASS.J')
+        mag, mag_unc = s1.synthetic_magnitude(filt)
+        self.assertIsInstance(mag, float)
+        self.assertIsInstance(mag_unc, float)
+
+        # Test flux
+        flx, flx_unc = s1.synthetic_flux(filt, plot=True)
+        self.assertIsInstance(flx, q.quantity.Quantity)
+        self.assertIsInstance(flx_unc, q.quantity.Quantity)
+
+        # Test out of range band returns None
+        filt = Filter('WISE.W4')
+        mag, mag_unc = s1.synthetic_magnitude(filt)
+        self.assertIsNone(mag)
+        self.assertIsNone(mag_unc)
+
     def test_norm_to_spec(self):
         """Test that a spectrum is properly normalized to another spectrum"""
         # Get two flat spectra
@@ -189,6 +225,39 @@ class TestSpectrum(unittest.TestCase):
         # Unsuccessfully trim it
         untrimmed = s1.trim([(1.1 * q.um, 2 * q.um)])
         self.assertEqual(self.flat1.size, untrimmed.size)
+
+
+class TestFileSpectrum(unittest.TestCase):
+    """Tests for the FileSpectrum class"""
+    def setUp(self):
+        """Setup the tests"""
+        # Files for testing
+        self.fitsfile = resource_filename('sedkit', 'data/Trappist-1_NIR.fits')
+        self.txtfile = resource_filename('sedkit', 'data/STScI_Vega.txt')
+
+    def test_fits(self):
+        """Test that a fits file can be loaded"""
+        spec = sp.FileSpectrum(self.fitsfile, wave_units='um', flux_units='erg/s/cm2/AA')
+
+    def test_txt(self):
+        """Test that a txt file can be loaded"""
+        spec = sp.FileSpectrum(self.txtfile, wave_units='um', flux_units='erg/s/cm2/AA')
+
+
+class TestModelSpectrum(unittest.TestCase):
+    """Tests for the ModelSpectrum class"""
+    def setUp(self):
+        """Setup the tests"""
+        pass
+
+    def test_Atlas(self):
+        """Test of the ATLAS models"""
+        self.atlas = sp.ModelSpectrum(stellar_model='ATLAS')
+
+    def test_Phoenix(self):
+        """Test of the PHOENIX models"""
+        # self.phoenix = sp.ModelSpectrum(stellar_model='PHOENIX')
+        pass
 
 
 class TestVega(unittest.TestCase):

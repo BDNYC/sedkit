@@ -1,8 +1,8 @@
+"""A suite of tests for the catalog.py module"""
 import unittest
 import copy
 import os
-
-import astropy.units as q
+from pkg_resources import resource_filename
 
 from .. import sed
 from .. import catalog
@@ -79,6 +79,13 @@ class TestCatalog(unittest.TestCase):
         f_cat = cat.filter('spectral_type', '>30')
         self.assertEqual(len(f_cat.results), 1)
 
+    def test_from_file(self):
+        """Test from_file method"""
+        cat = self.cat
+        file = resource_filename('sedkit', 'data/sources.txt')
+        cat.from_file(file)
+        self.assertTrue(len(cat.results) > 0)
+
     def test_get_data(self):
         """Test get_data method"""
         # Make the catalog
@@ -130,19 +137,21 @@ class TestCatalog(unittest.TestCase):
         # Make the catalog
         cat = copy.copy(self.cat)
         cat.add_SED(self.vega)
-        v1 = copy.copy(self.vega)
-        v1.name = 'foo'
-        cat.add_SED(v1)
 
         # Plot the SEDs
-        cat.plot_SEDs(['Vega', 'foo'])
+        cat.plot_SEDs(['Vega'])
         cat.plot_SEDs('*')
 
-    def test_save(self):
-        """Test save method"""
+    def test_save_and_load(self):
+        """Test save and load methods"""
         # Make the catalog
         cat = copy.copy(self.cat)
         cat.save('test.p')
+
+        # Try to load it
+        new_cat = catalog.Catalog("Loaded Catalog")
+        new_cat.load('test.p')
+
         os.system('rm test.p')
 
     def test_source(self):
