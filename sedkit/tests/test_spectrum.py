@@ -244,6 +244,21 @@ class TestFileSpectrum(unittest.TestCase):
         spec = sp.FileSpectrum(self.txtfile, wave_units='um', flux_units='erg/s/cm2/AA')
 
 
+class TestModelSpectrum(unittest.TestCase):
+    """Tests for the ModelSpectrum class"""
+    def setUp(self):
+        """Setup the tests"""
+        pass
+
+    def test_Atlas(self):
+        """Test of the ATLAS models"""
+        self.atlas = sp.ModelSpectrum(stellar_model='ATLAS')
+
+    def test_Phoenix(self):
+        """Test of the PHOENIX models"""
+        self.phoenix = sp.ModelSpectrum(stellar_model='PHOENIX')
+
+
 class TestVega(unittest.TestCase):
     """Tests for the Vega class"""
     def setUp(self):
