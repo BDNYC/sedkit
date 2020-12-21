@@ -137,12 +137,9 @@ class TestCatalog(unittest.TestCase):
         # Make the catalog
         cat = copy.copy(self.cat)
         cat.add_SED(self.vega)
-        v1 = copy.copy(self.vega)
-        v1.name = 'Sirius'
-        cat.add_SED(v1)
 
         # Plot the SEDs
-        cat.plot_SEDs(['Vega', 'Sirius'])
+        cat.plot_SEDs(['Vega'])
         cat.plot_SEDs('*')
 
     def test_save_and_load(self):

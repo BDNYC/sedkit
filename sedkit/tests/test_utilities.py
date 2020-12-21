@@ -22,7 +22,7 @@ def test_convert_mag():
     assert corr < mag
 
     # Vega to AB
-    corr, corr_unc = u.convert_mag('2MASS.J', mag, mag_unc, old='AB', new='Vega')
+    corr, corr_unc = u.convert_mag('2MASS.J', mag, mag_unc, old='Vega', new='AB')
     assert corr > mag
 
     # Other
