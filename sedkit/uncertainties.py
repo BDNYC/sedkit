@@ -1,6 +1,7 @@
 """
 Module to calculate uncertainties
 """
+from bokeh.plotting import show, figure
 import numpy as np
 from scipy.integrate import quad
 from scipy.optimize import leastsq
@@ -10,7 +11,7 @@ class Unum(object):
     """
     An object to handle math with uncertainties
     """
-    def __init__(self, nominal, upper, lower=None, n_samples=1000):
+    def __init__(self, nominal, upper, lower=None, n_samples=10000, sig_figs=2, method='median'):
         """
         Initialize a number with uncertainties
         """
@@ -19,6 +20,8 @@ class Unum(object):
         self.upper = upper
         self.lower = lower or upper
         self.n = n_samples
+        self.sig_figs = sig_figs
+        self.method = method
 
     def __repr__(self):
         """
@@ -227,7 +230,7 @@ class Unum(object):
         else:
 
             # If errors are symmetric, sample from a gaussian
-            samples = np.random.normal(self.nominal, self.upper, n)
+            samples = np.random.normal(self.nominal, self.upper, self.n)
 
             # If a lower limit or an upper limit is given, then search if any of the samples surpass
             # those limits, and sample again until no sample surpasses those limits:
@@ -250,8 +253,7 @@ class Unum(object):
                         break
             return samples
 
-    @staticmethod
-    def get_quantiles(dist, alpha=0.68, method='median'):
+    def get_quantiles(self, dist, alpha=0.68):
         """
         Determine the median, upper and lower quantiles of a distribution
 
@@ -276,7 +278,7 @@ class Unum(object):
         nsamples = len(dist)
         nsamples_at_each_side = int(nsamples * (alpha / 2.) + 1)
 
-        if method == 'median':
+        if self.method == 'median':
 
             # Number of points is even
             if nsamples % 2 == 0.0:
@@ -291,7 +293,37 @@ class Unum(object):
         q_upper = ordered_dist[med_idx_upper + nsamples_at_each_side]
         q_lower = ordered_dist[med_idx_lower - nsamples_at_each_side]
 
-        return param, q_upper - param, param - q_lower
+        return param.round(self.sig_figs), (q_upper - param).round(self.sig_figs), (param - q_lower).round(self.sig_figs)
+
+    def plot(self, bins=None):
+        """
+        Plot the distribution with stats
+
+        Parameters
+        ----------
+        bins: int
+            The number of bins for the histogram
+
+        Returns
+        -------
+        bokeh.plotting.figure.Figure
+        """
+        # Make the figure
+        fig = figure()
+
+        # Make a histogram of the distribution
+        dist = self.sample_from_errors()
+        hist, edges = np.histogram(dist, density=True, bins=bins or min(self.n, 50))
+        fig.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:], color='wheat')
+
+        # Add stats to plot
+        lower, nominal, upper = self.quantiles
+        fig.line([lower] * 2, [min(hist), max(hist)], line_width=2, color='red', legend_label='lower (-{})'.format(self.lower))
+        fig.line([nominal] * 2, [min(hist), max(hist)], line_width=2, color='black', legend_label='{} ({})'.format(self.method, self.nominal))
+        fig.line([upper] * 2, [min(hist), max(hist)], line_width=2, color='blue', legend_label='upper (+{})'.format(self.upper))
+
+        # Show the plot
+        show(fig)
 
     @property
     def value(self):
@@ -299,6 +331,13 @@ class Unum(object):
         The nominal, upper, and lower values
         """
         return self.nominal, self.upper, self.lower
+
+    @property
+    def quantiles(self):
+        """
+        The [0.15866, 0.5, 0.84134] quantiles
+        """
+        return self.nominal - self.lower, self.nominal, self.nominal + self.upper
 
 
 class SkewNormal(object):
