@@ -132,57 +132,57 @@ def query_SDSS_apogee_spectra(coords, verbose=True, **kwargs):
     return [wav, flx, err], catalog, header
 
 
-def query_IRAS_spectra(coords, verbose=True, **kwargs):
-    """
-    Query the IRAS survey data
-
-    Parameters
-    ----------
-    coords: astropy.coordinates.SkyCoord
-        The coordinates to query
-
-    Returns
-    -------
-    list
-        The [W, F, E] spectrum of the target
-    """
-
-    # Query vizier for spectra
-    catalog = 'III/197/lrs'
-    results = query_vizier(catalog, sky_coords=coords, wildcards=[], verbose=verbose)
-    # results = query_vizier(catalog, col_names=['Ascap', 'File', 'Tel', 'Field'], sky_coords=coords, wildcards=[], verbose=verbose)
-
-    if len(results) == 0:
-
-        return None, None, None
-
-    else:
-
-        file = [row[1] for row in results]
-
-        # Construct URL
-        url = 'https://cdsarc.unistra.fr/ftp/III/197/{}'.format(file)
-
-        # Download the file
-        urlretrieve(url, file)
-
-        # Get data
-        hdu = fits.open(file)
-        header = hdu[0].header
-
-        # Generate wavelength
-        wav = 10**(np.linspace(header['CRVAL1'], header['CRVAL1'] + (header['CDELT1'] * header['NWAVE']), header['NWAVE']))
-        wav *= q.AA
-
-        # Get flux and error
-        flx = hdu[1].data[0] * 1E-17 * q.erg / q.s / q.cm**2 / q.AA
-        err = hdu[2].data[0] * 1E-17 * q.erg / q.s / q.cm**2 / q.AA
-
-        # Delete file
-        hdu.close()
-        os.system('rm {}'.format(file))
-
-    return [wav, flx, err], catalog, header
+# def query_IRAS_spectra(coords, verbose=True, **kwargs):
+#     """
+#     Query the IRAS survey data
+#
+#     Parameters
+#     ----------
+#     coords: astropy.coordinates.SkyCoord
+#         The coordinates to query
+#
+#     Returns
+#     -------
+#     list
+#         The [W, F, E] spectrum of the target
+#     """
+#
+#     # Query vizier for spectra
+#     catalog = 'III/197/lrs'
+#     results = query_vizier(catalog, sky_coords=coords, wildcards=[], verbose=verbose)
+#     # results = query_vizier(catalog, col_names=['Ascap', 'File', 'Tel', 'Field'], sky_coords=coords, wildcards=[], verbose=verbose)
+#
+#     if len(results) == 0:
+#
+#         return None, None, None
+#
+#     else:
+#
+#         file = [row[1] for row in results]
+#
+#         # Construct URL
+#         url = 'https://cdsarc.unistra.fr/ftp/III/197/{}'.format(file)
+#
+#         # Download the file
+#         urlretrieve(url, file)
+#
+#         # Get data
+#         hdu = fits.open(file)
+#         header = hdu[0].header
+#
+#         # Generate wavelength
+#         wav = 10**(np.linspace(header['CRVAL1'], header['CRVAL1'] + (header['CDELT1'] * header['NWAVE']), header['NWAVE']))
+#         wav *= q.AA
+#
+#         # Get flux and error
+#         flx = hdu[1].data[0] * 1E-17 * q.erg / q.s / q.cm**2 / q.AA
+#         err = hdu[2].data[0] * 1E-17 * q.erg / q.s / q.cm**2 / q.AA
+#
+#         # Delete file
+#         hdu.close()
+#         os.system('rm {}'.format(file))
+#
+#     return [wav, flx, err], catalog, header
 
 
 def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcards=['e_*'], target_names=None, search_radius=20 * q.arcsec, idx=0, cat_name=None, verbose=True, **kwargs):
