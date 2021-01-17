@@ -7,6 +7,14 @@ from scipy.integrate import quad
 from scipy.optimize import leastsq
 
 
+def trapz(f, a, b, n):
+    h = (b - a) / float(n)
+    s = 0.5 * (f(a) + f(b))
+    for i in range(1, n, 1):
+        s = s + f(a + i * h)
+    return h * s
+
+
 class Unum(object):
     """
     An object to handle math with uncertainties

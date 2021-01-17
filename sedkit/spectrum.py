@@ -51,7 +51,7 @@ class Spectrum:
     A class to store, calibrate, fit, and plot a single spectrum
     """
     def __init__(self, wave, flux, unc=None, snr=None, trim=None, name=None,
-                 ref=None, verbose=False, **kwargs):
+                 ref=None, header=None, verbose=False, **kwargs):
         """Initialize the Spectrum object
 
         Parameters
@@ -73,6 +73,8 @@ class Spectrum:
             A name for the spectrum
         ref: str
             A reference for the data
+        header: str
+            The header for the spectrum file
         verbose: bool
             Print helpful stuff
         """
@@ -80,6 +82,7 @@ class Spectrum:
         self.verbose = verbose
         self.name = name or 'New Spectrum'
         self.ref = ref
+        self.header = header
 
         # Make sure the arrays are the same shape
         if not wave.shape == flux.shape and ((unc is None) or not (unc.shape == flux.shape)):
