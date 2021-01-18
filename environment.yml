@@ -20,3 +20,4 @@ dependencies:
     - svo-filters==0.3.0
     - dustmaps==1.0.4
     - numpydoc==0.8.0
+    - emcee>=3.0.2

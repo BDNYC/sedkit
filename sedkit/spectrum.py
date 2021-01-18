@@ -26,6 +26,7 @@ from pandas import DataFrame
 from scipy import interpolate, ndimage
 from svo_filters import Filter
 
+from . import mcmc as mc
 from . import utilities as u
 
 
@@ -249,6 +250,43 @@ class Spectrum:
 
         return new_spec
 
+    def mcmc_fit(self, model_grid, params=['teff', 'logg'], walkers=1000, steps=20, name=None):
+        """
+        Produces a marginalized distribution plot of best fit parameters from the specified model_grid
+
+        Parameters
+        ----------
+        model_grid: sedkit.modelgrid.ModeGrid
+            The model grid to use
+        params: list
+            The list of model grid parameters to fit
+        walkers: int
+            The number of walkers to deploy
+        steps: int
+            The number of steps for each walker to take
+        name: str
+            Name for the fit
+        """
+        # Specify the parameter space to be walked
+        for param in params:
+            if param not in model_grid.parameters:
+                raise ValueError("'{}' not a parameter in this model grid, {}".format(param, model_grid.parameters))
+
+        # Set up the sampler object
+        sampler = mc.SpecSampler(self, model_grid, params)
+
+        # Run the mcmc method
+        sampler.mcmc_go(nwalk_mult=walkers, nstep_mult=steps)
+
+        # Generate best fit spectrum the 50th quantile value
+        best_fit_params = {k: v for k, v in zip(sampler.all_params, sampler.all_quantiles.T[1])}
+        params_with_unc = sampler.get_error_and_unc()
+        for param, quant in zip(sampler.all_params, params_with_unc):
+            best_fit_params['{}_unc'.format(param)] = np.mean([quant[0], quant[2]])
+
+        name = name or '{} fit'.format(model_grid.name)
+        self.best_fit[name] = best_fit_params
+
     def best_fit_model(self, modelgrid, report=None, name=None):
         """Perform simple fitting of the spectrum to all models in the given
         modelgrid and store the best fit
@@ -264,6 +302,7 @@ class Spectrum:
             A name for the fit
         """
         # Prepare data
+        name = name or '{} fit'.format(modelgrid.name)
         spectrum = Spectrum(*self.spectrum)
         rows = [row for n, row in modelgrid.index.iterrows()]
 
