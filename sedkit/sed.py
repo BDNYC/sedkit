@@ -363,7 +363,7 @@ class SED:
             or a Spectrum object
         """
         # OK if already a Spectrum
-        if isinstance(spectrum, sp.Spectrum):
+        if hasattr(spectrum, 'spectrum'):
             spec = spectrum
 
         # or turn it into a Spectrum
@@ -1251,7 +1251,7 @@ class SED:
         else:
             print("Sorry, could not fit SED to model grid", modelgrid)
 
-    def fit_modelgrid(self, modelgrid, name=None, **kwargs):
+    def fit_modelgrid(self, modelgrid, name=None, mcmc=False, **kwargs):
         """
         Fit a model grid to the composite spectra
 
@@ -1261,17 +1261,22 @@ class SED:
             The model grid to fit
         name: str
             A name for the fit
+        mcmc: bool
+            Use MCMC fitting routine
         """
         if not self.calculated:
             self.make_sed()
 
         # Determine a name
         if name is None:
-            name = modelgrid.name
+            name = modelgrid.name + (' (MCMC)' if mcmc else '')
 
         if self.app_spec_SED is not None:
 
-            self.app_spec_SED.best_fit_model(modelgrid, name=name, **kwargs)
+            if mcmc:
+                self.app_spec_SED.mcmc_fit(modelgrid, name=name, **kwargs)
+            else:
+                self.app_spec_SED.best_fit_model(modelgrid, name=name, **kwargs)
             self.best_fit[name] = self.app_spec_SED.best_fit[name]
             setattr(self, name, self.best_fit[name]['label'])
 
@@ -2123,7 +2128,10 @@ class SED:
 
         if best_fit and len(self.best_fit) > 0:
             for bf, mod_fit in self.best_fit.items():
-                self.fig.line(mod_fit.spectrum[0]*(1E-4 if mod_fit.spectrum[0].min() > 100 else 1), mod_fit.spectrum[1] * const, alpha=0.3, color=color, legend_label=mod_fit.label, line_width=2)
+                try:
+                    self.fig.line(mod_fit['spectrum'][0]*(1E-4 if mod_fit['spectrum'][0].min() > 100 else 1), mod_fit['spectrum'][1] * const, alpha=0.3, color=color, legend_label=mod_fit['label'], line_width=2)
+                except:
+                    pass
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"

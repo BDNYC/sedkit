@@ -43,7 +43,7 @@ def log_probability(model_params, model_grid, spectrum):
 
     # Check if any of the parameters are outside the limits of the model
     pdict = {}
-    for i in range(ndim):
+    for i in range(model_grid.ndim):
         param = model_grid.params[i]
         pdict[param] = model_p[i]
         mx = getattr(model_grid, '{}_max'.format(param))
@@ -95,7 +95,7 @@ class SpecSampler(object):
         # Calculate starting parameters for the emcee walkers by minimizing
         # chi-squared for the grid of synthetic spectra
         self.spectrum.best_fit_model(self.model_grid, name='best')
-        self.start_p = list(self.spectrum.best_fit['best'][self.params])
+        self.start_p = [self.spectrum.best_fit['best'][param] for param in params]
         self.min_chi = self.spectrum.best_fit['best']['gstat']
 
         # Avoid edges of parameter space

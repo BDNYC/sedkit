@@ -52,7 +52,7 @@ def query_SDSS_optical_spectra(coords, idx=0, verbose=True):
     if verbose:
         if results is None:
             n_rec = 0 if results is None else len(results)
-        print("{} record{} found in SDSS {} data.".format(n_rec, '' if n_rec == 1 else 's', survey))
+        print("{} record{} found in SDSS optical data.".format(n_rec, '' if n_rec == 1 else 's'))
 
     if n_rec == 0:
 
@@ -97,7 +97,7 @@ def query_SDSS_apogee_spectra(coords, verbose=True, **kwargs):
 
     # Query vizier for spectra
     catalog = 'III/284/allstars'
-    results = query_vizier(catalog, col_names=['Ascap', 'File', 'Tel', 'Field'], sky_coords=coords, wildcards=[], verbose=verbose)
+    results = query_vizier(catalog, col_names=['Ascap', 'File', 'Tel', 'Field'], sky_coords=coords, wildcards=[], cat_name='APOGEE', verbose=verbose)
 
     if len(results) == 0:
 
@@ -236,7 +236,7 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
     # Check there are columns to fetch
     if cols is None:
         cols = viz_cat[0].colnames
-    print(cols)
+
     # Check for wildcards
     wildcards = wildcards or []
 

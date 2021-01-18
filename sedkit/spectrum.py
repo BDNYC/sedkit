@@ -256,7 +256,7 @@ class Spectrum:
 
         Parameters
         ----------
-        model_grid: sedkit.modelgrid.ModeGrid
+        model_grid: sedkit.modelgrid.ModelGrid
             The model grid to use
         params: list
             The list of model grid parameters to fit
@@ -285,6 +285,8 @@ class Spectrum:
             best_fit_params['{}_unc'.format(param)] = np.mean([quant[0], quant[2]])
 
         name = name or '{} fit'.format(model_grid.name)
+        best_fit_params['label'] = '/'.join([str(best_fit_params[param].round(2)) for param in sampler.params])
+        best_fit_params['filepath'] = None
         self.best_fit[name] = best_fit_params
 
     def best_fit_model(self, modelgrid, report=None, name=None):
@@ -344,10 +346,7 @@ class Spectrum:
             # Show the plot
             show(rep)
 
-        if bf['filepath'] in [i['filepath'] for n, i in self.best_fit.items()]:
-            print('{}: model has already been fit'.format(bf['filepath']))
-        else:
-            self.best_fit[name] = bf
+        self.best_fit[name] = dict(bf)
 
     def convolve_filter(self, filter, **kwargs):
         """
