@@ -187,11 +187,10 @@ class TestSED(unittest.TestCase):
         """Test plotting method"""
         v = sed.VegaSED()
         v.calculate_synthetic_photometry()
-        v.fit_blackbody()
         bt = mg.BTSettl()
         v.fit_modelgrid(bt)
         v.results
-        fig = v.plot(integral=True, synthetic_photometry=True, blackbody=True, best_fit=True)
+        fig = v.plot(integral=True, synthetic_photometry=True, best_fit=True)
 
     def test_no_photometry(self):
         """Test that a purely photometric SED can be creted"""
@@ -232,7 +231,7 @@ class TestSED(unittest.TestCase):
         """Test the find_SDSS_spectra method"""
         s = sed.SED()
         s.sky_coords = SkyCoord('0h8m05.63s +14d50m23.3s', frame='icrs')
-        s.find_SDSS_spectra(search_radius=1 * q.degree)
+        s.find_SDSS_spectra(search_radius=20 * q.arcsec)
         assert len(s.spectra) > 0
 
     def test_run_methods(self):
