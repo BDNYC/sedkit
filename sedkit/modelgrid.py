@@ -19,9 +19,42 @@ import astropy.units as q
 import astropy.io.votable as vo
 import numpy as np
 import pandas as pd
+from scipy.interpolate import RegularGridInterpolator
 
 from . import utilities as u
 from .spectrum import Spectrum
+
+
+def interp_flux(flux, params, values):
+    """
+    Interpolate a cube of synthetic spectra
+
+    Parameters
+    ----------
+    flux: np.ndarray
+        The data array
+    params: list
+        A list of each free parameter range
+    values: list
+        A list of each free parameter values
+
+    Returns
+    -------
+    tu
+        The array of new flux values
+    """
+    # Iterate over each wavelength (-1 index of flux array)
+    shp = flux.shape[-1]
+    flx = np.zeros(shp)
+    pn = len(params)
+
+    for lam in range(shp):
+        flx = flux[:, :, :, :, lam] if pn == 4 else flux[:, :, :, lam] if pn == 3 else flux[:, :, lam] if pn == 2 else flux[:, lam]
+        interp_f = RegularGridInterpolator(params, flx)
+        f, = interp_f(values)
+        flx[lam] = f
+
+    return flx
 
 
 def load_model(file, parameters=None, wl_min=5000, wl_max=50000, max_points=10000):
@@ -246,7 +279,7 @@ class ModelGrid:
         return u.filter_table(self.index, **kwargs)
 
     @staticmethod
-    def closest_value(input_value, possible_values):
+    def closest_value(input_value, possible_values, n_vals=1):
         """
         This function calculates, given an input_value and an array of possible_values,
         the closest value to input_value in the array.
@@ -254,21 +287,30 @@ class ModelGrid:
         Parameters
         ----------
         input_value: double
-             Input value to compare against possible_values.
+            Input value to compare against possible_values
         possible_values: np.ndarray
-             Array of possible values to compare against input_value.
+            Array of possible values to compare against input_value
+        n_vals: int
+            The number of closest values to return
 
         Returns
         -------
         double
-            Closest value on possible_values to input_value.
+            Closest value(s) on possible_values to input_value
         """
-        distance = np.abs(possible_values - input_value)
-        idx = np.where(distance == np.min(distance))[0]
+        # Calculate the difference
+        difference = np.abs(possible_values - input_value)
 
-        return possible_values[idx[0]]
+        # Sort by difference
+        idx = np.argsort(difference)
+        sorted_diffs = possible_values[idx]
 
-    def get_spectrum(self, closest=False, snr=None, **kwargs):
+        # Get correct number of vals
+        vals = sorted_diffs[:n_vals]
+
+        return vals[0] if n_vals == 1 else vals
+
+    def get_spectrum(self, closest=False, snr=None, interp=True, spec_obj=True, **kwargs):
         """Retrieve the first model with the specified parameters
 
         Parameters
@@ -277,10 +319,14 @@ class ModelGrid:
             Rounds to closest effective temperature
         snr: int (optional)
             The SNR to generate for the spectrum
+        interp: bool
+            Interpolate the model grid if not present
+        spec_obj: bool
+            Return a sedkit.spectrum.Spectrum object
 
         Returns
         -------
-        np.ndarray
+        sedkit.spectrum.Spectrum or np.ndarray
             A numpy array of the spectrum
         """
         # Get the row index and filepath
@@ -295,41 +341,131 @@ class ModelGrid:
             rows = rows.loc[rows[arg] == val]
 
         if rows.empty:
-            print("No models found satisfying", kwargs)
-            return None
+            if interp:
+                if self.verbose:
+                    print("Interpolating model grid to point {}".format(kwargs))
+                spec, name = self.interp(**kwargs)
+
+            else:
+                print("No models found satisfying", kwargs)
+                return None
+
         else:
             spec = rows.iloc[0].spectrum
             name = rows.iloc[0].label
 
-            # Trim it
-            trim = kwargs.get('trim', self.trim)
-            if trim is not None:
+        # Trim it
+        trim = kwargs.get('trim', self.trim)
+        if trim is not None:
 
-                # Get indexes to keep
-                idx, = np.where((spec[0] * self.wave_units > trim[0]) & (spec[0] * self.wave_units < trim[1]))
+            # Get indexes to keep
+            idx, = np.where((spec[0] * self.wave_units > trim[0]) & (spec[0] * self.wave_units < trim[1]))
 
-                if len(idx) > 0:
-                    spec = [i[idx] for i in spec]
+            if len(idx) > 0:
+                spec = [i[idx] for i in spec]
 
-            # Rebin
-            resolution = kwargs.get('resolution', self.resolution)
-            if resolution is not None:
+        # Rebin
+        resolution = kwargs.get('resolution', self.resolution)
+        if resolution is not None:
 
-                # Make the wavelength array
-                mn = np.nanmin(spec[0])
-                mx = np.nanmax(spec[0])
-                d_lam = (mx - mn) / resolution
-                wave = np.arange(mn, mx, d_lam)
+            # Make the wavelength array
+            mn = np.nanmin(spec[0])
+            mx = np.nanmax(spec[0])
+            d_lam = (mx - mn) / resolution
+            wave = np.arange(mn, mx, d_lam)
 
-                # Trim the wavelength
-                dmn = (spec[0][1] - spec[0][0]) / 2.
-                dmx = (spec[0][-1] - spec[0][-2]) / 2.
-                wave = wave[np.logical_and(wave >= mn + dmn, wave <= mx - dmx)]
+            # Trim the wavelength
+            dmn = (spec[0][1] - spec[0][0]) / 2.
+            dmx = (spec[0][-1] - spec[0][-2]) / 2.
+            wave = wave[np.logical_and(wave >= mn + dmn, wave <= mx - dmx)]
 
-                # Calculate the new spectrum
-                spec = u.spectres(wave, spec[0], spec[1])
+            # Calculate the new spectrum
+            spec = u.spectres(wave, spec[0], spec[1])
 
+        if spec_obj:
             return Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, **kwargs)
+        else:
+            return spec
+
+    def interp(self, **kwargs):
+        """
+        Interpolate the grid to the desired parameters
+
+        Returns
+        -------
+        dict
+            A dictionary of arrays of the wavelength, flux, and
+            mu values and the effective radius for the given model
+        """
+        # Make sure all parameters are included
+        if not all([param in kwargs for param in self.parameters]):
+            raise ValueError("{}: Please specify values for all parameters {}".format(kwargs, self.parameters))
+
+        # Select subset of parameter space to speed calculation
+        param_vals = []
+        param_lims = []
+        param_dims = []
+        for param in self.parameters:
+            possible_values = getattr(self, '{}_vals'.format(param))
+            pval = kwargs[param]
+            param_vals.append(pval)
+
+            # On grid
+            if pval in possible_values:
+                pmin = pmax = pval
+                dim = 1
+
+            # Off grid
+            else:
+
+                try:
+                    pmin, pmax = sorted(self.closest_value(pval, possible_values, n_vals=2))
+                    dim = 2
+                except:
+                    raise ValueError("{} = {}: Please use parameter value in range {} - {}".format(param, pval, min(possible_values), max(possible_values)))
+
+            param_lims.append((pmin, pmax))
+            param_dims.append(dim)
+
+        # Get subsample of full modelgrid
+        sub = self.index.copy()
+        valid_mn = np.prod(np.array([np.less_equal(min(plim), list(sub[param])) for plim, param in zip(param_lims, self.parameters)]), axis=0)
+        valid_mx = np.prod(np.array([np.greater_equal(max(plim), list(sub[param])) for plim, param in zip(param_lims, self.parameters)]), axis=0)
+        valid, = list(np.where(valid_mn * valid_mx))
+        sub = sub.iloc[valid]
+
+        # Get length of wave array
+        wavelength = sub.iloc[0].spectrum[0]
+
+        # Get the flux array by iterating through rows
+        flux_array = np.empty(tuple(param_dims + [len(wavelength)]))
+        for n0, d0 in enumerate(param_lims[0]):
+            for n1, d1 in enumerate(param_lims[1]):
+                for n2, d2 in enumerate(param_lims[2]):
+                    for n3, d3 in enumerate(param_lims[3]):
+
+                        model_vals = {self.parameters[0]: d0, self.parameters[1]: d1, self.parameters[2]: d2, self.parameters[3]: d3}
+
+                        # Retrieve spectrum using the `get_spectrum()` method
+                        spec = self.get_spectrum(**model_vals, interp=False, spec_obj=False)[1]
+                        flux_array[n0 - 1, n1 - 1, n2 - 1, n3 - 1] = spec
+                        del spec
+
+        # Ignore dimensions that don't need interpolation
+        flux_array = flux_array.squeeze()
+        pidx = [pl > 1 for pl in param_dims]
+
+        # Interpolate each wavelength point over the grid
+        new_flux = np.empty_like(wavelength)
+        pn = flux_array.ndim - 1
+        for lam in range(len(wavelength)):
+            flx = flux_array[:, :, :, :, lam] if pn == 4 else flux_array[:, :, :, lam] if pn == 3 else flux_array[:, :, lam] if pn == 2 else flux_array[:, lam]
+            interp_f = RegularGridInterpolator(np.array(param_lims)[pidx], flx)
+            new_flux[lam] = interp_f(np.array(param_vals)[pidx])[0]
+
+        name = '/'.join([str(val) for key, val in kwargs.items()])
+
+        return [wavelength, new_flux], name
 
     def plot(self, fig=None, scale='log', draw=True, **kwargs):
         """Plot the models using Spectrum.plot() with the given parameters
