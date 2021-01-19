@@ -188,8 +188,7 @@ class SpecSampler(object):
 
     def plot_chains(self):
         """
-        Calls Adrian's code to plot the development of the chains
-        as well as 1D histograms of the results
+        Plot the chains with histograms
         """
         # Get data dimensions
         nwalkers, nsamples, ndim = self.chain.shape
@@ -221,20 +220,36 @@ class SpecSampler(object):
     def quantile(self, x, quantiles):
         """
         Calculate the quantiles given by quantiles for the array x
+
+        Parameters
+        ----------
+        x: sequence
+            The data array
+        quantiles: sequence
+            The list of quantiles to compute
+
+        Returns
+        -------
+        list
+            The computed quantiles
         """
         xsorted = sorted(x)
         qvalues = [xsorted[int(q * len(xsorted))] for q in quantiles]
         return list(zip(quantiles, qvalues))
 
     def get_quantiles(self):
-        """ calculates (16th, 50th, 84th) quantiles for all parameters """
+        """
+        Calculates (16th, 50th, 84th) quantiles for all parameters
+        """
         self.all_quantiles = np.ones((self.ndim, 3)) * -99.
         for i in range(self.ndim):
             quant_array = self.quantile(self.cropchain[:, i], [.16, .5, .84])
             self.all_quantiles[i] = [quant_array[j][1] for j in range(3)]
 
     def get_error_and_unc(self):
-        """ Calculates 1-sigma uncertainties for all parameters """
+        """
+        Calculates 1-sigma uncertainties for all parameters
+        """
         self.get_quantiles()
 
         # The 50th quantile is the mean, the upper and lower "1-sigma"

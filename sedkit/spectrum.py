@@ -250,7 +250,7 @@ class Spectrum:
 
         return new_spec
 
-    def mcmc_fit(self, model_grid, params=['teff'], walkers=1000, steps=20, name=None):
+    def mcmc_fit(self, model_grid, params=['teff'], walkers=1000, steps=20, name=None, plot=False):
         """
         Produces a marginalized distribution plot of best fit parameters from the specified model_grid
 
@@ -266,6 +266,8 @@ class Spectrum:
             The number of steps for each walker to take
         name: str
             Name for the fit
+        plot: bool
+            Make plots
         """
         # Specify the parameter space to be walked
         for param in params:
@@ -277,6 +279,10 @@ class Spectrum:
 
         # Run the mcmc method
         sampler.mcmc_go(nwalk_mult=walkers, nstep_mult=steps)
+
+        # Make plots
+        if plot:
+            sampler.plot_chains()
 
         # Generate best fit spectrum the 50th quantile value
         best_fit_params = {k: v for k, v in zip(sampler.all_params, sampler.all_quantiles.T[1])}
