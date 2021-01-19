@@ -561,7 +561,7 @@ class SED:
                     if mag is not None and not np.isnan(mag):
 
                         # Make a dict for the new point
-                        new_photometry = {'band': band, 'eff': bp.wave_eff, 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc}
+                        new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'ref': 'sedkit'}
 
                         # Add it to the table
                         self._synthetic_photometry.add_row(new_photometry)

@@ -5,7 +5,6 @@ from pkg_resources import resource_filename
 import numpy as np
 import astropy.units as q
 from astropy.modeling.blackbody import blackbody_lambda
-from astropy.coordinates import SkyCoord
 
 from .. import sed
 from .. import spectrum as sp
@@ -224,6 +223,13 @@ class TestSED(unittest.TestCase):
         s = sed.SED('trappist-1', method_list=['find_2MASS'])
 
         self.assertNotEqual(len(s.photometry), 0)
+
+    def test_synthetic_photometry(self):
+        """Test the calculate_synthetic_photometry method"""
+        v = sed.VegaSED()
+        v.calculate_synthetic_photometry()
+
+        self.assertTrue(len(v.synthetic_photometry) > 0)
 
     def test_fit_spectral_type(self):
         """Test that the SED can be fit by a spectral type atlas"""
