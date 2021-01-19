@@ -2128,10 +2128,7 @@ class SED:
 
         if best_fit and len(self.best_fit) > 0:
             for bf, mod_fit in self.best_fit.items():
-                try:
-                    self.fig.line(mod_fit['spectrum'][0]*(1E-4 if mod_fit['spectrum'][0].min() > 100 else 1), mod_fit['spectrum'][1] * const, alpha=0.3, color=color, legend_label=mod_fit['label'], line_width=2)
-                except:
-                    pass
+                self.fig.line(mod_fit['spectrum'][0]*(1E-4 if mod_fit['spectrum'][0].min() > 100 else 1), mod_fit['spectrum'][1] * const, alpha=0.3, color=color, legend_label=mod_fit['label'], line_width=2)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
