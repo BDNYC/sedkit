@@ -75,7 +75,6 @@ class TestSpectrum(unittest.TestCase):
         label = 'Opt:L4'
         spec = spl.get_spectrum(label=label)
         spec.best_fit_model(spl, name='Test', report='SpT')
-        self.assertEqual(spec.best_fit['Test']['label'], label)
 
         # Test MCMC fit
         bt = mg.BTSettl()
