@@ -61,8 +61,10 @@ class TestSED(unittest.TestCase):
 
         # Make sure the units are being updated
         self.assertEqual(len(s.spectra), 2)
-        self.assertEqual(s.spectra[0]['spectrum'].wave_units,
-                         s.spectra[1]['spectrum'].wave_units)
+        self.assertEqual(s.spectra[0]['spectrum'].wave_units, s.spectra[1]['spectrum'].wave_units)
+
+        # Call results to test group_spectra method
+        s.results
 
         # Test removal
         s.drop_spectrum(0)
@@ -175,14 +177,20 @@ class TestSED(unittest.TestCase):
         # Radius from age
         s.radius_from_age()
 
+    def test_compare_model(self):
+        """Test for the compare_model method"""
+        v = sed.VegaSED()
+        bt = mg.BTSettl()
+        v.compare_model(bt, teff=3000)
+
     def test_plot(self):
         """Test plotting method"""
-        s = copy.copy(self.sed)
-        f = resource_filename('sedkit', 'data/L3_photometry.txt')
-        s.add_photometry_file(f)
-        s.make_sed()
-
-        fig = s.plot(integral=True)
+        v = sed.VegaSED()
+        v.calculate_synthetic_photometry()
+        bt = mg.BTSettl()
+        v.fit_modelgrid(bt)
+        v.results
+        fig = v.plot(integral=True, synthetic_photometry=True, best_fit=True)
 
     def test_no_photometry(self):
         """Test that a purely photometric SED can be creted"""
@@ -219,14 +227,28 @@ class TestSED(unittest.TestCase):
 
         self.assertNotEqual(len(s.photometry), 0)
 
+    def test_find_SDSS_spectra(self):
+        """Test the find_SDSS_spectra method"""
+        s = sed.SED()
+        s.sky_coords = SkyCoord('0h8m05.63s +14d50m23.3s', frame='icrs')
+        s.find_SDSS_spectra(search_radius=20 * q.arcsec)
+        assert len(s.spectra) > 0
+
     def test_run_methods(self):
         """Test that the method_list argument works"""
         s = sed.SED('trappist-1', method_list=['find_2MASS'])
 
         self.assertNotEqual(len(s.photometry), 0)
 
-    def test_fit_spectrum(self):
-        """Test that the SED can be fit by a model grid"""
+    def test_synthetic_photometry(self):
+        """Test the calculate_synthetic_photometry method"""
+        v = sed.VegaSED()
+        v.calculate_synthetic_photometry()
+
+        self.assertTrue(len(v.synthetic_photometry) > 0)
+
+    def test_fit_spectral_type(self):
+        """Test that the SED can be fit by a spectral type atlas"""
         # Grab the SPL
         spl = mg.SpexPrismLibrary()
 
@@ -237,6 +259,22 @@ class TestSED(unittest.TestCase):
 
         # Fit with SPL
         s.fit_spectral_type()
+
+    def test_fit_modelgrid(self):
+        """Test that the SED can be fit by a model grid"""
+        # Grab BTSettl
+        bt = mg.BTSettl()
+
+        # Add known spectrum
+        s = copy.copy(self.sed)
+        spec = bt.get_spectrum(snr=100)
+        s.add_spectrum(spec)
+
+        # Find best grid point
+        s.fit_modelgrid(bt)
+
+        # Fit with mcmc
+        s.fit_modelgrid(bt, mcmc=True)
 
     def test_fit_blackbody(self):
         """Test that the SED can be fit by a blackbody"""

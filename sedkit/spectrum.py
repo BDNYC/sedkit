@@ -26,6 +26,7 @@ from pandas import DataFrame
 from scipy import interpolate, ndimage
 from svo_filters import Filter
 
+from . import mcmc as mc
 from . import utilities as u
 
 
@@ -51,7 +52,7 @@ class Spectrum:
     A class to store, calibrate, fit, and plot a single spectrum
     """
     def __init__(self, wave, flux, unc=None, snr=None, trim=None, name=None,
-                 ref=None, verbose=False, **kwargs):
+                 ref=None, header=None, verbose=False, **kwargs):
         """Initialize the Spectrum object
 
         Parameters
@@ -73,6 +74,8 @@ class Spectrum:
             A name for the spectrum
         ref: str
             A reference for the data
+        header: str
+            The header for the spectrum file
         verbose: bool
             Print helpful stuff
         """
@@ -80,6 +83,7 @@ class Spectrum:
         self.verbose = verbose
         self.name = name or 'New Spectrum'
         self.ref = ref
+        self.header = header
 
         # Make sure the arrays are the same shape
         if not wave.shape == flux.shape and ((unc is None) or not (unc.shape == flux.shape)):
@@ -246,6 +250,59 @@ class Spectrum:
 
         return new_spec
 
+    def mcmc_fit(self, model_grid, params=['teff'], walkers=1000, steps=20, name=None, plot=False):
+        """
+        Produces a marginalized distribution plot of best fit parameters from the specified model_grid
+
+        Parameters
+        ----------
+        model_grid: sedkit.modelgrid.ModelGrid
+            The model grid to use
+        params: list
+            The list of model grid parameters to fit
+        walkers: int
+            The number of walkers to deploy
+        steps: int
+            The number of steps for each walker to take
+        name: str
+            Name for the fit
+        plot: bool
+            Make plots
+        """
+        # Specify the parameter space to be walked
+        for param in params:
+            if param not in model_grid.parameters:
+                raise ValueError("'{}' not a parameter in this model grid, {}".format(param, model_grid.parameters))
+
+        # Set up the sampler object
+        sampler = mc.SpecSampler(self, model_grid, params)
+
+        # Run the mcmc method
+        sampler.mcmc_go(nwalk_mult=walkers, nstep_mult=steps)
+
+        # Make plots
+        if plot:
+            sampler.plot_chains()
+
+        # Generate best fit spectrum the 50th quantile value
+        best_fit_params = {k: v for k, v in zip(sampler.all_params, sampler.all_quantiles.T[1])}
+        params_with_unc = sampler.get_error_and_unc()
+        for param, quant in zip(sampler.all_params, params_with_unc):
+            best_fit_params['{}_unc'.format(param)] = np.mean([quant[0], quant[2]])
+
+        # Add missing parameters
+        for param in model_grid.parameters:
+            if param not in best_fit_params:
+                best_fit_params[param] = getattr(model_grid, '{}_vals'.format(param))[0]
+
+        # Construct dictionary to save
+        name = name or '{} fit'.format(model_grid.name)
+        spec, label = model_grid.interp(**{param: best_fit_params[param] for param in model_grid.parameters})
+        best_fit_params['label'] = label
+        best_fit_params['filepath'] = None
+        best_fit_params['spectrum'] = np.array(spec)
+        self.best_fit[name] = best_fit_params
+
     def best_fit_model(self, modelgrid, report=None, name=None):
         """Perform simple fitting of the spectrum to all models in the given
         modelgrid and store the best fit
@@ -261,6 +318,7 @@ class Spectrum:
             A name for the fit
         """
         # Prepare data
+        name = name or '{} fit'.format(modelgrid.name)
         spectrum = Spectrum(*self.spectrum)
         rows = [row for n, row in modelgrid.index.iterrows()]
 
@@ -302,10 +360,7 @@ class Spectrum:
             # Show the plot
             show(rep)
 
-        if bf['filepath'] in [i['filepath'] for n, i in self.best_fit.items()]:
-            print('{}: model has already been fit'.format(bf['filepath']))
-        else:
-            self.best_fit[name] = bf
+        self.best_fit[name] = dict(bf)
 
     def convolve_filter(self, filter, **kwargs):
         """

@@ -75,7 +75,11 @@ class TestSpectrum(unittest.TestCase):
         label = 'Opt:L4'
         spec = spl.get_spectrum(label=label)
         spec.best_fit_model(spl, name='Test', report='SpT')
-        self.assertEqual(spec.best_fit['Test']['label'], label)
+
+        # Test MCMC fit
+        bt = mg.BTSettl()
+        spec = bt.get_spectrum(teff=2456, logg=5.5, meta=0, alpha=0, snr=100)
+        spec.mcmc_fit(bt, name='Test', plot=True)
 
     def test_addition(self):
         """Test that spectra are normalized and combined properly"""

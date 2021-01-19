@@ -30,6 +30,7 @@ from svo_filters import svo
 from . import utilities as u
 from . import spectrum as sp
 from . import isochrone as iso
+from . import query as qu
 from . import relations as rel
 from . import modelgrid as mg
 
@@ -273,11 +274,11 @@ class SED:
             The magnitude system of the input data, ['Vega', 'AB']
         """
         # Make sure the magnitudes are floats
-        if not isinstance(mag, float):
+        if not isinstance(mag, (float, np.float32)):
             raise TypeError("{}: Magnitude must be a float.".format(type(mag)))
 
         # Check the uncertainty
-        if not isinstance(mag_unc, (float, type(None))):
+        if not isinstance(mag_unc, (float, np.float32, type(None), np.ma.core.MaskedConstant)):
             raise TypeError("{}: Magnitude uncertainty must be a float, NaN, or None.".format(type(mag_unc)))
 
         # Make NaN if 0
@@ -293,8 +294,7 @@ class SED:
             print('Not a recognized bandpass: {}'.format(band))
 
         # Convert to Vega
-        if system == 'AB':
-            mag, mag_unc = u.convert_mag(mag, mag_unc, old=system, new=self.mag_system)
+        mag, mag_unc = u.convert_mag(band, mag, mag_unc, old=system, new=self.mag_system)
 
         # Convert bandpass to desired units
         bp.wave_units = self.wave_units
@@ -363,7 +363,7 @@ class SED:
             or a Spectrum object
         """
         # OK if already a Spectrum
-        if isinstance(spectrum, sp.Spectrum):
+        if hasattr(spectrum, 'spectrum'):
             spec = spectrum
 
         # or turn it into a Spectrum
@@ -561,7 +561,7 @@ class SED:
                     if mag is not None and not np.isnan(mag):
 
                         # Make a dict for the new point
-                        new_photometry = {'band': band, 'eff': bp.wave_eff, 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc}
+                        new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'ref': 'sedkit'}
 
                         # Add it to the table
                         self._synthetic_photometry.add_row(new_photometry)
@@ -676,6 +676,40 @@ class SED:
 
         # Set SED as uncalculated
         self.calculated = False
+
+    def compare_model(self, modelgrid, rebin=True, **kwargs):
+        """
+        Fit a specific model to the SED by specifying the parameters as kwargs
+
+        Parameters
+        ----------
+        modelgrid: sedkit.modelgrid.ModelGrid
+            The model grid to fit
+        """
+        if not self.calculated:
+            self.make_sed()
+
+        # Get the model to fit
+        model = modelgrid.get_spectrum(**kwargs)
+
+        if self.app_spec_SED is not None:
+
+            if rebin:
+                model = model.resamp(self.app_spec_SED.spectrum[0])
+
+            # Fit the model to the SED
+            gstat, yn, xn = list(self.app_spec_SED.fit(model, wave_units='AA'))
+            wave = model.wave * xn
+            flux = model.flux * yn
+
+            # Plot the SED with the model on top
+            fig = self.plot(output=True)
+            fig.line(wave, flux)
+
+            show(fig)
+
+        else:
+            print("Sorry, could not fit model to SED")
 
     @property
     def dec(self):
@@ -974,12 +1008,9 @@ class SED:
         """
         Search for 2MASS data
         """
-        self.find_photometry('2MASS', 'II/246/out',
-                             ['Jmag', 'Hmag', 'Kmag'],
-                             ['2MASS.J', '2MASS.H', '2MASS.Ks'],
-                             **kwargs)
+        self.find_photometry('2MASS', **kwargs)
 
-    def find_Gaia(self, search_radius=None, catalog='I/345/gaia2', include=['parallax', 'photometry'], idx=0):
+    def find_Gaia(self, search_radius=None, include=['parallax', 'photometry'], idx=0, **kwargs):
         """
         Search for Gaia data
 
@@ -992,132 +1023,84 @@ class SED:
         idx: int
             The index of the results to use
         """
-        # Make sure there are coordinates
-        if not isinstance(self.sky_coords, SkyCoord):
-            raise TypeError("Can't find Gaia data without coordinates!")
+        # Get the Vizier catalog
+        results = qu.query_vizier('Gaia', target=self.name, sky_coords=self.sky_coords, search_radius=search_radius or self.search_radius, verbose=self.verbose, idx=idx, **kwargs)
 
-        # Query the catalog
-        # See if the designation was fetched by Simbad
-        des = [name for name in self.all_names if name.startswith(name)]
+        # Parse the record
+        if len(results) == 2:
 
-        # If search_radius is explicitly set, use that
-        if search_radius is not None:
-            viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius, catalog=[catalog])
-
-        # ...or get photometry using designation...
-        elif len(des) > 0:
-            viz_cat = Vizier.query_object(des[0], catalog=[catalog])
-
-        # ...or from the coordinates
-        else:
-            viz_cat = Vizier.query_region(self.sky_coords, radius=self.search_radius, catalog=[catalog])
-
-        # Print info
-        if self.verbose:
-            n_rec = len(viz_cat)
-            print("{} record{} found in Gaia DR2.".format(n_rec, '' if n_rec == 1 else 's'))
-
-        # Parse the records
-        if len(viz_cat) > 0:
-
-            # Grab the first record
             if 'parallax' in include:
-                parallax = list(viz_cat[0][idx][['Plx', 'e_Plx']])
-                self.parallax = parallax[0] * q.mas, parallax[1] * q.mas
+                self.parallax = results[0][1] * q.mas, results[0][2] * q.mas
+                self.refs['parallax'] = results[0][3]
 
-            # Get Gband while we're here
             if 'photometry' in include:
-                try:
-                    mag, unc = list(viz_cat[0][0][['Gmag', 'e_Gmag']])
-                    self.add_photometry('Gaia.G', mag, unc)
-                except:
-                    pass
+                band, mag, unc, ref = results[1]
+                self.add_photometry(band, mag, unc, ref=ref)
 
     def find_PanSTARRS(self, **kwargs):
         """
         Search for PanSTARRS data
         """
-        self.find_photometry('PanSTARRS', 'II/349/ps1',
-                             ['gmag', 'rmag', 'imag', 'zmag', 'ymag'],
-                             ['PS1.g', 'PS1.r', 'PS1.i', 'PS1.z', 'PS1.y'],
-                             **kwargs)
+        self.find_photometry('PanSTARRS', **kwargs)
 
-    def find_photometry(self, name, catalog, band_names, target_names=None, search_radius=None, idx=0, **kwargs):
+    def find_photometry(self, catalog, col_names=None, target_names=None, search_radius=None, idx=0, **kwargs):
         """
         Search Vizier for photometry in the given catalog
 
         Parameters
         ----------
-        name: str
-            The informal name of the catalog, e.g. '2MASS'
         catalog: str
             The Vizier catalog address, e.g. 'II/246/out'
-        band_names: sequence
+        col_names: sequence
             The list of column names to treat as bandpasses
         target_names: sequence (optional)
-            The list of renamed columns, must be the same length as band_names
+            The list of renamed columns, must be the same length as col_names
         search_radius: astropy.units.quantity.Quantity
             The search radius for the Vizier query
         idx: int
             The index of the record to use if multiple Vizier results
         """
-        # See if the designation was fetched by Simbad
-        des = [name for name in self.all_names if name.startswith(name)]
-
-        # If search_radius is explicitly set, use that
-        if search_radius is not None and isinstance(self.sky_coords, SkyCoord):
-            viz_cat = Vizier.query_region(self.sky_coords, radius=search_radius, catalog=[catalog])
-
-        # ...or get photometry using designation...
-        elif len(des) > 0:
-            viz_cat = Vizier.query_object(des[0], catalog=[catalog])
-
-        # ...or from the coordinates...
-        elif isinstance(self.sky_coords, SkyCoord):
-            viz_cat = Vizier.query_region(self.sky_coords, radius=self.search_radius, catalog=[catalog])
-
-        # ...or abort
-        else:
-            viz_cat = None
-
-        if target_names is None:
-            target_names = band_names
-
-        # Print info
-        if self.verbose:
-            n_rec = 0 if viz_cat is None else len(viz_cat)
-            print("{} record{} found in {}.".format(n_rec, '' if n_rec == 1 else 's', name))
+        # Get the Vizier catalog
+        results = qu.query_vizier(catalog, col_names=col_names, target_names=target_names, target=self.name, sky_coords=self.sky_coords, search_radius=search_radius or self.search_radius, verbose=self.verbose, idx=idx, **kwargs)
 
         # Parse the record
-        if viz_cat is not None and len(viz_cat) > 0:
-            if len(viz_cat) > 1:
-                print('{} {} records found.'.format(len(viz_cat), name))
+        for result in results:
 
-            # Grab the record
-            rec = viz_cat[0][idx]
-            ref = viz_cat[0].meta['name']
+            # Get result
+            band, mag, unc, ref = result
 
-            # Pull out the photometry
-            for band, viz in zip(target_names, band_names):
-                try:
-                    mag, unc = list(rec[[viz, 'e_' + viz]])
-                    mag, unc = round(float(mag), 3), round(float(unc), 3)
+            # Ensure Vegamag
+            system = 'AB' if 'SDSS' in band else 'Vega'
 
-                    # Convert to Vegamag
-                    if name == 'SDSS':
-                        mag, unc = u.convert_mag(band, mag, unc, old='AB', new='Vega')
-                    self.add_photometry(band, mag, unc, ref=ref)
-                except IOError:
-                    pass
+            self.add_photometry(band, mag, unc, ref=ref, system=system)
 
     def find_SDSS(self, **kwargs):
         """
         Search for SDSS data
         """
-        self.find_photometry('SDSS', 'V/147',
-                             ['umag', 'gmag', 'rmag', 'imag', 'zmag'],
-                             ['SDSS.u', 'SDSS.g', 'SDSS.r', 'SDSS.i', 'SDSS.z'],
-                             **kwargs)
+        self.find_photometry('SDSS', **kwargs)
+
+    def find_SDSS_spectra(self, surveys=['optical', 'apogee'], search_radius=None, **kwargs):
+        """
+        Search for SDSS spectra
+        """
+        if 'optical' in surveys:
+
+            # Query spectra
+            data, ref, header = qu.query_SDSS_optical_spectra(self.sky_coords, verbose=self.verbose, radius=search_radius or self.search_radius, **kwargs)
+
+            # Add the spectrum to the SED
+            if data is not None:
+                self.add_spectrum(data, ref=ref, header=header)
+
+        if 'apogee' in surveys:
+
+            # Query spectra
+            data, ref, header = qu.query_SDSS_apogee_spectra(self.sky_coords, verbose=self.verbose, search_radius=search_radius or self.search_radius, **kwargs)
+
+            # Add the spectrum to the SED
+            if data is not None:
+                self.add_spectrum(data, ref=ref, header=header)
 
     def find_Simbad(self, search_radius=None, idx=0):
         """
@@ -1198,10 +1181,7 @@ class SED:
         """
         Search for WISE data
         """
-        self.find_photometry('WISE', 'II/328/allwise',
-                             ['W1mag', 'W2mag', 'W3mag', 'W4mag'],
-                             ['WISE.W1', 'WISE.W2', 'WISE.W3', 'WISE.W4'],
-                             **kwargs)
+        self.find_photometry('WISE', **kwargs)
 
     def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=4000, epsilon=0.0001, acc=0.05, trim=[], norm_to=[]):
         """
@@ -1268,44 +1248,7 @@ class SED:
             if self.verbose:
                 print('\nNo blackbody fit.')
 
-    def compare_model(self, modelgrid, rebin=True, **kwargs):
-        """
-        Fit a specific model to the SED by specifying the parameters as kwargs
-
-        Parameters
-        ----------
-        modelgrid: sedkit.modelgrid.ModelGrid
-            The model grid to fit
-        """
-        if not self.calculated:
-            self.make_sed()
-
-        # Get the model to fit
-        model = modelgrid.get_spectrum(**kwargs)
-
-        if self.app_spec_SED is not None:
-
-            if rebin:
-                model = model.resamp(self.app_spec_SED.spectrum[0])
-
-            # Fit the model to the SED
-            gstat, yn, xn = list(self.app_spec_SED.fit(model, wave_units='AA'))
-            wave = model.wave * xn
-            flux = model.flux * yn
-
-            # Plot the SED with the model on top
-            fig = self.plot(output=True)
-            fig.line(wave, flux)
-
-            show(fig)
-
-            if self.verbose:
-                print('Best fit {}: {}'.format(name, self.best_fit[name]['label']))
-
-        else:
-            print("Sorry, could not fit SED to model grid", modelgrid)
-
-    def fit_modelgrid(self, modelgrid, name=None, **kwargs):
+    def fit_modelgrid(self, modelgrid, name=None, mcmc=False, **kwargs):
         """
         Fit a model grid to the composite spectra
 
@@ -1315,17 +1258,22 @@ class SED:
             The model grid to fit
         name: str
             A name for the fit
+        mcmc: bool
+            Use MCMC fitting routine
         """
         if not self.calculated:
             self.make_sed()
 
         # Determine a name
         if name is None:
-            name = modelgrid.name
+            name = modelgrid.name + (' (MCMC)' if mcmc else '')
 
         if self.app_spec_SED is not None:
 
-            self.app_spec_SED.best_fit_model(modelgrid, name=name, **kwargs)
+            if mcmc:
+                self.app_spec_SED.mcmc_fit(modelgrid, name=name, **kwargs)
+            else:
+                self.app_spec_SED.best_fit_model(modelgrid, name=name, **kwargs)
             self.best_fit[name] = self.app_spec_SED.best_fit[name]
             setattr(self, name, self.best_fit[name]['label'])
 
@@ -2177,7 +2125,7 @@ class SED:
 
         if best_fit and len(self.best_fit) > 0:
             for bf, mod_fit in self.best_fit.items():
-                self.fig.line(mod_fit.spectrum[0]*(1E-4 if mod_fit.spectrum[0].min() > 100 else 1), mod_fit.spectrum[1] * const, alpha=0.3, color=color, legend_label=mod_fit.label, line_width=2)
+                self.fig.line(mod_fit['spectrum'][0]*(1E-4 if mod_fit['spectrum'][0].min() > 100 else 1), mod_fit['spectrum'][1] * const, alpha=0.3, color=color, legend_label=mod_fit['label'], line_width=2)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"

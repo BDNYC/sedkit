@@ -1,31 +1,82 @@
-#! /usr/bin/env python
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
+from setuptools import setup, find_packages, Extension, Command
+
+# allows you to build sphinx docs from the package
+# main directory with "python setup.py build_sphinx"
 
 try:
-    from setuptools import setup, find_packages
-    setup
-except ImportError:
-    from distutils.core import setup
-    setup
+    from sphinx.cmd.build import build_main
+    from sphinx.setup_command import BuildDoc
 
+    class BuildSphinx(BuildDoc):
+        """Build Sphinx documentation after compiling C source files"""
+
+        description = 'Build Sphinx documentation'
+
+        def initialize_options(self):
+            BuildDoc.initialize_options(self)
+
+        def finalize_options(self):
+            BuildDoc.finalize_options(self)
+
+        def run(self):
+            build_cmd = self.reinitialize_command('build_ext')
+            build_cmd.inplace = 1
+            self.run_command('build_ext')
+            build_main(['-b', 'html', './docs', './docs/_build/html'])
+
+except ImportError:
+    class BuildSphinx(Command):
+        user_options = []
+
+        def initialize_options(self):
+            pass
+
+        def finalize_options(self):
+            pass
+
+        def run(self):
+            print('!\n! Sphinx is not installed!\n!', file=sys.stderr)
+            exit(1)
+
+DOCS_REQUIRE = [
+    'nbsphinx',
+    'sphinx',
+    'sphinx-automodapi',
+    'sphinx-rtd-theme',
+    'stsci-rtd-theme',
+    'extension-helpers',
+]
+TESTS_REQUIRE = [
+    'pytest',
+]
 
 setup(
     name='sedkit',
-    version='1.0.8',
     description='Spectral energy distribution construction and analysis tools',
-    url='https://github.com/hover2pi/sedkit',
     author='Joe Filippazzo',
     author_email='jfilippazzo@stsci.edu',
     license='MIT',
+    url='https://github.com/hover2pi/sedkit',
+    keywords=['astronomy'],
     classifiers=[
-        'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 3.6',
+        'License :: OSI Approved :: BSD License',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python',
+        'Topic :: Scientific/Engineering :: Astronomy',
+        'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    keywords='astrophysics',
-    packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
-    install_requires=['numpy','astropy','bokeh','pysynphot','scipy','astroquery','dustmaps', 'pandas', 'svo_filters', 'healpy'],
+    packages=find_packages(exclude=["examples"]),
+    use_scm_version=True,
+    setup_requires=['setuptools_scm'],
+    install_requires=['numpy', 'astropy', 'bokeh', 'emcee', 'pysynphot', 'scipy', 'astroquery', 'dustmaps', 'pandas','svo_filters', 'healpy'],
     include_package_data=True,
-
-)
+    extras_require={
+        'docs': DOCS_REQUIRE,
+        'test': TESTS_REQUIRE,
+    },
+    tests_require=TESTS_REQUIRE,
+    cmdclass={
+        'build_sphinx': BuildSphinx
+    },)
