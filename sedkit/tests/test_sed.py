@@ -225,8 +225,8 @@ class TestSED(unittest.TestCase):
 
         self.assertNotEqual(len(s.photometry), 0)
 
-    def test_fit_spectrum(self):
-        """Test that the SED can be fit by a model grid"""
+    def test_fit_spectral_type(self):
+        """Test that the SED can be fit by a spectral type atlas"""
         # Grab the SPL
         spl = mg.SpexPrismLibrary()
 
@@ -237,6 +237,22 @@ class TestSED(unittest.TestCase):
 
         # Fit with SPL
         s.fit_spectral_type()
+
+    def test_fit_modelgrid(self):
+        """Test that the SED can be fit by a model grid"""
+        # Grab BTSettl
+        bt = mg.BTSettl()
+
+        # Add known spectrum
+        s = copy.copy(self.sed)
+        spec = bt.get_spectrum(snr=100)
+        s.add_spectrum(spec)
+
+        # Find best grid point
+        s.fit_modelgrid(bt)
+
+        # Fit with mcmc
+        s.fit_modelgrid(bt, mcmc=True)
 
     def test_fit_blackbody(self):
         """Test that the SED can be fit by a blackbody"""

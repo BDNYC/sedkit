@@ -178,12 +178,13 @@ class SpecSampler(object):
         self.cropchain = sampler.chain.reshape((-1, self.ndim))
         self.get_quantiles()
 
-    def plot_triangle(self, extents=None):
-        """
-        Calls triangle module to create a corner-plot of the results
-        """
-        self.corner_fig = triangle.corner(self.cropchain, labels=self.all_params, quantiles=[.16, .5, .84], verbose=False, extents=extents)  # , truths=np.ones(3))
-        # plt.suptitle(self.plot_title)
+    # TODO: Convert triangle plot to bokeh
+    # def plot_triangle(self, extents=None):
+    #     """
+    #     Calls triangle module to create a corner-plot of the results
+    #     """
+    #     self.corner_fig = triangle.corner(self.cropchain, labels=self.all_params, quantiles=[.16, .5, .84], verbose=False, extents=extents)  # , truths=np.ones(3))
+    #     plt.suptitle(self.plot_title)
 
     def plot_chains(self):
         """

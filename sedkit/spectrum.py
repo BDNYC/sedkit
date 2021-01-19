@@ -250,7 +250,7 @@ class Spectrum:
 
         return new_spec
 
-    def mcmc_fit(self, model_grid, params=['teff', 'logg'], walkers=1000, steps=20, name=None):
+    def mcmc_fit(self, model_grid, params=['teff'], walkers=1000, steps=20, name=None):
         """
         Produces a marginalized distribution plot of best fit parameters from the specified model_grid
 
@@ -284,9 +284,17 @@ class Spectrum:
         for param, quant in zip(sampler.all_params, params_with_unc):
             best_fit_params['{}_unc'.format(param)] = np.mean([quant[0], quant[2]])
 
+        # Add missing parameters
+        for param in model_grid.parameters:
+            if param not in best_fit_params:
+                best_fit_params[param] = getattr(model_grid, '{}_vals'.format(param))[0]
+
+        # Construct dictionary to save
         name = name or '{} fit'.format(model_grid.name)
-        best_fit_params['label'] = '/'.join([str(best_fit_params[param].round(2)) for param in sampler.params])
+        spec, label = model_grid.interp(**{param: best_fit_params[param] for param in model_grid.parameters})
+        best_fit_params['label'] = label
         best_fit_params['filepath'] = None
+        best_fit_params['spectrum'] = np.array(spec)
         self.best_fit[name] = best_fit_params
 
     def best_fit_model(self, modelgrid, report=None, name=None):

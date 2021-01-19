@@ -15,8 +15,6 @@ from astroquery.vizier import Vizier
 from astroquery.sdss import SDSS
 import numpy as np
 
-from . import utilities as u
-
 
 # A list of photometry catalogs from Vizier
 PHOT_CATALOGS = {'2MASS': {'catalog': 'II/246/out', 'cols': ['Jmag', 'Hmag', 'Kmag'], 'names': ['2MASS.J', '2MASS.H', '2MASS.Ks']},
@@ -28,7 +26,7 @@ PHOT_CATALOGS = {'2MASS': {'catalog': 'II/246/out', 'cols': ['Jmag', 'Hmag', 'Km
 Vizier.columns = ["**", "+_r"]
 
 
-def query_SDSS_optical_spectra(coords, idx=0, verbose=True):
+def query_SDSS_optical_spectra(coords, idx=0, verbose=True, **kwargs):
     """
     Query for SDSS spectra
 
@@ -38,6 +36,8 @@ def query_SDSS_optical_spectra(coords, idx=0, verbose=True):
         The coordinates to query
     idx: int
         The index of the target to use from the results table
+    verbose: bool
+        Print messages
 
     Returns
     -------
@@ -46,12 +46,11 @@ def query_SDSS_optical_spectra(coords, idx=0, verbose=True):
     """
 
     # Fetch results
-    results = SDSS.query_region(coords, spectro=True)
+    results = SDSS.query_region(coords, spectro=True, **kwargs)
+    n_rec = 0 if results is None else len(results)
 
     # Print info
     if verbose:
-        if results is None:
-            n_rec = 0 if results is None else len(results)
         print("{} record{} found in SDSS optical data.".format(n_rec, '' if n_rec == 1 else 's'))
 
     if n_rec == 0:
@@ -97,7 +96,7 @@ def query_SDSS_apogee_spectra(coords, verbose=True, **kwargs):
 
     # Query vizier for spectra
     catalog = 'III/284/allstars'
-    results = query_vizier(catalog, col_names=['Ascap', 'File', 'Tel', 'Field'], sky_coords=coords, wildcards=[], cat_name='APOGEE', verbose=verbose)
+    results = query_vizier(catalog, col_names=['Ascap', 'File', 'Tel', 'Field'], sky_coords=coords, wildcards=[], cat_name='APOGEE', verbose=verbose, **kwargs)
 
     if len(results) == 0:
 
