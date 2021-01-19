@@ -78,7 +78,7 @@ class TestSpectrum(unittest.TestCase):
 
         # Test MCMC fit
         bt = mg.BTSettl()
-        spec = bt.get_spectrum(teff=2456, logg=5.5, meta=0, alpha=0)
+        spec = bt.get_spectrum(teff=2456, logg=5.5, meta=0, alpha=0, snr=100)
         spec.mcmc_fit(bt, name='Test')
 
     def test_addition(self):

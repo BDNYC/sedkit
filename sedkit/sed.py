@@ -677,6 +677,40 @@ class SED:
         # Set SED as uncalculated
         self.calculated = False
 
+    def compare_model(self, modelgrid, rebin=True, **kwargs):
+        """
+        Fit a specific model to the SED by specifying the parameters as kwargs
+
+        Parameters
+        ----------
+        modelgrid: sedkit.modelgrid.ModelGrid
+            The model grid to fit
+        """
+        if not self.calculated:
+            self.make_sed()
+
+        # Get the model to fit
+        model = modelgrid.get_spectrum(**kwargs)
+
+        if self.app_spec_SED is not None:
+
+            if rebin:
+                model = model.resamp(self.app_spec_SED.spectrum[0])
+
+            # Fit the model to the SED
+            gstat, yn, xn = list(self.app_spec_SED.fit(model, wave_units='AA'))
+            wave = model.wave * xn
+            flux = model.flux * yn
+
+            # Plot the SED with the model on top
+            fig = self.plot(output=True)
+            fig.line(wave, flux)
+
+            show(fig)
+
+        else:
+            print("Sorry, could not fit model to SED")
+
     @property
     def dec(self):
         """
@@ -1046,14 +1080,14 @@ class SED:
         """
         self.find_photometry('SDSS', **kwargs)
 
-    def find_SDSS_spectra(self, surveys=['optical', 'apogee'], **kwargs):
+    def find_SDSS_spectra(self, surveys=['optical', 'apogee'], search_radius=None, **kwargs):
         """
         Search for SDSS spectra
         """
         if 'optical' in surveys:
 
             # Query spectra
-            data, ref, header = qu.query_SDSS_optical_spectra(self.sky_coords, verbose=self.verbose, **kwargs)
+            data, ref, header = qu.query_SDSS_optical_spectra(self.sky_coords, verbose=self.verbose, radius=search_radius or self.search_radius, **kwargs)
 
             # Add the spectrum to the SED
             if data is not None:
@@ -1062,7 +1096,7 @@ class SED:
         if 'apogee' in surveys:
 
             # Query spectra
-            data, ref, header = qu.query_SDSS_apogee_spectra(self.sky_coords, verbose=self.verbose, **kwargs)
+            data, ref, header = qu.query_SDSS_apogee_spectra(self.sky_coords, verbose=self.verbose, search_radius=search_radius or self.search_radius, **kwargs)
 
             # Add the spectrum to the SED
             if data is not None:
@@ -1213,43 +1247,6 @@ class SED:
         except IOError:
             if self.verbose:
                 print('\nNo blackbody fit.')
-
-    def compare_model(self, modelgrid, rebin=True, **kwargs):
-        """
-        Fit a specific model to the SED by specifying the parameters as kwargs
-
-        Parameters
-        ----------
-        modelgrid: sedkit.modelgrid.ModelGrid
-            The model grid to fit
-        """
-        if not self.calculated:
-            self.make_sed()
-
-        # Get the model to fit
-        model = modelgrid.get_spectrum(**kwargs)
-
-        if self.app_spec_SED is not None:
-
-            if rebin:
-                model = model.resamp(self.app_spec_SED.spectrum[0])
-
-            # Fit the model to the SED
-            gstat, yn, xn = list(self.app_spec_SED.fit(model, wave_units='AA'))
-            wave = model.wave * xn
-            flux = model.flux * yn
-
-            # Plot the SED with the model on top
-            fig = self.plot(output=True)
-            fig.line(wave, flux)
-
-            show(fig)
-
-            if self.verbose:
-                print('Best fit {}: {}'.format(name, self.best_fit[name]['label']))
-
-        else:
-            print("Sorry, could not fit SED to model grid", modelgrid)
 
     def fit_modelgrid(self, modelgrid, name=None, mcmc=False, **kwargs):
         """
