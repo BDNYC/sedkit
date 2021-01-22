@@ -250,7 +250,7 @@ class Spectrum:
 
         return new_spec
 
-    def mcmc_fit(self, model_grid, params=['teff'], walkers=1000, steps=20, name=None, plot=False):
+    def mcmc_fit(self, model_grid, params=['teff'], walkers=5, steps=20, name=None, report=None):
         """
         Produces a marginalized distribution plot of best fit parameters from the specified model_grid
 
@@ -274,20 +274,29 @@ class Spectrum:
             if param not in model_grid.parameters:
                 raise ValueError("'{}' not a parameter in this model grid, {}".format(param, model_grid.parameters))
 
+        # A name for the fit
+        name = name or model_grid.name
+
+        # Ensure modelgrid and spectruym are the same wave_units
+        model_grid.wave_units = self.wave_units
+
         # Set up the sampler object
-        sampler = mc.SpecSampler(self, model_grid, params)
+        self.sampler = mc.SpecSampler(self, model_grid, params)
 
         # Run the mcmc method
-        sampler.mcmc_go(nwalk_mult=walkers, nstep_mult=steps)
+        self.sampler.mcmc_go(nwalk_mult=walkers, nstep_mult=steps)
+
+        # Save the chi-sq best fit
+        self.best_fit[name + ' (chi2)'] = self.sampler.spectrum.best_fit['best']
 
         # Make plots
-        if plot:
-            sampler.plot_chains()
+        if report is not None:
+            self.sampler.plot_chains()
 
         # Generate best fit spectrum the 50th quantile value
-        best_fit_params = {k: v for k, v in zip(sampler.all_params, sampler.all_quantiles.T[1])}
-        params_with_unc = sampler.get_error_and_unc()
-        for param, quant in zip(sampler.all_params, params_with_unc):
+        best_fit_params = {k: v for k, v in zip(self.sampler.all_params, self.sampler.all_quantiles.T[1])}
+        params_with_unc = self.sampler.get_error_and_unc()
+        for param, quant in zip(self.sampler.all_params, params_with_unc):
             best_fit_params['{}_unc'.format(param)] = np.mean([quant[0], quant[2]])
 
         # Add missing parameters
@@ -295,15 +304,17 @@ class Spectrum:
             if param not in best_fit_params:
                 best_fit_params[param] = getattr(model_grid, '{}_vals'.format(param))[0]
 
-        # Construct dictionary to save
-        name = name or '{} fit'.format(model_grid.name)
-        spec, label = model_grid.interp(**{param: best_fit_params[param] for param in model_grid.parameters})
-        best_fit_params['label'] = label
+        # Get best fit model and scale to spectrum
+        model = model_grid.get_spectrum(**{param: best_fit_params[param] for param in model_grid.parameters})
+        model = model.norm_to_spec(self)
+
+        # Make dict for best fit model
+        best_fit_params['label'] = model.name
         best_fit_params['filepath'] = None
-        best_fit_params['spectrum'] = np.array(spec)
+        best_fit_params['spectrum'] = np.array(model.spectrum)
         self.best_fit[name] = best_fit_params
 
-    def best_fit_model(self, modelgrid, report=None, name=None):
+    def best_fit_model(self, modelgrid, report=None, name=None, **kwargs):
         """Perform simple fitting of the spectrum to all models in the given
         modelgrid and store the best fit
 

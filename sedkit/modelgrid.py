@@ -178,7 +178,9 @@ class ModelGrid:
         self.name = name
         self.parameters = parameters
         self.wave_units = wave_units
+        self.native_wave_units = wave_units
         self.flux_units = flux_units
+        self.native_flux_units = flux_units
         self.resolution = resolution
         self.trim = trim
         self.verbose = verbose
@@ -344,6 +346,13 @@ class ModelGrid:
             if interp:
                 if self.verbose:
                     print("Interpolating model grid to point {}".format(kwargs))
+
+                # Guess missing parameter values
+                for param in self.parameters:
+                    if param not in kwargs:
+                        vals = getattr(self, '{}_vals'.format(param))
+                        kwargs[param] = vals[len(vals) // 2]
+
                 spec, name = self.interp(**kwargs)
 
             else:
@@ -351,7 +360,9 @@ class ModelGrid:
                 return None
 
         else:
-            spec = rows.iloc[0].spectrum
+            spec = copy(rows.iloc[0].spectrum)
+            spec[0] = (spec[0] * self.native_wave_units).to(self.wave_units).value
+            spec[1] = (spec[1] * self.native_flux_units).to(self.flux_units).value
             name = rows.iloc[0].label
 
         # Trim it
@@ -359,7 +370,7 @@ class ModelGrid:
         if trim is not None:
 
             # Get indexes to keep
-            idx, = np.where((spec[0] * self.wave_units > trim[0]) & (spec[0] * self.wave_units < trim[1]))
+            idx, = np.where((spec[0] * self.native_wave_units > trim[0]) & (spec[0] * self.native_wave_units < trim[1]))
 
             if len(idx) > 0:
                 spec = [i[idx] for i in spec]
@@ -427,15 +438,9 @@ class ModelGrid:
             param_lims.append((pmin, pmax))
             param_dims.append(dim)
 
-        # Get subsample of full modelgrid
-        sub = self.index.copy()
-        valid_mn = np.prod(np.array([np.less_equal(min(plim), list(sub[param])) for plim, param in zip(param_lims, self.parameters)]), axis=0)
-        valid_mx = np.prod(np.array([np.greater_equal(max(plim), list(sub[param])) for plim, param in zip(param_lims, self.parameters)]), axis=0)
-        valid, = list(np.where(valid_mn * valid_mx))
-        sub = sub.iloc[valid]
-
         # Get length of wave array
-        wavelength = sub.iloc[0].spectrum[0]
+        start_vals = {param: getattr(self, '{}_vals'.format(param))[0] for param in self.parameters}
+        wavelength = self.get_spectrum(**start_vals, interp=False, spec_obj=False)[0]
 
         # Get the flux array by iterating through rows
         flux_array = np.empty(tuple(param_dims + [len(wavelength)]))
@@ -512,6 +517,14 @@ class ModelGrid:
             f.close()
 
             print("ModelGrid '{}' saved to {}".format(self.name, file))
+
+    @property
+    def wave_limits(self):
+        """The wavelength limits of the models"""
+        mn = np.min([np.min(spec[0]) for spec in self.index.spectrum])
+        mx = np.max([np.max(spec[0]) for spec in self.index.spectrum])
+
+        return (mn * self.native_wave_units).to(self.wave_units), (mx * self.native_wave_units).to(self.wave_units)
 
 
 class BTSettl(ModelGrid):

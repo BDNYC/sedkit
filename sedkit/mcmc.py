@@ -3,6 +3,8 @@ Module to perform MCMC fitting of a model grid to a spectrum
 
 Code is largely borrowed from https://github.com/BDNYC/synth_fit
 """
+from copy import copy
+
 import astropy.units as q
 from bokeh.plotting import figure, show
 from bokeh.layouts import gridplot
@@ -51,17 +53,22 @@ def log_probability(model_params, model_grid, spectrum):
         if model_p[i] > mx or model_p[i] < mn:
             return -np.inf
 
-    # Get the model
-    model = model_grid.get_spectrum(**pdict)
+    # Get the model and interpolate to the spectrum
+    model_grid.verbose = False
+    try:
+        model = model_grid.get_spectrum(**pdict, spec_obj=False)
+        model_flux = np.interp(spectrum.wave, model[0], model[1])
 
-    # mod_flux = model.flux * normalization
-    s = np.float64(np.exp(lns)) * spectrum.flux_unit
-    unc_sq = (spectrum.unc ** 2 + s ** 2) * normalization ** 2
-    flux_pts = (spectrum.flux - model.flux * normalization) ** 2 / unc_sq
-    width_term = np.log(2 * np.pi * unc_sq.value)
-    lnprob = -0.5 * (np.sum(flux_pts + width_term))
+        s = np.float64(np.exp(lns))
+        unc_sq = (spectrum.unc ** 2 + s ** 2) * normalization ** 2
+        flux_pts = (spectrum.flux - model_flux * normalization) ** 2 / unc_sq
+        width_term = np.log(2 * np.pi * unc_sq)
+        lnprob = -0.5 * (np.sum(flux_pts + width_term))
 
-    return lnprob
+        return lnprob
+
+    except ValueError:
+        return -np.inf
 
 
 class SpecSampler(object):
@@ -154,13 +161,13 @@ class SpecSampler(object):
         sampler = emcee.EnsembleSampler(nwalkers, self.ndim, log_probability, args=(self.model_grid, self.spectrum))
 
         # Burn in the walkers
-        pos, prob, state = sampler.run_mcmc(p0, nsteps / 10)
+        pos, prob, state = sampler.run_mcmc(p0, nsteps / 10, progress=True)
 
         # Reset the walkers, so the burn-in steps aren't included in analysis
         sampler.reset()
 
         # Run MCMC with the walkers starting at the end of the burn-in
-        pos, prob, state = sampler.run_mcmc(pos, nsteps)
+        pos, prob, state = sampler.run_mcmc(pos, nsteps, progress=True)
 
         # Chains contains the positions for each parameter, for each walker
         self.chain = sampler.chain

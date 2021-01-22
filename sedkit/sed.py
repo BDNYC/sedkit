@@ -9,8 +9,11 @@ and calculate fundamental and atmospheric parameters
 Author: Joe Filippazzo, jfilippazzo@stsci.edu
 """
 
+from copy import copy
 import os
 import shutil
+import time
+import warnings
 
 import astropy.table as at
 import astropy.units as q
@@ -21,6 +24,7 @@ from astropy.modeling import fitting
 from astropy.coordinates import Angle, SkyCoord
 from astroquery.vizier import Vizier
 from astroquery.simbad import Simbad
+from astropy.utils.exceptions import AstropyWarning
 from bokeh.io import export_png
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
@@ -39,11 +43,13 @@ Vizier.columns = ["**", "+_r"]
 Simbad.add_votable_fields('parallax', 'sptype', 'diameter', 'ids')
 SptRadius = rel.SpectralTypeRadius()
 
+warnings.simplefilter('ignore', category=AstropyWarning)
+
 
 class SED:
     """
     A class to construct spectral energy distributions and calculate
-    fundamental paramaters of stars
+    fundamental parameters of stars
 
     Attributes
     ----------
@@ -101,6 +107,8 @@ class SED:
         The target radius
     sources: astropy.table.QTable
         The table of sources (with only one row of cource)
+    wait: float, int
+        The number of seconds to sleep after a query
     spectra: astropy.table.QTable
         The table of spectra
     spectral_type: float
@@ -131,6 +139,7 @@ class SED:
         """
         # Print stuff
         self.verbose = verbose
+        self.wait = 1
 
         # Attributes with setters
         self._name = None
@@ -157,6 +166,7 @@ class SED:
         # Book keeping
         self.calculated = False
         self.isochrone_radius = False
+        self.params = ['name', 'ra', 'dec', 'age', 'membership', 'distance', 'parallax', 'SpT', 'spectral_type', 'fbol', 'mbol', 'Lbol', 'Lbol_sun', 'Mbol', 'Teff', 'Teff_evo', 'Teff_bb', 'logg', 'mass', 'radius']
 
         # Set the default wavelength and flux units
         self._wave_units = q.um
@@ -1037,6 +1047,9 @@ class SED:
                 band, mag, unc, ref = results[1]
                 self.add_photometry(band, mag, unc, ref=ref)
 
+        # Pause to prevent ConnectionError with astroquery
+        time.sleep(self.wait)
+
     def find_PanSTARRS(self, **kwargs):
         """
         Search for PanSTARRS data
@@ -1074,6 +1087,9 @@ class SED:
 
             self.add_photometry(band, mag, unc, ref=ref, system=system)
 
+        # Pause to prevent ConnectionError with astroquery
+        time.sleep(self.wait)
+
     def find_SDSS(self, **kwargs):
         """
         Search for SDSS data
@@ -1093,6 +1109,9 @@ class SED:
             if data is not None:
                 self.add_spectrum(data, ref=ref, header=header)
 
+            # Pause to prevent ConnectionError with astroquery
+            time.sleep(self.wait)
+
         if 'apogee' in surveys:
 
             # Query spectra
@@ -1101,6 +1120,9 @@ class SED:
             # Add the spectrum to the SED
             if data is not None:
                 self.add_spectrum(data, ref=ref, header=header)
+
+            # Pause to prevent ConnectionError with astroquery
+            time.sleep(self.wait)
 
     def find_Simbad(self, search_radius=None, idx=0):
         """
@@ -1176,6 +1198,9 @@ class SED:
                 n_rec = len(viz_cat)
                 print("{} record{} for {} found in Simbad.".format(n_rec, '' if n_rec == 1 else 's', crit))
                 print("Setting name to {} and sky_coords to {}".format(self.name, self.sky_coords))
+
+        # Pause to prevent ConnectionError with astroquery
+        time.sleep(self.wait)
 
     def find_WISE(self, **kwargs):
         """
@@ -1266,14 +1291,22 @@ class SED:
 
         # Determine a name
         if name is None:
-            name = modelgrid.name + (' (MCMC)' if mcmc else '')
+            name = modelgrid.name
 
         if self.app_spec_SED is not None:
+
+            # Determine if there is spectral coverage
+            model_min, model_max = modelgrid.wave_limits
+            spec_min, spec_max = self.app_spec_SED.wave_min, self.app_spec_SED.wave_max
+            if model_max < spec_min or model_min > spec_max:
+                print("Could not fit model grid {} to the SED. No overlapping wavelengths.".format(modelgrid.name))
 
             if mcmc:
                 self.app_spec_SED.mcmc_fit(modelgrid, name=name, **kwargs)
             else:
                 self.app_spec_SED.best_fit_model(modelgrid, name=name, **kwargs)
+
+            # Save the best fit
             self.best_fit[name] = self.app_spec_SED.best_fit[name]
             setattr(self, name, self.best_fit[name]['label'])
 
@@ -1281,7 +1314,7 @@ class SED:
                 print('Best fit {}: {}'.format(name, self.best_fit[name]['label']))
 
         else:
-            print("Sorry, could not fit SED to model grid", modelgrid)
+            print("Could not fit model grid {} to the SED. No spectrum to fit.".format(modelgrid.name))
 
     def fit_spectral_type(self):
         """
@@ -1891,8 +1924,12 @@ class SED:
         # Set the attribute
         self._name = new_name
 
-        # Check for sky coords
-        self.find_Simbad()
+        # Check for Simbad record (repeat if ConnectionError)
+        try:
+            self.find_Simbad()
+        except:
+            time.sleep(4)
+            self.find_Simbad()
 
     @property
     def parallax(self):
@@ -2265,27 +2302,8 @@ class SED:
         if not self.calculated:
             self.make_sed()
 
-        # Params to list in order
-        params = ['name',
-                  'ra',
-                  'dec',
-                  'age',
-                  'membership',
-                  'distance',
-                  'parallax',
-                  'SpT',
-                  'spectral_type',
-                  'fbol',
-                  'mbol',
-                  'Lbol',
-                  'Lbol_sun',
-                  'Mbol',
-                  'Teff',
-                  'Teff_evo',
-                  'Teff_bb',
-                  'logg',
-                  'mass',
-                  'radius']
+        # Get the params to display
+        params = copy(self.params)
 
         # Add best fits
         for name, fit in self.best_fit.items():
