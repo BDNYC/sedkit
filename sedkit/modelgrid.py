@@ -9,6 +9,7 @@ A module to generate a grid of model spectra
 import os
 import fileinput
 import glob
+import itertools
 import pickle
 from copy import copy
 from functools import partial
@@ -153,7 +154,7 @@ def load_ModelGrid(path):
 class ModelGrid:
     """A class to store a model grid"""
     def __init__(self, name, parameters, wave_units=None, flux_units=None,
-                 resolution=None, trim=None, verbose=True, **kwargs):
+                 resolution=None, trim=None, verbose=True, ref=None, **kwargs):
         """Initialize the model grid from a directory of VO table files
 
         Parameters
@@ -170,6 +171,8 @@ class ModelGrid:
             The resolution of the models
         trim: sequence
             Trim the models to a particular wavelength range
+        ref: str
+            A reference for the modelgrid
         verbose: bool
             Print info
         """
@@ -183,6 +186,7 @@ class ModelGrid:
         self.native_flux_units = flux_units
         self.resolution = resolution
         self.trim = trim
+        self.ref = ref
         self.verbose = verbose
 
         # Make all args into attributes
@@ -211,74 +215,6 @@ class ModelGrid:
 
         # Add it to the index
         self.index = self.index.append(new_rec)
-
-    def load(self, dirname, **kwargs):
-        """Load a model grid from a directory of VO table XML files
-
-        Parameters
-        ----------
-        dirname: str
-            The name of the directory
-        """
-        # Make the path
-        if not os.path.exists(dirname):
-            raise IOError(dirname, ": No such directory")
-
-        # See if there is a table of parameters
-        self.path = dirname
-        self.index_path = os.path.join(dirname, 'index.p')
-        if not os.path.isfile(self.index_path):
-            os.system("touch {}".format(self.index_path))
-
-            # Index the models
-            self.index_models(parameters=self.parameters, **kwargs)
-
-        # Load the index
-        self.index = pd.read_pickle(self.index_path)
-
-        # Store the parameter ranges
-        for param in self.parameters:
-            setattr(self, '{}_vals'.format(param), np.asarray(np.unique(self.index[param])))
-
-    def index_models(self, parameters=None, wl_min=0.3*q.um, wl_max=25*q.um):
-        """Generate model index file for faster reading
-
-        Parameters
-        ----------
-        parameters: sequence
-            The names of the parameters from the VOT files to index
-        """
-        # Get the files
-        files = glob.glob(os.path.join(self.path, '*.xml'))
-        self.n_models = len(files)
-        print("Indexing {} models for {} grid...".format(self.n_models, self.name))
-
-        # Grab the parameters and the filepath for each
-        pool = Pool(8)
-        func = partial(load_model, parameters=parameters, wl_min=wl_min.to(self.wave_units).value, wl_max=wl_max.to(self.wave_units).value)
-        all_meta = pool.map(func, files)
-        pool.close()
-        pool.join()
-
-        # Make the index table
-        self.index = pd.DataFrame(all_meta)
-        self.index.to_pickle(self.index_path)
-
-        # Update attributes
-        if parameters is None:
-            parameters = [col for col in self.index.columns if col not in ['filepath', 'spectrum', 'label']]
-        self.parameters = parameters
-
-    def filter(self, **kwargs):
-        """Retrieve all models with the specified parameters
-
-        Returns
-        -------
-        list
-            A list of the spectra as sedkit.spectrum.Spectrum objects
-        """
-        # Get the relevant table rows
-        return u.filter_table(self.index, **kwargs)
 
     @staticmethod
     def closest_value(input_value, possible_values, n_vals=1):
@@ -311,6 +247,17 @@ class ModelGrid:
         vals = sorted_diffs[:n_vals]
 
         return vals[0] if n_vals == 1 else vals
+
+    def filter(self, **kwargs):
+        """Retrieve all models with the specified parameters
+
+        Returns
+        -------
+        list
+            A list of the spectra as sedkit.spectrum.Spectrum objects
+        """
+        # Get the relevant table rows
+        return u.filter_table(self.index, **kwargs)
 
     def get_spectrum(self, closest=False, snr=None, interp=True, spec_obj=True, **kwargs):
         """Retrieve the first model with the specified parameters
@@ -394,9 +341,38 @@ class ModelGrid:
             spec = u.spectres(wave, spec[0], spec[1])
 
         if spec_obj:
-            return Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, **kwargs)
+            return Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, **kwargs)
         else:
             return spec
+
+    def index_models(self, parameters=None, wl_min=0.3*q.um, wl_max=25*q.um):
+        """Generate model index file for faster reading
+
+        Parameters
+        ----------
+        parameters: sequence
+            The names of the parameters from the VOT files to index
+        """
+        # Get the files
+        files = glob.glob(os.path.join(self.path, '*.xml'))
+        self.n_models = len(files)
+        print("Indexing {} models for {} grid...".format(self.n_models, self.name))
+
+        # Grab the parameters and the filepath for each
+        pool = Pool(8)
+        func = partial(load_model, parameters=parameters, wl_min=wl_min.to(self.wave_units).value, wl_max=wl_max.to(self.wave_units).value)
+        all_meta = pool.map(func, files)
+        pool.close()
+        pool.join()
+
+        # Make the index table
+        self.index = pd.DataFrame(all_meta)
+        self.index.to_pickle(self.index_path)
+
+        # Update attributes
+        if parameters is None:
+            parameters = [col for col in self.index.columns if col not in ['filepath', 'spectrum', 'label']]
+        self.parameters = parameters
 
     def interp(self, **kwargs):
         """
@@ -472,6 +448,34 @@ class ModelGrid:
 
         return [wavelength, new_flux], name
 
+    def load(self, dirname, **kwargs):
+        """Load a model grid from a directory of VO table XML files
+
+        Parameters
+        ----------
+        dirname: str
+            The name of the directory
+        """
+        # Make the path
+        if not os.path.exists(dirname):
+            raise IOError(dirname, ": No such directory")
+
+        # See if there is a table of parameters
+        self.path = dirname
+        self.index_path = os.path.join(dirname, 'index.p')
+        if not os.path.isfile(self.index_path):
+            os.system("touch {}".format(self.index_path))
+
+            # Index the models
+            self.index_models(parameters=self.parameters, **kwargs)
+
+        # Load the index
+        self.index = pd.read_pickle(self.index_path)
+
+        # Store the parameter ranges
+        for param in self.parameters:
+            setattr(self, '{}_vals'.format(param), np.asarray(np.unique(self.index[param])))
+
     def plot(self, fig=None, scale='log', draw=True, **kwargs):
         """Plot the models using Spectrum.plot() with the given parameters
 
@@ -494,6 +498,80 @@ class ModelGrid:
 
         # Plot or return it
         return model.plot(fig=fig, scale=scale, draw=draw, **kwargs)
+
+    def resample_grid(self, name=None, **kwargs):
+        """
+        Resample the model grid to new parameter values
+
+        Parameters
+        ----------
+        kwargs
+            A dictionary of the parameter name and list of values to resample the grid
+
+        Returns
+        -------
+        sedkit.modelgrid.ModelGrid
+        """
+        # Make an empty index
+        new_index = copy(self.index)[:0]
+
+        # If a param is missing, use the original range
+        for param in self.parameters:
+            if param not in kwargs:
+                vals = getattr(self, '{}_vals'.format(param))
+                kwargs[param] = vals
+                print("'{}' parameter missing. Assuming vals {}".format(param, vals))
+
+        # Check that the new grid points are valid
+        val_list = []
+        par_list = []
+        for param, vals in kwargs.items():
+
+            # Check for valid param name
+            if param not in self.parameters:
+                raise ValueError("{}: not a model grid parameter. Valid parameters include {}".format(param, self.parameters))
+
+            # Check for valid param range
+            mn = getattr(self, '{}_vals'.format(param)).min()
+            mx = getattr(self, '{}_vals'.format(param)).max()
+            if any([np.logical_or(i < mn, i > mx) for i in vals]):
+                raise ValueError("{} values not within existing parameter range {} - {}".format(param, mn, mx))
+
+            # Add approved values to list
+            val_list.append(vals)
+            par_list.append(param)
+
+        # Iterate over the new parameter space and add the models
+        grid_params = list(itertools.product(*val_list))
+        for vals in grid_params:
+
+            try:
+
+                # Populate the row
+                pars = {par: val for par, val in zip(par_list, vals)}
+                spec = self.get_spectrum(**pars, interp=True)
+                pars['label'] = spec.name
+                pars['spectrum'] = spec.data
+                pars['filepath'] = 'interp'
+
+                # Add line to the new dataframe
+                new_index = new_index.append(pars, ignore_index=True)
+
+            except ValueError:
+                print("Could not interpolate grid point {}".format(pars))
+
+        # Make the new ModelGrid
+        new_grid = copy(self)
+        new_grid.index = new_index
+        new_grid.name = name or self.name
+        new_grid.native_wave_units = self.wave_units
+        new_grid.native_flux_units = self.flux_units
+
+        # Store the new parameter values
+        for param, vals in kwargs.items():
+            setattr(new_grid, '{}_vals'.format(param), np.asarray(vals))
+
+        return new_grid
 
     def save(self, file):
         """Save the model grid to file
@@ -535,8 +613,7 @@ class BTSettl(ModelGrid):
         params = ['alpha', 'logg', 'teff', 'meta']
 
         # Inherit from base class
-        super().__init__('BT-Settl', params, q.AA, q.erg/q.s/q.cm**2/q.AA,
-                         **kwargs)
+        super().__init__('BT-Settl', params, q.AA, q.erg/q.s/q.cm**2/q.AA, ref='2014IAUS..299..271A', **kwargs)
 
         # Load the model grid
         modeldir = 'data/models/atmospheric/btsettl'
@@ -554,7 +631,7 @@ class Filippazzo2016(ModelGrid):
         data = pickle.load(open(root, 'rb'))
 
         # Inherit from base class
-        super().__init__(data['name'], data['parameters'])
+        super().__init__(data['name'], data['parameters'], ref='2017yCat..18100158F')
 
         # Copy to new __dict__
         for key, val in data.items():
@@ -569,8 +646,7 @@ class SpexPrismLibrary(ModelGrid):
         params = ['spty']
 
         # Inherit from base class
-        super().__init__('SpeX Prism Library', params, q.AA,
-                         q.erg/q.s/q.cm**2/q.AA)
+        super().__init__('SpeX Prism Library', params, q.AA, q.erg/q.s/q.cm**2/q.AA, ref='2014ASInC..11....7B')
 
         # Load the model grid
         model_path = 'data/models/atmospheric/spexprismlibrary'

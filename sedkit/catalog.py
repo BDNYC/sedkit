@@ -476,7 +476,7 @@ class Catalog:
             hover = HoverTool(tooltips=tips, names=['points'])
 
             # Make the plot
-            TOOLS = ['pan', 'reset', 'box_zoom', 'save', hover]
+            TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover]
             title = '{} v {}'.format(x, y)
             fig = figure(plot_width=800, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
 

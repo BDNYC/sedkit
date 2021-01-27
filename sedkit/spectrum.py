@@ -7,7 +7,10 @@ Make nice spectrum objects to pass around SED class
 """
 import copy
 from contextlib import closing
-from functools import wraps
+from functools import wraps, partial
+from itertools import groupby
+from operator import itemgetter
+from multiprocessing import Pool
 import os
 from pkg_resources import resource_filename
 import shutil
@@ -19,8 +22,6 @@ import astropy.io.votable as vo
 from astropy.io import fits
 from bokeh.plotting import figure, show
 from bokeh.models import ColumnDataSource, HoverTool
-from functools import partial
-from multiprocessing import Pool
 import numpy as np
 from pandas import DataFrame
 from scipy import interpolate, ndimage
@@ -51,7 +52,7 @@ class Spectrum:
     """
     A class to store, calibrate, fit, and plot a single spectrum
     """
-    def __init__(self, wave, flux, unc=None, snr=None, trim=None, name=None,
+    def __init__(self, wave, flux, unc=None, snr=None, name=None,
                  ref=None, header=None, verbose=False, **kwargs):
         """Initialize the Spectrum object
 
@@ -67,9 +68,6 @@ class Spectrum:
             A value to override spectrum SNR
         snr_trim: float (optional)
             The SNR value to trim spectra edges up to
-        trim: sequence (optional)
-            A sequence of (wave_min, wave_max) sequences to override spectrum
-            trimming
         name: str
             A name for the spectrum
         ref: str
@@ -130,11 +128,6 @@ class Spectrum:
         # Store components if added
         self.components = None
         self.best_fit = {}
-
-        # Trim manually
-        if trim is not None:
-            trimmed = self.trim(trim)
-            self.__dict__ = trimmed.__dict__
 
         # Store kwargs
         for key, val in kwargs.items():
@@ -250,70 +243,6 @@ class Spectrum:
 
         return new_spec
 
-    def mcmc_fit(self, model_grid, params=['teff'], walkers=5, steps=20, name=None, report=None):
-        """
-        Produces a marginalized distribution plot of best fit parameters from the specified model_grid
-
-        Parameters
-        ----------
-        model_grid: sedkit.modelgrid.ModelGrid
-            The model grid to use
-        params: list
-            The list of model grid parameters to fit
-        walkers: int
-            The number of walkers to deploy
-        steps: int
-            The number of steps for each walker to take
-        name: str
-            Name for the fit
-        plot: bool
-            Make plots
-        """
-        # Specify the parameter space to be walked
-        for param in params:
-            if param not in model_grid.parameters:
-                raise ValueError("'{}' not a parameter in this model grid, {}".format(param, model_grid.parameters))
-
-        # A name for the fit
-        name = name or model_grid.name
-
-        # Ensure modelgrid and spectruym are the same wave_units
-        model_grid.wave_units = self.wave_units
-
-        # Set up the sampler object
-        self.sampler = mc.SpecSampler(self, model_grid, params)
-
-        # Run the mcmc method
-        self.sampler.mcmc_go(nwalk_mult=walkers, nstep_mult=steps)
-
-        # Save the chi-sq best fit
-        self.best_fit[name + ' (chi2)'] = self.sampler.spectrum.best_fit['best']
-
-        # Make plots
-        if report is not None:
-            self.sampler.plot_chains()
-
-        # Generate best fit spectrum the 50th quantile value
-        best_fit_params = {k: v for k, v in zip(self.sampler.all_params, self.sampler.all_quantiles.T[1])}
-        params_with_unc = self.sampler.get_error_and_unc()
-        for param, quant in zip(self.sampler.all_params, params_with_unc):
-            best_fit_params['{}_unc'.format(param)] = np.mean([quant[0], quant[2]])
-
-        # Add missing parameters
-        for param in model_grid.parameters:
-            if param not in best_fit_params:
-                best_fit_params[param] = getattr(model_grid, '{}_vals'.format(param))[0]
-
-        # Get best fit model and scale to spectrum
-        model = model_grid.get_spectrum(**{param: best_fit_params[param] for param in model_grid.parameters})
-        model = model.norm_to_spec(self)
-
-        # Make dict for best fit model
-        best_fit_params['label'] = model.name
-        best_fit_params['filepath'] = None
-        best_fit_params['spectrum'] = np.array(model.spectrum)
-        self.best_fit[name] = best_fit_params
-
     def best_fit_model(self, modelgrid, report=None, name=None, **kwargs):
         """Perform simple fitting of the spectrum to all models in the given
         modelgrid and store the best fit
@@ -335,7 +264,7 @@ class Spectrum:
 
         # Iterate over entire model grid
         pool = Pool(8)
-        func = partial(fit_model, fitspec=spectrum)
+        func = partial(fit_model, fitspec=spectrum, wave_units=modelgrid.wave_units)
         fit_rows = pool.map(func, rows)
         pool.close()
         pool.join()
@@ -346,6 +275,14 @@ class Spectrum:
 
         # Get the best fit
         bf = copy.copy(models.iloc[0])
+
+        # Make into a dictionary
+        bdict = dict(bf)
+
+        # Add full model
+        bdict['full_model'] = modelgrid.get_spectrum(**{par: val for par, val in bdict.items() if par in modelgrid.parameters}, snr=5)
+        bdict['wave_units'] = self.wave_units
+        bdict['flux_units'] = self.flux_units
 
         if self.verbose:
             print(bf[modelgrid.parameters])
@@ -371,7 +308,7 @@ class Spectrum:
             # Show the plot
             show(rep)
 
-        self.best_fit[name] = dict(bf)
+        self.best_fit[name] = bdict
 
     def convolve_filter(self, filter, **kwargs):
         """
@@ -567,11 +504,6 @@ class Spectrum:
         self._flux_units = flux_units
         self._set_units()
 
-    def _set_units(self):
-        """Set the units for convenience"""
-        self.units = [self._wave_units, self._flux_units]
-        self.units += [self._flux_units] if self.unc is not None else []
-
     def integrate(self, units=q.erg / q.s / q.cm**2):
         """Calculate the area under the spectrum
 
@@ -638,6 +570,70 @@ class Spectrum:
         e1 = np.interp(wave.value, w0, e0.value, left=np.nan, right=np.nan) * self.flux_units
 
         return Spectrum(wave, f1, e1, name=self.name)
+
+    def mcmc_fit(self, model_grid, params=['teff'], walkers=5, steps=20, name=None, report=None):
+        """
+        Produces a marginalized distribution plot of best fit parameters from the specified model_grid
+
+        Parameters
+        ----------
+        model_grid: sedkit.modelgrid.ModelGrid
+            The model grid to use
+        params: list
+            The list of model grid parameters to fit
+        walkers: int
+            The number of walkers to deploy
+        steps: int
+            The number of steps for each walker to take
+        name: str
+            Name for the fit
+        plot: bool
+            Make plots
+        """
+        # Specify the parameter space to be walked
+        for param in params:
+            if param not in model_grid.parameters:
+                raise ValueError("'{}' not a parameter in this model grid, {}".format(param, model_grid.parameters))
+
+        # A name for the fit
+        name = name or model_grid.name
+
+        # Ensure modelgrid and spectruym are the same wave_units
+        model_grid.wave_units = self.wave_units
+
+        # Set up the sampler object
+        self.sampler = mc.SpecSampler(self, model_grid, params)
+
+        # Run the mcmc method
+        self.sampler.mcmc_go(nwalk_mult=walkers, nstep_mult=steps)
+
+        # Save the chi-sq best fit
+        self.best_fit[name + ' (chi2)'] = self.sampler.spectrum.best_fit['best']
+
+        # Make plots
+        if report is not None:
+            self.sampler.plot_chains()
+
+        # Generate best fit spectrum the 50th quantile value
+        best_fit_params = {k: v for k, v in zip(self.sampler.all_params, self.sampler.all_quantiles.T[1])}
+        params_with_unc = self.sampler.get_error_and_unc()
+        for param, quant in zip(self.sampler.all_params, params_with_unc):
+            best_fit_params['{}_unc'.format(param)] = np.mean([quant[0], quant[2]])
+
+        # Add missing parameters
+        for param in model_grid.parameters:
+            if param not in best_fit_params:
+                best_fit_params[param] = getattr(model_grid, '{}_vals'.format(param))[0]
+
+        # Get best fit model and scale to spectrum
+        model = model_grid.get_spectrum(**{param: best_fit_params[param] for param in model_grid.parameters})
+        model = model.norm_to_spec(self)
+
+        # Make dict for best fit model
+        best_fit_params['label'] = model.name
+        best_fit_params['filepath'] = None
+        best_fit_params['spectrum'] = np.array(model.spectrum)
+        self.best_fit[name] = best_fit_params
 
     @copy_raw
     def norm_to_mags(self, photometry, force=False, exclude=[], include=[]):
@@ -913,6 +909,16 @@ class Spectrum:
         """
         return Spectrum(*(self.raw or self.spectrum), name=self.name)
 
+    def _set_units(self):
+        """Set the units for convenience"""
+        self.units = [self._wave_units, self._flux_units]
+        self.units += [self._flux_units] if self.unc is not None else []
+
+    @property
+    def size(self):
+        """The length of the data"""
+        return len(self.wave)
+
     @copy_raw
     def smooth(self, beta, window=11):
         """
@@ -941,11 +947,6 @@ class Spectrum:
         spectrum[1] = smoothed * self.flux_units
 
         return Spectrum(*spectrum, name=self.name)
-
-    @property
-    def size(self):
-        """The length of the data"""
-        return len(self.wave)
 
     @property
     def spectrum(self):
@@ -1039,33 +1040,56 @@ class Spectrum:
 
         return mag, mag_unc
 
-    @copy_raw
-    def trim(self, ranges):
+    def trim(self, include=[], exclude=[], concat=False):
         """Trim the spectrum in the given wavelength ranges
 
         Parameters
         ----------
-        ranges: sequence
-            The (min_wave, max_wave) ranges to trim from the spectrum
+        include: sequence
+            The (min_wave, max_wave) ranges to include from the spectrum
+        exclude: sequence
+            The (min_wave, max_wave) ranges to exclude from the spectrum
         """
-        # Iterate over trim ranges
-        if isinstance(ranges, (list, tuple)):
-            for mn, mx in ranges:
-                try:
-                    idx, = np.where((self.spectrum[0] < mn) | (self.spectrum[0] > mx))
+        if not isinstance(include, (list, tuple)):
+            print("""Please provide a list of (lower,upper) bounds with units to include in trim, e.g. [(0*q.um,0.8*q.um)]""")
 
-                    if len(idx) > 0:
+        if not isinstance(exclude, (list, tuple)):
+            print("""Please provide a list of (lower,upper) bounds with units to exclude in trim, e.g. [(0*q.um,0.8*q.um)]""")
 
-                        # Trim the data
-                        spectrum = [i[idx] for i in self.spectrum]
+        # Default to include everything
+        if len(include) == 0:
+            include.append([self.wave_min, self.wave_max])
 
-                        return Spectrum(*spectrum, name=self.name)
+        # Get element indexes of included ranges
+        idx_include = []
+        for mn, mx in include:
+            inc, = np.where(np.logical_and(self.spectrum[0] >= mn, self.spectrum[0] <= mx))
+            idx_include.append(inc)
 
-                except TypeError:
-                    print("""Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
+        # Get element indexes of excluded ranges
+        idx_exclude = []
+        for mn, mx in exclude:
+            exc, = np.where(np.logical_and(self.spectrum[0] >= mn, self.spectrum[0] <= mx))
+            idx_exclude.append(exc)
 
-        else:
-            raise TypeError("""Please provide a list of (lower,upper) bounds with units to trim, e.g. [(0*q.um,0.8*q.um)]""")
+        # Get difference of each included set with each excluded set
+        segments = []
+        for inc in idx_include:
+            set_inc = set(inc)
+            for exc in idx_exclude:
+                set_inc = set_inc.difference(set(exc))
+
+            # Split the indexes by missing elements
+            for k, g in groupby(enumerate(list(set_inc)), lambda i_x: i_x[0] - i_x[1]):
+
+                # Make the spectra
+                group = list(map(itemgetter(1), g))
+                data = [i[group] for i in self.spectrum]
+                spectrum = Spectrum(*data, name=self.name)
+                spectrum.wave_units = self.wave_units
+                segments.append(spectrum)
+
+        return np.sum(segments) if concat else segments
 
     @property
     def wave_max(self):
@@ -1322,7 +1346,7 @@ class Vega(Spectrum):
         flux = flux.to(flux_units)
 
         # Make the Spectrum object
-        super().__init__(wave, flux, **kwargs)
+        super().__init__(wave, flux, ref='2007ASPC..364..315B, 2004AJ....127.3508B, 2005MSAIS...8..189K', **kwargs)
 
         self.name = 'Vega'
 
@@ -1837,7 +1861,7 @@ class ModelSpectrum(Spectrum):
         return f * scaling_factor
 
 
-def fit_model(row, fitspec):
+def fit_model(row, fitspec, wave_units=q.AA):
     """Fit the model grid row to the spectrum with the given parameters
 
     Parameters
@@ -1853,10 +1877,11 @@ def fit_model(row, fitspec):
         The input row with the normalized spectrum and additional gstat
     """
     try:
-        gstat, yn, xn = list(fitspec.fit(row['spectrum'], wave_units='AA'))
+        gstat, yn, xn = list(fitspec.fit(row['spectrum'], wave_units=wave_units))
         spectrum = np.array([row['spectrum'][0] * xn, row['spectrum'][1] * yn])
         row['spectrum'] = spectrum
         row['gstat'] = gstat
+        row['const'] = yn
 
     except ValueError:
         row['gstat'] = np.nan
