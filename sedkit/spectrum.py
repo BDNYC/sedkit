@@ -1069,7 +1069,7 @@ class Spectrum:
         # Get element indexes of excluded ranges
         idx_exclude = []
         for mn, mx in exclude:
-            exc, = np.where(np.logical_and(self.spectrum[0] >= mn, self.spectrum[0] <= mx))
+            exc, = np.where(np.logical_and(self.spectrum[0] > mn, self.spectrum[0] < mx))
             idx_exclude.append(exc)
 
         # Get difference of each included set with each excluded set
@@ -1337,6 +1337,7 @@ class Vega(Spectrum):
         """
         # Get the data and apply units
         vega_file = resource_filename('sedkit', 'data/STScI_Vega.txt')
+        ref = '2007ASPC..364..315B, 2004AJ....127.3508B, 2005MSAIS...8..189K'
         wave, flux = np.genfromtxt(vega_file, unpack=True)
         wave *= q.AA
         flux *= q.erg / q.s / q.cm**2 / q.AA
@@ -1346,7 +1347,7 @@ class Vega(Spectrum):
         flux = flux.to(flux_units)
 
         # Make the Spectrum object
-        super().__init__(wave, flux, ref='2007ASPC..364..315B, 2004AJ....127.3508B, 2005MSAIS...8..189K', **kwargs)
+        super().__init__(wave, flux, ref=ref, **kwargs)
 
         self.name = 'Vega'
 

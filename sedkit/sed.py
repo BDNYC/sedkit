@@ -1159,6 +1159,9 @@ class SED:
             if self.name is None:
                 self._name = main_ID
 
+            # TODO: Discovery paper bibcode?
+            # self._refs['discovery'] = obj['COO_BIBCODE']
+
             # Save the coordinates
             if self.sky_coords is None:
                 sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
@@ -1300,6 +1303,9 @@ class SED:
 
             if self.verbose:
                 print('Best fit {}: {}'.format(name, self.best_fit[name]['label']))
+
+            # Make the SED in case use_best_fit is True
+            self.make_sed()
 
         else:
             print("Could not fit model grid {} to the SED. No spectrum to fit.".format(modelgrid.name))
@@ -1802,6 +1808,7 @@ class SED:
                     # Get the full best fit model
                     const = model['const']
                     model = model['full_model']
+                    model.verbose = False
                     model.wave_units = self.wave_units
 
                     # Add the segments to the list of spectra (to be removed later)
@@ -1810,7 +1817,6 @@ class SED:
                     for n, mod in enumerate(seg_models):
                         data = mod.spectrum
                         data[1] *= const
-                        mod = sp.Spectrum(*data)
                         self.add_spectrum(mod, name='model')
                     self._calibrate_spectra()
 
@@ -2170,7 +2176,7 @@ class SED:
                     self.fig = spec.plot(fig=self.fig, components=True, const=const)
 
             else:
-                self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, legend_label='Spectrum')
+                self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, alpha=0.8, legend_label='Spectrum')
 
         # Plot photometry
         if photometry and len(self.photometry) > 0:
@@ -2229,8 +2235,12 @@ class SED:
             self.fig.line(bb_wav, bb_flx * const, line_color=color if one_color else 'red', legend_label='{} K'.format(self.Teff_bb))
 
         if best_fit and len(self.best_fit) > 0:
+            col_list = u.color_gen('Category10', n=len(self.best_fit) + 1)
+            _ = next(col_list)
             for bf, mod_fit in self.best_fit.items():
-                self.fig.line(mod_fit['full_model'].wave, mod_fit['full_model'].flux * mod_fit['const'], alpha=0.3, color=color, legend_label=mod_fit['label'], line_width=2)
+                mod = mod_fit['full_model']
+                mod.wave_units = self.wave_units
+                self.fig.line(mod.wave, mod.flux * mod_fit['const'], alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], line_width=2)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"

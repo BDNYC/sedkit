@@ -19,14 +19,14 @@ import numpy as np
 from . import utilities as u
 
 # A dictionary of all supported moving group ages from Bell et al. (2015)
-NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr),
-             'beta Pic': (24*q.Myr, 3*q.Myr),
-             'Carina': (45*q.Myr, 11*q.Myr),
-             'Columba': (42*q.Myr, 6*q.Myr),
-             'eta Cha': (11*q.Myr, 3*q.Myr),
-             'Tuc-Hor': (45*q.Myr, 4*q.Myr),
-             'TW Hya': (10*q.Myr, 3*q.Myr),
-             '32 Ori': (22*q.Myr, 4*q.Myr)}
+NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr, '2015MNRAS.454..593B'),
+             'beta Pic': (24*q.Myr, 3*q.Myr, '2015MNRAS.454..593B'),
+             'Carina': (45*q.Myr, 11*q.Myr, '2015MNRAS.454..593B'),
+             'Columba': (42*q.Myr, 6*q.Myr, '2015MNRAS.454..593B'),
+             'eta Cha': (11*q.Myr, 3*q.Myr, '2015MNRAS.454..593B'),
+             'Tuc-Hor': (45*q.Myr, 4*q.Myr, '2015MNRAS.454..593B'),
+             'TW Hya': (10*q.Myr, 3*q.Myr, '2015MNRAS.454..593B'),
+             '32 Ori': (22*q.Myr, 4*q.Myr, '2015MNRAS.454..593B')}
 
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
