@@ -228,8 +228,7 @@ class TestSpectrum(unittest.TestCase):
         self.assertNotEqual(self.flat1.size, trimmed[0].size)
 
         # Test exclude
-        trimmed = s1.trim(exclude=[(0.8 * q.um, 2 * q.um)])
-        self.assertTrue(len(trimmed) == 1)
+        trimmed = s1.trim(exclude=[(0.8 * q.um, 3 * q.um)])
         self.assertNotEqual(self.flat1.size, trimmed[0].size)
 
         # Test split
