@@ -294,9 +294,9 @@ class SED:
         if not isinstance(mag_unc, (float, np.float32, type(None), np.ma.core.MaskedConstant)):
             raise TypeError("{}: Magnitude uncertainty must be a float, NaN, or None.".format(type(mag_unc)))
 
-        # Make NaN if 0
-        if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, np.ma.core.MaskedConstant):
-            mag_unc = np.nan
+        # # Make NaN if 0
+        # if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, np.ma.core.MaskedConstant):
+        #     mag_unc = np.nan
 
         # Get the bandpass
         if isinstance(band, str):
@@ -760,33 +760,40 @@ class SED:
             The (distance, err) or (distance, lower_err, upper_err)
         """
         if distance is None:
-
             self._distance = None
             self._parallax = None
-
-            # Only clear radius if determined from isochrones,
-            # otherwise keep it if manually set
-            if self.isochrone_radius:
-                self.radius = None
-                self.isochrone_radius = False
+            self._refs.pop('distance', None)
+            self._refs.pop('parallax', None)
 
         else:
+
+            # If the last value is string, it's the reference
+            if isinstance(distance[-1], str):
+                ref = distance[-1]
+                distance = distance[:-1]
+            else:
+                ref = None
+
             # Make sure it's a sequence
             if not u.issequence(distance, length=[2, 3]):
-                raise TypeError('Distance must be a sequence of (value, error) or (value, lower_error, upper_error).')
+                raise TypeError("Distance must be a sequence of (value, error) or (value, lower_error, upper_error).")
 
-            # Make sure the values are in time units
-            if not u.equivalent(distance[0], q.pc):
+            # Make sure the values are in distance units
+            if not all([u.equivalent(dist, q.pc) for dist in distance]):
                 raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
 
-            # Set the distance
+            # Set the distance!
             self._distance = distance
-
-            if self.verbose:
-                print('Setting distance to', self.distance)
 
             # Update the parallax
             self._parallax = u.pi2pc(*self.distance, pc2pi=True)
+
+            # Set reference
+            self._refs['distance'] = ref
+            self._refs['parallax'] = ref
+
+            if self.verbose:
+                print("Setting distance to {} and parallax to {} with reference '{}'".format(self.distance, self.parallax, ref))
 
         # Try to calculate reddening
         self.get_reddening()
@@ -1756,11 +1763,26 @@ class SED:
 
         # Normalize to longest wavelength data
         if self.max_spec > self.max_phot:
+
+            # If sufficient RJ tail, ignore OPT and NIR
+            if self.max_spec > 5 * q.um:
+                rj = rj.trim(include=[(5 * q.um, 1000 * q.um)])[0]
             rj = rj.norm_to_spec(self.app_spec_SED)
             max_wave = self.max_spec.to(q.um)
+
         else:
-            # Ignore optical photometry
-            rj = rj.norm_to_mags(self.photometry[self.photometry['eff'] > 1 * q.um])
+
+            # If sufficient RJ tail, ignore OPT and NIR...
+            if self.max_phot > 3 * q.um:
+                rj = rj.norm_to_mags(self.photometry[self.photometry['eff'] > 3 * q.um])
+
+            # ...or just ignore OPT...
+            elif self.max_phot > 3 * q.um:
+                rj = rj.norm_to_mags(self.photometry[self.photometry['eff'] > 3 * q.um])
+
+            # ...or just normalize to whatever you have
+            else:
+                rj = rj.norm_to_mags(self.photometry)
             max_wave = self.max_phot.to(q.um)
 
         # Trim so there is no data overlap
@@ -1783,6 +1805,10 @@ class SED:
 
         # Combine spectra and flux calibrate
         self._calibrate_spectra()
+
+        # Turn off print statements
+        verb = self.verbose
+        self.verbose = False
 
         if len(self.stitched_spectra) > 0:
 
@@ -1808,7 +1834,6 @@ class SED:
                     # Get the full best fit model
                     const = model['const']
                     model = model['full_model']
-                    model.verbose = False
                     model.wave_units = self.wave_units
 
                     # Add the segments to the list of spectra (to be removed later)
@@ -1817,7 +1842,7 @@ class SED:
                     for n, mod in enumerate(seg_models):
                         data = mod.spectrum
                         data[1] *= const
-                        self.add_spectrum(mod, name='model')
+                        self.add_spectrum(data, name='model')
                     self._calibrate_spectra()
 
             # If photometry and spectra, exclude photometric points with spectrum coverage
@@ -1858,6 +1883,9 @@ class SED:
                 self.drop_spectrum(-1)
             self._calibrate_spectra()
 
+        # Restore print statements
+        self.verbose = verb
+
         # Run the calculation
         self._calculate_sed()
 
@@ -1893,7 +1921,7 @@ class SED:
         else:
 
             # Otherwise just use ~0 flux at ~0 wavelength
-            wein = sp.Spectrum(np.array([0.0001]) * self.wave_units, np.array([1E-30]) * self.flux_units, np.array([1E-30]) * self.flux_units, name='Wein Tail')
+            wein = sp.Spectrum((np.array([0.0001]) * q.um).to(self.wave_units), np.array([1E-30]) * self.flux_units, np.array([1E-30]) * self.flux_units, name='Wein Tail')
 
         # Trim so there is no data overlap
         min_wave = min(self.min_spec, self.min_phot)
@@ -2021,7 +2049,9 @@ class SED:
         """
         if parallax is None:
             self._parallax = None
+            self._distance = None
             self._refs.pop('parallax', None)
+            self._refs.pop('distance', None)
 
         else:
 
@@ -2048,6 +2078,7 @@ class SED:
 
             # Set reference
             self._refs['parallax'] = ref
+            self._refs['distance'] = ref
 
             if self.verbose:
                 print("Setting parallax to {} and distance to {} with reference '{}'".format(self.parallax, self.distance, ref))
@@ -2572,17 +2603,17 @@ class SED:
 
         else:
 
-            # If there is a sequence and a string, it's the value and reference
-            if u.issequence(spectral_type[0]) and isinstance(spectral_type[-1], str):
-                ref = spectral_type[-1]
-                spectral_type = spectral_type[:-1]
-            else:
-                ref = None
+            # No reference by default
+            ref = None
 
-            # If there are two strings, it's the SpT and the reference
+            # If there are two items, it's the SpT and the reference or the SpT and the unc
             if len(spectral_type) == 2:
-                if isinstance(spectral_type[0], str) and isinstance(spectral_type[-1], str):
+                if isinstance(spectral_type[1], str):
                     spectral_type, ref = spectral_type
+
+            # If the spectral type is a float or integer, assume it's the numeric spectral type
+            if isinstance(spectral_type, (int, float)):
+                spectral_type = spectral_type, 0.5
 
             # Just a spectral type
             if isinstance(spectral_type, str):

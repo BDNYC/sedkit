@@ -11,6 +11,7 @@ import glob
 from pkg_resources import resource_filename
 
 import astropy.units as q
+import astropy.constants as ac
 from astropy.io.ascii import read
 from bokeh.plotting import figure, show
 from bokeh.models import LinearColorMapper, BasicTicker, ColorBar
@@ -19,14 +20,14 @@ import numpy as np
 from . import utilities as u
 
 # A dictionary of all supported moving group ages from Bell et al. (2015)
-NYMG_AGES = {'AB Dor': (149*q.Myr, 51*q.Myr, '2015MNRAS.454..593B'),
-             'beta Pic': (24*q.Myr, 3*q.Myr, '2015MNRAS.454..593B'),
-             'Carina': (45*q.Myr, 11*q.Myr, '2015MNRAS.454..593B'),
-             'Columba': (42*q.Myr, 6*q.Myr, '2015MNRAS.454..593B'),
-             'eta Cha': (11*q.Myr, 3*q.Myr, '2015MNRAS.454..593B'),
-             'Tuc-Hor': (45*q.Myr, 4*q.Myr, '2015MNRAS.454..593B'),
-             'TW Hya': (10*q.Myr, 3*q.Myr, '2015MNRAS.454..593B'),
-             '32 Ori': (22*q.Myr, 4*q.Myr, '2015MNRAS.454..593B')}
+NYMG_AGES = {'AB Dor': (149 * q.Myr, 51 * q.Myr, '2015MNRAS.454..593B'),
+             'beta Pic': (24 * q.Myr, 3 * q.Myr, '2015MNRAS.454..593B'),
+             'Carina': (45 * q.Myr, 11 * q.Myr, '2015MNRAS.454..593B'),
+             'Columba': (42 * q.Myr, 6 * q.Myr, '2015MNRAS.454..593B'),
+             'eta Cha': (11 * q.Myr, 3 * q.Myr, '2015MNRAS.454..593B'),
+             'Tuc-Hor': (45 * q.Myr, 4 * q.Myr, '2015MNRAS.454..593B'),
+             'TW Hya': (10 * q.Myr, 3 * q.Myr, '2015MNRAS.454..593B'),
+             '32 Ori': (22 * q.Myr, 4 * q.Myr, '2015MNRAS.454..593B')}
 
 # A list of all supported evolutionary models
 EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
@@ -65,6 +66,11 @@ class Isochrone:
         # Convert years to Gyr if necessary
         if min(self.data['age']) > 100000:
             self.data['age'] *= 1E-9
+
+        # Calculate radii if not in the table (R = sqrt(GM/g))
+        if 'radius' not in self.data.colnames:
+            radius = np.sqrt((ac.G * (self.data['mass'] * q.M_sun)) / ((10**self.data['logg']) * q.m / q.s**2)).to(q.R_sun)
+            self.data.add_column(radius, name='radius')
 
         # Get the units
         if units is None or not isinstance(units, dict):

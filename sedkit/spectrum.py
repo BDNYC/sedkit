@@ -633,6 +633,8 @@ class Spectrum:
         best_fit_params['label'] = model.name
         best_fit_params['filepath'] = None
         best_fit_params['spectrum'] = np.array(model.spectrum)
+        best_fit_params['full_model'] = model
+        best_fit_params['const'] = 1.
         self.best_fit[name] = best_fit_params
 
     @copy_raw
@@ -1063,7 +1065,7 @@ class Spectrum:
         # Get element indexes of included ranges
         idx_include = []
         for mn, mx in include:
-            inc, = np.where(np.logical_and(self.spectrum[0] >= mn, self.spectrum[0] <= mx))
+            inc, = np.where(np.logical_and(self.spectrum[0] > mn, self.spectrum[0] < mx))
             idx_include.append(inc)
 
         # Get element indexes of excluded ranges

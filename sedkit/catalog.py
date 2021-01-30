@@ -403,7 +403,7 @@ class Catalog:
 
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
              xlabel=None, ylabel=None, fig=None, order=None, identify=None,
-             id_color='red', label_points=False, exclude=None, **kwargs):
+             id_color='red', label_points=False, exclude=None, draw=True, **kwargs):
         """Plot parameter x versus parameter y
 
         Parameters
@@ -441,6 +441,12 @@ class Catalog:
         # Grab the source and valid params
         source = copy(self.source)
         params = [k for k in source.column_names if not k.endswith('_unc')]
+
+        # If no uncertainty column for parameter, add it
+        if '{}_unc'.format(x) not in source.column_names:
+            _ = source.add([None] * len(self.source.data['name']), '{}_unc'.format(x))
+        if '{}_unc'.format(y) not in source.column_names:
+            _ = source.add([None] * len(self.source.data['name']), '{}_unc'.format(y))
 
         # Check if the x parameter is a color
         if '-' in x and all([i in params for i in x.split('-')]):
@@ -495,23 +501,21 @@ class Catalog:
         color = color or self.color
         marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
 
-        # Data arrays
-        xval = source.data[x]
-        xerr = source.data.get('{}_unc'.format(x))
-        yval = source.data[y]
-        yerr = source.data.get('{}_unc'.format(y))
-
         # Plot y errorbars
-        if yerr is not None:
-            y_err_x = [(i, i) for i in xval]
-            y_err_y = [(i, j) for i, j in zip(yval - yerr, yval + yerr)]
-            fig.multi_line(y_err_x, y_err_y, color=color)
+        yval, yerr = source.data[y], source.data['{}_unc'.format(y)]
+        yval[yval == None] = np.nan
+        yerr[yerr == None] = np.nan
+        y_err_x = [(i, i) for i in source.data[x]]
+        y_err_y = [(i, j) for i, j in zip(yval - yerr, yval + yerr)]
+        fig.multi_line(y_err_x, y_err_y, color=color)
 
         # Plot x errorbars
-        if xerr is not None:
-            x_err_y = [(i, i) for i in yval]
-            x_err_x = [(i, j) for i, j in zip(xval - xerr, xval + xerr)]
-            fig.multi_line(x_err_x, x_err_y, color=color)
+        xval, xerr = source.data[x], source.data['{}_unc'.format(x)]
+        xval[xval == None] = np.nan
+        xerr[xerr == None] = np.nan
+        x_err_y = [(i, i) for i in source.data[y]]
+        x_err_x = [(i, j) for i, j in zip(xval - xerr, xval + xerr)]
+        fig.multi_line(x_err_x, x_err_y, color=color)
 
         # Label points
         if label_points:
@@ -532,31 +536,36 @@ class Catalog:
             coeffs = None
 
             # Fit the polynomial
-            if yerr is not None:
-                ye = np.array(yerr, dtype=float)[idx]
-                coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, w=1./ye, cov=True)
-            else:
-                coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, cov=True)
+            try:
 
-            # Plot the line
-            if coeffs is None or any([np.isnan(i) for i in coeffs]):
-                if self.verbose:
-                    print("Could not fit that data with an order {} polynomial".format(order))
-            else:
+                if yerr is not None:
+                    ye = np.array(yerr, dtype=float)[idx]
+                    coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, w=1./ye, cov=True)
+                else:
+                    coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, cov=True)
 
-                # Calculate values and 1-sigma
-                TT = np.vstack([xaxis**(order-i) for i in range(order + 1)]).T
-                yaxis = np.dot(TT, coeffs)
-                C_yi = np.dot(TT, np.dot(cov, TT.T))
-                sig = np.sqrt(np.diag(C_yi))
+                # Plot the line
+                if coeffs is None or any([np.isnan(i) for i in coeffs]):
+                    if self.verbose:
+                        print("Could not fit that data with an order {} polynomial".format(order))
+                else:
 
-                # Plot the line and shaded error
-                fig.line(xaxis, yaxis, legend=label + ' {}'.format(coeffs[::-1]), color=color, line_alpha=0.3)
-                xpat = np.hstack((xaxis, xaxis[::-1]))
-                ypat = np.hstack((yaxis + sig, (yaxis - sig)[::-1]))
-                err_source = ColumnDataSource(dict(xaxis=xpat, yaxis=ypat))
-                glyph = Patch(x='xaxis', y='yaxis', fill_color=color, line_color=None, fill_alpha=0.1)
-                fig.add_glyph(err_source, glyph)
+                    # Calculate values and 1-sigma
+                    TT = np.vstack([xaxis**(order-i) for i in range(order + 1)]).T
+                    yaxis = np.dot(TT, coeffs)
+                    C_yi = np.dot(TT, np.dot(cov, TT.T))
+                    sig = np.sqrt(np.diag(C_yi))
+
+                    # Plot the line and shaded error
+                    fig.line(xaxis, yaxis, legend=label + ' {}'.format(coeffs[::-1]), color=color, line_alpha=0.3)
+                    xpat = np.hstack((xaxis, xaxis[::-1]))
+                    ypat = np.hstack((yaxis + sig, (yaxis - sig)[::-1]))
+                    err_source = ColumnDataSource(dict(xaxis=xpat, yaxis=ypat))
+                    glyph = Patch(x='xaxis', y='yaxis', fill_color=color, line_color=None, fill_alpha=0.1)
+                    fig.add_glyph(err_source, glyph)
+
+            except Exception as exc:
+                print("Skipping the polynomial fit: {}".format(exc))
 
         # Set axis labels
         xunit = source.data[x].unit
@@ -578,6 +587,9 @@ class Catalog:
                     id_cat.add_SED(obj)
             fig = id_cat.plot(x, y, fig=fig, size=size+5, marker='circle', line_color=id_color, fill_color=None, line_width=2, label_points=True)
             del id_cat
+
+        if draw:
+            show(fig)
 
         return fig
 

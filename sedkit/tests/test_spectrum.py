@@ -79,7 +79,7 @@ class TestSpectrum(unittest.TestCase):
         # Test MCMC fit
         bt = mg.BTSettl()
         spec = bt.get_spectrum(teff=2456, logg=5.5, meta=0, alpha=0, snr=100)
-        spec.mcmc_fit(bt, name='Test', plot=True)
+        spec.mcmc_fit(bt, name='Test', report=True)
 
     def test_addition(self):
         """Test that spectra are normalized and combined properly"""
@@ -222,13 +222,24 @@ class TestSpectrum(unittest.TestCase):
         # Get a flat spectra
         s1 = self.flat1
 
-        # Successfully trim it
-        trimmed = s1.trim([(0.8 * q.um, 2 * q.um)])
-        self.assertNotEqual(self.flat1.size, trimmed.size)
+        # Test include
+        trimmed = s1.trim(include=[(0.8 * q.um, 2 * q.um)])
+        self.assertTrue(len(trimmed) == 1)
+        self.assertNotEqual(self.flat1.size, trimmed[0].size)
 
-        # Unsuccessfully trim it
-        untrimmed = s1.trim([(1.1 * q.um, 2 * q.um)])
-        self.assertEqual(self.flat1.size, untrimmed.size)
+        # Test exclude
+        trimmed = s1.trim(exclude=[(0.8 * q.um, 2 * q.um)])
+        self.assertTrue(len(trimmed) == 1)
+        self.assertNotEqual(self.flat1.size, trimmed[0].size)
+
+        # Test split
+        trimmed = s1.trim(exclude=[(0.8 * q.um, 0.9 * q.um)])
+        self.assertTrue(len(trimmed) == 2)
+        self.assertNotEqual(self.flat1.size, trimmed[0].size)
+
+        # Test concat
+        trimmed = s1.trim(exclude=[(0.8 * q.um, 0.9 * q.um)], concat=True)
+        self.assertNotEqual(self.flat1.size, trimmed.size)
 
 
 class TestFileSpectrum(unittest.TestCase):

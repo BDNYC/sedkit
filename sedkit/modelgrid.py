@@ -340,6 +340,8 @@ class ModelGrid:
             # Calculate the new spectrum
             spec = u.spectres(wave, spec[0], spec[1])
 
+        spec = u.scrub(spec)
+
         if spec_obj:
             return Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, **kwargs)
         else:
