@@ -1086,7 +1086,7 @@ class Spectrum:
 
                 # Make the spectra
                 group = list(map(itemgetter(1), g))
-                data = [i[group] for i in self.spectrum]
+                data = [i[group] for i in copy.copy(self.spectrum)]
                 spectrum = Spectrum(*data, name=self.name)
                 spectrum.wave_units = self.wave_units
                 segments.append(spectrum)
