@@ -259,7 +259,7 @@ class ModelGrid:
         # Get the relevant table rows
         return u.filter_table(self.index, **kwargs)
 
-    def get_spectrum(self, closest=False, snr=None, interp=True, spec_obj=True, **kwargs):
+    def get_spectrum(self, closest=False, snr=None, interp=True, spec_obj=True, trim=None, resolution=None, **kwargs):
         """Retrieve the first model with the specified parameters
 
         Parameters
@@ -312,40 +312,19 @@ class ModelGrid:
             spec[1] = (spec[1] * self.native_flux_units).to(self.flux_units).value
             name = rows.iloc[0].label
 
-        # Trim it
-        trim = kwargs.get('trim', self.trim)
-        if trim is not None:
-
-            # Get indexes to keep
-            idx, = np.where((spec[0] * self.native_wave_units > trim[0]) & (spec[0] * self.native_wave_units < trim[1]))
-
-            if len(idx) > 0:
-                spec = [i[idx] for i in spec]
-
-        # Rebin
-        resolution = kwargs.get('resolution', self.resolution)
-        if resolution is not None:
-
-            # Make the wavelength array
-            mn = np.nanmin(spec[0])
-            mx = np.nanmax(spec[0])
-            d_lam = (mx - mn) / resolution
-            wave = np.arange(mn, mx, d_lam)
-
-            # Trim the wavelength
-            dmn = (spec[0][1] - spec[0][0]) / 2.
-            dmx = (spec[0][-1] - spec[0][-2]) / 2.
-            wave = wave[np.logical_and(wave >= mn + dmn, wave <= mx - dmx)]
-
-            # Calculate the new spectrum
-            spec = u.spectres(wave, spec[0], spec[1])
-
+        # Scrub nans and infs
         spec = u.scrub(spec)
 
-        if spec_obj:
-            return Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, **kwargs)
-        else:
-            return spec
+        # Convert to specobj
+        spec = Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, **kwargs)
+
+        if trim is not None:
+            spec = spec.trim(include=trim, concat=True)
+
+        if resolution is not None:
+            spec = spec.resamp(resolution=resolution)
+
+        return spec if spec_obj else spec.data
 
     def index_models(self, parameters=None, wl_min=0.3*q.um, wl_max=25*q.um):
         """Generate model index file for faster reading

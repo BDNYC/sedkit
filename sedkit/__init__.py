@@ -11,13 +11,13 @@ import re
 
 from .catalog import Catalog
 from .sed import SED, VegaSED
-from .spectrum import Spectrum, FileSpectrum, Vega, Blackbody, ModelSpectrum
+from .spectrum import Spectrum, FileSpectrum, Vega, Blackbody
 from .modelgrid import ModelGrid, BTSettl, SpexPrismLibrary
 
 __version_commit__ = ''
 _regex_git_hash = re.compile(r'.*\+g(\w+)')
 
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 
 # from pkg_resources import get_distribution, DistributionNotFound
 # try:
