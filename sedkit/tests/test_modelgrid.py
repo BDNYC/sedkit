@@ -39,7 +39,7 @@ class TestModelGrid(unittest.TestCase):
         spec = self.bt.get_spectrum(teff=3500)
 
         # Off grid
-        spec = self.bt.get_spectrum(teff=3456, log=5.5, alpha=0, meta=0)
+        spec = self.bt.get_spectrum(teff=3456, logg=5.5, alpha=0, meta=0)
 
     def test_resample_grid(self):
         """Test resample_grid method"""
