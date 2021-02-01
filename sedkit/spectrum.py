@@ -6,15 +6,12 @@
 Make nice spectrum objects to pass around SED class
 """
 import copy
-from contextlib import closing
 from functools import wraps, partial
 from itertools import groupby
 from operator import itemgetter
 from multiprocessing import Pool
 import os
 from pkg_resources import resource_filename
-import shutil
-import urllib.request as request
 
 import astropy.constants as ac
 import astropy.units as q
@@ -24,7 +21,6 @@ from bokeh.plotting import figure, show
 from bokeh.models import ColumnDataSource, HoverTool
 import numpy as np
 from pandas import DataFrame
-from scipy import interpolate, ndimage
 from svo_filters import Filter
 
 from . import mcmc as mc
@@ -834,7 +830,7 @@ class Spectrum:
         ----------
         mag: float
             The target magnitude
-        bandpass: sedkit.synphot.Bandpass
+        bandpass: svo_filters.svo.Filter, str
             The bandpass to use
         system: str
             The magnitude system to use
