@@ -25,7 +25,7 @@ from . import utilities as u
 
 class Catalog:
     """An object to collect SED results for plotting and analysis"""
-    def __init__(self, name='SED Catalog', marker='circle', color='blue', verbose=True,  **kwargs):
+    def __init__(self, name='SED Catalog', marker='circle', color='blue', verbose=True, **kwargs):
         """Initialize the Catalog object"""
         # Metadata
         self.verbose = verbose
@@ -76,6 +76,48 @@ class Catalog:
         new_cat.results = new_results
 
         return new_cat
+
+    def add_column(self, name, data, unc=None):
+        """
+        Add a column of data to the results table
+
+        Parameters
+        ----------
+        name: str
+            The name of the new column
+        data: sequence
+            The data array
+        unc: sequence (optional)
+            The uncertainty array
+        """
+        # Make sure column doesn't exist
+        if name in self.results.colnames:
+            raise ValueError("{}: Column already exists.".format(name))
+
+        # Make sure data is the right length
+        if len(data) != len(self.results):
+            raise ValueError("{} != {}: Data is not the right size for this catalog.".format(len(data), len(self.results)))
+
+        # Add the column
+        self.results.add_column(data, name=name)
+
+        # Add uncertainty column
+        if unc is not None:
+
+            # Uncertainty name
+            name = name + '_unc'
+
+            # Make sure column doesn't exist
+            if name in self.results.colnames:
+                raise ValueError("{}: Column already exists.".format(name))
+
+            # Make sure data is the right length
+            if len(unc) != len(self.results):
+                raise ValueError(
+                    "{} != {}: Data is not the right size for this catalog.".format(len(unc), len(self.results)))
+
+            # Add the column
+            self.results.add_column(unc, name=name)
 
     def add_SED(self, sed):
         """Add an SED to the catalog
@@ -360,9 +402,8 @@ class Catalog:
         return results
 
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
-             xlabel=None, ylabel=None, fig=None, order=None, data=None,
-             identify=None, id_color='red', label_points=False, exclude=None,
-             **kwargs):
+             xlabel=None, ylabel=None, fig=None, order=None, identify=None,
+             id_color='red', label_points=False, exclude=None, draw=True, **kwargs):
         """Plot parameter x versus parameter y
 
         Parameters
@@ -385,8 +426,6 @@ class Catalog:
              The figure to plot on
         order: int
              The polynomial order to fit
-        data: dict
-             Additional data to add to the plot
         identify: idx, str, sequence
              Names of sources to highlight in the plot
         id_color: str
@@ -402,6 +441,12 @@ class Catalog:
         # Grab the source and valid params
         source = copy(self.source)
         params = [k for k in source.column_names if not k.endswith('_unc')]
+
+        # If no uncertainty column for parameter, add it
+        if '{}_unc'.format(x) not in source.column_names:
+            _ = source.add([None] * len(self.source.data['name']), '{}_unc'.format(x))
+        if '{}_unc'.format(y) not in source.column_names:
+            _ = source.add([None] * len(self.source.data['name']), '{}_unc'.format(y))
 
         # Check if the x parameter is a color
         if '-' in x and all([i in params for i in x.split('-')]):
@@ -437,7 +482,7 @@ class Catalog:
             hover = HoverTool(tooltips=tips, names=['points'])
 
             # Make the plot
-            TOOLS = ['pan', 'reset', 'box_zoom', 'save', hover]
+            TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover]
             title = '{} v {}'.format(x, y)
             fig = figure(plot_width=800, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
 
@@ -484,7 +529,6 @@ class Catalog:
             idx = [n for n, (i, j) in enumerate(zip(xval, yval)) if not hasattr(i, 'mask') and not np.isnan(i) and not hasattr(j, 'mask') and not np.isnan(j)]
             xd = np.array(xval, dtype=float)[idx]
             yd = np.array(yval, dtype=float)[idx]
-            ye = np.array(yerr, dtype=float)[idx]
 
             # Plot data
             label = 'Order {} fit'.format(order)
@@ -493,32 +537,35 @@ class Catalog:
 
             # Fit the polynomial
             try:
-                coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, w=1./ye, cov=True)
-            except Exception:
-                try:
+
+                if yerr is not None:
+                    ye = np.array(yerr, dtype=float)[idx]
+                    coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, w=1./ye, cov=True)
+                else:
                     coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, cov=True)
-                except:
-                    pass
 
-            # Plot the line
-            if coeffs is None or any([np.isnan(i) for i in coeffs]):
-                if self.verbose:
-                    print("Could not fit that data with an order {} polynomial".format(order))
-            else:
+                # Plot the line
+                if coeffs is None or any([np.isnan(i) for i in coeffs]):
+                    if self.verbose:
+                        print("Could not fit that data with an order {} polynomial".format(order))
+                else:
 
-                # Calculate values and 1-sigma
-                TT = np.vstack([xaxis**(order-i) for i in range(order+1)]).T
-                yaxis = np.dot(TT, coeffs)
-                C_yi = np.dot(TT, np.dot(cov, TT.T))
-                sig = np.sqrt(np.diag(C_yi))
+                    # Calculate values and 1-sigma
+                    TT = np.vstack([xaxis**(order-i) for i in range(order + 1)]).T
+                    yaxis = np.dot(TT, coeffs)
+                    C_yi = np.dot(TT, np.dot(cov, TT.T))
+                    sig = np.sqrt(np.diag(C_yi))
 
-                # Plot the line and shaded error
-                fig.line(xaxis, yaxis, legend=label, color=color, line_alpha=0.3)
-                xpat = np.hstack((xaxis, xaxis[::-1]))
-                ypat = np.hstack((yaxis+sig, (yaxis-sig)[::-1]))
-                err_source = ColumnDataSource(dict(xaxis=xpat, yaxis=ypat))
-                glyph = Patch(x='xaxis', y='yaxis', fill_color=color, line_color=None, fill_alpha=0.1)
-                fig.add_glyph(err_source, glyph)
+                    # Plot the line and shaded error
+                    fig.line(xaxis, yaxis, legend=label + ' {}'.format(coeffs[::-1]), color=color, line_alpha=0.3)
+                    xpat = np.hstack((xaxis, xaxis[::-1]))
+                    ypat = np.hstack((yaxis + sig, (yaxis - sig)[::-1]))
+                    err_source = ColumnDataSource(dict(xaxis=xpat, yaxis=ypat))
+                    glyph = Patch(x='xaxis', y='yaxis', fill_color=color, line_color=None, fill_alpha=0.1)
+                    fig.add_glyph(err_source, glyph)
+
+            except Exception as exc:
+                print("Skipping the polynomial fit: {}".format(exc))
 
         # Set axis labels
         xunit = source.data[x].unit
@@ -540,6 +587,9 @@ class Catalog:
                     id_cat.add_SED(obj)
             fig = id_cat.plot(x, y, fig=fig, size=size+5, marker='circle', line_color=id_color, fill_color=None, line_width=2, label_points=True)
             del id_cat
+
+        if draw:
+            show(fig)
 
         return fig
 

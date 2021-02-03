@@ -6,6 +6,7 @@
 Interface with astroquery to fetch data
 """
 import os
+import time
 from urllib.request import urlretrieve
 
 from astropy.coordinates import Angle, SkyCoord
@@ -220,16 +221,36 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
     # Name for the catalog
     cat_name = cat_name or catalog
 
-    # Get photometry using designation...
-    if isinstance(target, str):
-        viz_cat = Vizier.query_object(target, catalog=[catalog])
+    try:
 
-    # ...or use coordinates...
-    elif search_radius is not None and isinstance(sky_coords, SkyCoord):
-        viz_cat = Vizier.query_region(sky_coords, radius=search_radius, catalog=[catalog])
+        # Get photometry using designation...
+        if isinstance(target, str):
 
-    # ...or abort
-    else:
+            try:
+                viz_cat = Vizier.query_object(target, catalog=[catalog])
+            except Exception as exc:
+                print(exc)
+                print("Trying again...")
+                time.sleep(10)
+                viz_cat = Vizier.query_object(target, catalog=[catalog])
+
+        # ...or use coordinates...
+        elif search_radius is not None and isinstance(sky_coords, SkyCoord):
+
+            try:
+                viz_cat = Vizier.query_region(sky_coords, radius=search_radius, catalog=[catalog])
+            except Exception as exc:
+                print(exc)
+                print("Trying again...")
+                time.sleep(10)
+                viz_cat = Vizier.query_region(sky_coords, radius=search_radius, catalog=[catalog])
+
+        # ...or abort
+        else:
+            viz_cat = []
+
+    except:
+
         viz_cat = []
 
     # Check there are columns to fetch

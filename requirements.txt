@@ -9,6 +9,7 @@ dustmaps>=1.0.4
 selenium>=2.49.2
 pytest>=6.2.1
 pytest-runner==4.2
+pygments==2.7.4
 pip==20.2.3
 bumpversion==0.5.3
 wheel==0.32.3

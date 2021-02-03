@@ -86,50 +86,54 @@ class TestSED(unittest.TestCase):
         s.name = b'Gl 752B'
 
         # Age
-        s.age = 4*q.Gyr, 0.1*q.Gyr
+        s.age = 4 * q.Gyr, 0.1 * q.Gyr
+        s.age = 4 * q.Gyr, 0.1 * q.Gyr, 'reference'
         self.assertRaises(TypeError, setattr, s, 'age', 'foo')
         self.assertRaises(TypeError, setattr, s, 'age', (4, 0.1))
         self.assertRaises(TypeError, setattr, s, 'age', (4*q.Jy, 0.1*q.Jy))
 
         # Dec
-        s.dec = 1.2345*q.deg
+        s.dec = 1.2345 * q.deg
         self.assertRaises(TypeError, setattr, s, 'dec', 1.2345)
 
         # RA
-        s.ra = 1.2345*q.deg
+        s.ra = 1.2345 * q.deg
         self.assertRaises(TypeError, setattr, s, 'ra', 1.2345)
 
         # Sky coords
-        s.sky_coords = 1.2345*q.deg, 1.2345*q.deg
+        s.sky_coords = 1.2345 * q.deg, 1.2345 * q.deg
         s.sky_coords = '1.2345', '1.2345'
         self.assertRaises(TypeError, setattr, s, 'sky_coords', 'foo')
         self.assertRaises(TypeError, setattr, s, 'sky_coords', None)
 
         # Distance
         s.distance = None
-        s.distance = 1.2*q.pc, 0.1*q.pc
+        s.distance = 1.2 * q.pc, 0.1 * q.pc
+        s.distance = 1.2 * q.pc, 0.1 * q.pc, 'reference'
         self.assertRaises(TypeError, setattr, s, 'distance', (1, 2, 3, 4))
         self.assertRaises(TypeError, setattr, s, 'distance', (1, 4))
 
         # Parallax
         s.parallax = None
-        s.parallax = 1.2*q.mas, 0.1*q.mas
+        s.parallax = 1.2 * q.mas, 0.1 * q.mas
+        s.parallax = 1.2 * q.mas, 0.1 * q.mas, 'reference'
         self.assertRaises(TypeError, setattr, s, 'parallax', (1, 2, 3, 4))
         self.assertRaises(TypeError, setattr, s, 'parallax', (1, 4))
 
         # Radius
         s.radius = None
-        s.radius = 1.2*q.R_jup, 0.1*q.R_jup
+        s.radius = 1.2 * q.R_jup, 0.1 * q.R_jup
+        s.radius = 1.2 * q.R_jup, 0.1 * q.R_jup, 'reference'
         self.assertRaises(TypeError, setattr, s, 'radius', (1, 2, 3, 4))
         self.assertRaises(TypeError, setattr, s, 'radius', (1, 4))
 
         # Spectral type
-        s.spectral_type = 'M3'
+        s.spectral_type = 'M3V', 'reference'
         s.radius = None
-        s.spectral_type = 20
+        s.spectral_type = 20, 0.5
         s.age = None
-        s.spectral_type = 10, 1, 'b', 'V', 'sd'
-        self.assertRaises(TypeError, setattr, s, 'spectral_type', ['foo'])
+        s.spectral_type = [10, 1, 'b', 'V', 'sd'], 'reference'
+        self.assertRaises(ValueError, setattr, s, 'spectral_type', ['foo'])
 
         # Evolutionary Model
         s.evo_model = 'COND03'
@@ -250,11 +254,11 @@ class TestSED(unittest.TestCase):
     def test_fit_spectral_type(self):
         """Test that the SED can be fit by a spectral type atlas"""
         # Grab the SPL
-        spl = mg.SpexPrismLibrary()
+        bt = mg.BTSettl()
 
         # Add known spectrum
         s = copy.copy(self.sed)
-        spec = spl.get_spectrum(snr=100)
+        spec = bt.get_spectrum(snr=100)
         s.add_spectrum(spec)
 
         # Fit with SPL

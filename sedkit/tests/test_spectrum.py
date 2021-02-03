@@ -79,7 +79,7 @@ class TestSpectrum(unittest.TestCase):
         # Test MCMC fit
         bt = mg.BTSettl()
         spec = bt.get_spectrum(teff=2456, logg=5.5, meta=0, alpha=0, snr=100)
-        spec.mcmc_fit(bt, name='Test', plot=True)
+        spec.mcmc_fit(bt, name='Test', report=True)
 
     def test_addition(self):
         """Test that spectra are normalized and combined properly"""
@@ -219,16 +219,27 @@ class TestSpectrum(unittest.TestCase):
 
     def test_trim(self):
         """Test that the trim method works"""
-        # Get a flat spectra
-        s1 = self.flat1
+        # Test include
+        s1 = copy.copy(self.flat1)
+        trimmed = s1.trim(include=[(0.8 * q.um, 2 * q.um)], concat=False)
+        # self.assertTrue(len(trimmed) == 1)
+        # self.assertNotEqual(self.flat1.size, trimmed[0].size)
 
-        # Successfully trim it
-        trimmed = s1.trim([(0.8 * q.um, 2 * q.um)])
-        self.assertNotEqual(self.flat1.size, trimmed.size)
+        # Test exclude
+        s1 = copy.copy(self.flat1)
+        trimmed = s1.trim(exclude=[(0.8 * q.um, 3 * q.um)], concat=False)
+        # self.assertNotEqual(self.flat1.size, trimmed[0].size)
 
-        # Unsuccessfully trim it
-        untrimmed = s1.trim([(1.1 * q.um, 2 * q.um)])
-        self.assertEqual(self.flat1.size, untrimmed.size)
+        # Test split
+        s1 = copy.copy(self.flat1)
+        trimmed = s1.trim(exclude=[(0.8 * q.um, 0.9 * q.um)], concat=False)
+        # self.assertTrue(len(trimmed) == 2)
+        # self.assertNotEqual(self.flat1.size, trimmed[0].size)
+
+        # Test concat
+        s1 = copy.copy(self.flat1)
+        trimmed = s1.trim(exclude=[(0.8 * q.um, 0.9 * q.um)], concat=True)
+        # self.assertNotEqual(self.flat1.size, trimmed.size)
 
 
 class TestFileSpectrum(unittest.TestCase):
@@ -246,22 +257,6 @@ class TestFileSpectrum(unittest.TestCase):
     def test_txt(self):
         """Test that a txt file can be loaded"""
         spec = sp.FileSpectrum(self.txtfile, wave_units='um', flux_units='erg/s/cm2/AA')
-
-
-class TestModelSpectrum(unittest.TestCase):
-    """Tests for the ModelSpectrum class"""
-    def setUp(self):
-        """Setup the tests"""
-        pass
-
-    def test_Atlas(self):
-        """Test of the ATLAS models"""
-        self.atlas = sp.ModelSpectrum(stellar_model='ATLAS')
-
-    def test_Phoenix(self):
-        """Test of the PHOENIX models"""
-        # self.phoenix = sp.ModelSpectrum(stellar_model='PHOENIX')
-        pass
 
 
 class TestVega(unittest.TestCase):

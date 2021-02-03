@@ -28,6 +28,25 @@ class TestModelGrid(unittest.TestCase):
 
         self.modelgrid = grid
 
+        self.bt = mg.BTSettl()
+
+    def test_get_spectrum(self):
+        """Test the get_spectrum method"""
+        # On grid specific
+        spec = self.bt.get_spectrum(teff=3500, logg=5.5, alpha=0, meta=0)
+
+        # On grid ambiguous
+        spec = self.bt.get_spectrum(teff=3500)
+
+        # Off grid
+        spec = self.bt.get_spectrum(teff=3456, logg=5.5, alpha=0, meta=0)
+
+    def test_resample_grid(self):
+        """Test resample_grid method"""
+        bt = self.bt
+        new = bt.resample_grid(teff=[3500, 3600, 3700], logg=[5.5], meta=[0], alpha=[0])
+        self.assertTrue(len(bt.index) > len(new.index))
+
     def test_filter(self):
         """Test the filter metod works"""
         filt = self.modelgrid.filter(SpT=70)

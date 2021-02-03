@@ -198,16 +198,25 @@ class Relation:
             print("Please run the derive method before trying to evaluate.")
             return
 
-        # Evaluate the polynomial
-        y_val = np.polyval(self.coeffs, x_val)
-        y_unc = np.interp(x_val, self.x, self.sig_yi)
+        try:
 
-        if plot:
-            plt = self.plot()
-            plt.circle([x_val], [y_val], color='red', size=10, legend='f({})'.format(x_val))
-            show(plt)
+            # Evaluate the polynomial
+            y_val = np.polyval(self.coeffs, x_val)
+            y_unc = np.interp(x_val, self.x, self.sig_yi)
 
-        return y_val, y_unc
+            if plot:
+                plt = self.plot()
+                plt.circle([x_val], [y_val], color='red', size=10, legend='f({})'.format(x_val))
+                show(plt)
+
+            return y_val, y_unc
+
+        except ValueError as exc:
+
+            print(exc)
+            print("Could not evaluate the {}({}) relation at {}".format(self.yparam, self.xparam, x_val))
+
+            return None
 
     def plot(self, xparam=None, yparam=None, **kwargs):
         """

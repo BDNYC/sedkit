@@ -17,6 +17,7 @@ class TestCatalog(unittest.TestCase):
 
         # Make SEDs
         self.vega = sed.VegaSED()
+        self.sirius = sed.SED('Sirius', spectral_type='A1V', method_list=['find_2MASS', 'find_WISE'])
 
     def test_add(self):
         """Test catalog adding works"""
@@ -69,7 +70,8 @@ class TestCatalog(unittest.TestCase):
 
         # Add another
         s = copy.copy(self.vega)
-        s.spectral_type = 50
+        s.spectral_type = 50, 0.5
+        s.name = 'Foobar'
         cat.add_SED(s)
 
         # Check there are two SEDs
@@ -91,7 +93,7 @@ class TestCatalog(unittest.TestCase):
         # Make the catalog
         cat = copy.copy(self.cat)
         cat.add_SED(self.vega)
-        cat.add_SED(self.vega)
+        cat.add_SED(self.sirius)
 
         # Get the data
         vals = len(cat.get_data('WISE.W1-WISE.W2', 'spectral_type', 'parallax'))
@@ -113,6 +115,7 @@ class TestCatalog(unittest.TestCase):
         # Make the catalog
         cat = copy.copy(self.cat)
         cat.add_SED(self.vega)
+        cat.add_SED(self.sirius)
 
         # Simple plot
         plt = cat.plot('spectral_type', 'parallax')
