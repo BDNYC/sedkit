@@ -24,6 +24,12 @@ or via ``conda`` with
 Contents
 ========
 
+.. automodapi:: sedkit/spectrum
+.. automodapi:: sedkit/sed
+.. automodapi:: sedkit/modelgrid
+.. automodapi:: sedkit/catalog
+
+
 .. toctree::
    :maxdepth: 1
    :caption: Contents:
