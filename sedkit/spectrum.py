@@ -280,8 +280,7 @@ class Spectrum:
         bdict['wave_units'] = self.wave_units
         bdict['flux_units'] = self.flux_units
 
-        if self.verbose:
-            print(bf[modelgrid.parameters])
+        self.message(bf[modelgrid.parameters])
 
         if report is not None:
 
@@ -567,6 +566,23 @@ class Spectrum:
 
         return Spectrum(wave, f1, e1, name=self.name)
 
+    def message(self, msg, pre='[sedkit]'):
+        """
+        Only print message if verbose=True
+
+        Parameters
+        ----------
+        msg: str
+            The message to print
+        pre: str
+            The stuff to print before
+        """
+        if self.verbose:
+            if pre is None:
+                print(msg)
+            else:
+                print("{} {}".format(pre, msg))
+
     def mcmc_fit(self, model_grid, params=['teff'], walkers=5, steps=20, name=None, report=None):
         """
         Produces a marginalized distribution plot of best fit parameters from the specified model_grid
@@ -673,8 +689,7 @@ class Spectrum:
         photometry = photometry[[idx for idx, bnd in enumerate(photometry['band']) if bnd in keep]]
 
         if len(photometry) == 0:
-            if self.verbose:
-                print('No photometry to normalize this spectrum.')
+            self.message('No photometry to normalize this spectrum.')
 
         else:
             # Calculate all the synthetic magnitudes
@@ -696,8 +711,7 @@ class Spectrum:
 
             # Check if there is overlap
             if len(data) == 0:
-                if self.verbose:
-                    print('No photometry in the range {} to normalize this spectrum.'.format([self.wave_min, self.wave_max]))
+                self.message('No photometry in the range {} to normalize this spectrum.'.format([self.wave_min, self.wave_max]))
 
             # Calculate the weighted normalization
             else:

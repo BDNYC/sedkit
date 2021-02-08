@@ -278,6 +278,9 @@ class ModelGrid:
         sedkit.spectrum.Spectrum or np.ndarray
             A numpy array of the spectrum
         """
+        # Check if it's in range
+        self._in_range(**kwargs)
+
         # Get the row index and filepath
         rows = copy(self.index)
         for arg, val in kwargs.items():
@@ -291,8 +294,7 @@ class ModelGrid:
 
         if rows.empty:
             if interp:
-                if self.verbose:
-                    print("Interpolating model grid to point {}".format(kwargs))
+                self.message("Interpolating model grid to point {}".format(kwargs))
 
                 # Guess missing parameter values
                 for param in self.parameters:
@@ -456,6 +458,39 @@ class ModelGrid:
         # Store the parameter ranges
         for param in self.parameters:
             setattr(self, '{}_vals'.format(param), np.asarray(np.unique(self.index[param])))
+
+    def _in_range(self, **kwargs):
+        """
+        Check that the given parameter values are in range of the parameter space
+
+        Returns
+        -------
+        bool
+            If the values are in range
+        """
+        for param, val in kwargs.items():
+
+            vals = getattr(self, '{}_vals'.format(param))
+            mn, mx = vals.min(), vals.max()
+            if val < mn or val > mx:
+                raise ValueError("{} outside of '{}' parameter space [{}, {}]".format(val, param, mn, mx))
+
+    def message(self, msg, pre='[sedkit]'):
+        """
+        Only print message if verbose=True
+
+        Parameters
+        ----------
+        msg: str
+            The message to print
+        pre: str
+            The stuff to print before
+        """
+        if self.verbose:
+            if pre is None:
+                print(msg)
+            else:
+                print("{} {}".format(pre, msg))
 
     def plot(self, fig=None, scale='log', draw=True, **kwargs):
         """Plot the models using Spectrum.plot() with the given parameters

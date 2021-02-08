@@ -186,8 +186,7 @@ class Catalog:
         # Add the new row
         self.results.add_row(new_row)
 
-        if self.verbose:
-            print("Successfully added SED '{}'".format(sed.name))
+        self.message("Successfully added SED '{}'".format(sed.name))
 
     def export(self, parentdir='.', dirname=None, format='ipac', sources=True, zipped=False):
         """
@@ -290,8 +289,7 @@ class Catalog:
         # Get the table of sources
         data = ascii.read(filepath, delimiter=delimiter)
 
-        if self.verbose:
-            print("Generating SEDs for {} sources from {}".format(len(data), filepath))
+        self.message("Generating SEDs for {} sources from {}".format(len(data), filepath))
 
         # Iterate over table
         for row in data:
@@ -353,8 +351,7 @@ class Catalog:
             return copy(self.results[name_or_idx]['SED'])
 
         else:
-            if self.verbose:
-                print('Could not retrieve SED {}'.format(name_or_idx))
+            self.message('Could not retrieve SED {}'.format(name_or_idx))
 
             return
 
@@ -400,6 +397,23 @@ class Catalog:
         results['Teff_evo_unc'].unit = q.K
 
         return results
+
+    def message(self, msg, pre='[sedkit.Catalog]'):
+        """
+        Only print message if verbose=True
+
+        Parameters
+        ----------
+        msg: str
+            The message to print
+        pre: str
+            The stuff to print before
+        """
+        if self.verbose:
+            if pre is None:
+                print(msg)
+            else:
+                print("{} {}".format(pre, msg))
 
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
              xlabel=None, ylabel=None, fig=None, order=None, identify=None,
@@ -546,8 +560,7 @@ class Catalog:
 
                 # Plot the line
                 if coeffs is None or any([np.isnan(i) for i in coeffs]):
-                    if self.verbose:
-                        print("Could not fit that data with an order {} polynomial".format(order))
+                    self.message("Could not fit that data with an order {} polynomial".format(order))
                 else:
 
                     # Calculate values and 1-sigma
@@ -651,8 +664,7 @@ class Catalog:
             self.results.remove_row([name_or_idx])
 
         else:
-            if self.verbose:
-                print('Could not remove SED {}'.format(name_or_idx))
+            self.message('Could not remove SED {}'.format(name_or_idx))
 
             return
 
@@ -677,8 +689,7 @@ class Catalog:
             pickle.dump(self.results, f, pickle.HIGHEST_PROTOCOL)
             f.close()
 
-            if self.verbose:
-                print('Catalog saved to {}'.format(file))
+            self.message('Catalog saved to {}'.format(file))
 
     @property
     def source(self):

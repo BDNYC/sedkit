@@ -139,6 +139,7 @@ class SED:
         """
         # Print stuff
         self.verbose = verbose
+        self.message("SED initialized")
         self.wait = 1
 
         # Attributes with setters
@@ -167,7 +168,7 @@ class SED:
         self.calculated = False
         self.isochrone_radius = False
         self.params = ['name', 'ra', 'dec', 'age', 'membership', 'distance', 'parallax', 'SpT', 'spectral_type', 'fbol', 'mbol', 'Lbol', 'Lbol_sun', 'Mbol', 'Teff', 'Teff_evo', 'Teff_bb', 'logg', 'mass', 'radius']
-        self.use_best_fit = True
+        self.use_best_fit = False
 
         # Set the default wavelength and flux units
         self._wave_units = q.um
@@ -304,7 +305,7 @@ class SED:
         elif isinstance(band, svo.Filter):
             bp, band = band, band.name
         else:
-            print('Not a recognized bandpass: {}'.format(band))
+            self.message('Not a recognized bandpass: {}'.format(band))
 
         # Convert to Vega
         mag, mag_unc = u.convert_mag(band, mag, mag_unc, old=system, new=self.mag_system)
@@ -399,14 +400,13 @@ class SED:
 
         # Make sure it's not a duplicate
         if any([(row['wave_min'] == mn) & (row['wave_max'] == mx) & (row['resolution'] == res) for row in self.spectra]):
-            if self.verbose:
-                print("Looks like that {}-{} spectrum is already added. Skipping...".format(mn, mx))
+            self.message("Looks like that {}-{} spectrum is already added. Skipping...".format(mn, mx))
 
         # If not, add it
         else:
 
             # Make a dict for the new spectrum
-            new_spectrum = {'name': spec.name, 'spectrum': spec, 'history': spec.history, 'wave_min': mn, 'wave_max': mx, 'resolution': res, 'wave_bins': spec.wave.size, 'ref': None}
+            new_spectrum = {'name': spec.name, 'spectrum': spec, 'history': spec.history, 'wave_min': mn, 'wave_max': mx, 'resolution': res, 'wave_bins': spec.wave.size, 'ref': kwargs.get('ref', spec.ref)}
 
             # Add the kwargs
             override = {key: val for key, val in kwargs.items() if key in new_spectrum}
@@ -421,8 +421,7 @@ class SED:
             # Update spectra max and min wavelengths
             self._calculate_spec_lims()
 
-            if self.verbose:
-                print("Spectrum added.")
+            self.message("Spectrum added.")
 
     def add_spectrum_file(self, file, wave_units=None, flux_units=None, ext=0, survey=None, **kwargs):
         """
@@ -491,8 +490,7 @@ class SED:
             # Set reference
             self._refs['age'] = ref
 
-            if self.verbose:
-                print("Setting age to {} with reference '{}'".format(self.age, ref))
+            self.message("Setting age to {} with reference '{}'".format(self.age, ref))
 
         # Set SED as uncalculated
         self.calculated = False
@@ -547,12 +545,18 @@ class SED:
         bandpasses: sequence
             A list of the bandpasses to calculate
         """
+        # Set filter list
+        all_filters = svo.filters()['Band']
+        if bandpasses is None:
+            bandpasses = all_filters
+
+        # Validate filters
+        for band in bandpasses:
+            if band not in all_filters:
+                raise ValueError("{} not a valid bandpass. Try {}".format(band, all_filters))
+
         # Clear table
         self._synthetic_photometry = self._synthetic_photometry[:0]
-
-        # Make sure spectra are calibrated
-        if not self.calculated:
-            self.make_sed()
 
         if len(self.stitched_spectra) > 0:
 
@@ -560,7 +564,7 @@ class SED:
             for spec in self.stitched_spectra:
 
                 # and over bandpasses
-                for band in bandpasses or svo.filters()['Band']:
+                for band in bandpasses:
 
                     # Get the bandpass
                     bp = svo.Filter(band)
@@ -578,8 +582,6 @@ class SED:
 
             # Calibrate the synthetic photometry
             self._calibrate_photometry('synthetic_photometry')
-
-        return self.synthetic_photometry
 
     def _calibrate_photometry(self, name='photometry'):
         """
@@ -635,8 +637,8 @@ class SED:
                 phot_array = phot_array[(getattr(self, name)['app_flux'] > 0) & (getattr(self, name)['app_flux_unc'] > 0)]
                 self.app_phot_SED = sp.Spectrum(*[phot_array[i] * Q for i, Q in zip(app_cols, self.units)])
 
-        # Set SED as uncalculated
-        self.calculated = False
+                # Set SED as uncalculated
+                self.calculated = False
 
     def _calibrate_spectra(self):
         """
@@ -655,7 +657,7 @@ class SED:
             # to form piecewise spectrum for flux calibration
             self.stitched_spectra = []
             if len(self.spectra) == 0:
-                print('No spectra available for SED.')
+                self.message('No spectra available for SED.')
             if len(self.spectra) == 1:
                 self.stitched_spectra = [self.spectra['spectrum'][0]]
             else:
@@ -677,6 +679,9 @@ class SED:
 
         # Set SED as uncalculated
         self.calculated = False
+
+        # Get synthetic magnitudes
+        self.calculate_synthetic_photometry(self.photometry['band'])
 
     def compare_model(self, modelgrid, rebin=True, **kwargs):
         """
@@ -710,7 +715,7 @@ class SED:
             show(fig)
 
         else:
-            print("Sorry, could not fit model to SED")
+            self.message("Sorry, could not fit model to SED")
 
     @property
     def dec(self):
@@ -792,8 +797,7 @@ class SED:
             self._refs['distance'] = ref
             self._refs['parallax'] = ref
 
-            if self.verbose:
-                print("Setting distance to {} and parallax to {} with reference '{}'".format(self.distance, self.parallax, ref))
+            self.message("Setting distance to {} and parallax to {} with reference '{}'".format(self.distance, self.parallax, ref))
 
         # Try to calculate reddening
         self.get_reddening()
@@ -937,10 +941,15 @@ class SED:
         model: str
             The evolutionary model name
         """
-        if model not in iso.EVO_MODELS:
-            raise ValueError("Please use an evolutionary model from the list: {}".format(iso.EVO_MODELS))
+        if model is None:
+            self._evo_model = None
 
-        self._evo_model = iso.Isochrone(model, verbose=self.verbose)
+        else:
+
+            if model not in iso.EVO_MODELS:
+                raise ValueError("Please use an evolutionary model from the list: {}".format(iso.EVO_MODELS))
+
+            self._evo_model = iso.Isochrone(model, verbose=self.verbose)
 
         # Set as uncalculated
         self.calculated = False
@@ -1005,7 +1014,7 @@ class SED:
                 export_png(self.fig, filename=pltopath)
             except:
                 # Bokeh dropped support for PhantomJS so image saving is now browser dependent and fails occasionally
-                print("Could not export SED for {}".format(self.name))
+                self.message("Could not export SED for {}".format(self.name))
 
         # zip if desired
         if zipped:
@@ -1192,10 +1201,9 @@ class SED:
                 self.radius = obj['Diameter_diameter'] / 2. * du, obj['Diameter_error'] * du, obj['Diameter_bibcode']
 
             # Print info
-            if self.verbose:
-                n_rec = len(viz_cat)
-                print("{} record{} for {} found in Simbad.".format(n_rec, '' if n_rec == 1 else 's', crit))
-                print("Setting name to {} and sky_coords to {}".format(self.name, self.sky_coords))
+            n_rec = len(viz_cat)
+            self.message("{} record{} for {} found in Simbad.".format(n_rec, '' if n_rec == 1 else 's', crit))
+            self.message("Setting name to {} and sky_coords to {}".format(self.name, self.sky_coords))
 
         # Pause to prevent ConnectionError with astroquery
         time.sleep(self.wait)
@@ -1235,7 +1243,7 @@ class SED:
                     if any(idx):
                         data = [i[idx] for i in data]
                 except TypeError:
-                    print('Please provide a list of (lower, upper) bounds to exclude from the fit, e.g. [(0, 0.8)]')
+                    self.message('Please provide a list of (lower, upper) bounds to exclude from the fit, e.g. [(0, 0.8)]')
 
         # Initial guess
         if self.Teff is not None:
@@ -1265,11 +1273,10 @@ class SED:
             bb = bb.norm_to_mags(self.photometry[-3:], include=norm_to)
             self.blackbody = bb
 
-            if self.verbose:
-                print('\nBlackbody fit: {} K'.format(self.Teff_bb))
+            self.message('Blackbody fit: {} K'.format(self.Teff_bb))
+
         except IOError:
-            if self.verbose:
-                print('\nNo blackbody fit.')
+            self.message('No blackbody fit.')
 
     def fit_modelgrid(self, modelgrid, name=None, mcmc=False, **kwargs):
         """
@@ -1297,7 +1304,7 @@ class SED:
             model_min, model_max = modelgrid.wave_limits
             spec_min, spec_max = self.app_spec_SED.wave_min, self.app_spec_SED.wave_max
             if model_max < spec_min or model_min > spec_max:
-                print("Could not fit model grid {} to the SED. No overlapping wavelengths.".format(modelgrid.name))
+                self.message("Could not fit model grid {} to the SED. No overlapping wavelengths.".format(modelgrid.name))
 
             if mcmc:
                 self.app_spec_SED.mcmc_fit(modelgrid, name=name, **kwargs)
@@ -1308,14 +1315,13 @@ class SED:
             self.best_fit[name] = self.app_spec_SED.best_fit[name]
             setattr(self, name, self.best_fit[name]['label'])
 
-            if self.verbose:
-                print('Best fit {}: {}'.format(name, self.best_fit[name]['label']))
+            self.message('Best fit {}: {}'.format(name, self.best_fit[name]['label']))
 
             # Make the SED in case use_best_fit is True
             self.make_sed()
 
         else:
-            print("Could not fit model grid {} to the SED. No spectrum to fit.".format(modelgrid.name))
+            self.message("Could not fit model grid {} to the SED. No spectrum to fit.".format(modelgrid.name))
 
     def fit_spectral_type(self):
         """
@@ -1515,16 +1521,17 @@ class SED:
         if self.Lbol_sun is not None:
 
             if self.Lbol_sun is None:
-                print('Lbol={0.Lbol}. Uncertainties are needed to estimate Teff, radius, surface gravity, and mass.'.format(self))
+                self.message('Lbol={0.Lbol}. Uncertainties are needed to estimate Teff, radius, surface gravity, and mass.'.format(self))
 
             else:
-                if self.radius is None:
+                if self.radius is None and self.evo_model is not None:
                     self.radius_from_age()
-                if self.logg is None:
+                if self.logg is None and self.evo_model is not None:
                     self.logg_from_age()
-                if self.mass is None:
+                if self.mass is None and self.evo_model is not None:
                     self.mass_from_age()
-                self.teff_from_age()
+                if self.evo_model is not None:
+                    self.teff_from_age()
 
         # Calculate Teff (dependent on Lbol, distance, and radius)
         self.get_Teff()
@@ -1668,7 +1675,7 @@ class SED:
         for attr in dir(self):
             if not attr.startswith('_') and attr not in ['info', 'results'] and not callable(getattr(self, attr)):
                 val = getattr(self, attr)
-                print('{0: <25}= {1}{2}'.format(attr, '\n' if isinstance(val, at.QTable) else '', val))
+                self.message('{0: <25}= {1}{2}'.format(attr, '\n' if isinstance(val, at.QTable) else '', val))
 
     @property
     def logg(self):
@@ -1712,8 +1719,7 @@ class SED:
             # Set reference
             self._refs['logg'] = ref
 
-            if self.verbose:
-                print("Setting log(g) to {} with reference '{}'".format(self.logg, ref))
+            self.message("Setting log(g) to {} with reference '{}'".format(self.logg, ref))
 
         # Set SED as uncalculated
         self.calculated = False
@@ -1728,21 +1734,20 @@ class SED:
             logg = None
 
             # Check for uncertainties
-            if self.verbose and self.Lbol_sun[1] is None:
-                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
+            if self.Lbol_sun[1] is None:
+                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
             else:
                 logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg', plot=plot)
 
             # Print a message if None
-            if logg is None and self.verbose:
-                print("Could not calculate surface gravity.")
+            if logg is None:
+                self.message("Could not calculate surface gravity.")
 
             # Store the value
             self.logg = [i.round(2) for i in logg] if logg is not None else logg
 
         else:
-            if self.verbose:
-                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
+            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
 
     def make_rj_tail(self, teff=3000 * q.K):
         """
@@ -1796,8 +1801,7 @@ class SED:
         """
         # Make sure there is data
         if len(self.spectra) == 0 and len(self.photometry) == 0:
-            if self.verbose:
-                print('Cannot make the SED without spectra or photometry!')
+            self.message('Cannot make the SED without spectra or photometry!')
             return
 
         # Calculate flux and calibrate
@@ -1819,7 +1823,7 @@ class SED:
 
                 # Check that a best fit exists
                 if len(self.best_fit) == 0:
-                    print("Please run a fitting routine to include best fit in calculations")
+                    self.message("Please run a fitting routine to include best fit in calculations")
 
                 else:
 
@@ -1928,6 +1932,53 @@ class SED:
         wein = wein.trim(include=[(0 * q.um, min_wave)])[0]
 
         self.wein = wein
+        
+    @property
+    def mass(self):
+        """Getter for mass"""
+        return self._mass
+
+    @mass.setter
+    def mass(self, mass):
+        """
+        A setter for mass
+
+        Parameters
+        ----------
+        mass: sequence
+            The mass and uncertainty in mass units
+        """
+        if mass is None:
+            self._mass = None
+            self._refs.pop('mass', None)
+
+        else:
+
+            # If the last value is string, it's the reference
+            if isinstance(mass[-1], str):
+                ref = mass[-1]
+                mass = mass[:-1]
+            else:
+                ref = None
+
+            # Make sure it's a sequence
+            if not u.issequence(mass, length=[2, 3]):
+                raise TypeError("mass must be a sequence of (value, error) or (value, lower_error, upper_error).")
+
+            # Make sure it's in mass units
+            if not all([u.equivalent(ms, q.M_sun) for ms in mass]):
+                raise TypeError("Mass values must be mass units of astropy.units.quantity.Quantity, e.g. 'M_sun'")
+
+            # Set the mass!
+            self._mass = mass
+
+            # Set reference
+            self._refs['mass'] = ref
+
+            self.message("Setting mass to {} with reference '{}'".format(self.mass, ref))
+
+        # Set SED as uncalculated
+        self.calculated = False
 
     def mass_from_age(self, mass_units=q.Msun, plot=False):
         """
@@ -1944,21 +1995,20 @@ class SED:
             mass = None
 
             # Check for uncertainties
-            if self.verbose and self.Lbol_sun[1] is None:
-                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
+            if self.Lbol_sun[1] is None:
+                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
             else:
                 mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', plot=plot)
 
             # Print a message if None
-            if mass is None and self.verbose:
-                print("Could not calculate mass.")
+            if mass is None:
+                self.message("Could not calculate mass.")
 
             # Store the value
             self.mass = [i.round(3) for i in mass] if mass is not None else mass
 
         else:
-            if self.verbose:
-                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the mass.'.format(self))
+            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the mass.'.format(self))
 
     @property
     def membership(self):
@@ -1986,14 +2036,13 @@ class SED:
             # Set the membership!
             self._membership = membership
 
-            if self.verbose:
-                print('Setting membership to', self.membership)
+            self.message('Setting membership to', self.membership)
 
             # Set the age
             self.age = iso.NYMG_AGES.get(membership)
 
         else:
-            print('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(iso.NYMG_AGES.keys())))
+            self.message('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(iso.NYMG_AGES.keys())))
 
     @property
     def name(self):
@@ -2001,6 +2050,23 @@ class SED:
         A property for name
         """
         return self._name
+
+    def message(self, msg, pre='[sedkit]'):
+        """
+        Only print message if verbose=True
+
+        Parameters
+        ----------
+        msg: str
+            The message to print
+        pre: str
+            The stuff to print before
+        """
+        if self.verbose:
+            if pre is None:
+                print(msg)
+            else:
+                print("{} {}".format(pre, msg))
 
     @name.setter
     def name(self, new_name):
@@ -2080,8 +2146,7 @@ class SED:
             self._refs['parallax'] = ref
             self._refs['distance'] = ref
 
-            if self.verbose:
-                print("Setting parallax to {} and distance to {} with reference '{}'".format(self.parallax, self.distance, ref))
+            self.message("Setting parallax to {} and distance to {} with reference '{}'".format(self.parallax, self.distance, ref))
 
         # Try to calculate reddening
         self.get_reddening()
@@ -2357,8 +2422,7 @@ class SED:
             # Set reference
             self._refs['radius'] = ref
 
-            if self.verbose:
-                print("Setting radius to {} with reference '{}'".format(self.radius, ref))
+            self.message("Setting radius to {} with reference '{}'".format(self.radius, ref))
 
         # Set SED as uncalculated
         self.calculated = False
@@ -2377,7 +2441,7 @@ class SED:
             self.radius = SptRadius.get_radius(spt)
 
         except:
-            print("Could not estimate radius from spectral type {}".format(spt))
+            self.message("Could not estimate radius from spectral type {}".format(spt))
 
     def radius_from_age(self, radius_units=q.Rsun, plot=False):
         """
@@ -2394,24 +2458,25 @@ class SED:
             radius = None
 
             # Check for uncertainties
-            if self.verbose and self.Lbol_sun[1] is None:
-                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the radius.'.format(self))
+            if self.Lbol_sun[1] is None:
+                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the radius.'.format(self))
             else:
                 self.evo_model.radius_units = radius_units
                 radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
 
             # Print a message if None
-            if radius is None and self.verbose:
-                print("Could not calculate radius.")
+            if radius is None:
+                self.message("Could not calculate radius.")
 
             # Store the value
             self.radius = [i.round(3) for i in radius] if radius is not None else radius
             if radius is not None:
                 self.isochrone_radius = True
+            self.message("{}: Lbol={}, age={} ==> radius={}".format(self.evo_model.name, self.Lbol_sun, self.age, self.radius ))
+
 
         else:
-            if self.verbose:
-                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
+            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
 
     @property
     def refs(self):
@@ -2565,6 +2630,23 @@ class SED:
         if simbad:
             self.find_Simbad()
 
+    def spectrum_from_modelgrid(self, model_grid, snr=10, **kwargs):
+        """
+        Load a spectrum of the given parameters from the given ModelGrid
+
+        Parameters
+        ----------
+        model_grid: sedkit.modelgrid.ModelGrid
+            A model grid to get the spectrum from
+        snr: int, float
+            The signal to noise to apply
+        """
+        # Get the model from the model grid
+        model = model_grid.get_spectrum(snr=snr, **kwargs)
+
+        # Save the model as a spectrum
+        self.add_spectrum(model)
+
     @property
     def spectra(self):
         """
@@ -2646,7 +2728,7 @@ class SED:
                     self.age = 225 * q.Myr, 75 * q.Myr
 
                 else:
-                    print("{} is an invalid gravity. Please use 'beta' or 'gamma' instead.".format(gravity))
+                    self.message("{} is an invalid gravity. Please use 'beta' or 'gamma' instead.".format(gravity))
 
             # If radius not explicitly set, estimate it from spectral type
             if self.spectral_type is not None and self.radius is None:
@@ -2655,8 +2737,7 @@ class SED:
             # Update the reference
             self._refs['spectral_type'] = ref
 
-        if self.verbose:
-            print("Setting spectral_type to {} with reference '{}'".format((self.spectral_type[0], self.spectral_type[1], self.luminosity_class, self.gravity, self.prefix), ref))
+        self.message("Setting spectral_type to {} with reference '{}'".format((self.spectral_type[0], self.spectral_type[1], self.luminosity_class, self.gravity, self.prefix), ref))
 
         # Set SED as uncalculated
         self.calculated = False
@@ -2667,7 +2748,7 @@ class SED:
         A property for synthetic photometry
         """
         if len(self._synthetic_photometry) == 0:
-            print("No synthetic photometry. Run `calculate_synthetic_photometry()` to generate.")
+            self.message("No synthetic photometry. Run `calculate_synthetic_photometry()` to generate.")
 
         # Sort by wavelength
         # self._synthetic_photometry.sort('eff')
@@ -2689,22 +2770,21 @@ class SED:
             teff = None
 
             # Check for uncertainties
-            if self.verbose and self.Lbol_sun[1] is None:
-                print('Lbol={0.Lbol}. Uncertainties are needed to calculate the teff.'.format(self))
+            if self.Lbol_sun[1] is None:
+                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the teff.'.format(self))
             else:
                 self.evo_model.teff_units = teff_units
                 teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
 
             # Print a message if None
-            if teff is None and self.verbose:
-                print("Could not calculate teff.")
+            if teff is None:
+                self.message("Could not calculate teff.")
 
             # Store the value
             self.Teff_evo = [i.round(0) for i in teff] if teff is not None else teff
 
         else:
-            if self.verbose:
-                print('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the teff.'.format(self))
+            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the teff.'.format(self))
 
     @property
     def wave_units(self):

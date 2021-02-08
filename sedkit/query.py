@@ -52,7 +52,7 @@ def query_SDSS_optical_spectra(coords, idx=0, verbose=True, **kwargs):
 
     # Print info
     if verbose:
-        print("{} record{} found in SDSS optical data.".format(n_rec, '' if n_rec == 1 else 's'))
+        print("[sedkit] {} record{} found in SDSS optical data.".format(n_rec, '' if n_rec == 1 else 's'))
 
     if n_rec == 0:
 
@@ -229,8 +229,8 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
             try:
                 viz_cat = Vizier.query_object(target, catalog=[catalog])
             except Exception as exc:
-                print(exc)
-                print("Trying again...")
+                print("[sedkit] {}".format(exc))
+                print("[sedkit] Trying query again...")
                 time.sleep(10)
                 viz_cat = Vizier.query_object(target, catalog=[catalog])
 
@@ -240,8 +240,8 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
             try:
                 viz_cat = Vizier.query_region(sky_coords, radius=search_radius, catalog=[catalog])
             except Exception as exc:
-                print(exc)
-                print("Trying again...")
+                print("[sedkit] {}".format(exc))
+                print("[sedkit] Trying again...")
                 time.sleep(10)
                 viz_cat = Vizier.query_region(sky_coords, radius=search_radius, catalog=[catalog])
 
@@ -266,13 +266,13 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
     # Print info
     if verbose:
         n_rec = len(viz_cat)
-        print("{} record{} found in {}.".format(n_rec, '' if n_rec == 1 else 's', cat_name))
+        print("[sedkit] {} record{} found in {}.".format(n_rec, '' if n_rec == 1 else 's', cat_name))
 
     # Parse the record
     results = []
     if len(viz_cat) > 0:
         if len(viz_cat) > 1:
-            print('{} {} records found.'.format(len(viz_cat), name))
+            print('[sedkit] {} {} records found.'.format(len(viz_cat), name))
 
         # Grab the record
         rec = viz_cat[0][idx]
@@ -285,6 +285,6 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
                 data = [val for val in rec[fetch]]
                 results.append([name] + data + [ref])
             else:
-                print("{}: Could not find all those columns".format(fetch))
+                print("[sedkit] {}: Could not find all those columns".format(fetch))
 
     return results

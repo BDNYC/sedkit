@@ -65,8 +65,3 @@ target/
 *checkpoint.ipynb
 .idea/
 .idea/*
-
-# RTD
-_build
-_static
-_templates

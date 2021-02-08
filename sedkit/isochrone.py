@@ -69,7 +69,7 @@ class Isochrone:
 
         # Calculate radii if not in the table (R = sqrt(GM/g))
         if 'radius' not in self.data.colnames:
-            radius = np.sqrt((ac.G * (self.data['mass'] * q.M_sun)) / ((10**self.data['logg']) * q.m / q.s**2)).to(q.R_sun)
+            radius = np.sqrt((ac.G * (self.data['mass'] * q.M_sun)) / ((10**self.data['logg']) * q.cm / q.s**2)).to(q.R_sun)
             self.data.add_column(radius, name='radius')
 
         # Get the units
@@ -159,9 +159,8 @@ class Isochrone:
 
         # Test the age range is inbounds
         if age[0] < self.ages.min() or age[0] > self.ages.max():
-            if self.verbose:
-                args = age[0], self.ages.min(), self.ages.max(), yparam, self.name
-                print('{}: age must be between {} and {} to infer {} from {} isochrones.'.format(*args))
+            args = age[0], self.ages.min(), self.ages.max(), yparam, self.name
+            self.message('{}: age must be between {} and {} to infer {} from {} isochrones.'.format(*args))
             return None
 
         # Get the lower, nominal, and upper values
@@ -235,9 +234,8 @@ class Isochrone:
         min_x = min(lower_iso[xparam].min(), upper_iso[xparam].min())
         max_x = max(lower_iso[xparam].max(), upper_iso[xparam].max())
         if xval < min_x or xval > max_x:
-            if self.verbose:
-                args = round(xval, 3), xparam, min_x, max_x, yparam, self.name
-                print('{}: {} must be between {} and {} to infer {} from {} isochrones.'.format(*args))
+            args = round(xval, 3), xparam, min_x, max_x, yparam, self.name
+            self.message('{}: {} must be between {} and {} to infer {} from {} isochrones.'.format(*args))
             return None
 
         # Get the neighboring interpolated values
@@ -250,6 +248,23 @@ class Isochrone:
         unit = self.data[yparam].unit or 1
 
         return result * unit
+
+    def message(self, msg, pre='[sedkit.Isochrone]'):
+        """
+        Only print message if verbose=True
+
+        Parameters
+        ----------
+        msg: str
+            The message to print
+        pre: str
+            The stuff to print before
+        """
+        if self.verbose:
+            if pre is None:
+                print(msg)
+            else:
+                print("{} {}".format(pre, msg))
 
     def plot(self, xparam, yparam, draw=False, **kwargs):
         """Plot an evaluated isochrone, isochrone, or set of isochrones
