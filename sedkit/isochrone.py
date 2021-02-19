@@ -30,8 +30,10 @@ NYMG_AGES = {'AB Dor': (149 * q.Myr, 51 * q.Myr, '2015MNRAS.454..593B'),
              '32 Ori': (22 * q.Myr, 4 * q.Myr, '2015MNRAS.454..593B')}
 
 # A list of all supported evolutionary models
-EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
-
+try:
+    EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
+except:
+    EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'sedkit/data/models/evolutionary/*'))]
 
 class Isochrone:
     """A class to handle model isochrones"""
