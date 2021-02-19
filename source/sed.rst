@@ -3,8 +3,7 @@
 SED
 ===
 
-An SED can be constructed by importing and initializing an ``SED``
-object.
+An SED (spectral energy distribution) can be constructed by importing and initializing an :py:class:`~sed.SED` object.
 
 .. code:: python
 
@@ -49,15 +48,13 @@ parameters can be set at any time.
     trap1.age = 7.6 * q.Gyr, 2.2 * q.Gyr
     trap1.radius = 0.121 * q.R_sun, 0.003 * q.R_sun
 
-Results can be calculated at any time by checking the ``results``
-property.
+Results can be calculated at any time by checking the :py:attr:`~sed.SED.results` property.
 
 .. code:: python
 
     trap1.results
 
-A variety of evolutionary model grids can be used to infer fundamental
-parameters,
+A variety of evolutionary model grids can be used to infer fundamental parameters,
 
 .. code:: python
 
@@ -84,6 +81,6 @@ Inspect the SED at any time with the interactive plotting method.
 
     trap1.plot()
 
-Entire catalogs of ``SED`` objects can also be created and their
+Entire catalogs of :py:class:`~sed.SED` objects can also be created and their
 properties can be arbitrarily compared and analyzed with the
-:ref:`catalog` object.
+:py:class:`~catalog.Catalog` object.

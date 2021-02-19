@@ -3,7 +3,7 @@
 Spectrum
 ========
 
-The :ref:`Spectrum` class handles any 1D data representing the light from an astronomical source. A :ref:`Spectrum` object is created by passing the wavelength, flux density, and (optional) uncertainty with ``astropy.units`` to the class.
+The :py:class:`~spectrum.Spectrum` class handles any 1D data representing the light from an astronomical source. A :py:class:`~spectrum.Spectrum` object is created by passing the wavelength, flux density, and (optional) uncertainty with ``astropy.units`` to the class.
 
 .. code:: python
 
@@ -15,7 +15,7 @@ The :ref:`Spectrum` class handles any 1D data representing the light from an ast
     unc = flux / 100.
     spec = Spectrum(wavelength, flux, unc, name='My spectrum')
 
-The :ref:`Spectrum` has a number of useful attributes.
+The :py:class:`~spectrum.Spectrum` has a number of useful attributes.
 
 .. code:: python
 
@@ -33,16 +33,16 @@ The :ref:`Spectrum` has a number of useful attributes.
     spec.flux_units     # The flux density units
     spec.size           # The number of data points
 
-After the :ref:`Spectrum` has been created, it be manipulated in a number of ways.
+After the :py:class:`~spectrum.Spectrum` has been created, it be manipulated in a number of ways.
 
-It can be trimmed by passing a list of lower and upper bounds to ``trim`` method. The ``include`` argument accepts bounds for wavelength regions to include and the ``exclude`` argument accepts bounds for regions to exclude. A list of :ref:`Spectrum` objects are returned unless the ``concat`` argument is set to ``True``, which simply concatenated the trimmed segment(s) into one :ref:`Spectrum`.
+It can be trimmed by passing a list of lower and upper bounds to :py:meth:`~spectrum.Spectrum.trim` method. The ``include`` argument accepts bounds for wavelength regions to include and the ``exclude`` argument accepts bounds for regions to exclude. A list of :py:class:`~spectrum.Spectrum` objects are returned unless the ``concat`` argument is set to ``True``, which simply concatenated the trimmed segment(s) into one :py:class:`~spectrum.Spectrum`.
 
 .. code:: python
 
     trim_spec_include = spec.trim(include=[(1.2 * q.um, 1.6 * q.um)])
     trim_spec_exclude = spec.trim(exclude=[(1.2 * q.um, 1.6 * q.um)], concat=True)
 
-The ``interpolate`` method accepts a new wavelength array and returns a new :ref:`Spectrum` object interpolated to those values. The ``resamp`` method accepts the same input and resamples the spectrum onto the new wavelength array while preserving the total flux.
+The :py:meth:`~spectrum.Spectrum.interpolate` method accepts a new wavelength array and returns a new :py:class:`~spectrum.Spectrum` object interpolated to those values. The :py:meth:`~spectrum.Spectrum.resamp` method accepts the same input and resamples the spectrum onto the new wavelength array while preserving the total flux.
 
 .. code:: python
 
@@ -50,19 +50,19 @@ The ``interpolate`` method accepts a new wavelength array and returns a new :ref
     new_wav_interp = spec.interpolate(new_wav)
     new_wav_resamp = spec.resamp(new_wav)
 
-The ``integrate`` method integrates the curve to caluclate the area underneath using the trapezoidal rule.
+The :py:meth:`~spectrum.Spectrum.integrate` method integrates the curve to calculate the area underneath using the trapezoidal rule.
 
 .. code:: python
 
     area = spec.integrate()
 
-The :ref:`Spectrum` can be smoothed using a Kaiser-Bessel smoothing window of narrowness ``beta`` and a given ``window`` size.
+The :py:class:`~spectrum.Spectrum` can be smoothed using a Kaiser-Bessel smoothing window of narrowness ``beta`` and a given ``window`` size.
 
 .. code:: python
 
     smooth_spec = spec.smooth(beta=2, window=11)
 
-A :ref:`Spectrum` may be flux calibrated to a given distance by passing a distance to the ``flux_calibrate`` method.
+A :py:class:`~spectrum.Spectrum` may be flux calibrated to a given distance by passing a distance to the :py:meth:`~spectrum.Spectrum.flux_calibrate` method.
 
 .. code:: python
 
@@ -79,9 +79,9 @@ A bandpass name or ``svo_filters.svo.Filter`` object can be used to convolve the
     jmag = spec.synthetic_magnitude(jband)      # Synthetic magnitude
     jflux = spec.synthetic_flux(jband)          # Synthetic flux
 
-It can also be normalized to a table of photometry weighted by the magnitude uncertainties with the ``norm_to_mags`` method. See the :ref:`SED` class for an example.
+It can also be normalized to a table of photometry weighted by the magnitude uncertainties with the :py:meth:`~spectrum.Spectrum.norm_to_mags` method. See the :ref:`SED` class for an example.
 
-A :ref:`Spectrum` object may also interact with another ``Spectrum`` object in a number of ways. The ``norm_to_spec`` method creates a new object normalized to the input :ref:`Spectrum` object and the ``__add__`` operation combines two :ref:`Spectrum` objects in their common wavelength region or concatenates the segments.
+A :py:class:`~spectrum.Spectrum` object may also interact with another :py:class:`~spectrum.Spectrum` object in a number of ways. The :py:meth:`~spectrum.Spectrum.norm_to_spec` method creates a new object normalized to the input :py:class:`~spectrum.Spectrum` object and the :py:meth:`~spectrum.Spectrum.__add__` operation combines two :py:class:`~spectrum.Spectrum` objects in their common wavelength region or concatenates the segments.
 
 .. code:: python
 
@@ -89,7 +89,7 @@ A :ref:`Spectrum` object may also interact with another ``Spectrum`` object in a
     normed_spec = spec.norm_to_spec(spec2)  # spec normalized to spec2
     combined_spec = spec + spec2            # New combined spectrum
 
-Any :ref:`Spectrum` may also be fit by a :ref:`ModelGrid` object to find the best fit model or spectrum. The ``best_fit_model`` method performs a simple goodness of fit test and returns the model with the best fit. The ``mcmc_fit` method performs a MCMC fit to the grid and returns the best fit parameters with uncertainties. The details of any fit are stored as a dictionary in the ``best_fit`` attribute.
+Any :py:class:`~spectrum.Spectrum` may also be fit by a :py:class:`~modelgrid.ModelGrid` object to find the best fit model or spectrum. The :py:meth:`~spectrum.Spectrum.best_fit_model` method performs a simple goodness of fit test and returns the model with the best fit. The :py:meth:`~spectrum.Spectrum.mcmc_fit` method performs a MCMC fit to the grid and returns the best fit parameters with uncertainties. The details of any fit are stored as a dictionary in the :py:attr:`~spectrum.Spectrum.best_fit` attribute.
 
 .. code:: python
 
@@ -98,34 +98,34 @@ Any :ref:`Spectrum` may also be fit by a :ref:`ModelGrid` object to find the bes
     spec.best_fit_model(bt)             # Goodness of fit
     spec.mcmc_fit(bt, params=['teff'])  # MCMC fit
 
-For visual inspection of an interactive ``bokeh.plotting.figure``, use the ``plot`` method.
+For visual inspection of an interactive ``bokeh.plotting.figure``, use the :py:meth:`~spectrum.Spectrum.plot` method.
 
 .. code:: python
 
     spec.plot()
 
-Several child classes are also available. The ``Blackbody`` class creates a blackbody spectrum for a given wavelength range and effective temperature.
+Several child classes are also available. The :py:class:`~spectrum.Blackbody` class creates a blackbody spectrum for a given wavelength range and effective temperature.
 
 .. code:: python
 
     from sedkit.spectrum import Blackbody
     bb_spec = Blackbody(np.linspace(1.5, 2.5, 100) * q.um, teff=2456 * q.K)
 
-The ever useful spectrum of ``Vega`` is easily created.
+The ever useful spectrum of :py:class:`~spectrum.Vega` is easily created.
 
 .. code:: python
 
     from sedkit.spectrum import Vega
     vega = Vega()
 
-And a ``Spectrum`` object can be created directly from a FITS or ASCII file with the ``FileSpectrum`` class.
+And a :py:class:`~spectrum.Spectrum` object can be created directly from a FITS or ASCII file with the :py:class:`~spectrum.FileSpectrum` class.
 
 .. code:: python
 
     from sedkit.spectrum import FileSpectrum
     file_spec = FileSpectrum('/path/to/the/file.fits', wave_units=q.um, flux_units=q.erg/q.s/q.cm**2/q.AA)
 
-Finally, the data can be exported to an ASCII file by passing a filepath to the ``export`` method.
+Finally, the data can be exported to an ASCII file by passing a filepath to the :py:meth:`~spectrum.Spectrum.export` method.
 
 .. code:: python
 

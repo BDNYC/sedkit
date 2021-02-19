@@ -35,8 +35,7 @@
             
   <div class="section" id="sed">
 <span id="id1"></span><h1>SED<a class="headerlink" href="#sed" title="Permalink to this headline">¶</a></h1>
-<p>An SED can be constructed by importing and initializing an <code class="docutils literal notranslate"><span class="pre">SED</span></code>
-object.</p>
+<p>An SED (spectral energy distribution) can be constructed by importing and initializing an <code class="xref py py-class docutils literal notranslate"><span class="pre">SED</span></code> object.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">SED</span>
 <span class="n">trap1</span> <span class="o">=</span> <span class="n">SED</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;Trappist-1&#39;</span><span class="p">)</span>
 </pre></div>
@@ -70,13 +69,11 @@ parameters can be set at any time.</p>
 <span class="n">trap1</span><span class="o">.</span><span class="n">radius</span> <span class="o">=</span> <span class="mf">0.121</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">R_sun</span><span class="p">,</span> <span class="mf">0.003</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">R_sun</span>
 </pre></div>
 </div>
-<p>Results can be calculated at any time by checking the <code class="docutils literal notranslate"><span class="pre">results</span></code>
-property.</p>
+<p>Results can be calculated at any time by checking the <code class="xref py py-attr docutils literal notranslate"><span class="pre">results</span></code> property.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trap1</span><span class="o">.</span><span class="n">results</span>
 </pre></div>
 </div>
-<p>A variety of evolutionary model grids can be used to infer fundamental
-parameters,</p>
+<p>A variety of evolutionary model grids can be used to infer fundamental parameters,</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trap1</span><span class="o">.</span><span class="n">evo_model</span> <span class="o">=</span> <span class="s1">&#39;DUSTY00&#39;</span>
 <span class="n">trap1</span><span class="o">.</span><span class="n">mass_from_age</span><span class="p">()</span>
 </pre></div>
@@ -95,9 +92,9 @@ parameters,</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trap1</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>Entire catalogs of <code class="docutils literal notranslate"><span class="pre">SED</span></code> objects can also be created and their
+<p>Entire catalogs of <code class="xref py py-class docutils literal notranslate"><span class="pre">SED</span></code> objects can also be created and their
 properties can be arbitrarily compared and analyzed with the
-<a class="reference internal" href="catalog.html#catalog"><span class="std std-ref">Catalog</span></a> object.</p>
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Catalog</span></code> object.</p>
 </div>
 
 
