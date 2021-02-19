@@ -38,6 +38,7 @@ release = __version__
 extensions = [
     'sphinx_automodapi.automodapi',
     'sphinx_automodapi.automodsumm',
+    'sphinx-automodapi.smart_resolver',
     'sphinx.ext.autodoc',
     'sphinx.ext.imgmath',
     'nbsphinx',

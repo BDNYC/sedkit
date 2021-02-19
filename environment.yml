@@ -13,6 +13,8 @@ dependencies:
   - pandas>=0.23.4
   - pip>=20.3.3
   - selenium>=2.49.2
+  - sphinx>=3.4.3
+  - sphinx-automodapi>=0.13
   - pytest>=6.2.1
   - pygments>=2.7.4
   - jupyter>=1.0.0
