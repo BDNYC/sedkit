@@ -49,17 +49,17 @@ class TestModelGrid(unittest.TestCase):
 
     def test_filter(self):
         """Test the filter metod works"""
-        filt = self.modelgrid.filter(SpT=70)
+        filt = self.bt.filter(teff=3500)
         self.assertEqual(len(filt), 1)
 
     def test_plot(self):
         """Test that the plot method works"""
-        plt = self.modelgrid.plot(SpT=70, draw=False)
+        plt = self.bt.plot(teff=3500, draw=False)
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
 
     def test_save(self):
         """Test the save method works"""
-        self.modelgrid.save('test.p')
+        self.bt.save('test.p')
         os.system('rm test.p')
 
 

@@ -281,6 +281,10 @@ class ModelGrid:
         # Check if it's in range
         self._in_range(**kwargs)
 
+        # Can't interp if strings
+        if any([type(self.index[param][0]) == str for param in kwargs]):
+            interp = False
+
         # Get the row index and filepath
         rows = copy(self.index)
         for arg, val in kwargs.items():
@@ -288,7 +292,7 @@ class ModelGrid:
             if closest:
                 old_val = copy(val)
                 val = self.closest_value(old_val, rows[arg])
-                print('Teff = {} rounded to {}'.format(old_val, val))
+                print('{} = {} rounded to {}'.format(arg, old_val, val))
 
             rows = rows.loc[rows[arg] == val]
 
@@ -356,6 +360,25 @@ class ModelGrid:
         if parameters is None:
             parameters = [col for col in self.index.columns if col not in ['filepath', 'spectrum', 'label']]
         self.parameters = parameters
+
+    def _in_range(self, **kwargs):
+        """
+        Check that the given parameter values are in range of the parameter space
+
+        Returns
+        -------
+        bool
+            If the values are in range
+        """
+        for param, val in kwargs.items():
+
+            # Pass range test if column is strings
+            if type(self.index[param][0]) != str:
+
+                vals = getattr(self, '{}_vals'.format(param))
+                mn, mx = vals.min(), vals.max()
+                if val < mn or val > mx:
+                    raise ValueError("{} outside of '{}' parameter space [{}, {}]".format(val, param, mn, mx))
 
     def interp(self, **kwargs):
         """
@@ -458,22 +481,6 @@ class ModelGrid:
         # Store the parameter ranges
         for param in self.parameters:
             setattr(self, '{}_vals'.format(param), np.asarray(np.unique(self.index[param])))
-
-    def _in_range(self, **kwargs):
-        """
-        Check that the given parameter values are in range of the parameter space
-
-        Returns
-        -------
-        bool
-            If the values are in range
-        """
-        for param, val in kwargs.items():
-
-            vals = getattr(self, '{}_vals'.format(param))
-            mn, mx = vals.min(), vals.max()
-            if val < mn or val > mx:
-                raise ValueError("{} outside of '{}' parameter space [{}, {}]".format(val, param, mn, mx))
 
     def message(self, msg, pre='[sedkit]'):
         """
