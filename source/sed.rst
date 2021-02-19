@@ -1,7 +1,7 @@
 .. _sed:
 
-The ``SED`` class
-=================
+SED
+===
 
 An SED can be constructed by importing and initializing an ``SED``
 object.
@@ -86,4 +86,4 @@ Inspect the SED at any time with the interactive plotting method.
 
 Entire catalogs of ``SED`` objects can also be created and their
 properties can be arbitrarily compared and analyzed with the
-``Catalog`` object.
+:ref:`catalog` object.

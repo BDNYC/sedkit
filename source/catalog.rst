@@ -1,9 +1,9 @@
 .. _catalog:
 
-The ``Catalog`` class
-=====================
+Catalog
+=======
 
-Collections of ``SED`` objects can be stored and analyzed in a ``Catalog`` object. One can be initialized and populated with an ``SED`` object using the ``add_SED`` method.
+Collections of :ref:`SED` objects can be stored and analyzed in a :ref:`Catalog` object. One can be initialized and populated with an :ref:`SED` object using the ``add_SED`` method.
 
 .. code:: python
 
@@ -73,7 +73,7 @@ The results table, photometry, and plots of each SED can be exported to a zip fi
 
     cat.export('/path/to/target/dir', zip=True)
 
-The whole ``Catalog`` object can be serialized and loaded with the ``save`` and ``load`` methods, respectively.
+The whole :ref:`Catalog` object can be serialized and loaded with the ``save`` and ``load`` methods, respectively.
 
 .. code:: python
 

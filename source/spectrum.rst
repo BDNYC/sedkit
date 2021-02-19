@@ -1,9 +1,9 @@
 .. _spectrum:
 
-The ``Spectrum`` class
-======================
+Spectrum
+========
 
-The ``spectrum`` class handles any 1D data representing the light from an astronomical source. A ``spectrum`` object is created by passing the wavelength, flux density, and (optional) uncertainty with ``astropy.units`` to the class.
+The :ref:`Spectrum` class handles any 1D data representing the light from an astronomical source. A :ref:`Spectrum` object is created by passing the wavelength, flux density, and (optional) uncertainty with ``astropy.units`` to the class.
 
 .. code:: python
 
@@ -15,7 +15,7 @@ The ``spectrum`` class handles any 1D data representing the light from an astron
     unc = flux / 100.
     spec = Spectrum(wavelength, flux, unc, name='My spectrum')
 
-The ``Spectrum`` has a number of useful attributes.
+The :ref:`Spectrum` has a number of useful attributes.
 
 .. code:: python
 
@@ -33,16 +33,16 @@ The ``Spectrum`` has a number of useful attributes.
     spec.flux_units     # The flux density units
     spec.size           # The number of data points
 
-After the ``Spectrum`` has been created, it be manipulated in a number of ways.
+After the :ref:`Spectrum` has been created, it be manipulated in a number of ways.
 
-It can be trimmed by passing a list of lower and upper bounds to ``trim`` method. The ``include`` argument accepts bounds for wavelength regions to include and the ``exclude`` argument accepts bounds for regions to exclude. A list of ``Spectrum`` objects are returned unless the ``concat`` argument is set to ``True``, which simply concatenated the trimmed segment(s) into one ``Spectrum``.
+It can be trimmed by passing a list of lower and upper bounds to ``trim`` method. The ``include`` argument accepts bounds for wavelength regions to include and the ``exclude`` argument accepts bounds for regions to exclude. A list of :ref:`Spectrum` objects are returned unless the ``concat`` argument is set to ``True``, which simply concatenated the trimmed segment(s) into one :ref:`Spectrum`.
 
 .. code:: python
 
     trim_spec_include = spec.trim(include=[(1.2 * q.um, 1.6 * q.um)])
     trim_spec_exclude = spec.trim(exclude=[(1.2 * q.um, 1.6 * q.um)], concat=True)
 
-The ``interpolate`` method accepts a new wavelength array and returns a new ``Spectrum`` object interpolated to those values. The ``resamp`` method accepts the same input and resamples the spectrum onto the new wavelength array while preserving the total flux.
+The ``interpolate`` method accepts a new wavelength array and returns a new :ref:`Spectrum` object interpolated to those values. The ``resamp`` method accepts the same input and resamples the spectrum onto the new wavelength array while preserving the total flux.
 
 .. code:: python
 
@@ -56,13 +56,13 @@ The ``integrate`` method integrates the curve to caluclate the area underneath u
 
     area = spec.integrate()
 
-The ``Spectrum`` can be smoothed using a Kaiser-Bessel smoothing window of narrowness ``beta`` and a given ``window`` size.
+The :ref:`Spectrum` can be smoothed using a Kaiser-Bessel smoothing window of narrowness ``beta`` and a given ``window`` size.
 
 .. code:: python
 
     smooth_spec = spec.smooth(beta=2, window=11)
 
-A ``Spectrum`` may be flux calibrated to a given distance by passing a distance to the ``flux_calibrate`` method.
+A :ref:`Spectrum` may be flux calibrated to a given distance by passing a distance to the ``flux_calibrate`` method.
 
 .. code:: python
 
@@ -79,9 +79,9 @@ A bandpass name or ``svo_filters.svo.Filter`` object can be used to convolve the
     jmag = spec.synthetic_magnitude(jband)      # Synthetic magnitude
     jflux = spec.synthetic_flux(jband)          # Synthetic flux
 
-It can also be normalized to a table of photometry weighted by the magnitude uncertainties with the ``norm_to_mags`` method. See the ``SED`` class for an example.
+It can also be normalized to a table of photometry weighted by the magnitude uncertainties with the ``norm_to_mags`` method. See the :ref:`SED` class for an example.
 
-A ``Spectrum`` object may also interact with another ``Spectrum`` object in a number of ways. The ``norm_to_spec`` method creates a new object normalized to the input ``Spectrum`` object and the ``__add__`` operation combines two ``Spectrum`` objects in their common wavelength region or concatenates the segments.
+A :ref:`Spectrum` object may also interact with another ``Spectrum`` object in a number of ways. The ``norm_to_spec`` method creates a new object normalized to the input :ref:`Spectrum` object and the ``__add__`` operation combines two :ref:`Spectrum` objects in their common wavelength region or concatenates the segments.
 
 .. code:: python
 
@@ -89,7 +89,7 @@ A ``Spectrum`` object may also interact with another ``Spectrum`` object in a nu
     normed_spec = spec.norm_to_spec(spec2)  # spec normalized to spec2
     combined_spec = spec + spec2            # New combined spectrum
 
-Any ``Spectrum`` may also be fit by a ``sedkit.modelgrid.ModelGrid`` object to find the best fit model or spectrum. The ``best_fit_model`` method performs a simple goodness of fit test and returns the model with the best fit. The ``mcmc_fit` method performs a MCMC fit to the grid and returns the best fit parameters with unvertainties. The details of any fit are stored as a dictionary in the ``best_fit`` attribute.
+Any :ref:`Spectrum` may also be fit by a :ref:`ModelGrid` object to find the best fit model or spectrum. The ``best_fit_model`` method performs a simple goodness of fit test and returns the model with the best fit. The ``mcmc_fit` method performs a MCMC fit to the grid and returns the best fit parameters with uncertainties. The details of any fit are stored as a dictionary in the ``best_fit`` attribute.
 
 .. code:: python
 

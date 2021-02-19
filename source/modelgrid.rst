@@ -1,11 +1,11 @@
 .. _modelgrid:
 
-The ``ModelGrid`` class
-=======================
+ModelGrid
+=========
 
-Theoretical model atmosphere grids and spectral atlases are useful tools for characterizing stellar and substellar atmospheres. These data can be managed in ``sedkit`` with the  ``ModelGrid`` class.
+Theoretical model atmosphere grids and spectral atlases are useful tools for characterizing stellar and substellar atmospheres. These data can be managed in ``sedkit`` with the :ref:`ModelGrid` class.
 
-To use this resource, create a ``ModelGrid`` object, specify the parameters to track, and load it with data from a directory of XML files.
+To use this resource, create a :ref:`ModelGrid` object, specify the parameters to track, and load it with data from a directory of XML files.
 
 .. code:: python
 
@@ -25,7 +25,7 @@ The table of model data can be viewed via the ``index`` property and the paramet
     mgrid.meta_vals
     mgrid.alpha_vals
 
-An individual model can be retrieved as a ``Spectrum`` object by passing the desired parameter values as keyword arguments to the ``get_spectrum`` method. If the given parameter values do not correspond to a point on the grid, the spectrum can be interpolated or the closest grid point spectrum can be retrieved.
+An individual model can be retrieved as a :ref:`Spectrum` object by passing the desired parameter values as keyword arguments to the ``get_spectrum`` method. If the given parameter values do not correspond to a point on the grid, the spectrum can be interpolated or the closest grid point spectrum can be retrieved.
 
 .. code:: python
 
@@ -33,7 +33,7 @@ An individual model can be retrieved as a ``Spectrum`` object by passing the des
     spec2 = mgrid.get_spectrum(teff=3534, logg=5.3, meta=0.1, alpha=0, interp=True)
     spec3 = mgrid.get_spectrum(teff=3500, logg=5.5, meta=0, alpha=0, closest=True)
 
-The ``ModelGrid`` can be resampled to new parameter values by passing arrays to the desired keyword arguments.
+The :ref:`ModelGrid` can be resampled to new parameter values by passing arrays to the desired keyword arguments.
 
 .. code:: python
 
@@ -55,7 +55,7 @@ And a grid can be saved as a pickle file ``save`` method and loaded into a new o
     mgrid.save(mgrid_path)
     new_grid = mg.load_ModelGrid(mgrid_path)
 
-Several ``ModelGrid`` child classes exist for convenience.
+Several :ref:`ModelGrid` child classes exist for convenience.
 
 .. code:: python
 
@@ -63,4 +63,4 @@ Several ``ModelGrid`` child classes exist for convenience.
     spl = mg.SpexPrismLibrary()     # Spex Prism Library substellar spectral atlas
     fili15 = mg.Filippazzo2016()    # Substellar SED atlas from Filippazzo (2016)
 
-The true utility of the ``ModelGrid`` class is that it can be passed to a ``Spectrum`` or ``SED`` object to find a best fit model or best fit parameters.
+The true utility of the :ref:`ModelGrid` class is that it can be passed to a :ref:`Spectrum` or :ref:`SED` object to find a best fit model or best fit parameters.
