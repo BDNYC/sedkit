@@ -21,7 +21,7 @@ import numpy as np
 PHOT_CATALOGS = {'2MASS': {'catalog': 'II/246/out', 'cols': ['Jmag', 'Hmag', 'Kmag'], 'names': ['2MASS.J', '2MASS.H', '2MASS.Ks']},
             'WISE': {'catalog': 'II/328/allwise', 'cols': ['W1mag', 'W2mag', 'W3mag', 'W4mag'], 'names': ['WISE.W1', 'WISE.W2', 'WISE.W3', 'WISE.W4']},
             'PanSTARRS': {'catalog': 'II/349/ps1', 'cols': ['gmag', 'rmag', 'imag', 'zmag', 'ymag'], 'names': ['PS1.g', 'PS1.r', 'PS1.i', 'PS1.z', 'PS1.y']},
-            'Gaia': {'catalog': 'I/345/gaia2', 'cols': ['Plx', 'Gmag'], 'names': ['parallax', 'Gaia.G']},
+            'Gaia': {'catalog': 'I/345/gaia2', 'cols': ['Plx', 'Gmag', 'Teff', 'Lum'], 'names': ['parallax', 'Gaia.G', 'teff', 'Lbol']},
             'SDSS': {'catalog': 'V/147', 'cols': ['umag', 'gmag', 'rmag', 'imag', 'zmag'], 'names': ['SDSS.u', 'SDSS.g', 'SDSS.r', 'SDSS.i', 'SDSS.z']}}
 
 Vizier.columns = ["**", "+_r"]
@@ -275,16 +275,32 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
             print('[sedkit] {} {} records found.'.format(len(viz_cat), name))
 
         # Grab the record
-        rec = viz_cat[0][idx]
+        rec = dict(viz_cat[0][idx])
         ref = viz_cat[0].meta['name']
 
         # Pull out the photometry
-        for name, viz in zip(names, cols):
-            fetch = [viz] + [wc.replace('*', viz) for wc in wildcards]
-            if all([i in rec.columns for i in fetch]):
-                data = [val for val in rec[fetch]]
-                results.append([name] + data + [ref])
-            else:
-                print("[sedkit] {}: Could not find all those columns".format(fetch))
+        for name, col in zip(names, cols):
+
+            # Data for this column
+            data = []
+
+            # Add name
+            data.append(name)
+
+            # Check for nominal value
+            nom = rec.get(col)
+            data.append(nom)
+            if nom is None:
+                print("[sedkit] Could not find '{}' column in '{}' catalog.".format(col, catalog))
+
+            # Check for wildcards
+            for wc in wildcards:
+                wc_col = wc.replace('*', col)
+                val = rec.get(wc_col)
+                data.append(val)
+
+            # Add reference
+            data.append(ref)
+            results.append(data)
 
     return results

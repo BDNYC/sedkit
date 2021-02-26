@@ -1038,7 +1038,7 @@ class SED:
         """
         self.find_photometry('2MASS', **kwargs)
 
-    def find_Gaia(self, search_radius=None, include=['parallax', 'photometry'], idx=0, **kwargs):
+    def find_Gaia(self, search_radius=None, include=['parallax', 'photometry', 'teff', 'Lbol'], idx=0, **kwargs):
         """
         Search for Gaia data
 
@@ -1055,7 +1055,7 @@ class SED:
         results = qu.query_vizier('Gaia', target=self.name, sky_coords=self.sky_coords, search_radius=search_radius or self.search_radius, verbose=self.verbose, idx=idx, **kwargs)
 
         # Parse the record
-        if len(results) == 2:
+        if len(results) == len(include):
 
             if 'parallax' in include:
                 self.parallax = results[0][1] * q.mas, results[0][2] * q.mas
@@ -1064,6 +1064,12 @@ class SED:
             if 'photometry' in include:
                 band, mag, unc, ref = results[1]
                 self.add_photometry(band, mag, unc, ref=ref)
+
+            if 'teff' in include:
+                self.Teff_Gaia = results[2][1] * q.K
+
+            if 'Lbol' in include:
+                self.Lbol_Gaia = results[3][1] or None
 
         # Pause to prevent ConnectionError with astroquery
         time.sleep(self.wait)
@@ -1310,6 +1316,7 @@ class SED:
             name = modelgrid.name
 
         # Get the spectrum to fit
+        # TODO: Weight fit by bandpass width
         if fit_to == 'phot':
             spec = self.app_phot_SED
             modelgrid = modelgrid.photometry(list(self.photometry['band']))
