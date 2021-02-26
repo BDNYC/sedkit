@@ -6,6 +6,7 @@
 A module to generate a grid of model spectra
 """
 
+from copy import copy
 import os
 import fileinput
 import glob
@@ -21,6 +22,7 @@ import astropy.io.votable as vo
 import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
+from svo_filters import svo
 
 from . import utilities as u
 from .spectrum import Spectrum
@@ -197,7 +199,7 @@ class ModelGrid:
         columns = self.parameters+['filepath', 'spectrum', 'label']
         self.index = pd.DataFrame(columns=columns)
 
-    def add_model(self, spectrum, **kwargs):
+    def add_model(self, spectrum, label=None, filepath=None, **kwargs):
         """Add the given model with the specified parameter values as kwargs
 
         Parameters
@@ -210,7 +212,7 @@ class ModelGrid:
             raise ValueError("Must have kwargs for", self.parameters)
 
         # Make the dictionary of new data
-        kwargs.update({'spectrum': spectrum, 'filepath': None, 'label': None})
+        kwargs.update({'spectrum': spectrum, 'filepath': filepath, 'label': label})
         new_rec = pd.DataFrame({k: [v] for k, v in kwargs.items()})
 
         # Add it to the index
@@ -499,8 +501,68 @@ class ModelGrid:
             else:
                 print("{} {}".format(pre, msg))
 
+    def photometry(self, bandpasses=None):
+        """
+        Generate a new ModelGrid object of photometry in the given bands
+
+        Parameters
+        ----------
+        bandpasses: list
+            A list of the bandpasses to measure
+
+        Returns
+        -------
+        ModelGrid
+            The photometry ModelGrid
+        """
+        # Set filter list
+        all_filters = svo.filters()['Band']
+        if bandpasses is None:
+            bandpasses = all_filters
+
+        # Validate filters
+        for band in bandpasses:
+            if band not in all_filters:
+                raise ValueError("{} not a valid bandpass. Try {}".format(band, all_filters))
+
+        # Copy the ModelGrid and empty the index
+        phot = ModelGrid(name=self.name, parameters=self.parameters)
+        dic = copy(self.__dict__)
+        dic['index'] = dic['index'][:0]
+        phot.__dict__ = dic
+
+        # Iterate over the rows
+        for n, row in self.index.iterrows():
+
+            # Get the spectrum
+            params = {param: val for param, val in dict(row).items() if param in phot.parameters}
+            spec = self.get_spectrum(**params)
+            err = True if len(spec.spectrum) == 3 else False
+
+            # Collect data
+            data = []
+            for band in bandpasses:
+
+                # Get the bandpass
+                bp = svo.Filter(band)
+
+                # Calculate the synthetic flux
+                flx, flx_unc = spec.synthetic_flux(bp)
+                if flx is not None and not np.isnan(flx):
+                    if err:
+                        data.append([bp.wave_eff.to(self.wave_units).astype(np.float16).value, flx.to(self.flux_units).value, flx_unc.to(self.flux_units).value])
+                    else:
+                        data.append([bp.wave_eff.to(self.wave_units).astype(np.float16).value, flx.to(self.flux_units).value])
+
+            # Unpack and save as new spectrum
+            dataT = np.array(data).T
+            phot.add_model(dataT if err else dataT[:2], label=row['label'], **params)
+
+        return phot
+
     def plot(self, fig=None, scale='log', draw=True, **kwargs):
-        """Plot the models using Spectrum.plot() with the given parameters
+        """
+        Plot the models using Spectrum.plot() with the given parameters
 
         Parameters
         ----------

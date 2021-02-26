@@ -52,6 +52,11 @@ class TestModelGrid(unittest.TestCase):
         filt = self.bt.filter(teff=3500)
         self.assertEqual(len(filt), 1)
 
+    def test_photometry(self):
+        """Test the photometry method"""
+        phot_mg = self.bt.photometry(['2MASS.J', '2MASS.H', '2MASS.Ks'])
+        self.assertEqual(phot_mg.index.iloc[0]['spectrum'][0].size, 3)
+
     def test_plot(self):
         """Test that the plot method works"""
         plt = self.bt.plot(teff=3500, draw=False)

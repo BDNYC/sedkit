@@ -683,7 +683,7 @@ class SED:
         # Get synthetic magnitudes
         self.calculate_synthetic_photometry(self.photometry['band'])
 
-    def compare_model(self, modelgrid, rebin=True, **kwargs):
+    def compare_model(self, modelgrid, fit_to='spec', rebin=True, **kwargs):
         """
         Fit a specific model to the SED by specifying the parameters as kwargs
 
@@ -691,20 +691,31 @@ class SED:
         ----------
         modelgrid: sedkit.modelgrid.ModelGrid
             The model grid to fit
+        fit_to: str
+            Which data to fit to, ['spec', 'phot']
+        rebin: bool
+            Rebin the model to the data
         """
         if not self.calculated:
             self.make_sed()
 
+        # Get the spectrum to fit
+        if fit_to == 'phot':
+            spec = self.app_phot_SED
+            modelgrid = modelgrid.photometry(list(self.photometry['band']))
+        else:
+            spec = self.app_spec_SED
+
         # Get the model to fit
         model = modelgrid.get_spectrum(**kwargs)
 
-        if self.app_spec_SED is not None:
+        if spec is not None:
 
-            if rebin:
-                model = model.resamp(self.app_spec_SED.spectrum[0])
+            if rebin and fit_to == 'spec':
+                model = model.resamp(spec.spectrum[0])
 
             # Fit the model to the SED
-            gstat, yn, xn = list(self.app_spec_SED.fit(model, wave_units='AA'))
+            gstat, yn, xn = list(spec.fit(model, wave_units='AA'))
             wave = model.wave * xn
             flux = model.flux * yn
 
@@ -1278,7 +1289,7 @@ class SED:
         except IOError:
             self.message('No blackbody fit.')
 
-    def fit_modelgrid(self, modelgrid, name=None, mcmc=False, **kwargs):
+    def fit_modelgrid(self, modelgrid, fit_to='spec', name=None, mcmc=False, **kwargs):
         """
         Fit a model grid to the composite spectra
 
@@ -1298,21 +1309,28 @@ class SED:
         if name is None:
             name = modelgrid.name
 
-        if self.app_spec_SED is not None:
+        # Get the spectrum to fit
+        if fit_to == 'phot':
+            spec = self.app_phot_SED
+            modelgrid = modelgrid.photometry(list(self.photometry['band']))
+        else:
+            spec = self.app_spec_SED
+
+        if spec is not None:
 
             # Determine if there is spectral coverage
             model_min, model_max = modelgrid.wave_limits
-            spec_min, spec_max = self.app_spec_SED.wave_min, self.app_spec_SED.wave_max
+            spec_min, spec_max = spec.wave_min, spec.wave_max
             if model_max < spec_min or model_min > spec_max:
                 self.message("Could not fit model grid {} to the SED. No overlapping wavelengths.".format(modelgrid.name))
 
             if mcmc:
-                self.app_spec_SED.mcmc_fit(modelgrid, name=name, **kwargs)
+                spec.mcmc_fit(modelgrid, name=name, **kwargs)
             else:
-                self.app_spec_SED.best_fit_model(modelgrid, name=name, **kwargs)
+                spec.best_fit_model(modelgrid, name=name, **kwargs)
 
             # Save the best fit
-            self.best_fit[name] = self.app_spec_SED.best_fit[name]
+            self.best_fit[name] = spec.best_fit[name]
             setattr(self, name, self.best_fit[name]['label'])
 
             self.message('Best fit {}: {}'.format(name, self.best_fit[name]['label']))
@@ -1321,7 +1339,7 @@ class SED:
             self.make_sed()
 
         else:
-            self.message("Could not fit model grid {} to the SED. No spectrum to fit.".format(modelgrid.name))
+            self.message("Could not fit model grid {} to the '{}' SED. No {} to fit.".format(modelgrid.name, fit_to, 'photometry' if fit_to == 'phot' else 'spectrum'))
 
     def fit_spectral_type(self):
         """
@@ -2737,7 +2755,7 @@ class SED:
             # Update the reference
             self._refs['spectral_type'] = ref
 
-        self.message("Setting spectral_type to {} with reference '{}'".format((self.spectral_type[0], self.spectral_type[1], self.luminosity_class, self.gravity, self.prefix), ref))
+            self.message("Setting spectral_type to {} with reference '{}'".format((self.spectral_type[0], self.spectral_type[1], self.luminosity_class, self.gravity, self.prefix), ref))
 
         # Set SED as uncalculated
         self.calculated = False
