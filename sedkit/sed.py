@@ -40,7 +40,7 @@ from . import modelgrid as mg
 
 
 Vizier.columns = ["**", "+_r"]
-Simbad.add_votable_fields('parallax', 'sptype', 'diameter', 'ids')
+Simbad.add_votable_fields('parallax', 'sptype', 'diameter', 'ids', 'flux(U)', 'flux_error(U)', 'flux_bibcode(U)', 'flux(B)', 'flux_error(B)', 'flux_bibcode(B)', 'flux(V)', 'flux_error(V)', 'flux_bibcode(V)', 'flux(R)', 'flux_error(R)', 'flux_bibcode(R)', 'flux(I)', 'flux_error(I)', 'flux_bibcode(I)')
 SptRadius = rel.SpectralTypeRadius()
 
 warnings.simplefilter('ignore', category=AstropyWarning)
@@ -91,8 +91,6 @@ class SED:
         The apparent bolometric flux [erg/s/cm2]
     flux_units: astropy.units.quantity.Quantity
         The desired flux density units
-    gravity: str
-        The surface gravity suffix
     mbol: float
         The apparent bolometric magnitude
     name: str
@@ -101,12 +99,8 @@ class SED:
         The table of parallaxes
     photometry: astropy.table.QTable
         The table of photometry
-    piecewise: sequence
-        The list of all piecewise combined spectra for normalization
     radius: astropy.units.quantity.Quantity
         The target radius
-    sources: astropy.table.QTable
-        The table of sources (with only one row of cource)
     wait: float, int
         The number of seconds to sleep after a query
     spectra: astropy.table.QTable
@@ -116,9 +110,7 @@ class SED:
         types O0-Y9
     spectral_types: astropy.table.QTable
         The table of spectral types
-    suffix: str
-        The spectral type suffix
-    syn_photometry: astropy.table.QTable
+    synthetic_photometry: astropy.table.QTable
         The table of calcuated synthetic photometry
     wave_units: astropy.units.quantity.Quantity
         The desired wavelength units
@@ -272,7 +264,7 @@ class SED:
         else:
             return None
 
-    def add_photometry(self, band, mag, mag_unc=None, system='Vega', **kwargs):
+    def add_photometry(self, band, mag, mag_unc=None, system='Vega', ref=None, **kwargs):
         """
         Add a photometric measurement to the photometry table
 
@@ -321,13 +313,14 @@ class SED:
         mag -= bp.ext_vector * self.reddening
 
         # Make a dict for the new point
-        new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': None}
+        new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
 
         # Add the kwargs
         new_photometry.update(kwargs)
 
         # Add it to the table
         self._photometry.add_row(new_photometry)
+        self.message("Setting {} photometry to {} ({}) with reference '{}'".format(band, mag, mag_unc, ref))
 
         # Set SED as uncalculated
         self.calculated = False
@@ -536,6 +529,91 @@ class SED:
             self.min_spec = (999 * q.um).to(self.wave_units)
             self.max_spec = (0 * q.um).to(self.wave_units)
 
+    def calculate_fbol(self, units=q.erg / q.s / q.cm**2):
+        """
+        Calculate the bolometric flux of the SED
+
+        Parameters
+        ----------
+        units: astropy.units.quantity.Quantity
+            The target untis for fbol
+        """
+        # Integrate the SED to get fbol
+        self.fbol = self.app_SED.integrate(units=units)
+
+    def calculate_Lbol(self):
+        """
+        Calculate the bolometric luminosity of the SED
+        """
+        # Caluclate fbol if not present
+        if self.fbol is None:
+            self.calculate_fbol()
+
+        # Calculate Lbol
+        if self.distance is not None:
+            Lbol = (4 * np.pi * self.fbol[0] * self.distance[0]**2).to(q.erg / q.s)
+            Lbol_sun = round(np.log10((Lbol / ac.L_sun).decompose().value), 3)
+
+            # Calculate Lbol_unc
+            if self.fbol[1] is None:
+                Lbol_unc = None
+                Lbol_sun_unc = None
+            else:
+                Lbol_unc = Lbol * np.sqrt((self.fbol[1] / self.fbol[0]).value**2 + (2 * self.distance[1] / self.distance[0]).value**2)
+                Lbol_sun_unc = round(abs(Lbol_unc / (Lbol * np.log(10))).value, 3)
+
+            # Update the attributes
+            self.Lbol = Lbol, Lbol_unc
+            self.Lbol_sun = Lbol_sun, Lbol_sun_unc
+
+    def calculate_mbol(self, L_sun=3.86E26 * q.W, Mbol_sun=4.74):
+        """
+        Calculate the apparent bolometric magnitude of the SED
+
+        Parameters
+        ----------
+        L_sun: astropy.units.quantity.Quantity
+            The bolometric luminosity of the Sun
+        Mbol_sun: float
+            The absolute bolometric magnitude of the sun
+        """
+        # Calculate fbol if not present
+        if self.fbol is None:
+            self.calculate_fbol()
+
+        # Calculate mbol
+        mbol = round(-2.5 * np.log10(self.fbol[0].value) - 11.482, 3)
+
+        # Calculate mbol_unc
+        if self.fbol[1] is None:
+            mbol_unc = None
+        else:
+            mbol_unc = round((2.5 / np.log(10)) * (self.fbol[1] / self.fbol[0]).value, 3)
+
+        # Update the attribute
+        self.mbol = mbol, mbol_unc
+
+    def calculate_Mbol(self):
+        """
+        Calculate the absolute bolometric magnitude of the SED
+        """
+        # Calculate mbol if not present
+        if self.mbol is None:
+            self.calculate_mbol()
+
+        # Calculate Mbol
+        if self.distance is not None:
+            Mbol = round(self.mbol[0] - 5 * np.log10((self.distance[0] / 10 * q.pc).value), 3)
+
+            # Calculate Mbol_unc
+            if self.fbol[1] is None:
+                Mbol_unc = None
+            else:
+                Mbol_unc = round(np.sqrt(self.mbol[1]**2 + ((2.5 / np.log(10)) * (self.distance[1] / self.distance[0]).value)**2), 3)
+
+            # Update the attribute
+            self.Mbol = Mbol, Mbol_unc
+
     def calculate_synthetic_photometry(self, bandpasses=None):
         """
         Calculate synthetic photometry of all stitched spectra
@@ -582,6 +660,23 @@ class SED:
 
             # Calibrate the synthetic photometry
             self._calibrate_photometry('synthetic_photometry')
+
+    def calculate_Teff(self):
+        """
+        Calculate the effective temperature
+        """
+        # Calculate Teff
+        if self.distance is not None and self.radius is not None:
+            Teff = np.sqrt(np.sqrt((self.Lbol[0] / (4 * np.pi * ac.sigma_sb * self.radius[0]**2)).to(q.K**4))).astype(int)
+
+            # Calculate Teff_unc
+            if self.fbol[1] is None:
+                Teff_unc = None
+            else:
+                Teff_unc = (Teff * np.sqrt((self.Lbol[1] / self.Lbol[0]).value**2 + (2 * self.radius[1] / self.radius[0]).value**2) / 4.).astype(int)
+
+            # Update the attribute
+            self.Teff = Teff, Teff_unc
 
     def _calibrate_photometry(self, name='photometry'):
         """
@@ -1178,6 +1273,11 @@ class SED:
 
         # Parse the record and save the names
         if viz_cat is not None and len(viz_cat) > 0:
+
+            # Print info
+            n_rec = len(viz_cat)
+            self.message("{} record{} for {} found in Simbad.".format(n_rec, '' if n_rec == 1 else 's', crit))
+
             # Choose the record
             obj = viz_cat[idx]
 
@@ -1217,10 +1317,12 @@ class SED:
                 du = q.Unit(obj['Diameter_unit'])
                 self.radius = obj['Diameter_diameter'] / 2. * du, obj['Diameter_error'] * du, obj['Diameter_bibcode']
 
-            # Print info
-            n_rec = len(viz_cat)
-            self.message("{} record{} for {} found in Simbad.".format(n_rec, '' if n_rec == 1 else 's', crit))
-            self.message("Setting name to {} and sky_coords to {}".format(self.name, self.sky_coords))
+            # Check for UBVRI photometry
+            for band, label in zip(['Johnson.U', 'Johnson.B', 'Johnson.V', 'Cousins.R', 'Cousins.I'], ['U', 'B', 'V', 'R', 'I']):
+                flx = obj['FLUX_{}'.format(label)]
+                if not hasattr(flx, 'mask'):
+                    err = np.nan if hasattr(obj['FLUX_ERROR_{}'.format(label)], 'mask') else obj['FLUX_ERROR_{}'.format(label)]
+                    self.add_photometry(band, flx, err, obj['FLUX_BIBCODE_{}'.format(label)])
 
         # Pause to prevent ConnectionError with astroquery
         time.sleep(self.wait)
@@ -1316,10 +1418,9 @@ class SED:
             name = modelgrid.name
 
         # Get the spectrum to fit
-        # TODO: Weight fit by bandpass width
         if fit_to == 'phot':
             spec = self.app_phot_SED
-            modelgrid = modelgrid.photometry(list(self.photometry['band']))
+            modelgrid = modelgrid.photometry(list(self.photometry['band']), weight=False if mcmc else True)
         else:
             spec = self.app_spec_SED
 
@@ -1539,8 +1640,8 @@ class SED:
         Calculate the fundamental parameters of the current SED
         """
         # Calculate bolometric luminosity (dependent on fbol and distance)
-        self.get_Lbol()
-        self.get_Mbol()
+        self.calculate_Lbol()
+        self.calculate_Mbol()
 
         # Interpolate surface gravity, mass and radius from isochrones
         if self.Lbol_sun is not None:
@@ -1559,123 +1660,36 @@ class SED:
                     self.teff_from_age()
 
         # Calculate Teff (dependent on Lbol, distance, and radius)
-        self.get_Teff()
+        self.calculate_Teff()
 
-    def get_fbol(self, units=q.erg / q.s / q.cm**2):
-        """
-        Calculate the bolometric flux of the SED
-
-        Parameters
-        ----------
-        units: astropy.units.quantity.Quantity
-            The target untis for fbol
-        """
-        # Integrate the SED to get fbol
-        self.fbol = self.app_SED.integrate(units=units)
-
-    def get_Lbol(self):
-        """
-        Calculate the bolometric luminosity of the SED
-        """
-        # Caluclate fbol if not present
-        if self.fbol is None:
-            self.get_fbol()
-
-        # Calculate Lbol
-        if self.distance is not None:
-            Lbol = (4 * np.pi * self.fbol[0] * self.distance[0]**2).to(q.erg / q.s)
-            Lbol_sun = round(np.log10((Lbol / ac.L_sun).decompose().value), 3)
-
-            # Calculate Lbol_unc
-            if self.fbol[1] is None:
-                Lbol_unc = None
-                Lbol_sun_unc = None
-            else:
-                Lbol_unc = Lbol * np.sqrt((self.fbol[1] / self.fbol[0]).value**2 + (2 * self.distance[1] / self.distance[0]).value**2)
-                Lbol_sun_unc = round(abs(Lbol_unc / (Lbol * np.log(10))).value, 3)
-
-            # Update the attributes
-            self.Lbol = Lbol, Lbol_unc
-            self.Lbol_sun = Lbol_sun, Lbol_sun_unc
-
-    def get_mbol(self, L_sun=3.86E26 * q.W, Mbol_sun=4.74):
-        """
-        Calculate the apparent bolometric magnitude of the SED
-
-        Parameters
-        ----------
-        L_sun: astropy.units.quantity.Quantity
-            The bolometric luminosity of the Sun
-        Mbol_sun: float
-            The absolute bolometric magnitude of the sun
-        """
-        # Calculate fbol if not present
-        if self.fbol is None:
-            self.get_fbol()
-
-        # Calculate mbol
-        mbol = round(-2.5 * np.log10(self.fbol[0].value) - 11.482, 3)
-
-        # Calculate mbol_unc
-        if self.fbol[1] is None:
-            mbol_unc = None
-        else:
-            mbol_unc = round((2.5 / np.log(10)) * (self.fbol[1] / self.fbol[0]).value, 3)
-
-        # Update the attribute
-        self.mbol = mbol, mbol_unc
-
-    def get_Mbol(self):
-        """
-        Calculate the absolute bolometric magnitude of the SED
-        """
-        # Calculate mbol if not present
-        if self.mbol is None:
-            self.get_mbol()
-
-        # Calculate Mbol
-        if self.distance is not None:
-            Mbol = round(self.mbol[0] - 5 * np.log10((self.distance[0] / 10 * q.pc).value), 3)
-
-            # Calculate Mbol_unc
-            if self.fbol[1] is None:
-                Mbol_unc = None
-            else:
-                Mbol_unc = round(np.sqrt(self.mbol[1]**2 + ((2.5 / np.log(10)) * (self.distance[1] / self.distance[0]).value)**2), 3)
-
-            # Update the attribute
-            self.Mbol = Mbol, Mbol_unc
-
-    def get_reddening(self):
+    def get_reddening(self, version='bayestar2019'):
         """
         Calculate the reddening from the Bayestar17 dust map
         """
         # Check for distance and coordinates
-        if self.distance is not None and self.sky_coords is not None:
-            gal_coords = SkyCoord(self.sky_coords.galactic, frame='galactic', distance=self.distance[0])
-            bayestar = BayestarWebQuery(version='bayestar2019')
-            red = bayestar(gal_coords, mode='random_sample')
+        if self.sky_coords is not None:
 
-            # Set the attribute
-            if not np.isinf(red) and not np.isnan(red) and red >= 0:
-                self.reddening = red
-
-    def get_Teff(self):
-        """
-        Calculate the effective temperature
-        """
-        # Calculate Teff
-        if self.distance is not None and self.radius is not None:
-            Teff = np.sqrt(np.sqrt((self.Lbol[0] / (4 * np.pi * ac.sigma_sb * self.radius[0]**2)).to(q.K**4))).astype(int)
-
-            # Calculate Teff_unc
-            if self.fbol[1] is None:
-                Teff_unc = None
+            # Get galactic coordinates
+            if self.distance is not None:
+                gal_coords = SkyCoord(self.sky_coords.galactic, frame='galactic', distance=self.distance[0])
             else:
-                Teff_unc = (Teff * np.sqrt((self.Lbol[1] / self.Lbol[0]).value**2 + (2 * self.radius[1] / self.radius[0]).value**2) / 4.).astype(int)
+                gal_coords = SkyCoord(self.sky_coords.galactic, frame='galactic')
 
-            # Update the attribute
-            self.Teff = Teff, Teff_unc
+            # Query web server
+            try:
+                bayestar = BayestarWebQuery(version=version)
+                red = bayestar(gal_coords, mode='random_sample')
+                ref = '2018JOSS....3..695M'
+
+                # Set the attribute
+                if not np.isinf(red) and not np.isnan(red) and red >= 0:
+                    self.reddening = red
+                    self._refs['reddening'] = ref
+                    self.message("Setting interstellar reddening to {} with reference '{}'".format(red, ref))
+
+            except:
+                self.message("There was a problem determining the interstellar reddening. Setting to 0. You can manually set this with the 'reddening' attribute.")
+                self._refs.pop('reddening', None)
 
     @staticmethod
     def group_spectra(spectra):
@@ -2069,13 +2083,6 @@ class SED:
         else:
             self.message('{} not valid. Supported memberships include {}.'.format(membership, ', '.join(iso.NYMG_AGES.keys())))
 
-    @property
-    def name(self):
-        """
-        A property for name
-        """
-        return self._name
-
     def message(self, msg, pre='[sedkit]'):
         """
         Only print message if verbose=True
@@ -2092,6 +2099,13 @@ class SED:
                 print(msg)
             else:
                 print("{} {}".format(pre, msg))
+
+    @property
+    def name(self):
+        """
+        A property for name
+        """
+        return self._name
 
     @name.setter
     def name(self, new_name):
@@ -2113,6 +2127,7 @@ class SED:
 
         # Set the attribute
         self._name = new_name
+        self.message("Setting name to {}".format(self.name))
 
         # Check for Simbad record (repeat if ConnectionError)
         try:
@@ -2647,6 +2662,7 @@ class SED:
         self._sky_coords = sky_coords
         self._ra = sky_coords.ra.degree
         self._dec = sky_coords.dec.degree
+        self.message("Setting sky_coords to {}".format(self.sky_coords))
 
         # Try to calculate reddening
         self.get_reddening()

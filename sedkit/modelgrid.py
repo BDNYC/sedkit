@@ -501,7 +501,7 @@ class ModelGrid:
             else:
                 print("{} {}".format(pre, msg))
 
-    def photometry(self, bandpasses=None):
+    def photometry(self, bandpasses=None, weight=True):
         """
         Generate a new ModelGrid object of photometry in the given bands
 
@@ -541,10 +541,14 @@ class ModelGrid:
 
             # Collect data
             data = []
+            weights = []
             for band in bandpasses:
 
                 # Get the bandpass
                 bp = svo.Filter(band)
+
+                # Weight the bands by the inverse of the band width
+                weights.append((bp.wave_max - bp.wave_min).to(q.um).value if weight else 1)
 
                 # Calculate the synthetic flux
                 flx, flx_unc = spec.synthetic_flux(bp)
@@ -556,7 +560,7 @@ class ModelGrid:
 
             # Unpack and save as new spectrum
             dataT = np.array(data).T
-            phot.add_model(dataT if err else dataT[:2], label=row['label'], **params)
+            phot.add_model(dataT if err else dataT[:2], weights=weights, label=row['label'], **params)
 
         return phot
 

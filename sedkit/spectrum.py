@@ -1380,7 +1380,7 @@ def fit_model(row, fitspec, wave_units=q.AA):
         The input row with the normalized spectrum and additional gstat
     """
     try:
-        gstat, yn, xn = list(fitspec.fit(row['spectrum'], wave_units=wave_units))
+        gstat, yn, xn = list(fitspec.fit(row['spectrum'], weights=row['weights'], wave_units=wave_units))
         spectrum = np.array([row['spectrum'][0] * xn, row['spectrum'][1] * yn])
         row['spectrum'] = spectrum
         row['gstat'] = gstat
