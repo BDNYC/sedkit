@@ -78,6 +78,7 @@ class Spectrum:
         self.name = name or 'New Spectrum'
         self.ref = ref
         self.header = header
+        self.phot = False
 
         # Make sure the arrays are the same shape
         if not wave.shape == flux.shape and ((unc is None) or not (unc.shape == flux.shape)):
@@ -814,23 +815,56 @@ class Spectrum:
 
         # Plot the spectrum
         c = kwargs.get('color', next(u.COLORS))
-        fig.line(self.wave, self.flux * const, color=c, alpha=0.8, legend_label=self.name)
 
-        # Plot the uncertainties
-        if self.unc is not None:
-            band_x = np.append(self.wave, self.wave[::-1])
-            band_y = np.append((self.flux - self.unc) * const, (self.flux + self.unc)[::-1] * const)
-            fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
+        # Scatter plot
+        if self.phot:
 
-        # Plot the components
-        if components and self.components is not None:
-            for spec in self.components:
-                fig.line(spec.wave, spec.flux * const, color=next(u.COLORS), legend_label=spec.name)
+            idx = np.arange(len(self.wave))
 
-        # Plot the best fit
-        if best_fit:
-            for name, bf in self.best_fit.items():
-                fig.line(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3, color=next(u.COLORS), legend_label=bf.label)
+            # Uncertainties
+            if self.unc is not None:
+
+                # Plot points with errors
+                idx, = np.where(self.unc > 0)
+                if len(idx) > 0:
+                    fig.circle(self.wave[idx], self.flux[idx] * const, color=c, fill_alpha=0.7, size=8, legend_label=self.name)
+                    y_err_x = [(px, px) for px in self.wave[idx]]
+                    y_err_y = [(py - err, py + err) for py, err in zip(self.flux[idx], self.unc[idx])]
+                    fig.multi_line(y_err_x, y_err_y, color=c)
+
+                # Plot points without errors
+                idn, = np.where(self.unc <= 0)
+                if len(idn) > 0:
+                    fig.circle(self.wave[idn], self.flux[idn] * const, color=c, fill_alpha=0, size=8)
+
+            else:
+                fig.circle(self.wave, self.flux * const, color=c, fill_alpha=0.7, size=8, legend_label=self.name)
+
+            # Plot the best fit
+            if best_fit:
+                for name, bf in self.best_fit.items():
+                    fig.line(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3, color=next(u.COLORS),
+                             legend_label=bf.label)
+
+        # Line plot
+        else:
+            fig.line(self.wave, self.flux * const, color=c, alpha=0.8, legend_label=self.name)
+
+            # Plot the uncertainties
+            if self.unc is not None:
+                band_x = np.append(self.wave, self.wave[::-1])
+                band_y = np.append((self.flux - self.unc) * const, (self.flux + self.unc)[::-1] * const)
+                fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
+
+            # Plot the components
+            if components and self.components is not None:
+                for spec in self.components:
+                    fig.line(spec.wave, spec.flux * const, color=next(u.COLORS), legend_label=spec.name)
+
+            # Plot the best fit
+            if best_fit:
+                for name, bf in self.best_fit.items():
+                    fig.line(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3, color=next(u.COLORS), legend_label=bf.label)
 
         if draw:
             show(fig)
@@ -1380,7 +1414,7 @@ def fit_model(row, fitspec, wave_units=q.AA):
         The input row with the normalized spectrum and additional gstat
     """
     try:
-        gstat, yn, xn = list(fitspec.fit(row['spectrum'], weights=row['weights'], wave_units=wave_units))
+        gstat, yn, xn = list(fitspec.fit(row['spectrum'], weights=row.get('weights'), wave_units=wave_units))
         spectrum = np.array([row['spectrum'][0] * xn, row['spectrum'][1] * yn])
         row['spectrum'] = spectrum
         row['gstat'] = gstat

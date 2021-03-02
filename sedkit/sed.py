@@ -2323,7 +2323,7 @@ class SED:
             self.fig.add_tools(hover)
 
             # Plot points with errors
-            pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if not any([np.isnan(i) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
+            pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if not any([(np.isnan(i) or i <= 0) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
                 self.fig.circle('x', 'y', source=source, legend_label='Photometry', name='photometry', color=color, fill_alpha=0.7, size=8)
@@ -2335,17 +2335,17 @@ class SED:
                 self.fig.multi_line(y_err_x, y_err_y, color=color)
 
             # Plot points without errors
-            pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if np.isnan(err) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
+            pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if (np.isnan(err) or err <= 0) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             if len(pts) > 0:
-                source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[str(b) for b in pts['desc']]))
-                self.fig.circle('x', 'y', source=source, legend_label='Nondetection', name='nondetection', color=color, fill_alpha=0, size=8)
+                source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
+                self.fig.circle('x', 'y', source=source, legend_label='Limit', name='nondetection', color=color, fill_alpha=0, size=8)
 
         # Plot photometry
         if synthetic_photometry and len(self.synthetic_photometry) > 0:
 
             # Set up hover tool
             phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
-            hover = HoverTool(names=['synthetic photometry', 'nondetection'], tooltips=phot_tips, mode='vline')
+            hover = HoverTool(names=['synthetic photometry'], tooltips=phot_tips, mode='vline')
             self.fig.add_tools(hover)
 
             # Plot points with errors

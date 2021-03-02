@@ -190,6 +190,7 @@ class ModelGrid:
         self.trim = trim
         self.ref = ref
         self.verbose = verbose
+        self.phot = False
 
         # Make all args into attributes
         for key, val in kwargs.items():
@@ -324,7 +325,7 @@ class ModelGrid:
         spec = u.scrub(spec)
 
         # Convert to specobj
-        spec = Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, **kwargs)
+        spec = Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, phot=self.phot, **kwargs)
 
         if trim is not None:
             spec = spec.trim(include=trim, concat=True)
@@ -561,6 +562,7 @@ class ModelGrid:
             # Unpack and save as new spectrum
             dataT = np.array(data).T
             phot.add_model(dataT if err else dataT[:2], weights=weights, label=row['label'], **params)
+            phot.phot = True
 
         return phot
 
