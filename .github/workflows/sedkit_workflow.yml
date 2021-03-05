@@ -25,7 +25,7 @@ jobs:
       run: |
         conda env update --file env/environment-${{ matrix.python-version }}.yml --name sedkit-${{ matrix.python-version }}
       env:
-          PYTHONVERSION: ${{ matrix.python-version }}
+        PYTHONVERSION: ${{ matrix.python-version }}
     - name: Test with pytest
       run: |
         conda run -n sedkit-${{ matrix.python-version }} pytest
