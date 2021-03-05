@@ -1318,7 +1318,7 @@ class SED:
                 self.radius = obj['Diameter_diameter'] / 2. * du, obj['Diameter_error'] * du, obj['Diameter_bibcode']
 
             # Check for UBVRI photometry
-            for band, label in zip(['Johnson.U', 'Johnson.B', 'Johnson.V', 'Cousins.R', 'Cousins.I'], ['U', 'B', 'V', 'R', 'I']):
+            for band, label in zip(['Generic/Johnson.U', 'Generic/Johnson.B', 'Generic/Johnson.V', 'Cousins.R', 'Cousins.I'], ['U', 'B', 'V', 'R', 'I']):
                 flx = obj['FLUX_{}'.format(label)]
                 if not hasattr(flx, 'mask'):
                     err = np.nan if hasattr(obj['FLUX_ERROR_{}'.format(label)], 'mask') else obj['FLUX_ERROR_{}'.format(label)]
