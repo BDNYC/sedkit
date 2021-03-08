@@ -6,7 +6,7 @@ channels:
 dependencies:
   - numpy>=1.18.1
   - astropy>=4.0
-  - python>=3.6.8
+  - python>=3.7
   - bokeh>=1.4.0
   - scipy>=1.4.1
   - pandas>=0.23.4
