@@ -624,14 +624,9 @@ class SED:
             A list of the bandpasses to calculate
         """
         # Set filter list
-        all_filters = svo.filters()['Band']
+        all_filters = svo.filters()
         if bandpasses is None:
             bandpasses = all_filters
-
-        # Validate filters
-        for band in bandpasses:
-            if band not in all_filters:
-                raise ValueError("{} not a valid bandpass. Try {}".format(band, all_filters))
 
         # Clear table
         self._synthetic_photometry = self._synthetic_photometry[:0]
@@ -645,18 +640,22 @@ class SED:
                 for band in bandpasses:
 
                     # Get the bandpass
-                    bp = svo.Filter(band)
+                    try:
+                        bp = svo.Filter(band)
 
-                    # Calculate the magnitiude
-                    mag, mag_unc = spec.synthetic_magnitude(bp)
+                        # Calculate the magnitiude
+                        mag, mag_unc = spec.synthetic_magnitude(bp)
 
-                    if mag is not None and not np.isnan(mag):
+                        if mag is not None and not np.isnan(mag):
 
-                        # Make a dict for the new point
-                        new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'ref': 'sedkit'}
+                            # Make a dict for the new point
+                            new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'ref': 'sedkit'}
 
-                        # Add it to the table
-                        self._synthetic_photometry.add_row(new_photometry)
+                            # Add it to the table
+                            self._synthetic_photometry.add_row(new_photometry)
+
+                    except IndexError:
+                        self.message("'{}' not a supported bandpass. Skipping...")
 
             # Calibrate the synthetic photometry
             self._calibrate_photometry('synthetic_photometry')
