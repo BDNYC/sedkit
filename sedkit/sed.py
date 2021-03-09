@@ -624,7 +624,7 @@ class SED:
             A list of the bandpasses to calculate
         """
         # Set filter list
-        all_filters = svo.filters()['Band']
+        all_filters = svo.filters()
         if bandpasses is None:
             bandpasses = all_filters
 
