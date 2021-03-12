@@ -1101,12 +1101,16 @@ class SED:
         # All photometry
         if self.photometry is not None:
             photpath = os.path.join(dirpath, '{}_photometry.txt'.format(name))
-            self.photometry.write(photpath, format='ipac')
+            phot_table = copy(self.photometry)
+            phot_table['band'] = [row['band'].replace('/', '_') for row in phot_table]
+            phot_table.write(photpath, format='ipac')
 
         # All synthetic photometry
         if self.synthetic_photometry is not None:
             synpath = os.path.join(dirpath, '{}_synthetic_photometry.txt'.format(name))
-            self.synthetic_photometry.write(synpath, format='ipac')
+            syn_table = copy(self.synthetic_photometry)
+            syn_table['band'] = [row['band'].replace('/', '_') for row in syn_table]
+            syn_table.write(synpath, format='ipac')
 
         # All results
         resultspath = os.path.join(dirpath, '{}_results.txt'.format(name))
