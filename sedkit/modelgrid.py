@@ -502,7 +502,7 @@ class ModelGrid:
             else:
                 print("{} {}".format(pre, msg))
 
-    def photometry(self, bandpasses=None, weight=True):
+    def photometry(self, bandpasses, weight=True):
         """
         Generate a new ModelGrid object of photometry in the given bands
 
@@ -516,16 +516,6 @@ class ModelGrid:
         ModelGrid
             The photometry ModelGrid
         """
-        # Set filter list
-        all_filters = svo.filters()['Band']
-        if bandpasses is None:
-            bandpasses = all_filters
-
-        # Validate filters
-        for band in bandpasses:
-            if band not in all_filters:
-                raise ValueError("{} not a valid bandpass. Try {}".format(band, all_filters))
-
         # Copy the ModelGrid and empty the index
         phot = ModelGrid(name=self.name, parameters=self.parameters)
         dic = copy(self.__dict__)
