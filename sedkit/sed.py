@@ -1116,7 +1116,10 @@ class SED:
 
         # All results
         resultspath = os.path.join(dirpath, '{}_results.txt'.format(name))
-        self.results.write(resultspath, format='ipac')
+        res_table = copy(self.results)
+        for colname in res_table.colnames:
+            res_table.rename_column(colname, colname.replace('/', '_'))
+        res_table.write(resultspath, format='ipac')
 
         # The SED plot
         if self.fig is not None:
