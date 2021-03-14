@@ -217,7 +217,7 @@ class Catalog:
         # Remove '.' from column names
         final = at.Table(self.results).filled(np.nan)
         for col in final.colnames:
-            final.rename_column(col, col.replace('.', '_'))
+            final.rename_column(col, col.replace('.', '_').replace('/', '_'))
 
         # Write a directory of results and all SEDs...
         if sources:
