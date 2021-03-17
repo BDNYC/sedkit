@@ -268,6 +268,7 @@ class TestSED(unittest.TestCase):
         # Add known spectrum
         s = copy.copy(self.sed)
         spec = bt.get_spectrum(snr=100)
+        spec = spec.resamp(wave=np.linspace(0.4, 3, 200) * q.um)
         s.add_spectrum(spec)
 
         # Find best grid point
