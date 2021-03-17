@@ -65,6 +65,7 @@ class TestModelGrid(unittest.TestCase):
     def test_save(self):
         """Test the save method works"""
         self.bt.save('test.p')
+        os.system('rm test.p')
 
 
 def test_load_model():
@@ -80,6 +81,8 @@ def test_load_model():
 
 def test_load_ModelGrid():
     """Test the load_ModelGrid function"""
+    grid = mg.BTSettl()
+    grid.save('test.p')
     lmg = mg.load_ModelGrid('test.p')
     assert isinstance(lmg, mg.ModelGrid)
     os.system('rm test.p')

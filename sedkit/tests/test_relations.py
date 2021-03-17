@@ -72,7 +72,6 @@ class TestRelation(unittest.TestCase):
         # Derive
         r.add_relation('Teff(Mbol)', 1, yunit=q.K)
         self.assertTrue(len(r.relations) > 0)
-        self.assertEqual(r.order, 1)
 
         # Bad param name
         args = {'rel_name': 'foo(bar)', 'order': 1}

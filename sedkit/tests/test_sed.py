@@ -175,11 +175,7 @@ class TestSED(unittest.TestCase):
         s.make_wein_tail(teff=2000*q.K)
 
         # Radius from spectral type
-        s.radius_from_spectral_type('foo')
-        s.radius_from_spectral_type()
-
-        # Radius from age
-        s.radius_from_age()
+        s.results
 
     def test_compare_model(self):
         """Test for the compare_model method"""

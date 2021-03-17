@@ -143,9 +143,21 @@ class SED:
         self._parallax = None
         self._radius = None
         self._spectral_type = None
+        self._logg = None
+        self._fbol = None
+        self._mass = None
+        self._mbol = None
+        self._Mbol = None
+        self._Lbol = None
+        self._Lbol_sun = None
+        self._Teff = None
         self._membership = None
         self._sky_coords = None
         self._evo_model = None
+
+        # Static attributes
+        self.bb_source = None
+        self.blackbody = None
         self.evo_model = 'parsec12_solar'
         self.reddening = 0
         self.SpT = None
@@ -210,20 +222,6 @@ class SED:
 
         # Make a plot
         self.fig = figure()
-
-        # Empty result attributes
-        self.fbol = None
-        self.mbol = None
-        self.Teff = None
-        self.Teff_bb = None
-        self.Teff_evo = None
-        self.Lbol = None
-        self.Mbol = None
-        self.Lbol_sun = None
-        self.mass = None
-        self.logg = None
-        self.bb_source = None
-        self.blackbody = None
 
         # Run methods
         if method_list is not None:
@@ -453,37 +451,7 @@ class SED:
         age: sequence
             The age and uncertainty in distance units
         """
-        if age is None:
-            self._age = None
-            self._refs.pop('age', None)
-
-        else:
-
-            # If the last value is string, it's the reference
-            if isinstance(age[-1], str):
-                ref = age[-1]
-                age = age[:-1]
-            else:
-                ref = None
-
-            # Make sure it's a sequence
-            if not u.issequence(age, length=[2, 3]):
-                raise TypeError("Age must be a sequence of (value, error) or (value, lower_error, upper_error).")
-
-            # Make sure the values are in distance units
-            if not all([u.equivalent(a, q.Gyr) for a in age]):
-                raise TypeError("Age values must be length units of astropy.units.quantity.Quantity, e.g. 'Gyr'")
-
-            # Set the age!
-            self._age = age
-
-            # Set reference
-            self._refs['age'] = ref
-
-            self.message("Setting age to {} with reference '{}'".format(self.age, ref))
-
-        # Set SED as uncalculated
-        self.calculated = False
+        self._validate_and_set_param('age', age, q.Gyr, True)
 
     def _calculate_sed(self):
         """
@@ -536,7 +504,10 @@ class SED:
             The target untis for fbol
         """
         # Integrate the SED to get fbol
-        self.fbol = self.app_SED.integrate(units=units)
+        fbol = self.app_SED.integrate(units=units)
+
+        # Set the attribute
+        self.fbol = tuple([val for val in fbol] + ['This Work'])
 
     def calculate_Lbol(self):
         """
@@ -560,8 +531,8 @@ class SED:
                 Lbol_sun_unc = round(abs(Lbol_unc / (Lbol * np.log(10))).value, 3)
 
             # Update the attributes
-            self.Lbol = Lbol, Lbol_unc
-            self.Lbol_sun = Lbol_sun, Lbol_sun_unc
+            self.Lbol = Lbol, Lbol_unc, 'This Work'
+            self.Lbol_sun = Lbol_sun, Lbol_sun_unc, 'This Work'
 
     def calculate_mbol(self, L_sun=3.86E26 * q.W, Mbol_sun=4.74):
         """
@@ -588,7 +559,7 @@ class SED:
             mbol_unc = round((2.5 / np.log(10)) * (self.fbol[1] / self.fbol[0]).value, 3)
 
         # Update the attribute
-        self.mbol = mbol, mbol_unc
+        self.mbol = mbol, mbol_unc, 'This Work'
 
     def calculate_Mbol(self):
         """
@@ -609,7 +580,7 @@ class SED:
                 Mbol_unc = round(np.sqrt(self.mbol[1]**2 + ((2.5 / np.log(10)) * (self.distance[1] / self.distance[0]).value)**2), 3)
 
             # Update the attribute
-            self.Mbol = Mbol, Mbol_unc
+            self.Mbol = Mbol, Mbol_unc, 'This Work'
 
     def calculate_synthetic_photometry(self, bandpasses=None):
         """
@@ -672,7 +643,7 @@ class SED:
                 Teff_unc = (Teff * np.sqrt((self.Lbol[1] / self.Lbol[0]).value**2 + (2 * self.radius[1] / self.radius[0]).value**2) / 4.).astype(int)
 
             # Update the attribute
-            self.Teff = Teff, Teff_unc
+            self.Teff = Teff, Teff_unc, 'This Work'
 
     def _calibrate_photometry(self, name='photometry'):
         """
@@ -866,52 +837,12 @@ class SED:
         distance: sequence
             The (distance, err) or (distance, lower_err, upper_err)
         """
-        if distance is None:
-            self._distance = None
-            self._parallax = None
-            self._refs.pop('distance', None)
-            self._refs.pop('parallax', None)
+        self._validate_and_set_param('distance', distance, q.pc, True, trigger=['get_reddening', '_calibrate_photometry', '_calibrate_spectra'])
 
-        else:
-
-            # If the last value is string, it's the reference
-            if isinstance(distance[-1], str):
-                ref = distance[-1]
-                distance = distance[:-1]
-            else:
-                ref = None
-
-            # Make sure it's a sequence
-            if not u.issequence(distance, length=[2, 3]):
-                raise TypeError("Distance must be a sequence of (value, error) or (value, lower_error, upper_error).")
-
-            # Make sure the values are in distance units
-            if not all([u.equivalent(dist, q.pc) for dist in distance]):
-                raise TypeError("Distance values must be length units of astropy.units.quantity.Quantity, e.g. 'pc'")
-
-            # Set the distance!
-            self._distance = distance
-
-            # Update the parallax
-            self._parallax = u.pi2pc(*self.distance, pc2pi=True)
-
-            # Set reference
-            self._refs['distance'] = ref
-            self._refs['parallax'] = ref
-
-            self.message("Setting distance to {} and parallax to {} with reference '{}'".format(self.distance, self.parallax, ref))
-
-        # Try to calculate reddening
-        self.get_reddening()
-
-        # Update the absolute photometry
-        self._calibrate_photometry()
-
-        # Update the flux calibrated spectra
-        self._calibrate_spectra()
-
-        # Set SED as uncalculated
-        self.calculated = False
+        # Update parallax
+        ref = [distance[-1]] if isinstance(distance[-1], str) else []
+        parallax = None if distance is None else tuple(list(u.pi2pc(*self.distance, pc2pi=True)) + ref)
+        self._validate_and_set_param('parallax', parallax, q.mas, True)
 
     def drop_photometry(self, band):
         """
@@ -1131,6 +1062,23 @@ class SED:
         if zipped:
             shutil.make_archive(dirpath, 'zip', dirpath)
             os.system('rm -R {}'.format(dirpath))
+
+    @property
+    def fbol(self):
+        """Getter for fbol"""
+        return self._fbol
+
+    @fbol.setter
+    def fbol(self, fbol):
+        """
+        A setter for fbol
+
+        Parameters
+        ----------
+        fbol: sequence
+            The fbol and uncertainty in cgs units
+        """
+        self._validate_and_set_param('fbol', fbol, q.erg / (q.cm**2 * q.s), False)
 
     def find_2MASS(self, **kwargs):
         """
@@ -1656,11 +1604,13 @@ class SED:
             self.infer_logg()
         if self.mass is None:
             self.infer_mass()
-        # if self.teff is not None:
-        #     self.infer_teff()
 
         # Calculate Teff (dependent on Lbol, distance, and radius)
         self.calculate_Teff()
+
+        # If Teff could not be calculated, infer it from SpT
+        if self.Teff is None:
+            self.infer_Teff()
 
     def get_reddening(self, version='bayestar2019'):
         """
@@ -1710,7 +1660,8 @@ class SED:
         """
         Estimate the surface gravity from model isochrones given an age and Lbol
         """
-        if self.age is not None and self.Lbol_sun is not None:
+        # Try model isochrones
+        if self.logg is None and self.age is not None and self.Lbol_sun is not None:
 
             # Default
             logg = None
@@ -1728,8 +1679,9 @@ class SED:
             # Store the value
             self.logg = [i.round(2) for i in logg] if logg is not None else logg
 
-        else:
-            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
+        # No dice
+        if self.logg is None:
+            self.message('Could not calculate logg without Lbol and age')
 
     def infer_mass(self, mass_units=q.Msun, plot=False):
         """
@@ -1740,7 +1692,8 @@ class SED:
         mass_units: astropy.units.quantity.Quantity
             The units for the mass
         """
-        if self.age is not None and self.Lbol_sun is not None and self.evo_model is not None:
+        # Try model isochrones
+        if self.age is not None and self.Lbol_sun is not None:
 
             # Default
             mass = None
@@ -1749,22 +1702,22 @@ class SED:
             if self.Lbol_sun[1] is None:
                 self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
             else:
+                self.evo_model.mass_units = mass_units
                 mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', plot=plot)
-
-            # Print a message if None
-            if mass is None:
-                self.message("Could not calculate mass.")
 
             # Store the value
             self.mass = [i.round(3) for i in mass] if mass is not None else mass
 
-        elif self.Lbol_sun is not None:
+        # Try mass(Lbol) relation
+        if self.mass is None and self.Lbol_sun is not None:
 
             # Infer from Dwarf Sequence
             self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, plot=plot)
 
-        else:
-            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the mass.'.format(self))
+        # No dice
+        if self.mass is None:
+            self.message('Could not calculate mass without Lbol')
+
 
     def infer_radius(self, radius_units=q.Rsun, plot=False):
         """
@@ -1775,6 +1728,7 @@ class SED:
         radius_units: astropy.units.quantity.Quantity
             The radius units
         """
+        # Try model isochrones
         if self.age is not None and self.Lbol_sun is not None:
 
             # Default
@@ -1787,30 +1741,36 @@ class SED:
                 self.evo_model.radius_units = radius_units
                 radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
 
-            # Print a message if None
-            if radius is None:
-                self.message("Could not calculate radius.")
-
             # Store the value
             self.radius = [i.round(3) for i in radius] if radius is not None else radius
-            if radius is not None:
-                self.isochrone_radius = True
-            self.message("{}: Lbol={}, age={} ==> radius={}".format(self.evo_model.name, self.Lbol_sun, self.age, self.radius ))
 
+        # Try radius(spt) relation
+        if self.radius is None and self.spectral_type is not None:
 
-        else:
-            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
+            # Infer from Dwarf Sequence
+            self.radius = self.mainsequence.evaluate('radius(spt)', self.spectral_type, plot=plot)
 
-    def infer_teff(self, teff_units=q.K, plot=False):
+        # Try radius(Lbol) relation
+        if self.radius is None and self.Lbol_sun is not None:
+
+            # Infer from Dwarf Sequence
+            self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, plot=plot)
+
+        # No dice
+        if self.radius is None:
+            self.message('Could not calculate radius without spectral_type or Lbol')
+
+    def infer_Teff(self, teff_units=q.K, plot=False):
         """
-        Estimate the radius from model isochrones given an age and Lbol
+        Infer the effective temperature
 
         Parameters
         ----------
         teff_units: astropy.units.quantity.Quantity
             The temperature units to use
         """
-        if self.age is not None and self.Lbol_sun is not None:
+        # Try model isochrones
+        if self.Teff is None and self.age is not None and self.Lbol_sun is not None:
 
             # Default
             teff = None
@@ -1822,15 +1782,24 @@ class SED:
                 self.evo_model.teff_units = teff_units
                 teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
 
-            # Print a message if None
-            if teff is None:
-                self.message("Could not calculate teff.")
-
             # Store the value
-            self.Teff_evo = [i.round(0) for i in teff] if teff is not None else teff
+            self.Teff = [i.round(0) for i in teff] if teff is not None else teff
 
-        else:
-            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the teff.'.format(self))
+        # Try Teff(spt) relation
+        if self.Teff is None and self.spectral_type is not None:
+
+            # Infer from Dwarf Sequence
+            self.Teff = self.mainsequence.evaluate('Teff(spt)', self.spectral_type, plot=plot)
+
+        # Try Teff(Lbol) relation
+        if self.Teff is None and self.Lbol_sun is not None:
+
+            # Infer from Dwarf Sequence
+            self.Teff = self.mainsequence.evaluate('Teff(Lbol)', self.Lbol_sun, plot=plot)
+
+        # No dice
+        if self.Teff is None:
+            self.message('Could not calculate Teff without spectral_type or Lbol')
 
     @property
     def info(self):
@@ -1841,6 +1810,40 @@ class SED:
             if not attr.startswith('_') and attr not in ['info', 'results'] and not callable(getattr(self, attr)):
                 val = getattr(self, attr)
                 self.message('{0: <25}= {1}{2}'.format(attr, '\n' if isinstance(val, at.QTable) else '', val))
+
+    @property
+    def Lbol(self):
+        """Getter for Lbol"""
+        return self._Lbol
+
+    @Lbol.setter
+    def Lbol(self, Lbol):
+        """
+        A setter for Lbol
+
+        Parameters
+        ----------
+        Lbol: sequence
+            The Lbol and uncertainty in cgs units
+        """
+        self._validate_and_set_param('Lbol', Lbol, q.erg / q.s, False)
+        
+    @property
+    def Lbol_sun(self):
+        """Getter for Lbol_sun"""
+        return self._Lbol_sun
+
+    @Lbol_sun.setter
+    def Lbol_sun(self, Lbol_sun):
+        """
+        A setter for Lbol_sun
+
+        Parameters
+        ----------
+        Lbol_sun: sequence
+            The Lbol_sun and uncertainty in cgs units
+        """
+        self._validate_and_set_param('Lbol_sun', Lbol_sun, None, False)
 
     @property
     def logg(self):
@@ -1857,37 +1860,7 @@ class SED:
         logg: sequence
             The logg and uncertainty in cgs units
         """
-        if logg is None:
-            self._logg = None
-            self._refs.pop('logg', None)
-
-        else:
-
-            # If the last value is string, it's the reference
-            if isinstance(logg[-1], str):
-                ref = logg[-1]
-                logg = logg[:-1]
-            else:
-                ref = None
-
-            # Make sure it's a sequence
-            if not u.issequence(logg, length=[2, 3]):
-                raise TypeError("log(g) must be a sequence of (value, error) or (value, lower_error, upper_error).")
-
-            # Make sure the values are unitless
-            if any([hasattr(l, 'unit') for l in logg]):
-                raise TypeError("log(g) values must be unitless magnitudes")
-
-            # Set the logg!
-            self._logg = logg
-
-            # Set reference
-            self._refs['logg'] = ref
-
-            self.message("Setting log(g) to {} with reference '{}'".format(self.logg, ref))
-
-        # Set SED as uncalculated
-        self.calculated = False
+        self._validate_and_set_param('logg', logg, None, False)
 
     def make_rj_tail(self, teff=3000 * q.K):
         """
@@ -2088,37 +2061,41 @@ class SED:
         mass: sequence
             The mass and uncertainty in mass units
         """
-        if mass is None:
-            self._mass = None
-            self._refs.pop('mass', None)
+        self._validate_and_set_param('mass', mass, q.M_sun, False)
+        
+    @property
+    def mbol(self):
+        """Getter for mbol"""
+        return self._mbol
 
-        else:
+    @mbol.setter
+    def mbol(self, mbol):
+        """
+        A setter for mbol
 
-            # If the last value is string, it's the reference
-            if isinstance(mass[-1], str):
-                ref = mass[-1]
-                mass = mass[:-1]
-            else:
-                ref = None
+        Parameters
+        ----------
+        mbol: sequence
+            The mbol and uncertainty
+        """
+        self._validate_and_set_param('mbol', mbol, None, True)
+        
+    @property
+    def Mbol(self):
+        """Getter for Mbol"""
+        return self._Mbol
 
-            # Make sure it's a sequence
-            if not u.issequence(mass, length=[2, 3]):
-                raise TypeError("mass must be a sequence of (value, error) or (value, lower_error, upper_error).")
+    @Mbol.setter
+    def Mbol(self, Mbol):
+        """
+        A setter for Mbol
 
-            # Make sure it's in mass units
-            if not all([u.equivalent(ms, q.M_sun) for ms in mass]):
-                raise TypeError("Mass values must be mass units of astropy.units.quantity.Quantity, e.g. 'M_sun'")
-
-            # Set the mass!
-            self._mass = mass
-
-            # Set reference
-            self._refs['mass'] = ref
-
-            self.message("Setting mass to {} with reference '{}'".format(self.mass, ref))
-
-        # Set SED as uncalculated
-        self.calculated = False
+        Parameters
+        ----------
+        Mbol: sequence
+            The Mbol and uncertainty
+        """
+        self._validate_and_set_param('Mbol', Mbol, None, True)
 
     @property
     def membership(self):
@@ -2224,52 +2201,12 @@ class SED:
         parallax: sequence
             The (parallax, err) or (parallax, lower_err, upper_err)
         """
-        if parallax is None:
-            self._parallax = None
-            self._distance = None
-            self._refs.pop('parallax', None)
-            self._refs.pop('distance', None)
+        self._validate_and_set_param('parallax', parallax, q.mas, True)
 
-        else:
-
-            # If the last value is string, it's the reference
-            if isinstance(parallax[-1], str):
-                ref = parallax[-1]
-                parallax = parallax[:-1]
-            else:
-                ref = None
-
-            # Make sure it's a sequence
-            if not u.issequence(parallax, length=[2, 3]):
-                raise TypeError("Parallax must be a sequence of (value, error) or (value, lower_error, upper_error).")
-
-            # Make sure the values are in distance units
-            if not all([u.equivalent(plx, q.mas) for plx in parallax]):
-                raise TypeError("Parallax values must be angular units of astropy.units.quantity.Quantity, e.g. 'mas'")
-
-            # Set the parallax!
-            self._parallax = parallax
-
-            # Update the distance
-            self._distance = u.pi2pc(*self.parallax)
-
-            # Set reference
-            self._refs['parallax'] = ref
-            self._refs['distance'] = ref
-
-            self.message("Setting parallax to {} and distance to {} with reference '{}'".format(self.parallax, self.distance, ref))
-
-        # Try to calculate reddening
-        self.get_reddening()
-
-        # Update the absolute photometry
-        self._calibrate_photometry()
-
-        # Update the flux calibrated spectra
-        self._calibrate_spectra()
-
-        # Set SED as uncalculated
-        self.calculated = False
+        # Update parallax
+        ref = [parallax[-1]] if isinstance(parallax[-1], str) else []
+        distance = None if parallax is None else tuple(list(u.pi2pc(*self.parallax)) + ref)
+        self._validate_and_set_param('distance', distance, q.pc, True, trigger=['get_reddening', '_calibrate_photometry', '_calibrate_spectra'])
 
     @property
     def photometry(self):
@@ -2506,53 +2443,7 @@ class SED:
         radius: sequence
             The radius and uncertainty in distance units
         """
-        if radius is None:
-            self._radius = None
-            self._refs.pop('radius', None)
-
-        else:
-
-            # If the last value is string, it's the reference
-            if isinstance(radius[-1], str):
-                ref = radius[-1]
-                radius = radius[:-1]
-            else:
-                ref = None
-
-            # Make sure it's a sequence
-            if not u.issequence(radius, length=[2, 3]):
-                raise TypeError("Radius must be a sequence of (value, error) or (value, lower_error, upper_error).")
-
-            # Make sure the values are in distance units
-            if not all([u.equivalent(rad, q.R_sun) for rad in radius]):
-                raise TypeError("Radius values must be length units of astropy.units.quantity.Quantity, e.g. 'R_sun'")
-
-            # Set the radius!
-            self._radius = radius
-
-            # Set reference
-            self._refs['radius'] = ref
-
-            self.message("Setting radius to {} with reference '{}'".format(self.radius, ref))
-
-        # Set SED as uncalculated
-        self.calculated = False
-
-    def radius_from_spectral_type(self, spt=None):
-        """
-        Estimate the radius from CMD plot
-
-        Parameters
-        ----------
-        spt: float
-            The spectral type float, where 0-99 correspond to types O0-Y9
-        """
-        spt = spt or self.spectral_type[0]
-        try:
-            self.radius = SptRadius.get_radius(spt)
-
-        except:
-            self.message("Could not estimate radius from spectral type {}".format(spt))
+        self._validate_and_set_param('radius', radius, q.R_sun, True)
 
     @property
     def refs(self):
@@ -2809,7 +2700,7 @@ class SED:
 
             # If radius not explicitly set, estimate it from spectral type
             if self.spectral_type is not None and self.radius is None:
-                self.radius_from_spectral_type()
+                self.infer_radius()
 
             # Update the reference
             self._refs['spectral_type'] = ref
@@ -2828,6 +2719,77 @@ class SED:
             self.message("No synthetic photometry. Run `calculate_synthetic_photometry()` to generate.")
 
         return self._synthetic_photometry
+
+    @property
+    def Teff(self):
+        """
+        A property for effective temperature
+        """
+        return self._Teff
+
+    @Teff.setter
+    def Teff(self, teff):
+        """
+        A setter for effective temperature
+
+        Parameters
+        ----------
+        teff: sequence
+            The teff and uncertainty in temperature units
+        """
+        self._validate_and_set_param('Teff', teff, q.K, True)
+
+    def _validate_and_set_param(self, param, values, units, set_uncalculated=True, trigger=[]):
+        """
+        Method to validate and set a calculated quantity
+
+        Parameters
+        ----------
+        param: str
+            The name of the parameter
+        values: tuple
+            The values to set
+        units: NoneType, astropy.units.quantity.Quantity
+            The units to require
+        set_uncalculated: bool
+            Set the SED as uncalculated
+        trigger: list
+            A list of methods to trigger
+        """
+        if values is None:
+            setattr(self, '_{}'.format(param), None)
+            self._refs.pop(param, None)
+
+        else:
+
+            # If the last value is string, it's the reference
+            if isinstance(values[-1], str):
+                ref = values[-1]
+                values = values[:-1]
+            else:
+                ref = None
+
+            # Make sure it's a sequence
+            if not u.issequence(values, length=[2, 3]):
+                raise TypeError("{} must be a sequence of (value, error) or (value, lower_error, upper_error).".format(param))
+
+            # Make sure it's in correct units
+            if not all([u.equivalent(val, units) for val in values]):
+                raise TypeError("{} values must be {}".format(param, 'unitless' if units is None else "astropy.units.quantity.Quantity of the appropriate units , e.g. '{}'".format(units)))
+
+            # Set the mbol!
+            setattr(self, '_{}'.format(param), values)
+
+            # Set reference
+            self._refs[param] = ref
+
+            self.message("Setting {} to {} with reference '{}'".format(param, getattr(self, param), ref))
+
+        # Trigger other methods
+        self.run_methods(trigger)
+
+        # Set SED as uncalculated
+        self.calculated = not set_uncalculated
 
     @property
     def wave_units(self):
