@@ -164,7 +164,10 @@ def equivalent(value, units):
 
     # Check is unitless
     if units is None:
-        eq = False if hasattr(1 * value, 'unit') else True
+        if value is None:
+            eq = True
+        else:
+            eq = False if hasattr(1 * value, 'unit') else True
 
     # Check if it's a list or tuple
     elif isinstance(value, (tuple, list)):
