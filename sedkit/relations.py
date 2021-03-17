@@ -141,7 +141,7 @@ class Relation:
         self.relations['{}({})'.format(yparam, xparam)] = rel
 
         if plot:
-            show(self.plot(rel_name), browser='chrome')
+            show(self.plot(rel_name))
 
     def evaluate(self, rel_name, x_val, plot=False):
         """
@@ -198,7 +198,7 @@ class Relation:
             if y_upper:
                 return y_val, y_upper, y_lower, self.ref
             else:
-                return y_val
+                return y_val, self.ref
 
         except ValueError as exc:
 

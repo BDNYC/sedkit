@@ -10,11 +10,27 @@ from .utilities import equivalent
 
 
 def trapz(f, a, b, n):
-    h = (b - a) / float(n)
-    s = 0.5 * (f(a) + f(b))
-    for i in range(1, n, 1):
-        s = s + f(a + i * h)
-    return h * s
+    """
+    Function to perform integration via the trapezoidal rule
+
+    Parameters
+    ----------
+    f: func
+        The function to evaluate
+    a:
+    b
+    n
+
+    Returns
+    -------
+
+    """
+    h = float(b - a) / n
+    result = 0.5 * f(a) + 0.5 * f(b)
+    for i in range(1, n):
+        result += f(a + i * h)
+    result *= h
+    return result
 
 
 class Unum(object):

@@ -62,7 +62,7 @@ class TestRelation(unittest.TestCase):
         # Check the data
         self.assertIsNotNone(r.data)
         self.assertTrue(len(r.relations) == 0)
-        self.assertTrue(r.parameters > 0)
+        self.assertTrue(len(r.parameters) > 0)
 
     def test_add_relation(self):
         """Tests for the add_relation method"""
@@ -108,10 +108,10 @@ class TestRelation(unittest.TestCase):
         # Evaluate
         self.assertTrue(isinstance(r.evaluate(rel_name, -2), tuple))
 
-        # Evaluate with plot
+        # Evaluate with no errors and plot
         self.assertTrue(isinstance(r.evaluate(rel_name, -1, plot=True), tuple))
 
-        # Evaluate with errors
+        # Evaluate with errors and plot
         self.assertTrue(isinstance(r.evaluate(rel_name, (-1, 0.1), plot=True), tuple))
 
     def test_plot(self):
