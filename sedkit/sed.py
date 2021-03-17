@@ -146,6 +146,7 @@ class SED:
         self._membership = None
         self._sky_coords = None
         self._evo_model = None
+        self.evo_model = 'parsec12_solar'
         self.reddening = 0
         self.SpT = None
         self.mainsequence = rel.DwarfSequence()

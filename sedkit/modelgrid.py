@@ -702,23 +702,6 @@ class BTSettl(ModelGrid):
         self.load(root)
 
 
-class Filippazzo2016(ModelGrid):
-    """Child class for the Filippazzo et al. (2016) sample"""
-    def __init__(self):
-        """Load the model object"""
-        model_path = 'data/models/atmospheric/Filippazzo2016.p'
-        root = resource_filename('sedkit', model_path)
-
-        data = pickle.load(open(root, 'rb'))
-
-        # Inherit from base class
-        super().__init__(data['name'], data['parameters'], ref='2017yCat..18100158F')
-
-        # Copy to new __dict__
-        for key, val in data.items():
-            setattr(self, key, val)
-
-
 class SpexPrismLibrary(ModelGrid):
     """Child class for the SpeX Prism Library model grid"""
     def __init__(self):
