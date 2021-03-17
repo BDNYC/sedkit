@@ -17,7 +17,7 @@ from .modelgrid import ModelGrid, BTSettl, SpexPrismLibrary
 __version_commit__ = ''
 _regex_git_hash = re.compile(r'.*\+g(\w+)')
 
-__version__ = '1.1.2'
+__version__ = '1.1.3'
 
 # from pkg_resources import get_distribution, DistributionNotFound
 # try:
