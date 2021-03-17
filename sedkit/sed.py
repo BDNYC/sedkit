@@ -1612,6 +1612,38 @@ class SED:
         if self.Teff is None:
             self.infer_Teff()
 
+    def get_mag(self, band, cal='app', type='magnitude'):
+        """
+        Retrieve the magnitude, uncertainty, and reference for a given band
+
+        Parameters
+        ----------
+        band: str
+            The name of the bandpass
+        cal: str
+            Apparent or absolute calibrated, ['app', 'abs']
+        type: str
+            Magnitude or flux density, ['magnitude', 'flux']
+
+        Returns
+        -------
+        tuple, NoneType
+            The tuple of values or None
+        """
+        if band in self.photometry['band'] and cal in ['abs', 'app'] and type in ['magnitude', 'flux']:
+            key = '_'.join([cal, type])
+            mag = self.photometry[self.photometry['band'] == band][key][0]
+            unc = self.photometry[self.photometry['band'] == band][key + '_unc'][0]
+            ref = self.photometry[self.photometry['band'] == band]['ref'][0]
+
+            if mag == unc == 0:
+                return None
+            else:
+                return mag, unc, ref
+
+        else:
+            return None
+
     def get_reddening(self, version='bayestar2019'):
         """
         Calculate the reddening from the Bayestar17 dust map
@@ -1713,6 +1745,18 @@ class SED:
 
             # Infer from Dwarf Sequence
             self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, plot=plot)
+            
+        # Try mass(M_J) relation
+        if self.mass is None and self.get_mag('2MASS.J', 'abs') is not None:
+
+            # Infer from Dwarf Sequence
+            self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), plot=plot)
+
+        # Try mass(M_Ks) relation
+        if self.mass is None and self.get_mag('2MASS.Ks', 'abs') is not None:
+
+            # Infer from Dwarf Sequence
+            self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
 
         # No dice
         if self.mass is None:
@@ -1755,6 +1799,18 @@ class SED:
 
             # Infer from Dwarf Sequence
             self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, plot=plot)
+
+        # Try radius(M_J) relation
+        if self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
+
+            # Infer from Dwarf Sequence
+            self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), plot=plot)
+
+        # Try radius(M_Ks) relation
+        if self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
+
+            # Infer from Dwarf Sequence
+            self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
 
         # No dice
         if self.radius is None:

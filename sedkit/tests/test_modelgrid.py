@@ -86,7 +86,7 @@ def test_load_ModelGrid():
     grid.save(path)
     lmg = mg.load_ModelGrid(path)
     assert isinstance(lmg, mg.ModelGrid)
-    os.system('rm test.p)
+    os.system('rm test.p')
 
 
 def test_BTSettl():

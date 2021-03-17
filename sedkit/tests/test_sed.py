@@ -226,6 +226,7 @@ class TestSED(unittest.TestCase):
         s.find_Gaia()
 
         self.assertNotEqual(len(s.photometry), 0)
+        self.assertTrue(isinstance(s.get_mag('2MASS.J'), tuple))
 
     def test_find_SDSS_spectra(self):
         """Test the find_SDSS_spectra method"""
