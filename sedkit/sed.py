@@ -63,8 +63,6 @@ class SED:
         The string spectral type
     Teff: astropy.units.quantity.Quantity
         The effective temperature calculated from the SED
-    Teff_bb: astropy.units.quantity.Quantity
-        The effective temperature calculated from the blackbody fit
     abs_SED: sequence
         The [W, F, E] of the calculated absolute SED
     abs_phot_SED: sequence
@@ -1712,7 +1710,7 @@ class SED:
             self.logg = [i.round(2) for i in logg] if logg is not None else logg
 
         # No dice
-        if self.logg is None:
+        else:
             self.message('Could not calculate logg without Lbol and age')
 
     def infer_mass(self, mass_units=q.Msun, plot=False):
@@ -1741,29 +1739,29 @@ class SED:
             self.mass = [i.round(3) for i in mass] if mass is not None else mass
 
         # Try mass(Lbol) relation
-        if self.mass is None and self.Lbol_sun is not None:
+        elif self.mass is None and self.Lbol_sun is not None:
 
             # Infer from Dwarf Sequence
             self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, plot=plot)
             
         # Try mass(M_J) relation
-        if self.mass is None and self.get_mag('2MASS.J', 'abs') is not None:
+        elif self.mass is None and self.get_mag('2MASS.J', 'abs') is not None:
 
             # Infer from Dwarf Sequence
             self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), plot=plot)
 
         # Try mass(M_Ks) relation
-        if self.mass is None and self.get_mag('2MASS.Ks', 'abs') is not None:
+        elif self.mass is None and self.get_mag('2MASS.Ks', 'abs') is not None:
 
             # Infer from Dwarf Sequence
             self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
 
         # No dice
-        if self.mass is None:
-            self.message('Could not calculate mass without Lbol')
+        else:
+            self.message('Could not calculate mass without Lbol, M_2MASS.J, or M_2MASS.Ks')
 
 
-    def infer_radius(self, radius_units=q.Rsun, plot=False):
+    def infer_radius(self, radius_units=q.Rsun, relation=None, plot=False):
         """
         Estimate the radius from model isochrones given an age and Lbol
 
@@ -1789,32 +1787,32 @@ class SED:
             self.radius = [i.round(3) for i in radius] if radius is not None else radius
 
         # Try radius(spt) relation
-        if self.radius is None and self.spectral_type is not None:
+        elif self.radius is None and self.spectral_type is not None:
 
             # Infer from Dwarf Sequence
             self.radius = self.mainsequence.evaluate('radius(spt)', self.spectral_type, plot=plot)
 
         # Try radius(Lbol) relation
-        if self.radius is None and self.Lbol_sun is not None:
+        elif self.radius is None and self.Lbol_sun is not None:
 
             # Infer from Dwarf Sequence
             self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, plot=plot)
 
         # Try radius(M_J) relation
-        if self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
+        elif self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
 
             # Infer from Dwarf Sequence
             self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), plot=plot)
 
         # Try radius(M_Ks) relation
-        if self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
+        elif self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
 
             # Infer from Dwarf Sequence
             self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
 
         # No dice
-        if self.radius is None:
-            self.message('Could not calculate radius without spectral_type or Lbol')
+        else:
+            self.message('Could not calculate radius without spectral_type, Lbol, M_2MASS.J, or M_2MASS.Ks')
 
     def infer_Teff(self, teff_units=q.K, plot=False):
         """
@@ -1842,19 +1840,19 @@ class SED:
             self.Teff = [i.round(0) for i in teff] if teff is not None else teff
 
         # Try Teff(spt) relation
-        if self.Teff is None and self.spectral_type is not None:
+        elif self.Teff is None and self.spectral_type is not None:
 
             # Infer from Dwarf Sequence
             self.Teff = self.mainsequence.evaluate('Teff(spt)', self.spectral_type, plot=plot)
 
         # Try Teff(Lbol) relation
-        if self.Teff is None and self.Lbol_sun is not None:
+        elif self.Teff is None and self.Lbol_sun is not None:
 
             # Infer from Dwarf Sequence
             self.Teff = self.mainsequence.evaluate('Teff(Lbol)', self.Lbol_sun, plot=plot)
 
         # No dice
-        if self.Teff is None:
+        else:
             self.message('Could not calculate Teff without spectral_type or Lbol')
 
     @property

@@ -391,9 +391,6 @@ class Catalog:
         results['mass_unc'].unit = q.Msun
         results['Teff'].unit = q.K
         results['Teff_unc'].unit = q.K
-        results['Teff_bb'].unit = q.K
-        results['Teff_evo'].unit = q.K
-        results['Teff_evo_unc'].unit = q.K
 
         return results
 

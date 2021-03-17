@@ -164,48 +164,54 @@ class Relation:
             print("Please run 'add_relation' method for {} before trying to evaluate.".format(rel_name))
             return
 
-        try:
-
-            # Get the relation
-            rel = self.relations[rel_name]
-
-            # Evaluate the polynomial
-            if isinstance(x_val, (list, tuple)):
-
-                # With uncertainties
-                x = Unum(*x_val)
-                y = x.polyval(rel['coeffs'])
-                x_val = x.nominal
-                y_val = y.nominal * rel['yunit']
-                y_upper = y.upper * rel['yunit']
-                y_lower = y.lower * rel['yunit']
-
-            else:
-
-                # Without uncertainties
-                x_val = x_val.value if hasattr(x_val, 'unit') else x_val
-                y_val = np.polyval(rel['coeffs'], x_val) * rel['yunit']
-                y_lower = y_upper = None
-
-            if plot:
-                print(y_val, y_lower, y_upper)
-                plt = self.plot(rel_name)
-                plt.circle([x_val], [y_val], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
-                if y_upper:
-                    plt.line([x_val, x_val], [y_val - y_lower, y_val + y_upper], color='red')
-                show(plt)
-
-            if y_upper:
-                return y_val, y_upper, y_lower, self.ref
-            else:
-                return y_val, self.ref
-
-        except ValueError as exc:
-
-            print(exc)
-            print("Could not evaluate the {} relation at {}".format(rel_name, x_val))
+        if x_val is None:
 
             return None
+
+        else:
+
+            try:
+
+                # Get the relation
+                rel = self.relations[rel_name]
+
+                # Evaluate the polynomial
+                if isinstance(x_val, (list, tuple)):
+
+                    # With uncertainties
+                    x = Unum(*x_val)
+                    y = x.polyval(rel['coeffs'])
+                    x_val = x.nominal
+                    y_val = y.nominal * rel['yunit']
+                    y_upper = y.upper * rel['yunit']
+                    y_lower = y.lower * rel['yunit']
+
+                else:
+
+                    # Without uncertainties
+                    x_val = x_val.value if hasattr(x_val, 'unit') else x_val
+                    y_val = np.polyval(rel['coeffs'], x_val) * rel['yunit']
+                    y_lower = y_upper = None
+
+                if plot:
+                    print(y_val, y_lower, y_upper)
+                    plt = self.plot(rel_name)
+                    plt.circle([x_val], [y_val], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
+                    if y_upper:
+                        plt.line([x_val, x_val], [y_val - y_lower, y_val + y_upper], color='red')
+                    show(plt)
+
+                if y_upper:
+                    return y_val, y_upper, y_lower, self.ref
+                else:
+                    return y_val, self.ref
+
+            except ValueError as exc:
+
+                print(exc)
+                print("Could not evaluate the {} relation at {}".format(rel_name, x_val))
+
+                return None
 
     @property
     def parameters(self):
