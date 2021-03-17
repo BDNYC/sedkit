@@ -840,7 +840,7 @@ class SED:
         self._validate_and_set_param('distance', distance, q.pc, True, trigger=['get_reddening', '_calibrate_photometry', '_calibrate_spectra'])
 
         # Update parallax
-        ref = [distance[-1]] if isinstance(distance[-1], str) else []
+        ref = [] if distance is None else [distance[-1]] if isinstance(distance[-1], str) else []
         parallax = None if distance is None else tuple(list(u.pi2pc(*self.distance, pc2pi=True)) + ref)
         self._validate_and_set_param('parallax', parallax, q.mas, True)
 
@@ -2204,7 +2204,7 @@ class SED:
         self._validate_and_set_param('parallax', parallax, q.mas, True)
 
         # Update parallax
-        ref = [parallax[-1]] if isinstance(parallax[-1], str) else []
+        ref = [] if parallax is None else [parallax[-1]] if isinstance(parallax[-1], str) else []
         distance = None if parallax is None else tuple(list(u.pi2pc(*self.parallax)) + ref)
         self._validate_and_set_param('distance', distance, q.pc, True, trigger=['get_reddening', '_calibrate_photometry', '_calibrate_spectra'])
 

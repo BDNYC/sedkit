@@ -82,10 +82,11 @@ def test_load_model():
 def test_load_ModelGrid():
     """Test the load_ModelGrid function"""
     grid = mg.BTSettl()
-    grid.save('test.p')
-    lmg = mg.load_ModelGrid('test.p')
+    path = './test.p'
+    grid.save(path)
+    lmg = mg.load_ModelGrid(path)
     assert isinstance(lmg, mg.ModelGrid)
-    os.system('rm test.p')
+    os.system('rm test.p)
 
 
 def test_BTSettl():

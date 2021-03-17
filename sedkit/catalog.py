@@ -42,8 +42,7 @@ class Catalog:
                      'membership', 'reddening', 'fbol', 'fbol_unc', 'mbol',
                      'mbol_unc', 'Lbol', 'Lbol_unc', 'Lbol_sun',
                      'Lbol_sun_unc', 'Mbol', 'Mbol_unc', 'logg', 'logg_unc',
-                     'mass', 'mass_unc', 'Teff', 'Teff_unc', 'Teff_evo',
-                     'Teff_evo_unc', 'Teff_bb', 'SED']
+                     'mass', 'mass_unc', 'Teff', 'Teff_unc', 'SED']
 
         # A master table of all SED results
         self.results = self.make_results_table(self)
