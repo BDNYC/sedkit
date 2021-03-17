@@ -147,8 +147,8 @@ class SED:
         self._sky_coords = None
         self._evo_model = None
         self.reddening = 0
-        self.evo_model = 'parsec12_solar'
         self.SpT = None
+        self.mainsequence = rel.DwarfSequence()
 
         # Dictionary to keep track of references
         self._refs = {}
@@ -223,10 +223,6 @@ class SED:
         self.logg = None
         self.bb_source = None
         self.blackbody = None
-
-        # Default parameters
-        if self.age is None:
-            self.age = 6 * q.Gyr, 4 * q.Gyr
 
         # Run methods
         if method_list is not None:
@@ -1428,7 +1424,8 @@ class SED:
         # Get the spectrum to fit
         if fit_to == 'phot':
             spec = self.app_phot_SED
-            modelgrid = modelgrid.photometry(list(self.photometry['band']), weight=False if mcmc else True)
+            measured = self.photometry[(self.photometry['app_flux_unc'] > 0) & (self.photometry['app_flux'] > 0)]
+            modelgrid = modelgrid.photometry(list(measured['band']), weight=False if mcmc else True)
         else:
             spec = self.app_spec_SED
 
@@ -1651,21 +1648,15 @@ class SED:
         self.calculate_Lbol()
         self.calculate_Mbol()
 
-        # Interpolate surface gravity, mass and radius from isochrones
-        if self.Lbol_sun is not None:
-
-            if self.Lbol_sun is None:
-                self.message('Lbol={0.Lbol}. Uncertainties are needed to estimate Teff, radius, surface gravity, and mass.'.format(self))
-
-            else:
-                if self.radius is None and self.evo_model is not None:
-                    self.radius_from_age()
-                if self.logg is None and self.evo_model is not None:
-                    self.logg_from_age()
-                if self.mass is None and self.evo_model is not None:
-                    self.mass_from_age()
-                if self.evo_model is not None:
-                    self.teff_from_age()
+        # Interpolate surface gravity, mass and radius
+        if self.radius is None:
+            self.infer_radius()
+        if self.logg is None:
+            self.infer_logg()
+        if self.mass is None:
+            self.infer_mass()
+        # if self.teff is not None:
+        #     self.infer_teff()
 
         # Calculate Teff (dependent on Lbol, distance, and radius)
         self.calculate_Teff()
@@ -1713,6 +1704,132 @@ class SED:
                         group.append(s), idx.append(n)
                 groups.append(group)
         return groups
+
+    def infer_logg(self, plot=False):
+        """
+        Estimate the surface gravity from model isochrones given an age and Lbol
+        """
+        if self.age is not None and self.Lbol_sun is not None:
+
+            # Default
+            logg = None
+
+            # Check for uncertainties
+            if self.Lbol_sun[1] is None:
+                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
+            else:
+                logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg', plot=plot)
+
+            # Print a message if None
+            if logg is None:
+                self.message("Could not calculate surface gravity.")
+
+            # Store the value
+            self.logg = [i.round(2) for i in logg] if logg is not None else logg
+
+        else:
+            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
+
+    def infer_mass(self, mass_units=q.Msun, plot=False):
+        """
+        Estimate the mass from model isochrones given an age and Lbol
+
+        Parameters
+        ----------
+        mass_units: astropy.units.quantity.Quantity
+            The units for the mass
+        """
+        if self.age is not None and self.Lbol_sun is not None and self.evo_model is not None:
+
+            # Default
+            mass = None
+
+            # Check for uncertainties
+            if self.Lbol_sun[1] is None:
+                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
+            else:
+                mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', plot=plot)
+
+            # Print a message if None
+            if mass is None:
+                self.message("Could not calculate mass.")
+
+            # Store the value
+            self.mass = [i.round(3) for i in mass] if mass is not None else mass
+
+        elif self.Lbol_sun is not None:
+
+            # Infer from Dwarf Sequence
+            self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, plot=plot)
+
+        else:
+            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the mass.'.format(self))
+
+    def infer_radius(self, radius_units=q.Rsun, plot=False):
+        """
+        Estimate the radius from model isochrones given an age and Lbol
+
+        Parameters
+        ----------
+        radius_units: astropy.units.quantity.Quantity
+            The radius units
+        """
+        if self.age is not None and self.Lbol_sun is not None:
+
+            # Default
+            radius = None
+
+            # Check for uncertainties
+            if self.Lbol_sun[1] is None:
+                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the radius.'.format(self))
+            else:
+                self.evo_model.radius_units = radius_units
+                radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
+
+            # Print a message if None
+            if radius is None:
+                self.message("Could not calculate radius.")
+
+            # Store the value
+            self.radius = [i.round(3) for i in radius] if radius is not None else radius
+            if radius is not None:
+                self.isochrone_radius = True
+            self.message("{}: Lbol={}, age={} ==> radius={}".format(self.evo_model.name, self.Lbol_sun, self.age, self.radius ))
+
+
+        else:
+            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
+
+    def infer_teff(self, teff_units=q.K, plot=False):
+        """
+        Estimate the radius from model isochrones given an age and Lbol
+
+        Parameters
+        ----------
+        teff_units: astropy.units.quantity.Quantity
+            The temperature units to use
+        """
+        if self.age is not None and self.Lbol_sun is not None:
+
+            # Default
+            teff = None
+
+            # Check for uncertainties
+            if self.Lbol_sun[1] is None:
+                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the teff.'.format(self))
+            else:
+                self.evo_model.teff_units = teff_units
+                teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
+
+            # Print a message if None
+            if teff is None:
+                self.message("Could not calculate teff.")
+
+            # Store the value
+            self.Teff_evo = [i.round(0) for i in teff] if teff is not None else teff
+
+        else:
+            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the teff.'.format(self))
 
     @property
     def info(self):
@@ -1770,31 +1887,6 @@ class SED:
 
         # Set SED as uncalculated
         self.calculated = False
-
-    def logg_from_age(self, plot=False):
-        """
-        Estimate the surface gravity from model isochrones given an age and Lbol
-        """
-        if self.age is not None and self.Lbol_sun is not None:
-
-            # Default
-            logg = None
-
-            # Check for uncertainties
-            if self.Lbol_sun[1] is None:
-                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
-            else:
-                logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg', plot=plot)
-
-            # Print a message if None
-            if logg is None:
-                self.message("Could not calculate surface gravity.")
-
-            # Store the value
-            self.logg = [i.round(2) for i in logg] if logg is not None else logg
-
-        else:
-            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the surface gravity.'.format(self))
 
     def make_rj_tail(self, teff=3000 * q.K):
         """
@@ -2026,36 +2118,6 @@ class SED:
 
         # Set SED as uncalculated
         self.calculated = False
-
-    def mass_from_age(self, mass_units=q.Msun, plot=False):
-        """
-        Estimate the mass from model isochrones given an age and Lbol
-
-        Parameters
-        ----------
-        mass_units: astropy.units.quantity.Quantity
-            The units for the mass
-        """
-        if self.age is not None and self.Lbol_sun is not None:
-
-            # Default
-            mass = None
-
-            # Check for uncertainties
-            if self.Lbol_sun[1] is None:
-                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
-            else:
-                mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', plot=plot)
-
-            # Print a message if None
-            if mass is None:
-                self.message("Could not calculate mass.")
-
-            # Store the value
-            self.mass = [i.round(3) for i in mass] if mass is not None else mass
-
-        else:
-            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the mass.'.format(self))
 
     @property
     def membership(self):
@@ -2491,41 +2553,6 @@ class SED:
         except:
             self.message("Could not estimate radius from spectral type {}".format(spt))
 
-    def radius_from_age(self, radius_units=q.Rsun, plot=False):
-        """
-        Estimate the radius from model isochrones given an age and Lbol
-
-        Parameters
-        ----------
-        radius_units: astropy.units.quantity.Quantity
-            The radius units
-        """
-        if self.age is not None and self.Lbol_sun is not None:
-
-            # Default
-            radius = None
-
-            # Check for uncertainties
-            if self.Lbol_sun[1] is None:
-                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the radius.'.format(self))
-            else:
-                self.evo_model.radius_units = radius_units
-                radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
-
-            # Print a message if None
-            if radius is None:
-                self.message("Could not calculate radius.")
-
-            # Store the value
-            self.radius = [i.round(3) for i in radius] if radius is not None else radius
-            if radius is not None:
-                self.isochrone_radius = True
-            self.message("{}: Lbol={}, age={} ==> radius={}".format(self.evo_model.name, self.Lbol_sun, self.age, self.radius ))
-
-
-        else:
-            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the radius.'.format(self))
-
     @property
     def refs(self):
         """
@@ -2799,41 +2826,7 @@ class SED:
         if len(self._synthetic_photometry) == 0:
             self.message("No synthetic photometry. Run `calculate_synthetic_photometry()` to generate.")
 
-        # Sort by wavelength
-        # self._synthetic_photometry.sort('eff')
-
         return self._synthetic_photometry
-
-    def teff_from_age(self, teff_units=q.K, plot=False):
-        """
-        Estimate the radius from model isochrones given an age and Lbol
-
-        Parameters
-        ----------
-        teff_units: astropy.units.quantity.Quantity
-            The temperature units to use
-        """
-        if self.age is not None and self.Lbol_sun is not None:
-
-            # Default
-            teff = None
-
-            # Check for uncertainties
-            if self.Lbol_sun[1] is None:
-                self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the teff.'.format(self))
-            else:
-                self.evo_model.teff_units = teff_units
-                teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
-
-            # Print a message if None
-            if teff is None:
-                self.message("Could not calculate teff.")
-
-            # Store the value
-            self.Teff_evo = [i.round(0) for i in teff] if teff is not None else teff
-
-        else:
-            self.message('Lbol={0.Lbol} and age={0.age}. Both are needed to calculate the teff.'.format(self))
 
     @property
     def wave_units(self):

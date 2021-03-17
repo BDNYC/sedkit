@@ -162,8 +162,12 @@ def equivalent(value, units):
     """
     eq = True
 
+    # Check is unitless
+    if units is None:
+        eq = False if hasattr(1 * value, 'unit') else True
+
     # Check if it's a list or tuple
-    if isinstance(value, (tuple, list)):
+    elif isinstance(value, (tuple, list)):
         for val in value:
             try:
                 val *= 1
@@ -187,7 +191,7 @@ def equivalent(value, units):
     return eq
 
 
-def isnumber(s):
+def isnumber(s, nan=False):
     """
     Tests to see if the input is an int, float, or exponential
 
@@ -204,8 +208,11 @@ def isnumber(s):
     if isinstance(s, (str, bytes)):
         return s.replace('.', '').replace('-', '').replace(' + ', '').isnumeric()
 
-    elif isinstance(s, (int, float, np.float32)):
-        return True
+    elif isinstance(s, (int, float, np.int64, np.float32, np.float64)):
+        if np.isnan(s) and not nan:
+            return False
+        else:
+            return True
 
     else:
         return False

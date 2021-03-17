@@ -6,6 +6,8 @@ import numpy as np
 from scipy.integrate import quad
 from scipy.optimize import leastsq
 
+from .utilities import equivalent
+
 
 def trapz(f, a, b, n):
     h = (b - a) / float(n)
@@ -25,8 +27,12 @@ class Unum(object):
         """
         # Store values
         self.nominal = nominal
+        self._nominal = nominal.value if hasattr(nominal, 'unit') else nominal
         self.upper = upper
-        self.lower = lower or upper
+        self._upper = upper.value if hasattr(upper, 'unit') else upper
+        self.lower = lower or self.upper
+        self._lower = lower.value if hasattr(lower, 'unit') else lower or self._upper
+        self.units = nominal.unit if hasattr(nominal, 'unit') else None
         self.n = n_samples
         self.sig_figs = sig_figs
         self.method = method
@@ -36,9 +42,9 @@ class Unum(object):
         repr method
         """
         if self.upper == self.lower:
-            return '{}({})'.format(*self.value[:2])
+            return '{}({}){}'.format(*self.value[:2], self.units or '')
         else:
-            return '{}(+{},-{})'.format(*self.value)
+            return '{}(+{},-{}){}'.format(*self.value, self.units or '')
 
     def __add__(self, other):
         """
@@ -54,6 +60,10 @@ class Unum(object):
         Unum
             The Unum value
         """
+        # Validate units
+        if not equivalent(self.units, other.units):
+            raise TypeError("Cannot add values with units {} and {}".format(self.units, other.units))
+
         # Generate distributions for each number
         dist1 = self.sample_from_errors()
         dist2 = other.sample_from_errors()
@@ -102,6 +112,10 @@ class Unum(object):
         Unum
             The Unum value
         """
+        # Validate units
+        if not equivalent(self.units, other.units):
+            raise TypeError("Cannot subtract values with units {} and {}".format(self.units, other.units))
+
         # Generate distributions for each number
         dist1 = self.sample_from_errors()
         dist2 = other.sample_from_errors()
@@ -173,6 +187,10 @@ class Unum(object):
         Unum
             The Unum value
         """
+        # Validate units
+        if not equivalent(self.units, other.units):
+            raise TypeError("Cannot floordiv values with units {} and {}".format(self.units, other.units))
+
         # Generate distributions for each number
         dist1 = self.sample_from_errors()
         dist2 = other.sample_from_errors()
@@ -182,6 +200,33 @@ class Unum(object):
 
         # Make a new Unum from the new nominal value and upper and lower quantiles
         return Unum(*self.get_quantiles(dist3))
+
+    def polyval(self, coeffs):
+        """
+        Evaluate the number in a polynomial
+
+        Parameters
+        ----------
+        coeffs: list
+            The polynomial coefficients in descending order
+
+        Returns
+        -------
+        Unum
+            The Unum value
+        """
+        # Generate distributions for each number
+        dist1 = self.sample_from_errors()
+
+        # Get units
+        dist1 = dist1.value if hasattr(dist1, 'unit') else dist1
+
+        # Do math
+        dist3 = np.polyval(coeffs, dist1)
+
+        # Make a new Unum from the new nominal value and upper and lower quantiles
+        return Unum(*self.get_quantiles(dist3))
+
 
     def sample_from_errors(self, low_lim=None, up_lim=None):
         """
@@ -233,12 +278,11 @@ class Unum(object):
                         samples[idx] = sknorm.sample(l_idx)
                     else:
                         break
-            return samples
 
         else:
 
             # If errors are symmetric, sample from a gaussian
-            samples = np.random.normal(self.nominal, self.upper, self.n)
+            samples = np.random.normal(self._nominal, self._upper, self.n)
 
             # If a lower limit or an upper limit is given, then search if any of the samples surpass
             # those limits, and sample again until no sample surpasses those limits:
@@ -247,7 +291,7 @@ class Unum(object):
                     idx = np.where(samples < low_lim)[0]
                     l_idx = len(idx)
                     if l_idx > 0:
-                        samples[idx] = np.random.normal(self.nominal, self.upper, l_idx)
+                        samples[idx] = np.random.normal(self._nominal, self._upper, l_idx)
                     else:
                         break
 
@@ -256,10 +300,11 @@ class Unum(object):
                     idx = np.where(samples > up_lim)[0]
                     l_idx = len(idx)
                     if l_idx > 0:
-                        samples[idx] = np.random.normal(self.nominal, self.upper, l_idx)
+                        samples[idx] = np.random.normal(self._nominal, self._upper, l_idx)
                     else:
                         break
-            return samples
+
+        return samples * (self.units or 1)
 
     def get_quantiles(self, dist, alpha=0.68):
         """
@@ -279,6 +324,10 @@ class Unum(object):
         tuple
             Median of the parameter, upper credibility bound, lower credibility bound
         """
+        # Get units
+        units = dist.unit if hasattr(dist, 'unit') else 1
+        dist = dist.value if hasattr(dist, 'unit') else dist
+
         # Order the distribution
         ordered_dist = dist[np.argsort(dist)]
 
@@ -301,7 +350,7 @@ class Unum(object):
         q_upper = ordered_dist[med_idx_upper + nsamples_at_each_side]
         q_lower = ordered_dist[med_idx_lower - nsamples_at_each_side]
 
-        return param.round(self.sig_figs), (q_upper - param).round(self.sig_figs), (param - q_lower).round(self.sig_figs)
+        return param.round(self.sig_figs) * units, (q_upper - param).round(self.sig_figs) * units, (param - q_lower).round(self.sig_figs) * units
 
     def plot(self, bins=None):
         """
@@ -338,14 +387,14 @@ class Unum(object):
         """
         The nominal, upper, and lower values
         """
-        return self.nominal, self.upper, self.lower
+        return self._nominal, self._upper, self._lower
 
     @property
     def quantiles(self):
         """
         The [0.15866, 0.5, 0.84134] quantiles
         """
-        return self.nominal - self.lower, self.nominal, self.nominal + self.upper
+        return self._nominal - self._lower, self._nominal, self._nominal + self._upper
 
 
 class SkewNormal(object):

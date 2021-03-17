@@ -16,6 +16,7 @@ from bokeh.plotting import figure, show
 import numpy as np
 
 from . import utilities as u
+from .uncertainties import Unum
 
 
 V = Vizier(columns=["**"])
@@ -23,7 +24,7 @@ V = Vizier(columns=["**"])
 
 class Relation:
     """A base class to store raw data, fit a polynomial, and evaluate quickly"""
-    def __init__(self, file, xparam=None, yparam=None, order=None, add_columns=None, **kwargs):
+    def __init__(self, file, add_columns=None, ref=None, **kwargs):
         """Load the data
 
         Parameters
@@ -33,32 +34,18 @@ class Relation:
         """
         # Load the file into a table
         self.data = ii.read(file, **kwargs)
+        self.ref = ref
 
         # Fill in masked values
         self.data = self.data.filled(np.nan)
+
+        # Dict of relations
+        self.relations = {}
 
         # Add additional columns
         if isinstance(add_columns, dict):
             for colname, values in add_columns.items():
                 self.add_column(colname, values)
-
-        # Set attributes
-        self.xparam = xparam
-        self.yparam = yparam
-        self.order = order
-        self.x = None
-        self.y = None
-        self.coeffs = None
-        self.C_p = None
-        self.matrix = None
-        self.yi = None
-        self.C_yi = None
-        self.sig_yi = None
-        self.derived = False
-
-        # Try to derive
-        if self.xparam is not None and self.yparam is not None and self.order is not None:
-            self.derive(self.xparam, self.yparam, self.order)
 
     def add_column(self, colname, values):
         """
@@ -72,7 +59,7 @@ class Relation:
             The values for the column
         """
         # Check the colname
-        if colname in self.data.colnames:
+        if colname in self.parameters:
             raise KeyError("{}: column name already exists!".format(colname))
 
         # Check the length
@@ -82,174 +69,216 @@ class Relation:
         # Add the column
         self.data[colname] = values
 
-    def derive(self, xparam, yparam, order, xrange=None):
+    def add_relation(self, rel_name, order, xrange=None, xunit=None, yunit=None, plot=True):
         """
         Create a polynomial of the given *order* for *yparam* as a function of *xparam*
         which can be evaluated at any x value
 
         Parameters
         ----------
-        xparam: str
-            The x-axis parameter
-        yparam: str
-            The y-axis parameter
+        rel_name: str
+            The relation name, i.e. 'yparam(xparam)'
         order: int
             The order of the polynomial fit
+        xrange: sequence
+            The range of x-values to consider
+        xunit: astropy.units.quantity.Quantity
+            The units of the x parameter values
+        yunit: astropy.units.quantity.Quantity
+            The units of the y parameter values
         """
+        # Get params
+        xparam, yparam = self._parse_rel_name(rel_name)
+
         # Make sure params are in the table
-        if xparam not in self.data.colnames or yparam not in self.data.colnames:
+        if xparam not in self.parameters or yparam not in self.parameters:
             raise NameError("{}, {}: Make sure both parameters are in the data, {}".format(xparam, yparam, self.data.colnames))
 
         # Grab data
-        self.xparam = xparam
-        self.yparam = yparam
-        self.order = order
-        self.x = self.data[xparam]
-        self.y = self.data[yparam]
+        rel = {'xparam': xparam, 'yparam': yparam, 'order': order, 'x': np.array(self.data[xparam]), 'y': np.array(self.data[yparam]),
+               'coeffs': None, 'C_p': None, 'matrix': None, 'yi': None, 'C_yi': None, 'sig_yi': None, 'xunit': xunit or 1, 'yunit': yunit or 1}
 
         # Set x range for fit
         if xrange is not None:
-            idx = np.where(np.logical_and(self.x > xrange[0], self.x < xrange[1]))
-            self.x = self.x[idx]
-            self.y = self.y[idx]
+            idx = np.where(np.logical_and(rel['x'] > xrange[0], rel['x'] < xrange[1]))
+            rel['x'] = rel['x'][idx]
+            rel['y'] = rel['y'][idx]
 
         # Remove masked and NaN values
-        self.x, self.y = np.asarray([(x, y) for x, y in zip(self.x, self.y) if not hasattr(x, 'mask') and not np.isnan(x) and not hasattr(y, 'mask') and not np.isnan(y)]).T
+        rel['x'], rel['y'] = self.validate_data(rel['x'], rel['y'])
 
         # Determine monotonicity
-        self.monotonic = u.monotonic(self.x)
+        rel['monotonic'] = u.monotonic(rel['x'])
 
         # Set weighting
-        self.weight = np.ones_like(self.x)
+        rel['weight'] = np.ones_like(rel['x'])
         if '{}_unc'.format(yparam) in self.data.colnames:
-            self.weight = 1. / self.data['{}_unc'.format(yparam)]
+            rel['weight'] = 1. / self.data['{}_unc'].format(yparam)
 
         # Try to fit a polynomial
         try:
 
             # Fit polynomial
-            self.coeffs, self.C_p = np.polyfit(self.x, self.y, self.order, w=self.weight, cov=True)
+            rel['coeffs'], rel['C_p'] = np.polyfit(rel['x'], rel['y'], rel['order'], w=rel['weight'], cov=True)
 
             # Matrix with rows 1, spt, spt**2, ...
-            self.matrix = np.vstack([self.x**(order-i) for i in range(order + 1)]).T
+            rel['matrix'] = np.vstack([rel['x']**(order-i) for i in range(order + 1)]).T
 
             # Matrix multiplication calculates the polynomial values
-            self.yi = np.dot(self.matrix, self.coeffs)
+            rel['yi'] = np.dot(rel['matrix'], rel['coeffs'])
 
             # C_y = TT*C_z*TT.T
-            self.C_yi = np.dot(self.matrix, np.dot(self.C_p, self.matrix.T))
+            rel['C_yi'] = np.dot(rel['matrix'], np.dot(rel['C_p'], rel['matrix'].T))
 
             # Standard deviations are sqrt of diagonal
-            self.sig_yi = np.sqrt(np.diag(self.C_yi))
-
-            # Set as derived
-            self.derived = True
+            rel['sig_yi'] = np.sqrt(np.diag(rel['C_yi']))
 
         except Exception as exc:
             print(exc)
             print("Could not fit a polynomial to [{}, {}, {}, {}]. Try different values.".format(xparam, yparam, order, xrange))
 
-    def estimate(self, xval, plot=False):
-        """
-        Estimate the y-value given the xvalue
-
-        Parameters
-        ----------
-        x_val: float, int
-            The xvalue to evaluate
-
-        Returns
-        -------
-        y_val, y_unc
-            The value and uncertainty
-        """
-        # Check to see if the polynomial has been derived
-        if not self.derived:
-            print("Please run the derive method before trying to evaluate.")
-            return
-
-        # Find the nearest
-        y_val = np.polyval(self.coeffs, x_val)
-        y_unc = np.interp(x_val, self.x, self.sig_yi)
+        # Add relation to dict
+        self.relations['{}({})'.format(yparam, xparam)] = rel
 
         if plot:
-            plt = self.plot()
-            plt.circle([x_val], [y_val], color='red', size=10, legend='f({})'.format(x_val))
-            show(plt)
+            show(self.plot(rel_name), browser='chrome')
 
-        return y_val, y_unc
-
-    def evaluate(self, x_val, plot=False):
+    def evaluate(self, rel_name, x_val, plot=False):
         """
-        Evaluate the derived polynomial at the given xval
+        Evaluate the given relation at the given xval
 
         Parameters
         ----------
+        rel_name: str
+            The relation name, i.e. 'yparam(xparam)'
         x_val: float, int
             The xvalue to evaluate
 
         Returns
         -------
-        y_val, y_unc
-            The value and uncertainty
+        y_val, y_unc, ref
+            The value, uncertainty, and reference
         """
         # Check to see if the polynomial has been derived
-        if not self.derived:
-            print("Please run the derive method before trying to evaluate.")
+        if not rel_name in self.relations:
+            print("Please run 'add_relation' method for {} before trying to evaluate.".format(rel_name))
             return
 
         try:
 
+            # Get the relation
+            rel = self.relations[rel_name]
+
             # Evaluate the polynomial
-            y_val = np.polyval(self.coeffs, x_val)
-            y_unc = np.interp(x_val, self.x, self.sig_yi)
+            if isinstance(x_val, (list, tuple)):
+
+                # With uncertainties
+                x = Unum(*x_val)
+                y = x.polyval(rel['coeffs'])
+                x_val = x.nominal
+                y_val = y.nominal * rel['yunit']
+                y_upper = y.upper * rel['yunit']
+                y_lower = y.lower * rel['yunit']
+
+            else:
+
+                # Without uncertainties
+                x_val = x_val.value if hasattr(x_val, 'unit') else x_val
+                y_val = np.polyval(rel['coeffs'], x_val) * rel['yunit']
+                y_lower = y_upper = None
 
             if plot:
-                plt = self.plot()
-                plt.circle([x_val], [y_val], color='red', size=10, legend='f({})'.format(x_val))
+                print(y_val, y_lower, y_upper)
+                plt = self.plot(rel_name)
+                plt.circle([x_val], [y_val], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
+                if y_upper:
+                    plt.line([x_val, x_val], [y_val - y_lower, y_val + y_upper], color='red')
                 show(plt)
 
-            return y_val, y_unc
+            if y_upper:
+                return y_val, y_upper, y_lower, self.ref
+            else:
+                return y_val
 
         except ValueError as exc:
 
             print(exc)
-            print("Could not evaluate the {}({}) relation at {}".format(self.yparam, self.xparam, x_val))
+            print("Could not evaluate the {} relation at {}".format(rel_name, x_val))
 
             return None
 
-    def plot(self, xparam=None, yparam=None, **kwargs):
+    @property
+    def parameters(self):
+        """
+        List of parameters in the data table
+        """
+        return self.data.colnames
+
+    def _parse_rel_name(self, rel_name):
+        """
+        Parse the rel_name into xparam and yparam
+
+        Parameters
+        ----------
+        rel_name: str
+            The relation name, i.e. 'yparam(xparam)'
+
+        Returns
+        -------
+        str, str
+            The xparam and yparam of the relation
+        """
+        return rel_name.replace(')', '').split('(')[::-1]
+
+    def plot(self, rel_name, **kwargs):
         """
         Plot the data for the given parameters
         """
-        # If no param, use stored
-        if xparam is None:
-            xparam = self.xparam
+        # Get params
+        xparam, yparam = self._parse_rel_name(rel_name)
 
-        if yparam is None:
-            yparam = self.yparam
-
-        # Make sure there is data to plot
-        if xparam is None or yparam is None:
-            raise ValueError("{}, {}: Not enough data to plot.".format(xparam, yparam))
+        if not xparam in self.parameters or not yparam in self.parameters:
+            raise ValueError("{}, {}: Both parameters need to be in the relation. Try {}".format(xparam, yparam, self.relations))
 
         # Make the figure
         fig = figure(x_axis_label=xparam, y_axis_label=yparam)
-        fig.circle(self.data[xparam], self.data[yparam], legend='Data', **kwargs)
+        x, y = self.validate_data(self.data[xparam], self.data[yparam])
+        fig.circle(x, y, legend='Data', **kwargs)
 
-        if self.derived and xparam == self.xparam and yparam == self.yparam:
+        if rel_name in self.relations:
+
+            # Get the relation
+            rel = self.relations[rel_name]
 
             # Plot polynomial values
-            xaxis = np.linspace(self.x.min(), self.x.max(), 100)
-            evals = [self.evaluate(i)[0] for i in xaxis]
+            xaxis = np.linspace(rel['x'].min(), rel['x'].max(), 100)
+            evals = np.polyval(rel['coeffs'], xaxis)
             fig.line(xaxis, evals, color='black', legend='Fit')
 
-            # Plot polynomial uncertainties
-            xunc = np.append(self.x, self.x[::-1])
-            yunc = np.append(self.yi-self.sig_yi, (self.yi+self.sig_yi)[::-1])
-            fig.patch(xunc, yunc, fill_alpha=0.1, line_alpha=0, color='black')
-
         return fig
+
+    def validate_data(self, X, Y):
+        """
+        Validate the data for onlu numbers
+
+        Parameters
+        ----------
+        X: sequence
+            The x-array
+        Y: sequence
+            The y-array
+
+        Returns
+        -------
+        sequence
+            The validated arrays
+        """
+        valid = np.asarray([(float(x), float(y)) for x, y in zip(X, Y) if u.isnumber(x) and u.isnumber(y)]).T
+
+        if len(valid) == 0:
+            raise ValueError("No valid data in the arrays")
+        else:
+            return valid
 
 
 class DwarfSequence(Relation):
@@ -265,9 +294,20 @@ class DwarfSequence(Relation):
         fill_values = [('...', np.nan), ('....', np.nan), ('.....', np.nan)]
 
         # Initialize Relation object
-        super().__init__(file, fill_values=fill_values, **kwargs)
+        super().__init__(file, fill_values=fill_values, ref='2013ApJS..208....9P', **kwargs)
 
         self.add_column('spt', [u.specType(i)[0] for i in self.data['SpT']])
+
+        # Add well-characterized relations
+        self.add_relation('Teff(spt)', 12, yunit=q.K, plot=False)
+        self.add_relation('Teff(Lbol)', 9, yunit=q.K, plot=False)
+        self.add_relation('radius(Lbol)', 9, yunit=q.R_sun, plot=False)
+        self.add_relation('radius(spt)', 11, yunit=q.R_sun, plot=False)
+        self.add_relation('radius(M_J)', 9, yunit=q.R_sun, plot=False)
+        self.add_relation('radius(M_Ks)', 9, yunit=q.R_sun, plot=False)
+        self.add_relation('mass(Lbol)', 9, yunit=q.M_sun, plot=False)
+        self.add_relation('mass(M_Ks)', 9, yunit=q.M_sun, plot=False)
+        self.add_relation('mass(M_J)', 9, yunit=q.M_sun, plot=False)
 
 
 class SpectralTypeRadius:

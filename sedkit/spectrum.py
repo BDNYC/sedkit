@@ -1420,7 +1420,7 @@ def fit_model(row, fitspec, wave_units=q.AA):
         row['gstat'] = gstat
         row['const'] = yn
 
-    except ValueError:
+    except IOError:
         row['gstat'] = np.nan
 
     return row
