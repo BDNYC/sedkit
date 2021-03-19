@@ -280,8 +280,8 @@ class SED:
         if not isinstance(mag_unc, (float, np.float32, type(None), np.ma.core.MaskedConstant)):
             raise TypeError("{}: Magnitude uncertainty must be a float, NaN, or None.".format(type(mag_unc)))
 
-        # Make NaN if 0
-        if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, np.ma.core.MaskedConstant):
+        # Make NaN if 0 or None
+        if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, (np.ma.core.MaskedConstant, type(None))):
             mag_unc = np.nan
 
         # Get the bandpass
