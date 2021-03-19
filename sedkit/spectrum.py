@@ -649,6 +649,7 @@ class Spectrum:
         # Get best fit model and scale to spectrum
         model = model_grid.get_spectrum(**{param: best_fit_params[param] for param in model_grid.parameters})
         model = model.norm_to_spec(self)
+        model.phot = model_grid.phot
 
         # Make dict for best fit model
         best_fit_params['label'] = model.name
@@ -656,6 +657,8 @@ class Spectrum:
         best_fit_params['spectrum'] = np.array(model.spectrum)
         best_fit_params['full_model'] = model
         best_fit_params['const'] = 1.
+        best_fit_params['fit_to'] = 'phot' if model_grid.phot else 'spec'
+
         self.best_fit[name] = best_fit_params
 
     @copy_raw
