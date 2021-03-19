@@ -21,10 +21,12 @@ or via `conda` with
 ```
 git clone https://github.com/hover2pi/sedkit.git
 cd sedkit
-conda env create -f environment.yml --force
+conda env create -f env/environment-<python_version>.yml --force
 conda activate sedkit
 python setup.py install
 ```
+
+where `<python_version>` is `3.7` or `3.8`.
 
 ## Demo
 
@@ -40,15 +42,16 @@ The `name` argument triggers a lookup in the Simbad database for meta, astrometr
 Photometry can be added manually...
 
 ```python
-trap1.add_photometry('Johnson.V', 18.798, 0.082)
-trap1.add_photometry('Cousins.R', 16.466, 0.065)
-trap1.add_photometry('Cousins.I', 14.024, 0.115)
+trap1.add_photometry('Johnson.V', 18.798, 0.082, '2006AJ....132.1234C')
+trap1.add_photometry('Cousins.R', 16.466, 0.065, '2006AJ....132.1234C')
+trap1.add_photometry('Cousins.I', 14.024, 0.115, '2006AJ....132.1234C')
 ```
 
 ...and/or retrieved from Vizier catalogs with built-in methods.
 
 ```python
 trap1.find_2MASS()
+trap1.find_WISE()
 ```
 
 Spectrum arrays or ASCII/FITS files can also be added to the SED data.
@@ -63,9 +66,9 @@ trap1.add_spectrum_file(spec_file, wave_units=u.um, flux_units=u.erg/u.s/q.cm**2
 Other data which may affect the calculated and inferred fundamantal parameters can be set at any time.
 
 ```python
-trap1.spectral_type = 'M8'
-trap1.age = 7.6*u.Gyr, 2.2*u.Gyr
-trap1.radius = 0.121*u.R_sun, 0.003*u.R_sun
+trap1.spectral_type = 'M8', '2006AJ....132.1234C'
+trap1.age = 7.6*u.Gyr, 2.2*u.Gyr, '2017ApJ...845..110B'
+trap1.radius = 0.121*u.R_sun, 0.003*u.R_sun, '2021PSJ.....2....1A'
 ```
 
 Results can be calculated at any time by checking the `results` property.
@@ -83,6 +86,30 @@ trap1.results
    <th>units</th>
   </tr>
  </thead>
+ <tr>
+  <td>name</td>
+  <td>Trappist-1</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>ra</td>
+  <td>346.6223683333333</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
+ <tr>
+  <td>age</td>
+  <td>7.6</td>
+  <td>2.2</td>
+  <td>Gyr</td>
+ </tr>
+ <tr>
+  <td>dec</td>
+  <td>-5.0413974999999995</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
  <tr>
   <td>Lbol</td>
   <td>2.24e+30</td>
@@ -108,52 +135,10 @@ trap1.results
   <td>--</td>
  </tr>
  <tr>
-  <td>SpT_fit</td>
-  <td>--</td>
-  <td>--</td>
-  <td>--</td>
- </tr>
- <tr>
   <td>Teff</td>
   <td>2581</td>
   <td>37</td>
   <td>K</td>
- </tr>
- <tr>
-  <td>Teff_bb</td>
-  <td>--</td>
-  <td>--</td>
-  <td>--</td>
- </tr>
- <tr>
-  <td>Teff_evo</td>
-  <td>2658.0666666666666</td>
-  <td>22.96666666666715</td>
-  <td>K</td>
- </tr>
- <tr>
-  <td>age</td>
-  <td>7.6</td>
-  <td>2.2</td>
-  <td>Gyr</td>
- </tr>
- <tr>
-  <td>bb_source</td>
-  <td>--</td>
-  <td>--</td>
-  <td>--</td>
- </tr>
- <tr>
-  <td>blackbody</td>
-  <td>--</td>
-  <td>--</td>
-  <td>--</td>
- </tr>
- <tr>
-  <td>dec</td>
-  <td>-5.0413974999999995</td>
-  <td>--</td>
-  <td>--</td>
  </tr>
  <tr>
   <td>fbol</td>
@@ -162,21 +147,9 @@ trap1.results
   <td>erg / (cm2 s)</td>
  </tr>
  <tr>
-  <td>gravity</td>
-  <td>--</td>
-  <td>--</td>
-  <td>--</td>
- </tr>
- <tr>
   <td>logg</td>
   <td>5.281466666666667</td>
   <td>0.005382456140353042</td>
-  <td>--</td>
- </tr>
- <tr>
-  <td>luminosity_class</td>
-  <td>V</td>
-  <td>--</td>
   <td>--</td>
  </tr>
  <tr>
@@ -198,28 +171,10 @@ trap1.results
   <td>--</td>
  </tr>
  <tr>
-  <td>name</td>
-  <td>Trappist-1</td>
-  <td>--</td>
-  <td>--</td>
- </tr>
- <tr>
   <td>parallax</td>
   <td>80.4512</td>
   <td>0.12110000103712082</td>
   <td>mas</td>
- </tr>
- <tr>
-  <td>prefix</td>
-  <td>--</td>
-  <td>--</td>
-  <td>--</td>
- </tr>
- <tr>
-  <td>ra</td>
-  <td>346.6223683333333</td>
-  <td>--</td>
-  <td>--</td>
  </tr>
  <tr>
   <td>radius</td>
@@ -250,11 +205,11 @@ trap1.mass_from_age()
 
 <img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_mass.png" height="400">
 
-A variety of atmospheric model grids can be fit to the data,
+A variety of atmospheric model grids can be fit to the data with or without MCMC analysis,
 
 ```python
 from sedkit import BTSettl
-trap1.fit_modelgrid(BTSettl())
+trap1.fit_modelgrid(BTSettl(), mcmc=True)
 ```
 
 And any arbitrary atlas of models can be applied as well.
@@ -271,6 +226,8 @@ trap1.plot()
 ```
 
 <img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/sed_plot.png" height="500">
+
+References for all data can be accessed via the `refs` parameter.
 
 Entire catalogs of `SED` objects can also be created and their properties can be arbitrarily compared and analyzed with the `sedkit.catalog.Catalog()` object.
 
