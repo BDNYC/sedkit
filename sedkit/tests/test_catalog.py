@@ -122,7 +122,7 @@ class TestCatalog(unittest.TestCase):
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
 
         # Color-color plot
-        plt = cat.plot('WISE.W1-WISE.W2', 'WISE.W1-WISE.W2')
+        plt = cat.plot('WISE.W1-WISE.W2', 'WISE.W1-WISE.W2', order=1)
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
 
         # Bad columns

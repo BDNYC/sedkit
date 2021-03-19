@@ -273,7 +273,7 @@ class SED:
             The magnitude system of the input data, ['Vega', 'AB']
         """
         # Make sure the magnitudes are floats
-        if not isinstance(mag, (float, np.float32)):
+        if (not isinstance(mag, (float, np.float32))) or np.isnan(mag):
             raise TypeError("{}: Magnitude must be a float.".format(type(mag)))
 
         # Check the uncertainty
@@ -306,8 +306,8 @@ class SED:
         mag -= bp.ext_vector * self.reddening
 
         # Make a dict for the new point
-        mag = mag.round(3)
-        mag_unc = mag_unc if np.isnan(mag_unc) else mag_unc.round(3)
+        mag = round(mag, 3)
+        mag_unc = mag_unc if np.isnan(mag_unc) else round(mag_unc, 3)
         eff = bp.wave_eff.astype(np.float16)
         new_photometry = {'band': band, 'eff': eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
 
