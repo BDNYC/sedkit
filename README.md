@@ -227,7 +227,7 @@ trap1.plot()
 
 <img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/sed_plot.png" height="500">
 
-References for all data can be accessed via the `refs` parameter.
+References for all data can be accessed via the `refs` attribute.
 
 Entire catalogs of `SED` objects can also be created and their properties can be arbitrarily compared and analyzed with the `sedkit.catalog.Catalog()` object.
 
