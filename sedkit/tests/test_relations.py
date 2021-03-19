@@ -58,32 +58,24 @@ class TestRelation(unittest.TestCase):
 
         # Just the file
         r = rel.Relation(self.file, fill_values=fill_values)
+
+        # Check the data
         self.assertIsNotNone(r.data)
-        self.assertIsNone(r.coeffs)
+        self.assertTrue(len(r.relations) == 0)
+        self.assertTrue(len(r.parameters) > 0)
 
-        # Auto-derive
-        r = rel.Relation(self.file, xparam='logL', yparam='Mbol', order=1, fill_values=fill_values)
-        self.assertIsNotNone(r.data)
-        self.assertIsNotNone(r.coeffs)
-
-        # Add_columns
-        columns = {'spt': np.ones_like(r.data['SpT'])}
-        r = rel.Relation(self.file, fill_values=fill_values, add_columns=columns)
-        self.assertTrue('spt' in r.data.colnames)
-
-    def test_derive(self):
-        """Tests for the derive method"""
+    def test_add_relation(self):
+        """Tests for the add_relation method"""
         # Generate object
         r = rel.DwarfSequence()
 
         # Derive
-        r.derive('logL', 'Mbol', 1)
-        self.assertIsNotNone(r.coeffs)
-        self.assertEqual(r.order, 1)
+        r.add_relation('Teff(Mbol)', 1, yunit=q.K)
+        self.assertTrue(len(r.relations) > 0)
 
         # Bad param name
-        args = {'xparam': 'foo', 'yparam': 'Mbol', 'order': 1}
-        self.assertRaises(NameError, r.derive, **args)
+        args = {'rel_name': 'foo(bar)', 'order': 1}
+        self.assertRaises(NameError, r.add_relation, **args)
 
     def test_add_column(self):
         """Tests for add_column method"""
@@ -108,27 +100,30 @@ class TestRelation(unittest.TestCase):
         # Generate object
         r = rel.DwarfSequence()
 
-        # Check not derived initially
-        self.assertFalse(r.derived)
-        r.evaluate(5)
-
-        # Try again
-        r.derive('logL', 'Mbol', 1)
-        self.assertTrue(r.derived)
+        # Add a relation
+        rel_name = 'Teff(Lbol)'
+        r.add_relation(rel_name, 9, yunit=q.K, plot=False)
 
         # Evaluate
-        self.assertTrue(isinstance(r.evaluate(5), tuple))
+        self.assertTrue(isinstance(r.evaluate(rel_name, -2), tuple))
 
-        # Evaluate with plot
-        self.assertTrue(isinstance(r.evaluate(5, plot=True), tuple))
+        # Evaluate with no errors and plot
+        self.assertTrue(isinstance(r.evaluate(rel_name, -1, plot=True), tuple))
+
+        # Evaluate with errors and plot
+        self.assertTrue(isinstance(r.evaluate(rel_name, (-1, 0.1), plot=True), tuple))
 
     def test_plot(self):
         """Test plot method"""
         # Generate object
-        r = rel.DwarfSequence(xparam='logL', yparam='Mbol', order=1)
+        r = rel.DwarfSequence()
 
-        # No explicit params
-        fig = r.plot()
+        # Add a relation
+        rel_name = 'Teff(Lbol)'
+        r.add_relation(rel_name, 9, yunit=q.K, plot=False)
 
-        # Explicit params
-        fig = r.plot('logL', 'Mbol')
+        # In relations
+        fig = r.plot(rel_name)
+
+        # Not in relations
+        fig = r.plot('BCv(Mbol)')

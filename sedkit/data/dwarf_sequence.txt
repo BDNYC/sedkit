@@ -19,7 +19,7 @@
 # BtVt, Cousins RcIc, Gaia DR2 G/Bp/Rp, Sloan izY, 2MASS JHKs,
 # and WISE W1/W2/W3/W4 photometry. G-V color is Gaia DR2 G - Johnson V.
 #
-SpT   Teff  logT   logL  Mbol  BCv    Mv    B-V    Bt-Vt  G-V    Bp-Rp  G-Rp   M_G    b-y    U-B    V-Rc   V-Ic   V-Ks   J-H    H-Ks    Ks-W1   W1-W2  W1-W3  W1-W4   M_J    M_Ks  i-z  z-Y  R_Rsun Msun  #SpT
+SpT   Teff  logT   Lbol  Mbol  BCv    Mv    B-V    Bt-Vt  G-V    Bp-Rp  G-Rp   M_G    b-y    U-B    V-Rc   V-Ic   V-Ks   J-H    H-Ks    Ks-W1   W1-W2  W1-W3  W1-W4   M_J    M_Ks  i-z  z-Y  radius mass  #SpT
 O3V    46000 4.663  5.80 -9.75 -4.05  -5.7  -0.32   ...    ...    ...    ...    ...    ..... -1.22   ...    .....  .....  .....  .....   ...     ...    ...    ...     ....   ....  ...  ...  12.5   ....  O3V
 O4V    43000 4.633  5.67 -9.42 -3.92  -5.5  -0.32   ...    ...    ...    ...    ...    ..... -1.20   ...    .....  .....  .....  .....   ...     ...    ...    ...     ....   ....  ...  ...  12.3   ....  O4V
 O5V    41500 4.618  5.58 -9.20 -3.77  -5.4  -0.32   ...    ...    ...    ...    ...   -0.133 -1.19   ...    .....  .....  .....  .....   ...     ...    ...    ...     ....   ....  ...  ...  11.9   ....  O5V

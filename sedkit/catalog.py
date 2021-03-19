@@ -42,8 +42,7 @@ class Catalog:
                      'membership', 'reddening', 'fbol', 'fbol_unc', 'mbol',
                      'mbol_unc', 'Lbol', 'Lbol_unc', 'Lbol_sun',
                      'Lbol_sun_unc', 'Mbol', 'Mbol_unc', 'logg', 'logg_unc',
-                     'mass', 'mass_unc', 'Teff', 'Teff_unc', 'Teff_evo',
-                     'Teff_evo_unc', 'Teff_bb', 'SED']
+                     'mass', 'mass_unc', 'Teff', 'Teff_unc', 'SED']
 
         # A master table of all SED results
         self.results = self.make_results_table(self)
@@ -294,16 +293,21 @@ class Catalog:
         # Iterate over table
         for row in data:
 
-            # Make the SED
-            s = SED(row['name'], verbose=False)
-            if 'ra' in row and 'dec' in row:
-                s.sky_coords = row['ra']*q.deg, row['dec']*q.deg
+            try:
 
-            # Run the desired methods
-            s.run_methods(run_methods)
+                # Make the SED
+                s = SED(row['name'], verbose=False)
+                if 'ra' in row and 'dec' in row:
+                    s.sky_coords = row['ra']*q.deg, row['dec']*q.deg
 
-            # Add it to the catalog
-            self.add_SED(s)
+                # Run the desired methods
+                s.run_methods(run_methods)
+
+                # Add it to the catalog
+                self.add_SED(s)
+
+            except:
+                self.message("Could not add SED '{}".format(row['name']))
 
     def get_data(self, *args):
         """Fetch the data for the given columns
@@ -392,13 +396,10 @@ class Catalog:
         results['mass_unc'].unit = q.Msun
         results['Teff'].unit = q.K
         results['Teff_unc'].unit = q.K
-        results['Teff_bb'].unit = q.K
-        results['Teff_evo'].unit = q.K
-        results['Teff_evo_unc'].unit = q.K
 
         return results
 
-    def message(self, msg, pre='[sedkit.Catalog]'):
+    def message(self, msg, pre='[sedkit]'):
         """
         Only print message if verbose=True
 
@@ -416,8 +417,8 @@ class Catalog:
                 print("{} {}".format(pre, msg))
 
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
-             xlabel=None, ylabel=None, fig=None, order=None, identify=None,
-             id_color='red', label_points=False, exclude=None, draw=True, **kwargs):
+             xlabel=None, ylabel=None, fig=None, order=None, identify=[],
+             id_color='red', label_points=False, draw=True, **kwargs):
         """Plot parameter x versus parameter y
 
         Parameters
@@ -458,9 +459,9 @@ class Catalog:
 
         # If no uncertainty column for parameter, add it
         if '{}_unc'.format(x) not in source.column_names:
-            _ = source.add([None] * len(self.source.data['name']), '{}_unc'.format(x))
+            _ = source.add([None] * len(source.data['name']), '{}_unc'.format(x))
         if '{}_unc'.format(y) not in source.column_names:
-            _ = source.add([None] * len(self.source.data['name']), '{}_unc'.format(y))
+            _ = source.add([None] * len(source.data['name']), '{}_unc'.format(y))
 
         # Check if the x parameter is a color
         if '-' in x and all([i in params for i in x.split('-')]):
@@ -500,35 +501,36 @@ class Catalog:
             title = '{} v {}'.format(x, y)
             fig = figure(plot_width=800, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
 
-        # # Exclude sources
-        # if exclude is not None:
-        #     exc_idx = [i for i, v in enumerate(source.data['name']) if v in exclude]
-        #     patches = {x : [(i, np.nan) for i in exc_idx],
-        #                y : [(i, np.nan) for i in exc_idx]}
-        #
-        #     source.patch(patches)
-
         # Get marker class
         size = kwargs.get('size', 8)
         kwargs['size'] = size
         marker = getattr(fig, marker or self.marker)
         color = color or self.color
-        marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
 
-        # Plot y errorbars
-        yval, yerr = source.data[y], source.data['{}_unc'.format(y)]
-        yval[yval == None] = np.nan
-        yerr[yerr == None] = np.nan
-        y_err_x = [(i, i) for i in source.data[x]]
-        y_err_y = [(i, j) for i, j in zip(yval - yerr, yval + yerr)]
-        fig.multi_line(y_err_x, y_err_y, color=color)
-
-        # Plot x errorbars
+        # Prep data
+        names = source.data['name']
         xval, xerr = source.data[x], source.data['{}_unc'.format(x)]
         xval[xval == None] = np.nan
         xerr[xerr == None] = np.nan
+        yval, yerr = source.data[y], source.data['{}_unc'.format(y)]
+        yval[yval == None] = np.nan
+        yerr[yerr == None] = np.nan
+
+        # Plot nominal values
+        marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
+
+        # Identify sources
+        idx = [ni for ni, name in enumerate(names) if name in identify]
+        fig.circle(xval[idx], yval[idx], size=size + 5, color=id_color, fill_color=None, line_width=2)
+
+        # Plot y errorbars
+        y_err_x = [(i, i) for i in source.data[x]]
+        y_err_y = [(yval[n] if np.isnan(i - j) else i - j, yval[n] if np.isnan(i + j) else i + j) for n, (i, j) in enumerate(zip(yval, yerr))]
+        fig.multi_line(y_err_x, y_err_y, color=color)
+
+        # Plot x errorbars
         x_err_y = [(i, i) for i in source.data[y]]
-        x_err_x = [(i, j) for i, j in zip(xval - xerr, xval + xerr)]
+        x_err_x = [(xval[n] if np.isnan(i - j) else i - j, xval[n] if np.isnan(i + j) else i + j) for n, (i, j) in enumerate(zip(xval, xerr))]
         fig.multi_line(x_err_x, x_err_y, color=color)
 
         # Label points
@@ -554,7 +556,7 @@ class Catalog:
 
                 if yerr is not None:
                     ye = np.array(yerr, dtype=float)[idx]
-                    coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, w=1./ye, cov=True)
+                    coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, w=1. / ye, cov=True)
                 else:
                     coeffs, cov = np.polyfit(x=xd, y=yd, deg=order, cov=True)
 
@@ -564,7 +566,7 @@ class Catalog:
                 else:
 
                     # Calculate values and 1-sigma
-                    TT = np.vstack([xaxis**(order-i) for i in range(order + 1)]).T
+                    TT = np.vstack([xaxis**(order - i) for i in range(order + 1)]).T
                     yaxis = np.dot(TT, coeffs)
                     C_yi = np.dot(TT, np.dot(cov, TT.T))
                     sig = np.sqrt(np.diag(C_yi))
@@ -583,23 +585,11 @@ class Catalog:
         # Set axis labels
         xunit = source.data[x].unit
         yunit = source.data[y].unit
-        fig.xaxis.axis_label = '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
-        fig.yaxis.axis_label = '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
+        fig.xaxis.axis_label = xlabel or '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
+        fig.yaxis.axis_label = ylabel or '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
 
         # Formatting
         fig.legend.location = "top_right"
-
-        # Identify sources
-        if isinstance(identify, list):
-            id_cat = Catalog('Identified')
-            for obj_id in identify:
-                obj_result = self.get_SED(obj_id)
-                if str(type(obj_result)) != "<class 'astropy.table.column.Column'>":
-                    obj_result = [obj_result]
-                for obj in obj_result:
-                    id_cat.add_SED(obj)
-            fig = id_cat.plot(x, y, fig=fig, size=size+5, marker='circle', line_color=id_color, fill_color=None, line_width=2, label_points=True)
-            del id_cat
 
         if draw:
             show(fig)

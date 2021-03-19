@@ -175,11 +175,7 @@ class TestSED(unittest.TestCase):
         s.make_wein_tail(teff=2000*q.K)
 
         # Radius from spectral type
-        s.radius_from_spectral_type('foo')
-        s.radius_from_spectral_type()
-
-        # Radius from age
-        s.radius_from_age()
+        s.results
 
     def test_compare_model(self):
         """Test for the compare_model method"""
@@ -230,6 +226,7 @@ class TestSED(unittest.TestCase):
         s.find_Gaia()
 
         self.assertNotEqual(len(s.photometry), 0)
+        self.assertTrue(isinstance(s.get_mag('2MASS.J'), tuple))
 
     def test_find_SDSS_spectra(self):
         """Test the find_SDSS_spectra method"""
@@ -272,6 +269,7 @@ class TestSED(unittest.TestCase):
         # Add known spectrum
         s = copy.copy(self.sed)
         spec = bt.get_spectrum(snr=100)
+        spec = spec.resamp(wave=np.linspace(0.4, 3, 200) * q.um)
         s.add_spectrum(spec)
 
         # Find best grid point

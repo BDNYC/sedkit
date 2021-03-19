@@ -81,11 +81,12 @@ def test_load_model():
 
 def test_load_ModelGrid():
     """Test the load_ModelGrid function"""
-    path = 'data/models/atmospheric/Filippazzo2016.p'
-    filepath = resource_filename('sedkit', path)
-
-    lmg = mg.load_ModelGrid(filepath)
+    grid = mg.BTSettl()
+    path = './test.p'
+    grid.save(path)
+    lmg = mg.load_ModelGrid(path)
     assert isinstance(lmg, mg.ModelGrid)
+    os.system('rm test.p')
 
 
 def test_BTSettl():
@@ -97,10 +98,4 @@ def test_BTSettl():
 def test_SpexPrismLibrary():
     """Test the SpexPrismLibrary grid"""
     grid = mg.SpexPrismLibrary()
-    assert hasattr(grid, 'name')
-
-
-def test_Filippazzo2016():
-    """Test the Filippazzo2016 grid"""
-    grid = mg.Filippazzo2016()
     assert hasattr(grid, 'name')

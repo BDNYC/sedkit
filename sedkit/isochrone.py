@@ -72,7 +72,7 @@ class Isochrone:
 
         # Calculate radii if not in the table (R = sqrt(GM/g))
         if 'radius' not in self.data.colnames:
-            radius = np.sqrt((ac.G * (self.data['mass'] * q.M_sun)) / ((10**self.data['logg']) * q.cm / q.s**2)).to(q.R_sun)
+            radius = np.sqrt((ac.G * (self.data['mass'] * q.M_sun)) / ((10**self.data['logg']) * q.m / q.s**2)).to(q.R_sun)
             self.data.add_column(radius, name='radius')
 
         # Get the units
@@ -180,7 +180,7 @@ class Isochrone:
         if upper is None:
             return None
 
-        # Caluclate the symmetric error
+        # Calculate the symmetric error
         error = max(abs(nominal - lower), abs(nominal - upper)) * 2
 
         # Plot the figure and evaluated point

@@ -502,7 +502,7 @@ class ModelGrid:
             else:
                 print("{} {}".format(pre, msg))
 
-    def photometry(self, bandpasses, weight=True):
+    def photometry(self, bandpasses, weight=False):
         """
         Generate a new ModelGrid object of photometry in the given bands
 
@@ -543,16 +543,20 @@ class ModelGrid:
 
                 # Calculate the synthetic flux
                 flx, flx_unc = spec.synthetic_flux(bp)
+                wav = bp.wave_eff.astype(np.float16).value
                 if flx is not None and not np.isnan(flx):
                     if err:
-                        data.append([bp.wave_eff.to(self.wave_units).astype(np.float16).value, flx.to(self.flux_units).value, flx_unc.to(self.flux_units).value])
+                        # data.append([bp.wave_eff.astype(np.float16).value, flx.to(self.flux_units).value, flx_unc.to(self.flux_units).value])
+                        data.append([wav, flx.value, flx_unc.value])
                     else:
-                        data.append([bp.wave_eff.to(self.wave_units).astype(np.float16).value, flx.to(self.flux_units).value])
+                        # data.append([bp.wave_eff.astype(np.float16).value, flx.to(self.flux_units).value])
+                        data.append([wav, flx.value])
 
             # Unpack and save as new spectrum
             dataT = np.array(data).T
             phot.add_model(dataT if err else dataT[:2], weights=weights, label=row['label'], **params)
             phot.phot = True
+            phot.native_wave_units = bp.wave_units
 
         return phot
 
@@ -700,23 +704,6 @@ class BTSettl(ModelGrid):
         modeldir = 'data/models/atmospheric/btsettl'
         root = root or resource_filename('sedkit', modeldir)
         self.load(root)
-
-
-class Filippazzo2016(ModelGrid):
-    """Child class for the Filippazzo et al. (2016) sample"""
-    def __init__(self):
-        """Load the model object"""
-        model_path = 'data/models/atmospheric/Filippazzo2016.p'
-        root = resource_filename('sedkit', model_path)
-
-        data = pickle.load(open(root, 'rb'))
-
-        # Inherit from base class
-        super().__init__(data['name'], data['parameters'], ref='2017yCat..18100158F')
-
-        # Copy to new __dict__
-        for key, val in data.items():
-            setattr(self, key, val)
 
 
 class SpexPrismLibrary(ModelGrid):

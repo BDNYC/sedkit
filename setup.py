@@ -68,7 +68,7 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     packages=find_packages(exclude=["examples"]),
-    use_scm_version=True,
+    version='1.1.3',
     setup_requires=['setuptools_scm'],
     install_requires=['numpy', 'astropy', 'bokeh', 'emcee', 'pysynphot', 'scipy', 'astroquery', 'dustmaps', 'pandas','svo_filters', 'healpy'],
     include_package_data=True,
