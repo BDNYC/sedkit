@@ -293,16 +293,21 @@ class Catalog:
         # Iterate over table
         for row in data:
 
-            # Make the SED
-            s = SED(row['name'], verbose=False)
-            if 'ra' in row and 'dec' in row:
-                s.sky_coords = row['ra']*q.deg, row['dec']*q.deg
+            try:
 
-            # Run the desired methods
-            s.run_methods(run_methods)
+                # Make the SED
+                s = SED(row['name'], verbose=False)
+                if 'ra' in row and 'dec' in row:
+                    s.sky_coords = row['ra']*q.deg, row['dec']*q.deg
 
-            # Add it to the catalog
-            self.add_SED(s)
+                # Run the desired methods
+                s.run_methods(run_methods)
+
+                # Add it to the catalog
+                self.add_SED(s)
+
+            except:
+                self.message("Could not add SED '{}".format(row['name']))
 
     def get_data(self, *args):
         """Fetch the data for the given columns
@@ -394,7 +399,7 @@ class Catalog:
 
         return results
 
-    def message(self, msg, pre='[sedkit.Catalog]'):
+    def message(self, msg, pre='[sedkit]'):
         """
         Only print message if verbose=True
 

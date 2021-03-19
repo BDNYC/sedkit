@@ -170,7 +170,7 @@ class SED:
         # Book keeping
         self.calculated = False
         self.isochrone_radius = False
-        self.params = ['name', 'ra', 'dec', 'age', 'membership', 'distance', 'parallax', 'SpT', 'spectral_type', 'fbol', 'mbol', 'Lbol', 'Lbol_sun', 'Mbol', 'Teff', 'Teff_evo', 'Teff_bb', 'logg', 'mass', 'radius']
+        self.params = ['name', 'ra', 'dec', 'age', 'membership', 'distance', 'parallax', 'SpT', 'spectral_type', 'fbol', 'mbol', 'Lbol', 'Lbol_sun', 'Mbol', 'Teff', 'logg', 'mass', 'radius']
         self.use_best_fit = False
 
         # Set the default wavelength and flux units
@@ -253,7 +253,7 @@ class SED:
     def abs_phot_SED(self):
         """The flux calibrated photometric SED"""
         if self.app_phot_SED is not None and self.distance is not None:
-            return self.app_spec_SED.flux_calibrate(self.distance)
+            return self.app_phot_SED.flux_calibrate(self.distance)
         else:
             return None
 
@@ -280,9 +280,9 @@ class SED:
         if not isinstance(mag_unc, (float, np.float32, type(None), np.ma.core.MaskedConstant)):
             raise TypeError("{}: Magnitude uncertainty must be a float, NaN, or None.".format(type(mag_unc)))
 
-        # # Make NaN if 0
-        # if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, np.ma.core.MaskedConstant):
-        #     mag_unc = np.nan
+        # Make NaN if 0
+        if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, np.ma.core.MaskedConstant):
+            mag_unc = np.nan
 
         # Get the bandpass
         if isinstance(band, str):
@@ -306,14 +306,17 @@ class SED:
         mag -= bp.ext_vector * self.reddening
 
         # Make a dict for the new point
-        new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
+        mag = mag.round(3)
+        mag_unc = mag_unc if np.isnan(mag_unc) else mag_unc.round(3)
+        eff = bp.wave_eff.astype(np.float16)
+        new_photometry = {'band': band, 'eff': eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
 
         # Add the kwargs
         new_photometry.update(kwargs)
 
         # Add it to the table
         self._photometry.add_row(new_photometry)
-        self.message("Setting {} photometry to {} ({}) with reference '{}'".format(band, mag, mag_unc, ref))
+        self.message("Setting {} photometry to {:.3f} ({:.3f}) with reference '{}'".format(band, mag, mag_unc, ref))
 
         # Set SED as uncalculated
         self.calculated = False
@@ -1273,7 +1276,7 @@ class SED:
                 flx = obj['FLUX_{}'.format(label)]
                 if not hasattr(flx, 'mask'):
                     err = np.nan if hasattr(obj['FLUX_ERROR_{}'.format(label)], 'mask') else obj['FLUX_ERROR_{}'.format(label)]
-                    self.add_photometry(band, flx, err, obj['FLUX_BIBCODE_{}'.format(label)])
+                    self.add_photometry(band, flx, err, ref=obj['FLUX_BIBCODE_{}'.format(label)])
 
         # Pause to prevent ConnectionError with astroquery
         time.sleep(self.wait)
@@ -1366,13 +1369,14 @@ class SED:
 
         # Determine a name
         if name is None:
-            name = modelgrid.name
+            name = '{} {}'.format(modelgrid.name, fit_to)
 
         # Get the spectrum to fit
         if fit_to == 'phot':
             spec = self.app_phot_SED
-            measured = self.photometry[(self.photometry['app_flux_unc'] > 0) & (self.photometry['app_flux'] > 0)]
-            modelgrid = modelgrid.photometry(list(measured['band']), weight=False if mcmc else True)
+            bands = [b for b in self.photometry['band'] if not np.isnan(self.get_mag(b)[0]) and not np.isnan(self.get_mag(b)[1])]
+            modelgrid = modelgrid.photometry(bands, weight=False if mcmc else True)
+
         else:
             spec = self.app_spec_SED
 
@@ -2438,7 +2442,10 @@ class SED:
             for bf, mod_fit in self.best_fit.items():
                 mod = mod_fit['full_model']
                 mod.wave_units = self.wave_units
-                self.fig.line(mod.wave, mod.flux * mod_fit['const'], alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], line_width=2)
+                if mod_fit['fit_to'] == 'phot':
+                    self.fig.square(mod.wave, mod.flux * mod_fit['const'], alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], size=12)
+                else:
+                    self.fig.line(mod.wave, mod.flux * mod_fit['const'], alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], line_width=2)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"

@@ -254,6 +254,9 @@ class Spectrum:
         name: str
             A name for the fit
         """
+        # Preapre modelgrid
+        modelgrid.wave_units = self.wave_units
+
         # Prepare data
         name = name or '{} fit'.format(modelgrid.name)
         spectrum = Spectrum(*self.spectrum)
@@ -261,7 +264,7 @@ class Spectrum:
 
         # Iterate over entire model grid
         pool = Pool(8)
-        func = partial(fit_model, fitspec=spectrum, wave_units=modelgrid.wave_units)
+        func = partial(fit_model, fitspec=spectrum, resample=False if modelgrid.phot==True else True)
         fit_rows = pool.map(func, rows)
         pool.close()
         pool.join()
@@ -277,9 +280,12 @@ class Spectrum:
         bdict = dict(bf)
 
         # Add full model
-        bdict['full_model'] = modelgrid.get_spectrum(**{par: val for par, val in bdict.items() if par in modelgrid.parameters}, snr=5)
+        full_model = modelgrid.get_spectrum(**{par: val for par, val in bdict.items() if par in modelgrid.parameters}, snr=5)
+        full_model.phot = True
+        bdict['full_model'] = full_model
         bdict['wave_units'] = self.wave_units
         bdict['flux_units'] = self.flux_units
+        bdict['fit_to'] = 'phot' if modelgrid.phot else 'spec'
 
         self.message(bf[modelgrid.parameters])
 
@@ -368,7 +374,7 @@ class Spectrum:
         t_data = np.asarray(self.spectrum).T
         np.savetxt(filepath, t_data, header=head)
 
-    def fit(self, spec, weights=None, wave_units=None, scale=True, plot=False):
+    def fit(self, spec, weights=None, wave_units=None, scale=True, resample=True, plot=False):
         """Determine the goodness of fit between this and another spectrum
 
         Parameters
@@ -401,13 +407,14 @@ class Spectrum:
 
             spec2 = copy.copy(spec)
 
-            # Convert A to um
-            if wave_units is not None:
-                xnorm = q.Unit(wave_units).to(self.wave_units)
-                spec2[0] = spec2[0] * xnorm
+            # Convert wave units
+            wave_units = wave_units or q.AA
+            xnorm = q.Unit(wave_units).to(self.wave_units)
+            spec2[0] = spec2[0] * xnorm
 
             # Resample spec onto self wavelength
-            spec2 = u.spectres(self.wave, *spec2)
+            if resample:
+                spec2 = u.spectres(self.wave, *spec2)
             wav = spec2[0]
             flx2 = spec2[1]
             err2 = np.ones_like(flx2) if len(spec2) == 2 else spec2[2]
@@ -421,8 +428,9 @@ class Spectrum:
 
         # Make default weights the bin widths, excluding gaps in spectra
         if weights is None:
-            weights = np.gradient(wav)
-            weights[weights > np.std(weights)] = 1
+            weights = np.ones_like(wav)
+            # weights = np.gradient(wav)
+            # weights[weights > np.std(weights)] = 1
 
         # Run the fitting and get the normalization
         gstat, ynorm = u.goodness(flx1, flx2, err1, err2, weights)
@@ -843,8 +851,7 @@ class Spectrum:
             # Plot the best fit
             if best_fit:
                 for name, bf in self.best_fit.items():
-                    fig.line(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3, color=next(u.COLORS),
-                             legend_label=bf.label)
+                    fig.square(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3, color=next(u.COLORS), legend_label=bf.label)
 
         # Line plot
         else:
@@ -1398,7 +1405,7 @@ class Vega(Spectrum):
         self.name = 'Vega'
 
 
-def fit_model(row, fitspec, wave_units=q.AA):
+def fit_model(row, fitspec, resample=True, wave_units=q.AA):
     """Fit the model grid row to the spectrum with the given parameters
 
     Parameters
@@ -1414,7 +1421,7 @@ def fit_model(row, fitspec, wave_units=q.AA):
         The input row with the normalized spectrum and additional gstat
     """
     try:
-        gstat, yn, xn = list(fitspec.fit(row['spectrum'], weights=row.get('weights'), wave_units=wave_units))
+        gstat, yn, xn = list(fitspec.fit(row['spectrum'], resample=resample, wave_units=wave_units, weights=row.get('weights')))
         spectrum = np.array([row['spectrum'][0] * xn, row['spectrum'][1] * yn])
         row['spectrum'] = spectrum
         row['gstat'] = gstat
