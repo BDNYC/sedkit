@@ -98,17 +98,17 @@ trap1.results
   <td>--</td>
   <td>--</td>
  </tr>
+  <tr>
+  <td>dec</td>
+  <td>-5.0413974999999995</td>
+  <td>--</td>
+  <td>--</td>
+ </tr>
  <tr>
   <td>age</td>
   <td>7.6</td>
   <td>2.2</td>
   <td>Gyr</td>
- </tr>
- <tr>
-  <td>dec</td>
-  <td>-5.0413974999999995</td>
-  <td>--</td>
-  <td>--</td>
  </tr>
  <tr>
   <td>Lbol</td>
