@@ -1104,21 +1104,21 @@ class SED:
         results = qu.query_vizier('Gaia', target=self.name, sky_coords=self.sky_coords, search_radius=search_radius or self.search_radius, verbose=self.verbose, idx=idx, **kwargs)
 
         # Parse the record
-        if len(results) == len(include):
+        if 'parallax' in include:
+            self.parallax = results[0][1] * q.mas, results[0][2] * q.mas
+            self._refs['parallax'] = results[0][3]
 
-            if 'parallax' in include:
-                self.parallax = results[0][1] * q.mas, results[0][2] * q.mas
-                self._refs['parallax'] = results[0][3]
+        if 'photometry' in include:
+            band, mag, unc, ref = results[1]
+            self.add_photometry(band, mag, unc, ref=ref)
 
-            if 'photometry' in include:
-                band, mag, unc, ref = results[1]
-                self.add_photometry(band, mag, unc, ref=ref)
+        if 'teff' in include:
+            self.Teff_Gaia = None if results[2][1] == 0 else results[2][1] * q.K
+            self.message("'Teff_Gaia' set to {}".format(self.Teff_Gaia))
 
-            if 'teff' in include:
-                self.Teff_Gaia = results[2][1] * q.K
-
-            if 'Lbol' in include:
-                self.Lbol_Gaia = results[3][1] or None
+        if 'Lbol' in include:
+            self.Lbol_Gaia = results[3][1] or None
+            self.message("'Lbol_Gaia' set to {}".format(self.Lbol_Gaia))
 
         # Pause to prevent ConnectionError with astroquery
         time.sleep(self.wait)
@@ -1197,7 +1197,7 @@ class SED:
             # Pause to prevent ConnectionError with astroquery
             time.sleep(self.wait)
 
-    def find_Simbad(self, search_radius=None, idx=0):
+    def find_Simbad(self, search_radius=None, include=['parallax', 'spectral_type', 'radius'], idx=0):
         """
         Search for a Simbad record to retrieve designations, coordinates,
         parallax, radius, and spectral type information
@@ -1206,6 +1206,8 @@ class SED:
         ----------
         search_radius: astropy.units.quantity.Quantity
             The radius for the cone search
+        include: sequence
+            The list of data to include
         idx: int
             The index of the result to use
         """
@@ -1256,27 +1258,28 @@ class SED:
                 self._set_sky_coords(sky_coords, simbad=False)
 
             # Check for a parallax
-            if not hasattr(obj['PLX_VALUE'], 'mask'):
+            if 'parallax' in include and not hasattr(obj['PLX_VALUE'], 'mask'):
                 self.parallax = obj['PLX_VALUE'] * q.mas, obj['PLX_ERROR'] * q.mas, obj['PLX_BIBCODE']
 
             # Check for a spectral type
-            if not hasattr(obj['SP_TYPE'], 'mask'):
+            if 'spectral_type' in include and not hasattr(obj['SP_TYPE'], 'mask'):
                 try:
                     self.spectral_type = obj['SP_TYPE'], obj['SP_BIBCODE']
                 except IndexError:
                     pass
 
             # Check for a radius
-            if not hasattr(obj['Diameter_diameter'], 'mask'):
+            if 'radius' in include and not hasattr(obj['Diameter_diameter'], 'mask'):
                 du = q.Unit(obj['Diameter_unit'])
                 self.radius = obj['Diameter_diameter'] / 2. * du, obj['Diameter_error'] * du, obj['Diameter_bibcode']
 
             # Check for UBVRI photometry
-            for band, label in zip(['Generic/Johnson.U', 'Generic/Johnson.B', 'Generic/Johnson.V', 'Cousins.R', 'Cousins.I'], ['U', 'B', 'V', 'R', 'I']):
-                flx = obj['FLUX_{}'.format(label)]
-                if not hasattr(flx, 'mask'):
-                    err = np.nan if hasattr(obj['FLUX_ERROR_{}'.format(label)], 'mask') else obj['FLUX_ERROR_{}'.format(label)]
-                    self.add_photometry(band, flx, err, ref=obj['FLUX_BIBCODE_{}'.format(label)])
+            if 'photometry' in include:
+                for band, label in zip(['Generic/Johnson.U', 'Generic/Johnson.B', 'Generic/Johnson.V', 'Cousins.R', 'Cousins.I'], ['U', 'B', 'V', 'R', 'I']):
+                    flx = obj['FLUX_{}'.format(label)]
+                    if not hasattr(flx, 'mask'):
+                        err = np.nan if hasattr(obj['FLUX_ERROR_{}'.format(label)], 'mask') else obj['FLUX_ERROR_{}'.format(label)]
+                        self.add_photometry(band, flx, err, ref=obj['FLUX_BIBCODE_{}'.format(label)])
 
         # Pause to prevent ConnectionError with astroquery
         time.sleep(self.wait)
