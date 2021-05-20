@@ -1042,10 +1042,10 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
 
                 # Check for luminosity class
                 LC = []
-                for cl in ['III', 'V', 'IV']:
+                for cl in ['III', 'II', 'IV', 'I', 'V']:
                     if cl in suf:
+                        suf = suf.replace(cl, '')
                         LC.append(cl)
-                        suf.replace(cl, '')
                 LC = '/'.join(LC) or 'V'
 
                 return [val, unc, pre, grv, LC]

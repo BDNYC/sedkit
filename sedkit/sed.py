@@ -2721,7 +2721,7 @@ class SED:
             ref = None
 
             # If there are two items, it's the SpT and the reference or the SpT and the unc
-            if len(spectral_type) == 2:
+            if len(spectral_type) == 2 and not isinstance(spectral_type, str):
                 if isinstance(spectral_type[1], str):
                     spectral_type, ref = spectral_type
 
