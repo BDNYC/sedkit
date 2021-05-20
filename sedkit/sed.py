@@ -364,6 +364,10 @@ class SED:
         if hasattr(spectrum, 'spectrum'):
             spec = spectrum
 
+            # Trim if necessary
+            if 'trim' in kwargs:
+                spec = spec.trim(**kwargs['trim'], concat=True)
+
         # or turn it into a Spectrum
         elif isinstance(spectrum, (list, tuple)):
 
@@ -1698,7 +1702,7 @@ class SED:
         Estimate the surface gravity from model isochrones given an age and Lbol
         """
         # Try model isochrones
-        if self.logg is None and self.age is not None and self.Lbol_sun is not None:
+        if self.age is not None and self.Lbol_sun is not None:
 
             # Default
             logg = None
@@ -1714,7 +1718,7 @@ class SED:
                 self.message("Could not calculate surface gravity.")
 
             # Store the value
-            self.logg = [i.round(2) for i in logg] if logg is not None else logg
+            self.logg = [logg[0].round(2), logg[1].round(2), logg[2]] if logg is not None else logg
 
         # No dice
         else:
@@ -1743,7 +1747,7 @@ class SED:
                 mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', plot=plot)
 
             # Store the value
-            self.mass = [i.round(3) for i in mass] if mass is not None else mass
+            self.mass = [mass[0].round(3), mass[1].round(3), mass[2]] if mass is not None else mass
 
         # Try mass(Lbol) relation
         elif self.mass is None and self.Lbol_sun is not None:
@@ -1791,7 +1795,7 @@ class SED:
                 radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
 
             # Store the value
-            self.radius = [i.round(3) for i in radius] if radius is not None else radius
+            self.radius = [radius[0].round(3), radius[1].round(3), radius[2]] if radius is not None else radius
 
         # Try radius(spt) relation
         elif self.radius is None and self.spectral_type is not None:
@@ -1831,7 +1835,7 @@ class SED:
             The temperature units to use
         """
         # Try model isochrones
-        if self.Teff is None and self.age is not None and self.Lbol_sun is not None:
+        if self.age is not None and self.Lbol_sun is not None:
 
             # Default
             teff = None
@@ -1844,7 +1848,7 @@ class SED:
                 teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
 
             # Store the value
-            self.Teff = [i.round(0) for i in teff] if teff is not None else teff
+            self.Teff = [teff[0].round(0), teff[1].round(0), teff[2]] if teff is not None else teff
 
         # Try Teff(spt) relation
         elif self.Teff is None and self.spectral_type is not None:

@@ -198,7 +198,7 @@ class Isochrone:
         if np.isnan(nominal):
             raise ValueError("I got a nan from {} for some reason.".format(self.name))
 
-        return nominal, error
+        return nominal, error, self.name
 
     def interpolate(self, xval, age, xparam, yparam):
         """Interpolate a value between two isochrones

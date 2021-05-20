@@ -48,8 +48,8 @@ class Spectrum:
     """
     A class to store, calibrate, fit, and plot a single spectrum
     """
-    def __init__(self, wave, flux, unc=None, snr=None, name=None,
-                 ref=None, header=None, verbose=False, **kwargs):
+    def __init__(self, wave, flux, unc=None, snr=None, trim=None,
+                 name=None, ref=None, header=None, verbose=False, **kwargs):
         """Initialize the Spectrum object
 
         Parameters
@@ -62,8 +62,8 @@ class Spectrum:
             The flux density uncertainty array
         snr: float (optional)
             A value to override spectrum SNR
-        snr_trim: float (optional)
-            The SNR value to trim spectra edges up to
+        trim: dict
+            A dictionary of the `trim` method arguments to run
         name: str
             A name for the spectrum
         ref: str
@@ -129,6 +129,10 @@ class Spectrum:
         # Store kwargs
         for key, val in kwargs.items():
             setattr(self, key, val)
+
+        # Trim
+        if trim is not None:
+            self.trim(**trim)
 
     @copy_raw
     def __add__(self, spec):
@@ -854,7 +858,8 @@ class Spectrum:
             # Plot the best fit
             if best_fit:
                 for name, bf in self.best_fit.items():
-                    fig.square(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3, color=next(u.COLORS), legend_label=bf.label)
+                    spec = bf['spectrum']
+                    fig.square(spec[0], spec[1] * const, alpha=0.3, color=next(u.COLORS), legend_label=bf['label'])
 
         # Line plot
         else:
@@ -874,7 +879,8 @@ class Spectrum:
             # Plot the best fit
             if best_fit:
                 for name, bf in self.best_fit.items():
-                    fig.line(bf.spectrum[0], bf.spectrum[1] * const, alpha=0.3, color=next(u.COLORS), legend_label=bf.label)
+                    spec = bf['spectrum']
+                    fig.line(spec[0], spec[1] * const, alpha=0.3, color=next(u.COLORS), legend_label=bf['label'])
 
         if draw:
             show(fig)

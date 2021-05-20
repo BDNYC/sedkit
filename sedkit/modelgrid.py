@@ -722,9 +722,7 @@ class SpexPrismLibrary(ModelGrid):
         self.load(root)
 
         # Add numeric spectral type
-        self.index['SpT'] = [u.specType(i.split(',')[0].replace('Opt:','')\
-                              .replace('NIR:',''))[0] for i in\
-                              self.index['spty']]
+        self.index['SpT'] = [u.specType(i.split(',')[0].replace('Opt:','').replace('NIR:',''))[0] for i in self.index['spty']]
 
 
 def format_XML(modeldir):
