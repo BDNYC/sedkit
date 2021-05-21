@@ -1125,23 +1125,25 @@ class Spectrum:
         # Get element indexes of included ranges
         idx_include = []
         for mn, mx in include:
-            inc, = np.where(np.logical_and(self.spectrum[0] > mn, self.spectrum[0] < mx))
+            inc, = np.where(np.logical_and(self.spectrum[0] >= mn, self.spectrum[0] <= mx))
             idx_include.append(inc)
 
         # Get element indexes of excluded ranges
         idx_exclude = []
         for mn, mx in exclude:
-            exc, = np.where(np.logical_and(self.spectrum[0] > mn, self.spectrum[0] < mx))
+            exc, = np.where(np.logical_and(self.spectrum[0] >= mn, self.spectrum[0] <= mx))
             idx_exclude.append(exc)
 
         # Get difference of each included set with each excluded set
         segments = []
         for inc in idx_include:
             set_inc = set(inc)
+
             for exc in idx_exclude:
                 set_inc = set_inc.difference(set(exc))
 
-            # Split the indexes by missing elements
+            # Sort and split the indexes by missing elements
+            set_inc = sorted(set_inc)
             for k, g in groupby(enumerate(list(set_inc)), lambda i_x: i_x[0] - i_x[1]):
 
                 # Make the spectra
