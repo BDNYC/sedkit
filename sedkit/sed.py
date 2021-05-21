@@ -156,7 +156,7 @@ class SED:
         # Static attributes
         self.bb_source = None
         self.blackbody = None
-        self.evo_model = 'parsec12_solar'
+        self.evo_model = 'DUSTY00'
         self.reddening = 0
         self.SpT = None
         self.mainsequence = rel.DwarfSequence()
@@ -2049,6 +2049,7 @@ class SED:
 
             # If no photometry, just use spectra
             else:
+
                 self.app_specphot_SED = np.sum(self.stitched_spectra)
 
         # If no spectra, just use photometry
