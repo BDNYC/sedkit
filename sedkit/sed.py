@@ -37,6 +37,7 @@ from . import isochrone as iso
 from . import query as qu
 from . import relations as rel
 from . import modelgrid as mg
+from .uncertainties import Unum
 
 
 Vizier.columns = ["**", "+_r"]
@@ -685,6 +686,12 @@ class SED:
             # Calculate absolute mags
             if self.distance is not None:
 
+                # TODO: This needs to be vectorized!
+                # mm = Unum(m, m_unc)
+                # dd = Unum(*self.distance).to(q.pc)
+                # MM = mm - (((dd / (10 * q.pc)) ** 2).log10() * 2.5)
+                # M, M_unc = MM.nominal, MM.upper
+
                 # Calculate abs_mags
                 M, M_unc = u.flux_calibrate(m, self.distance[0], m_unc, self.distance[1])
                 table['abs_magnitude'] = M
@@ -845,8 +852,22 @@ class SED:
         self._validate_and_set_param('distance', distance, q.pc, True, trigger=['get_reddening', '_calibrate_photometry', '_calibrate_spectra'])
 
         # Update parallax
-        ref = [] if distance is None else [distance[-1]] if isinstance(distance[-1], str) else []
-        parallax = None if distance is None else tuple(list(u.pi2pc(*self.distance, pc2pi=True)) + ref)
+        if distance is None:
+            parallax = None
+
+        else:
+
+            # Same ref as distance
+            if isinstance(distance[-1], str):
+                ref = [distance[-1]]
+                distance = list(distance[:-1])
+            else:
+                ref = []
+
+            # Calculate the distance
+            plx = (Unum(*distance).to(q.pc)**-1) * q.pc * q.arcsec
+            parallax = list(plx.quantity) + ref
+
         self._validate_and_set_param('parallax', parallax, q.mas, True)
 
     def drop_photometry(self, band):
@@ -1109,8 +1130,7 @@ class SED:
 
         # Parse the record
         if 'parallax' in include:
-            self.parallax = results[0][1] * q.mas, results[0][2] * q.mas
-            self._refs['parallax'] = results[0][3]
+            self.parallax = results[0][1] * q.mas, results[0][2] * q.mas, results[0][3]
 
         if 'photometry' in include:
             band, mag, unc, ref = results[1]
@@ -1366,6 +1386,8 @@ class SED:
         ----------
         modelgrid: sedkit.modelgrid.ModelGrid
             The model grid to fit
+        fit_to: str
+            The type of data to fit or the bandpass names, ['spec', 'phot', ['2MASS.J', '2MASS.H', '2MASS.Ks']]
         name: str
             A name for the fit
         mcmc: bool
@@ -1379,13 +1401,22 @@ class SED:
             name = '{} {}'.format(modelgrid.name, fit_to)
 
         # Get the spectrum to fit
-        if fit_to == 'phot':
-            spec = self.app_phot_SED
-            bands = [b for b in self.photometry['band'] if not np.isnan(self.get_mag(b)[0]) and not np.isnan(self.get_mag(b)[1])]
-            modelgrid = modelgrid.photometry(bands, weight=False if mcmc else True)
+        if fit_to == 'spec':
+            spec = self.app_spec_SED
 
         else:
-            spec = self.app_spec_SED
+
+            # See what bands are available to be fit
+            bands = fit_to if isinstance(fit_to, (list, tuple)) else None
+            bands = bands or [b for b in self.photometry['band'] if not np.isnan(self.get_mag(b)[0]) and not np.isnan(self.get_mag(b)[1])]
+            modelgrid = modelgrid.photometry(bands, weight=False if mcmc else True)
+
+            # See what bands have spectral coverage from the modelgrid
+            app_cols = ['band', 'eff', 'app_flux', 'app_flux_unc']
+            phot_array = np.array(self.photometry[app_cols])
+            phot_array = phot_array[(phot_array['app_flux'] > 0) & (phot_array['app_flux_unc'] > 0)]
+            phot_array = phot_array[[idx for idx, row in enumerate(phot_array) if row['band'] in modelgrid.bandpasses]][app_cols[1:]]
+            spec = sp.Spectrum(*[phot_array[i] * Q for i, Q in zip(app_cols[1:], self.units)])
 
         if spec is not None:
 
@@ -1407,7 +1438,8 @@ class SED:
             self.message('Best fit {}: {}'.format(name, self.best_fit[name]['label']))
 
             # Make the SED in case use_best_fit is True
-            self.make_sed()
+            if fit_to == 'spec' and self.use_best_fit:
+                self.make_sed()
 
         else:
             self.message("Could not fit model grid {} to the '{}' SED. No {} to fit.".format(modelgrid.name, fit_to, 'photometry' if fit_to == 'phot' else 'spectrum'))
@@ -1724,7 +1756,7 @@ class SED:
         else:
             self.message('Could not calculate logg without Lbol and age')
 
-    def infer_mass(self, mass_units=q.Msun, plot=False):
+    def infer_mass(self, mass_units=q.Msun, isochrone=False, plot=False):
         """
         Estimate the mass from model isochrones given an age and Lbol
 
@@ -1732,9 +1764,11 @@ class SED:
         ----------
         mass_units: astropy.units.quantity.Quantity
             The units for the mass
+        isochrone: bool
+            Use the model isochrones
         """
         # Try model isochrones
-        if self.age is not None and self.Lbol_sun is not None:
+        if isochrone and self.age is not None and self.Lbol_sun is not None:
 
             # Default
             mass = None
@@ -1749,30 +1783,32 @@ class SED:
             # Store the value
             self.mass = [mass[0].round(3), mass[1].round(3), mass[2]] if mass is not None else mass
 
-        # Try mass(Lbol) relation
-        elif self.mass is None and self.Lbol_sun is not None:
-
-            # Infer from Dwarf Sequence
-            self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, plot=plot)
-            
-        # Try mass(M_J) relation
-        elif self.mass is None and self.get_mag('2MASS.J', 'abs') is not None:
-
-            # Infer from Dwarf Sequence
-            self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), plot=plot)
-
-        # Try mass(M_Ks) relation
-        elif self.mass is None and self.get_mag('2MASS.Ks', 'abs') is not None:
-
-            # Infer from Dwarf Sequence
-            self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
-
-        # No dice
         else:
-            self.message('Could not calculate mass without Lbol, M_2MASS.J, or M_2MASS.Ks')
+
+            # Try mass(Lbol) relation
+            if self.mass is None and self.Lbol_sun is not None:
+
+                # Infer from Dwarf Sequence
+                self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, plot=plot)
+
+            # Try mass(M_J) relation
+            elif self.mass is None and self.get_mag('2MASS.J', 'abs') is not None:
+
+                # Infer from Dwarf Sequence
+                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), plot=plot)
+
+            # Try mass(M_Ks) relation
+            elif self.mass is None and self.get_mag('2MASS.Ks', 'abs') is not None:
+
+                # Infer from Dwarf Sequence
+                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
+
+            # No dice
+            else:
+                self.message('Could not calculate mass without Lbol, M_2MASS.J, or M_2MASS.Ks')
 
 
-    def infer_radius(self, radius_units=q.Rsun, relation=None, plot=False):
+    def infer_radius(self, radius_units=q.Rsun, isochrone=False, plot=False):
         """
         Estimate the radius from model isochrones given an age and Lbol
 
@@ -1780,9 +1816,11 @@ class SED:
         ----------
         radius_units: astropy.units.quantity.Quantity
             The radius units
+        isochrone: bool
+            Use the model isochrones
         """
         # Try model isochrones
-        if self.age is not None and self.Lbol_sun is not None:
+        if isochrone and self.age is not None and self.Lbol_sun is not None:
 
             # Default
             radius = None
@@ -1797,35 +1835,37 @@ class SED:
             # Store the value
             self.radius = [radius[0].round(3), radius[1].round(3), radius[2]] if radius is not None else radius
 
-        # Try radius(spt) relation
-        elif self.radius is None and self.spectral_type is not None:
-
-            # Infer from Dwarf Sequence
-            self.radius = self.mainsequence.evaluate('radius(spt)', self.spectral_type, plot=plot)
-
-        # Try radius(Lbol) relation
-        elif self.radius is None and self.Lbol_sun is not None:
-
-            # Infer from Dwarf Sequence
-            self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, plot=plot)
-
-        # Try radius(M_J) relation
-        elif self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
-
-            # Infer from Dwarf Sequence
-            self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), plot=plot)
-
-        # Try radius(M_Ks) relation
-        elif self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
-
-            # Infer from Dwarf Sequence
-            self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
-
-        # No dice
         else:
-            self.message('Could not calculate radius without spectral_type, Lbol, M_2MASS.J, or M_2MASS.Ks')
 
-    def infer_Teff(self, teff_units=q.K, plot=False):
+            # Try radius(spt) relation
+            if self.radius is None and self.spectral_type is not None:
+
+                # Infer from Dwarf Sequence
+                self.radius = self.mainsequence.evaluate('radius(spt)', self.spectral_type, plot=plot)
+
+            # Try radius(Lbol) relation
+            elif self.radius is None and self.Lbol_sun is not None:
+
+                # Infer from Dwarf Sequence
+                self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, plot=plot)
+
+            # Try radius(M_J) relation
+            elif self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
+
+                # Infer from Dwarf Sequence
+                self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), plot=plot)
+
+            # Try radius(M_Ks) relation
+            elif self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
+
+                # Infer from Dwarf Sequence
+                self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
+
+            # No dice
+            else:
+                self.message('Could not calculate radius without spectral_type, Lbol, M_2MASS.J, or M_2MASS.Ks')
+
+    def infer_Teff(self, teff_units=q.K, isochrone=False, plot=False):
         """
         Infer the effective temperature
 
@@ -1835,7 +1875,7 @@ class SED:
             The temperature units to use
         """
         # Try model isochrones
-        if self.age is not None and self.Lbol_sun is not None:
+        if isochrone and self.age is not None and self.Lbol_sun is not None:
 
             # Default
             teff = None
@@ -1850,21 +1890,23 @@ class SED:
             # Store the value
             self.Teff = [teff[0].round(0), teff[1].round(0), teff[2]] if teff is not None else teff
 
-        # Try Teff(spt) relation
-        elif self.Teff is None and self.spectral_type is not None:
-
-            # Infer from Dwarf Sequence
-            self.Teff = self.mainsequence.evaluate('Teff(spt)', self.spectral_type, plot=plot)
-
-        # Try Teff(Lbol) relation
-        elif self.Teff is None and self.Lbol_sun is not None:
-
-            # Infer from Dwarf Sequence
-            self.Teff = self.mainsequence.evaluate('Teff(Lbol)', self.Lbol_sun, plot=plot)
-
-        # No dice
         else:
-            self.message('Could not calculate Teff without spectral_type or Lbol')
+
+            # Try Teff(spt) relation
+            if self.Teff is None and self.spectral_type is not None:
+
+                # Infer from Dwarf Sequence
+                self.Teff = self.mainsequence.evaluate('Teff(spt)', self.spectral_type, plot=plot)
+
+            # Try Teff(Lbol) relation
+            elif self.Teff is None and self.Lbol_sun is not None:
+
+                # Infer from Dwarf Sequence
+                self.Teff = self.mainsequence.evaluate('Teff(Lbol)', self.Lbol_sun, plot=plot)
+
+            # No dice
+            else:
+                self.message('Could not calculate Teff without spectral_type or Lbol')
 
     @property
     def info(self):
@@ -1908,7 +1950,7 @@ class SED:
         Lbol_sun: sequence
             The Lbol_sun and uncertainty in cgs units
         """
-        self._validate_and_set_param('Lbol_sun', Lbol_sun, None, False)
+        self._validate_and_set_param('Lbol_sun', Lbol_sun, None, False, pos=False)
 
     @property
     def logg(self):
@@ -1991,6 +2033,7 @@ class SED:
         # Turn off print statements
         verb = self.verbose
         self.verbose = False
+        n_models = 0
 
         if len(self.stitched_spectra) > 0:
 
@@ -2161,7 +2204,7 @@ class SED:
         Mbol: sequence
             The Mbol and uncertainty
         """
-        self._validate_and_set_param('Mbol', Mbol, None, True)
+        self._validate_and_set_param('Mbol', Mbol, None, True, pos=False)
 
     @property
     def membership(self):
@@ -2269,9 +2312,23 @@ class SED:
         """
         self._validate_and_set_param('parallax', parallax, q.mas, True)
 
-        # Update parallax
-        ref = [] if parallax is None else [parallax[-1]] if isinstance(parallax[-1], str) else []
-        distance = None if parallax is None else tuple(list(u.pi2pc(*self.parallax)) + ref)
+        # Update distance
+        if parallax is None:
+            distance = None
+
+        else:
+
+            # Same ref as parallax
+            if isinstance(parallax[-1], str):
+                ref = [parallax[-1]]
+                parallax = list(parallax[:-1])
+            else:
+                ref = []
+
+            # Calculate the distance
+            dist = (Unum(*parallax).to(q.arcsec)**-1) * q.pc * q.arcsec
+            distance = list(dist.quantity) + ref
+
         self._validate_and_set_param('distance', distance, q.pc, True, trigger=['get_reddening', '_calibrate_photometry', '_calibrate_spectra'])
 
     @property
@@ -2282,9 +2339,9 @@ class SED:
         self._photometry.sort('eff')
         return self._photometry
 
-    def plot(self, app=True, photometry=True, spectra=True, integral=False,
-             synthetic_photometry=False, blackbody=False, best_fit=False, normalize=None,
-             scale=['log', 'log'], output=False, fig=None, color='#1f77b4', one_color=True,
+    def plot(self, app=True, photometry=True, spectra=True, integral=True,
+             synthetic_photometry=False, blackbody=False, best_fit=True, normalize=None,
+             scale=['log', 'log'], output=False, fig=None, color='#1f77b4', one_color=False,
              **kwargs):
         """
         Plot the SED
@@ -2460,6 +2517,9 @@ class SED:
         self.fig.x_range = Range1d(mn_x * 0.8, mx_x * 1.2)
         self.fig.y_range = Range1d(mn_y * 0.5 * const, mx_y * 2 * const)
 
+        # Set as caluclated
+        self.calculated = True
+
         if not output:
             show(self.fig)
 
@@ -2576,6 +2636,9 @@ class SED:
 
             else:
                 pass
+
+        # Set as calculated
+        self.calculated = True
 
         return at.Table(np.asarray(rows), names=('param', 'value', 'unc', 'units'))
 
@@ -2808,7 +2871,7 @@ class SED:
         """
         self._validate_and_set_param('Teff', teff, q.K, True)
 
-    def _validate_and_set_param(self, param, values, units, set_uncalculated=True, trigger=[]):
+    def _validate_and_set_param(self, param, values, units, set_uncalculated=True, trigger=[], pos=True):
         """
         Method to validate and set a calculated quantity
 
@@ -2846,13 +2909,19 @@ class SED:
             if not all([u.equivalent(val, units) for val in values]):
                 raise TypeError("{} values must be {}".format(param, 'unitless' if units is None else "astropy.units.quantity.Quantity of the appropriate units , e.g. '{}'".format(units)))
 
-            # Set the mbol!
-            setattr(self, '_{}'.format(param), values)
+            # Ensure it's positive
+            if pos and ((units is not None and values[0] < 0 * units) or (units is None and values[0] < 0)):
+                print("{}: A negative {} value is not valid.".format(values, param))
 
-            # Set reference
-            self._refs[param] = ref
+            else:
 
-            self.message("Setting {} to {} with reference '{}'".format(param, getattr(self, param), ref))
+                # Set the value
+                setattr(self, '_{}'.format(param), values)
+
+                # Set reference
+                self._refs[param] = ref
+
+                self.message("Setting {} to {} with reference '{}'".format(param, getattr(self, param), ref))
 
         # Trigger other methods
         self.run_methods(trigger)

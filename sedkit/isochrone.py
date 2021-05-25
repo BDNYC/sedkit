@@ -252,7 +252,7 @@ class Isochrone:
 
         return result * unit
 
-    def message(self, msg, pre='[sedkit.Isochrone]'):
+    def message(self, msg, pre='[sedkit]'):
         """
         Only print message if verbose=True
 

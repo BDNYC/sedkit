@@ -191,6 +191,7 @@ class ModelGrid:
         self.ref = ref
         self.verbose = verbose
         self.phot = False
+        self.bandpasses = []
 
         # Make all args into attributes
         for key, val in kwargs.items():
@@ -533,13 +534,11 @@ class ModelGrid:
             # Collect data
             data = []
             weights = []
+            bands = []
             for band in bandpasses:
 
                 # Get the bandpass
                 bp = svo.Filter(band)
-
-                # Weight the bands by the inverse of the band width
-                weights.append((bp.wave_max - bp.wave_min).to(q.um).value if weight else 1)
 
                 # Calculate the synthetic flux
                 flx, flx_unc = spec.synthetic_flux(bp)
@@ -552,11 +551,18 @@ class ModelGrid:
                         # data.append([bp.wave_eff.astype(np.float16).value, flx.to(self.flux_units).value])
                         data.append([wav, flx.value])
 
+                    # Store the band names
+                    bands.append(band)
+
+                    # Weight the bands by the inverse of the band width
+                    weights.append((bp.wave_max - bp.wave_min).to(q.um).value if weight else 1)
+
             # Unpack and save as new spectrum
             dataT = np.array(data).T
             phot.add_model(dataT if err else dataT[:2], weights=weights, label=row['label'], **params)
             phot.phot = True
             phot.native_wave_units = bp.wave_units
+            phot.bandpasses = bands
 
         return phot
 

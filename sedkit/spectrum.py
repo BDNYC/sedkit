@@ -268,7 +268,7 @@ class Spectrum:
 
         # Iterate over entire model grid
         pool = Pool(8)
-        func = partial(fit_model, fitspec=spectrum, resample=False if modelgrid.phot==True else True)
+        func = partial(fit_model, fitspec=spectrum, resample=not modelgrid.phot)
         fit_rows = pool.map(func, rows)
         pool.close()
         pool.join()
@@ -1431,14 +1431,10 @@ def fit_model(row, fitspec, resample=True, wave_units=q.AA):
     pandas.Row
         The input row with the normalized spectrum and additional gstat
     """
-    try:
-        gstat, yn, xn = list(fitspec.fit(row['spectrum'], resample=resample, wave_units=wave_units, weights=row.get('weights')))
-        spectrum = np.array([row['spectrum'][0] * xn, row['spectrum'][1] * yn])
-        row['spectrum'] = spectrum
-        row['gstat'] = gstat
-        row['const'] = yn
-
-    except IOError:
-        row['gstat'] = np.nan
+    gstat, yn, xn = list(fitspec.fit(row['spectrum'], resample=resample, wave_units=wave_units, weights=row.get('weights')))
+    spectrum = np.array([row['spectrum'][0] * xn, row['spectrum'][1] * yn])
+    row['spectrum'] = spectrum
+    row['gstat'] = gstat
+    row['const'] = yn
 
     return row

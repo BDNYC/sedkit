@@ -47,7 +47,10 @@ def query_SDSS_optical_spectra(coords, idx=0, verbose=True, **kwargs):
     """
 
     # Fetch results
-    results = SDSS.query_region(coords, spectro=True, **kwargs)
+    try:
+        results = SDSS.query_region(coords, spectro=True, **kwargs)
+    except:
+        results = None
     n_rec = 0 if results is None else len(results)
 
     # Print info
@@ -97,7 +100,10 @@ def query_SDSS_apogee_spectra(coords, verbose=True, **kwargs):
 
     # Query vizier for spectra
     catalog = 'III/284/allstars'
-    results = query_vizier(catalog, col_names=['Ascap', 'File', 'Tel', 'Field'], sky_coords=coords, wildcards=[], cat_name='APOGEE', verbose=verbose, **kwargs)
+    try:
+        results = query_vizier(catalog, col_names=['Ascap', 'File', 'Tel', 'Field'], sky_coords=coords, wildcards=[], cat_name='APOGEE', verbose=verbose, **kwargs)
+    except IOError:
+        results = []
 
     if len(results) == 0:
 
