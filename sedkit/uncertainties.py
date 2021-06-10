@@ -487,8 +487,8 @@ class UArray:
         self._nominal = nominal.value if hasattr(nominal, 'unit') else nominal
         self.upper = upper
         self._upper = upper.value if hasattr(upper, 'unit') else upper
-        self.lower = lower or self.upper
-        self._lower = lower.value if hasattr(lower, 'unit') else lower or self._upper
+        self.lower = self.upper if lower is None else lower
+        self._lower = self._upper if lower is None else (lower.value if hasattr(lower, 'unit') else lower)
         self.units = nominal.unit if hasattr(nominal, 'unit') else None
         self.n = n_samples
         self.sig_figs = sig_figs
@@ -516,6 +516,10 @@ class UArray:
         # Validate shape
         self._validate_shape(other)
 
+        # Ensure same number of samples
+        if isinstance(other, (Unum, UArray)):
+            other.n = self.n
+
         # Determine other units
         units = other.unit if hasattr(other, 'unit') else other.units if hasattr(other, 'units') else None
 
@@ -523,18 +527,48 @@ class UArray:
         if not equivalent(self.units, units):
             raise TypeError("Cannot add values with units {} and {}".format(self.units, units or 'Unitless'))
 
-        # Ensure same number of samples
-        other.n = self.n
-
         # Generate distributions for each number
         dist1 = self.sample_from_errors()
         dist2 = other.sample_from_errors() if isinstance(other, (Unum, UArray)) else other
 
+        # Massage dist2
+        dist2 = self._prep_dist(dist1, dist2)
+
         # Do math
-        dist3 = dist1 + (dist2[:, None] if dist2.ndim == 1 else dist2)
+        dist3 = dist1 + dist2
 
         # Make a new Unum from the new nominal value and upper and lower quantiles
         return UArray(*self.get_quantiles(dist3))
+
+    def _prep_dist(self, dist1, dist2):
+        """
+        Make sure dist2 has the same shape as dist 1
+
+        Parameters
+        ----------
+        dist1: sequence
+            The first distribution
+        dist2: sequence
+            The second distribution
+
+        Returns
+        -------
+        dist2
+            The corrected distribution
+        """
+        if isinstance(dist2, VALID_SHAPES):
+            if hasattr(dist2, 'unit'):
+                dist2, dunits = dist2.value, dist2.unit
+            else:
+                dunits = 1
+            dist2 = np.asarray([dist2]).squeeze() * dunits
+
+        if dist2.ndim == 1:
+            dist2 = dist2[:, None]
+            if dist2.shape[0] == dist1.shape[1]:
+                dist2 = dist2.swapaxes(0, 1)
+
+        return dist2
 
     def __mul__(self, other):
         """
@@ -553,18 +587,16 @@ class UArray:
         # Validate shape
         self._validate_shape(other)
 
+        # Ensure same number of samples
+        if isinstance(other, (Unum, UArray)):
+            other.n = self.n
+
         # Generate distributions for each number
         dist1 = self.sample_from_errors()
         dist2 = other.sample_from_errors() if isinstance(other, (Unum, UArray)) else other
 
-        # Massage shape
-        if isinstance(dist2, VALID_SHAPES):
-            if hasattr(dist2, 'unit'):
-                dist2, dunits = dist2.value, dist2.unit
-            else:
-                dunits = 1
-            dist2 = np.asarray([dist2]).squeeze() * dunits
-        dist2 = dist2[:, None] if dist2.ndim == 1 else dist2
+        # Massage dist2
+        dist2 = self._prep_dist(dist1, dist2)
 
         # Do math
         dist3 = dist1 * dist2
@@ -589,6 +621,10 @@ class UArray:
         # Validate shape
         self._validate_shape(other)
 
+        # Ensure same number of samples
+        if isinstance(other, (Unum, UArray)):
+            other.n = self.n
+
         # Determine other units
         units = other.unit if hasattr(other, 'unit') else other.units if hasattr(other, 'units') else None
 
@@ -596,15 +632,15 @@ class UArray:
         if not equivalent(self.units, units):
             raise TypeError("Cannot add values with units {} and {}".format(self.units, units or 'Unitless'))
 
-        # Ensure same number of samples
-        other.n = self.n
-
         # Generate distributions for each number
         dist1 = self.sample_from_errors()
         dist2 = other.sample_from_errors() if isinstance(other, (Unum, UArray)) else other
 
+        # Massage dist2
+        dist2 = self._prep_dist(dist1, dist2)
+
         # Do math
-        dist3 = dist1 - (dist2[:, None] if dist2.ndim == 1 else dist2)
+        dist3 = dist1 - dist2
 
         # Make a new Unum from the new nominal value and upper and lower quantiles
         return UArray(*self.get_quantiles(dist3))
@@ -649,18 +685,16 @@ class UArray:
         # Validate shape
         self._validate_shape(other)
 
+        # Ensure same number of samples
+        if isinstance(other, (Unum, UArray)):
+            other.n = self.n
+
         # Generate distributions for each number
         dist1 = self.sample_from_errors()
         dist2 = other.sample_from_errors() if isinstance(other, (Unum, UArray)) else other
 
-        # Massage shape
-        if isinstance(dist2, VALID_SHAPES):
-            if hasattr(dist2, 'unit'):
-                dist2, dunits = dist2.value, dist2.unit
-            else:
-                dunits = 1
-            dist2 = np.asarray([dist2]).squeeze() * dunits
-        dist2 = dist2[:, None] if dist2.ndim == 1 else dist2
+        # Massage dist2
+        dist2 = self._prep_dist(dist1, dist2)
 
         # Do math
         dist3 = dist1 / dist2
@@ -685,6 +719,10 @@ class UArray:
         # Validate shape
         self._validate_shape(other)
 
+        # Ensure same number of samples
+        if isinstance(other, (Unum, UArray)):
+            other.n = self.n
+
         # Determine other units
         units = other.unit if hasattr(other, 'unit') else other.units if hasattr(other, 'units') else None
 
@@ -695,6 +733,9 @@ class UArray:
         # Generate distributions for each number
         dist1 = self.sample_from_errors()
         dist2 = other.sample_from_errors() if isinstance(other, (Unum, UArray)) else other
+
+        # Massage dist2
+        dist2 = self._prep_dist(dist1, dist2)
 
         # Do math
         dist3 = dist1 // dist2
@@ -1009,4 +1050,4 @@ class SkewNormal:
         return palpha((x - mu) / sigma, alpha) * (1. / sigma)
 
 
-VALID_SHAPES = int, float, Unum, q.quantity.Quantity, q.core.PrefixUnit
+VALID_SHAPES = int, float, Unum, UArray, q.quantity.Quantity, q.core.PrefixUnit

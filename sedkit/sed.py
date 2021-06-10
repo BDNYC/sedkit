@@ -866,7 +866,7 @@ class SED:
 
             # Calculate the distance
             plx = (Unum(*distance).to(q.pc)**-1) * q.pc * q.arcsec
-            parallax = list(plx.quantity) + ref
+            parallax = tuple(list(plx.quantity) + ref)
 
         self._validate_and_set_param('parallax', parallax, q.mas, True)
 
@@ -2187,7 +2187,7 @@ class SED:
         mbol: sequence
             The mbol and uncertainty
         """
-        self._validate_and_set_param('mbol', mbol, None, True)
+        self._validate_and_set_param('mbol', mbol, None, True, pos=False)
         
     @property
     def Mbol(self):
@@ -2327,7 +2327,7 @@ class SED:
 
             # Calculate the distance
             dist = (Unum(*parallax).to(q.arcsec)**-1) * q.pc * q.arcsec
-            distance = list(dist.quantity) + ref
+            distance = tuple(list(dist.quantity) + ref)
 
         self._validate_and_set_param('distance', distance, q.pc, True, trigger=['get_reddening', '_calibrate_photometry', '_calibrate_spectra'])
 
