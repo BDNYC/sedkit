@@ -19,6 +19,7 @@ from astropy.modeling import models
 import astropy.table as at
 import astropy.units as q
 import bokeh.palettes as bpal
+from bokeh.models import Patch
 import numpy as np
 import pandas as pd
 import scipy.optimize as opt
@@ -202,6 +203,8 @@ def isnumber(s, nan=False):
     ----------
     s: str, int, float
         The input to test
+    nan: bool
+        Consider NaN a number
 
     Returns
     -------

@@ -226,6 +226,7 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
 
     # Name for the catalog
     cat_name = cat_name or catalog
+    n_rec = 0
 
     try:
 
@@ -240,8 +241,13 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
                 time.sleep(10)
                 viz_cat = Vizier.query_object(target, catalog=[catalog])
 
+            # Print info
+            n_rec = len(viz_cat)
+            if verbose:
+                print("[sedkit] {} record{} found in {} using target name '{}'".format(n_rec, '' if n_rec == 1 else 's', cat_name, target))
+
         # ...or use coordinates...
-        elif search_radius is not None and isinstance(sky_coords, SkyCoord):
+        if len(viz_cat) == 0 and search_radius is not None and isinstance(sky_coords, SkyCoord):
 
             try:
                 viz_cat = Vizier.query_region(sky_coords, radius=search_radius, catalog=[catalog])
@@ -251,8 +257,13 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
                 time.sleep(10)
                 viz_cat = Vizier.query_region(sky_coords, radius=search_radius, catalog=[catalog])
 
+            # Print info
+            n_rec = len(viz_cat)
+            if verbose:
+                print("[sedkit] {} record{} found in {} using {} radius around {}".format(n_rec, '' if n_rec == 1 else 's', cat_name, search_radius, sky_coords))
+
         # ...or abort
-        else:
+        if n_rec == 0:
             viz_cat = []
 
     except:
@@ -269,16 +280,11 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
     # Check for target names or just use native column names
     names = names or cols
 
-    # Print info
-    if verbose:
-        n_rec = len(viz_cat)
-        print("[sedkit] {} record{} found in {}.".format(n_rec, '' if n_rec == 1 else 's', cat_name))
-
     # Parse the record
     results = []
-    if len(viz_cat) > 0:
-        if len(viz_cat) > 1:
-            print('[sedkit] {} {} records found.'.format(len(viz_cat), name))
+    if n_rec > 0:
+        if n_rec > 1:
+            print('[sedkit] {} {} records found.'.format(n_rec, name))
 
         # Grab the record
         rec = dict(viz_cat[0][idx])

@@ -263,7 +263,7 @@ class ModelGrid:
         # Get the relevant table rows
         return u.filter_table(self.index, **kwargs)
 
-    def get_spectrum(self, closest=False, snr=None, interp=True, spec_obj=True, trim=None, resolution=None, **kwargs):
+    def get_spectrum(self, closest=False, snr=None, interp=True, spec_obj=True, trim=None, resolution=None, const=1, **kwargs):
         """Retrieve the first model with the specified parameters
 
         Parameters
@@ -276,6 +276,8 @@ class ModelGrid:
             Interpolate the model grid if not present
         spec_obj: bool
             Return a sedkit.spectrum.Spectrum object
+        const: float
+            Multiplicative factor fof the flux
 
         Returns
         -------
@@ -326,7 +328,7 @@ class ModelGrid:
         spec = u.scrub(spec)
 
         # Convert to specobj
-        spec = Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, phot=self.phot, **kwargs)
+        spec = Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, phot=self.phot, const=const, **kwargs)
 
         if trim is not None:
             spec = spec.trim(include=trim, concat=True)

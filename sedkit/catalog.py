@@ -127,6 +127,12 @@ class Catalog:
         sed: sedkit.sed.SED
             The SED object to add
         """
+        # Overwrite duplicate names
+        idx = None
+        if sed.name in self.results['name']:
+            self.message("{}: Target already in catalog. Overwriting with new SED...")
+            idx = np.where(self.results['name'] == sed.name)[0][0]
+
         # Turn off print statements
         sed.verbose = False
 
@@ -183,8 +189,13 @@ class Catalog:
             # Add the absolute uncertainty
             new_row['M_' + row['band'] + '_unc'] = row['abs_magnitude_unc']
 
-        # Add the new row
-        self.results.add_row(new_row)
+        # Add the new row...
+        if idx is None:
+            self.results.add_row(new_row)
+
+        # ...or replace existing
+        else:
+            self.results[idx] = new_row
 
         self.message("Successfully added SED '{}'".format(sed.name))
 
@@ -696,7 +707,7 @@ class MdwarfCatalog(Catalog):
     def __init__(self, **kwargs):
         """Initialize the catalog object"""
         # Initialize object
-        super().__init__(**kwargs)
+        super().__init__(name='M Dwarf Catalog', **kwargs)
 
         # Read the names from the file
         file = resource_filename('sedkit', 'data/sources.txt')

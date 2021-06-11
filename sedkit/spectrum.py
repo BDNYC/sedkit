@@ -48,7 +48,7 @@ class Spectrum:
     """
     A class to store, calibrate, fit, and plot a single spectrum
     """
-    def __init__(self, wave, flux, unc=None, snr=None, trim=None,
+    def __init__(self, wave, flux, unc=None, snr=None, trim=None, const=1, phot=False,
                  name=None, ref=None, header=None, verbose=False, **kwargs):
         """Initialize the Spectrum object
 
@@ -64,6 +64,10 @@ class Spectrum:
             A value to override spectrum SNR
         trim: dict
             A dictionary of the `trim` method arguments to run
+        const: int, float
+            A multiplicative factor for the flux
+        phot: bool
+            Photometric spectrum
         name: str
             A name for the spectrum
         ref: str
@@ -78,7 +82,8 @@ class Spectrum:
         self.name = name or 'New Spectrum'
         self.ref = ref
         self.header = header
-        self.phot = False
+        self.const = const
+        self.phot = phot
 
         # Make sure the arrays are the same shape
         if not wave.shape == flux.shape and ((unc is None) or not (unc.shape == flux.shape)):
@@ -119,8 +124,8 @@ class Spectrum:
 
         # Add the data
         self.wave = spectrum[0]
-        self.flux = spectrum[1]
-        self.unc = None if unc is None else spectrum[2]
+        self._flux = spectrum[1]
+        self._unc = None if unc is None else spectrum[2]
 
         # Store components if added
         self.components = None
@@ -258,7 +263,7 @@ class Spectrum:
         name: str
             A name for the fit
         """
-        # Preapre modelgrid
+        # Prepare modelgrid
         modelgrid.wave_units = self.wave_units
 
         # Prepare data
@@ -284,12 +289,12 @@ class Spectrum:
         bdict = dict(bf)
 
         # Add full model
-        full_model = modelgrid.get_spectrum(**{par: val for par, val in bdict.items() if par in modelgrid.parameters}, snr=5)
-        full_model.phot = True
-        bdict['full_model'] = full_model
         bdict['wave_units'] = self.wave_units
         bdict['flux_units'] = self.flux_units
         bdict['fit_to'] = 'phot' if modelgrid.phot else 'spec'
+        full_model = modelgrid.get_spectrum(const=bdict['const'], snr=5, **{par: val for par, val in bdict.items() if par in modelgrid.parameters})
+        full_model.phot = True
+        bdict['full_model'] = full_model
 
         self.message(bf[modelgrid.parameters])
 
@@ -450,6 +455,11 @@ class Spectrum:
 
         return gstat, ynorm, xnorm
 
+    @property
+    def flux(self):
+        """Getter for the flux"""
+        return self._flux * self.const
+
     @copy_raw
     def flux_calibrate(self, distance, target_distance=10 * q.pc, flux_units=None):
         """Flux calibrate the spectrum from the given distance to the target distance
@@ -504,9 +514,9 @@ class Spectrum:
             raise TypeError("flux_units must be in flux density units, e.g. 'erg/s/cm2/A'")
 
         # Update the flux and unc arrays
-        self.flux = self.flux * self.flux_units.to(flux_units)
+        self._flux = self._flux * self.flux_units.to(flux_units)
         if self.unc is not None:
-            self.unc = self.unc * self.flux_units.to(flux_units)
+            self._unc = self._unc * self.flux_units.to(flux_units)
 
         # Set the flux_units
         self._flux_units = flux_units
@@ -824,7 +834,8 @@ class Spectrum:
         """
         # Make the figure
         if fig is None:
-            fig = figure(x_axis_type=scale, y_axis_type=scale)
+            # fig = figure(x_axis_type=scale, y_axis_type=scale)
+            fig = figure()
             fig.xaxis.axis_label = "Wavelength [{}]".format(self.wave_units)
             fig.yaxis.axis_label = "Flux Density [{}]".format(self.flux_units)
 
@@ -867,9 +878,21 @@ class Spectrum:
 
             # Plot the uncertainties
             if self.unc is not None:
-                band_x = np.append(self.wave, self.wave[::-1])
-                band_y = np.append((self.flux - self.unc) * const, (self.flux + self.unc)[::-1] * const)
-                fig.patch(band_x, band_y, color=c, fill_alpha=0.1, line_alpha=0)
+
+                # Upper and lower bounds
+                lower = (self.flux - self.unc) * const
+                upper = (self.flux + self.unc) * const
+
+                # Change x values to NaN if y value is NaN
+                xpatch = copy.copy(self.wave)
+                xpatch[np.argwhere(np.isnan(upper)) | np.argwhere(np.isnan(lower))] = np.nan
+
+                # Make top and bottom of patch
+                xpatch = np.concatenate([xpatch, xpatch[::-1]])
+                ypatch = np.concatenate([upper, lower[::-1]])
+
+                # Add the patch
+                fig.patch(xpatch, ypatch, color=c, fill_alpha=0.1, line_alpha=0)
 
             # Plot the components
             if components and self.components is not None:
@@ -1156,6 +1179,14 @@ class Spectrum:
         return np.sum(segments) if concat else segments
 
     @property
+    def unc(self):
+        """Getter for the unc"""
+        if self._unc is None:
+            return None
+        else:
+            return self.flux / (self._flux / self._unc)
+
+    @property
     def wave_max(self):
         """The minimum wavelength"""
         return max(self.wave) * self.wave_units
@@ -1220,27 +1251,29 @@ class Blackbody(Spectrum):
             raise TypeError("teff must be in astropy units of temperature, eg. 'K'")
         if not u.equivalent(teff[1], q.K) and teff[1] is not None:
             raise TypeError("teff_unc must be in astropy units of temperature, eg. 'K'")
-        self.teff, self.teff_unc = teff
+        self.teff, self.teff_unc = teff[:2]
 
         # Check radius
-        if not u.issequence(radius, length=2):
-            radius = radius, None
+        if u.issequence(radius, length=3):
+            radius = radius
+        if not u.issequence(radius):
+            radius = radius, None, None
         if not u.equivalent(radius[0], q.R_jup) and radius[0] is not None:
             raise TypeError("radius must be in astropy units of length, eg. 'R_jup'")
         if not u.equivalent(radius[1], q.R_jup) and radius[1] is not None:
             raise TypeError("radius_unc must be in astropy units of length, eg. 'R_jup'")
-        self.radius, self.radius_unc = radius
+        self.radius, self.radius_unc = radius[:2]
 
         # Check distance
         if u.issequence(distance, length=3):
-            distance = distance[:2]
+            distance = distance
         if not u.issequence(distance):
-            distance = distance, None
+            distance = distance, None, None
         if not u.equivalent(distance[0], q.pc) and distance[0] is not None:
             raise TypeError("distance must be in astropy units of length, eg. 'pc'")
         if not u.equivalent(distance[1], q.pc) and distance[1] is not None:
             raise TypeError("distance_unc must be in astropy units of length, eg. 'pc'")
-        self.distance, self.distance_unc = distance
+        self.distance, self.distance_unc = distance[:2]
 
         # Evaluate
         I, I_unc = self.eval(wavelength)

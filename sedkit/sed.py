@@ -172,7 +172,7 @@ class SED:
         self.calculated = False
         self.isochrone_radius = False
         self.params = ['name', 'ra', 'dec', 'age', 'membership', 'distance', 'parallax', 'SpT', 'spectral_type', 'fbol', 'mbol', 'Lbol', 'Lbol_sun', 'Mbol', 'Teff', 'logg', 'mass', 'radius']
-        self.use_best_fit = False
+        self.best_fit_fill = False
 
         # Set the default wavelength and flux units
         self._wave_units = q.um
@@ -457,7 +457,7 @@ class SED:
         age: sequence
             The age and uncertainty in distance units
         """
-        self._validate_and_set_param('age', age, q.Gyr, True)
+        self._validate_and_set_param('age', age, q.Gyr, True, vmin=0 * q.Myr, vmax=13.8 * q.Gyr)
 
     def _calculate_sed(self):
         """
@@ -849,7 +849,7 @@ class SED:
         distance: sequence
             The (distance, err) or (distance, lower_err, upper_err)
         """
-        self._validate_and_set_param('distance', distance, q.pc, True, trigger=['get_reddening', '_calibrate_photometry', '_calibrate_spectra'])
+        self._validate_and_set_param('distance', distance, q.pc, True, trigger=['get_reddening', '_calibrate_photometry', '_calibrate_spectra'], vmin=0*q.pc)
 
         # Update parallax
         if distance is None:
@@ -1104,7 +1104,7 @@ class SED:
         fbol: sequence
             The fbol and uncertainty in cgs units
         """
-        self._validate_and_set_param('fbol', fbol, q.erg / (q.cm**2 * q.s), False)
+        self._validate_and_set_param('fbol', fbol, q.erg / (q.cm**2 * q.s), False, vmin=0 * q.erg / q.s / q.cm**2)
 
     def find_2MASS(self, **kwargs):
         """
@@ -1403,42 +1403,42 @@ class SED:
         # Get the spectrum to fit
         if fit_to == 'spec':
             spec = self.app_spec_SED
+            mgrid = copy(modelgrid)
 
         else:
 
             # See what bands are available to be fit
             bands = fit_to if isinstance(fit_to, (list, tuple)) else None
             bands = bands or [b for b in self.photometry['band'] if not np.isnan(self.get_mag(b)[0]) and not np.isnan(self.get_mag(b)[1])]
-            modelgrid = modelgrid.photometry(bands, weight=False if mcmc else True)
+            mgrid = modelgrid.photometry(bands, weight=False if mcmc else True)
 
             # See what bands have spectral coverage from the modelgrid
             app_cols = ['band', 'eff', 'app_flux', 'app_flux_unc']
             phot_array = np.array(self.photometry[app_cols])
             phot_array = phot_array[(phot_array['app_flux'] > 0) & (phot_array['app_flux_unc'] > 0)]
-            phot_array = phot_array[[idx for idx, row in enumerate(phot_array) if row['band'] in modelgrid.bandpasses]][app_cols[1:]]
+            phot_array = phot_array[[idx for idx, row in enumerate(phot_array) if row['band'] in mgrid.bandpasses]][app_cols[1:]]
             spec = sp.Spectrum(*[phot_array[i] * Q for i, Q in zip(app_cols[1:], self.units)])
 
         if spec is not None:
 
             # Determine if there is spectral coverage
-            model_min, model_max = modelgrid.wave_limits
+            model_min, model_max = mgrid.wave_limits
             spec_min, spec_max = spec.wave_min, spec.wave_max
             if model_max < spec_min or model_min > spec_max:
                 self.message("Could not fit model grid {} to the SED. No overlapping wavelengths.".format(modelgrid.name))
 
             if mcmc:
-                spec.mcmc_fit(modelgrid, name=name, **kwargs)
+                spec.mcmc_fit(mgrid, name=name, **kwargs)
             else:
-                spec.best_fit_model(modelgrid, name=name, **kwargs)
+                spec.best_fit_model(mgrid, name=name, **kwargs)
 
             # Save the best fit
             self.best_fit[name] = spec.best_fit[name]
             setattr(self, name, self.best_fit[name]['label'])
-
             self.message('Best fit {}: {}'.format(name, self.best_fit[name]['label']))
 
-            # Make the SED in case use_best_fit is True
-            if fit_to == 'spec' and self.use_best_fit:
+            # Make the SED in case best_fit_fill is True
+            if fit_to == 'spec' and self.best_fit_fill:
                 self.make_sed()
 
         else:
@@ -1634,6 +1634,9 @@ class SED:
         """
         Calculate the fundamental parameters of the current SED
         """
+        # Calculate fbol to incorporate any changes to spectra or photometry
+        self.calculate_fbol()
+
         # Calculate bolometric luminosity (dependent on fbol and distance)
         self.calculate_Lbol()
         self.calculate_Mbol()
@@ -1950,7 +1953,7 @@ class SED:
         Lbol_sun: sequence
             The Lbol_sun and uncertainty in cgs units
         """
-        self._validate_and_set_param('Lbol_sun', Lbol_sun, None, False, pos=False)
+        self._validate_and_set_param('Lbol_sun', Lbol_sun, None, False)
 
     @property
     def logg(self):
@@ -1967,7 +1970,7 @@ class SED:
         logg: sequence
             The logg and uncertainty in cgs units
         """
-        self._validate_and_set_param('logg', logg, None, False)
+        self._validate_and_set_param('logg', logg, None, False, vmin=0, vmax=6)
 
     def make_rj_tail(self, teff=3000 * q.K):
         """
@@ -2040,7 +2043,7 @@ class SED:
             # Make list of spectrum segment limits
             seg_limits = [(spec.wave_min, spec.wave_max) for spec in self.stitched_spectra]
 
-            if self.use_best_fit:
+            if self.best_fit_fill:
 
                 # Check that a best fit exists
                 if len(self.best_fit) == 0:
@@ -2049,15 +2052,14 @@ class SED:
                 else:
 
                     # Get the model
-                    if isinstance(self.use_best_fit, str):
-                        model = self.best_fit[self.use_best_fit]
+                    if isinstance(self.best_fit_fill, str):
+                        model = self.best_fit[self.best_fit_fill]
                     else:
                         # Get name of first best fit
                         bf_name = list(self.best_fit.keys())[0]
                         model = self.best_fit[bf_name]
 
                     # Get the full best fit model
-                    const = model['const']
                     model = model['full_model']
                     model.wave_units = self.wave_units
 
@@ -2065,9 +2067,7 @@ class SED:
                     seg_models = model.trim(exclude=seg_limits, concat=False)
                     n_models = len(seg_models)
                     for n, mod in enumerate(seg_models):
-                        data = mod.spectrum
-                        data[1] *= const
-                        self.add_spectrum(data, name='model')
+                        self.add_spectrum(mod.spectrum, name='model')
                     self._calibrate_spectra()
 
             # If photometry and spectra, exclude photometric points with spectrum coverage
@@ -2104,7 +2104,7 @@ class SED:
         self.make_rj_tail()
 
         # Remove model spectra and trim Wein and RJ tails
-        if self.use_best_fit and len(self.best_fit) > 0:
+        if self.best_fit_fill and len(self.best_fit) > 0:
             for _ in range(n_models):
                 self.drop_spectrum(-1)
             self._calibrate_spectra()
@@ -2170,7 +2170,7 @@ class SED:
         mass: sequence
             The mass and uncertainty in mass units
         """
-        self._validate_and_set_param('mass', mass, q.M_sun, False)
+        self._validate_and_set_param('mass', mass, q.M_sun, False, vmin=0 * q.M_sun, vmax=226 * q.M_sun)
         
     @property
     def mbol(self):
@@ -2187,7 +2187,7 @@ class SED:
         mbol: sequence
             The mbol and uncertainty
         """
-        self._validate_and_set_param('mbol', mbol, None, True, pos=False)
+        self._validate_and_set_param('mbol', mbol, None, True)
         
     @property
     def Mbol(self):
@@ -2204,7 +2204,7 @@ class SED:
         Mbol: sequence
             The Mbol and uncertainty
         """
-        self._validate_and_set_param('Mbol', Mbol, None, True, pos=False)
+        self._validate_and_set_param('Mbol', Mbol, None, True)
 
     @property
     def membership(self):
@@ -2310,7 +2310,7 @@ class SED:
         parallax: sequence
             The (parallax, err) or (parallax, lower_err, upper_err)
         """
-        self._validate_and_set_param('parallax', parallax, q.mas, True)
+        self._validate_and_set_param('parallax', parallax, q.mas, True, vmin=0 * q.mas)
 
         # Update distance
         if parallax is None:
@@ -2508,9 +2508,9 @@ class SED:
                 mod = mod_fit['full_model']
                 mod.wave_units = self.wave_units
                 if mod_fit['fit_to'] == 'phot':
-                    self.fig.square(mod.wave, mod.flux * mod_fit['const'], alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], size=12)
+                    self.fig.square(mod.wave, mod.flux, alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], size=12)
                 else:
-                    self.fig.line(mod.wave, mod.flux * mod_fit['const'], alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], line_width=2)
+                    self.fig.line(mod.wave, mod.flux, alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], line_width=2)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
@@ -2572,7 +2572,7 @@ class SED:
         radius: sequence
             The radius and uncertainty in distance units
         """
-        self._validate_and_set_param('radius', radius, q.R_sun, True)
+        self._validate_and_set_param('radius', radius, q.R_sun, True, vmin=0 * q.R_sun, vmax=2150 * q.R_sun)
 
     @property
     def refs(self):
@@ -2743,6 +2743,9 @@ class SED:
         """
         # Get the model from the model grid
         model = model_grid.get_spectrum(snr=snr, **kwargs)
+        params = {par: val for par, val in kwargs.items() if par in model_grid.parameters}
+
+        self.message("Adding model spectrum with parameters {}".format(params))
 
         # Save the model as a spectrum
         self.add_spectrum(model)
@@ -2869,9 +2872,9 @@ class SED:
         teff: sequence
             The teff and uncertainty in temperature units
         """
-        self._validate_and_set_param('Teff', teff, q.K, True)
+        self._validate_and_set_param('Teff', teff, q.K, True, vmin=0 * q.K, vmax=50000 * q.K)
 
-    def _validate_and_set_param(self, param, values, units, set_uncalculated=True, trigger=[], pos=True):
+    def _validate_and_set_param(self, param, values, units, set_uncalculated=True, trigger=[], vmin=None, vmax=None):
         """
         Method to validate and set a calculated quantity
 
@@ -2887,6 +2890,10 @@ class SED:
             Set the SED as uncalculated
         trigger: list
             A list of methods to trigger
+        vmin: float, int, NoneType, astropy.units.quantity.Quantity
+            Minimum allowed value
+        vmax: float, int, NoneType, astropy.units.quantity.Quantity
+            Maximum allowed value
         """
         if values is None:
             setattr(self, '_{}'.format(param), None)
@@ -2909,9 +2916,11 @@ class SED:
             if not all([u.equivalent(val, units) for val in values]):
                 raise TypeError("{} values must be {}".format(param, 'unitless' if units is None else "astropy.units.quantity.Quantity of the appropriate units , e.g. '{}'".format(units)))
 
-            # Ensure it's positive
-            if pos and ((units is not None and values[0] < 0 * units) or (units is None and values[0] < 0)):
-                print("{}: A negative {} value is not valid.".format(values, param))
+            # Ensure valid range but don't throw error
+            vmin = vmin or -np.inf * (units or 1)
+            vmax = vmax or np.inf * (units or 1)
+            if (values[0] < vmin) or (values[0] > vmax):
+                print("{}: {} value is not in valid range [{}, {}].".format(values, param, vmin, vmax))
 
             else:
 
@@ -2966,9 +2975,8 @@ class VegaSED(SED):
     def __init__(self, **kwargs):
         """Initialize the SED of Vega"""
         # Make the Spectrum object
-        super().__init__(**kwargs)
+        super().__init__(name='Vega', **kwargs)
 
-        self.name = 'Vega'
         self.find_SDSS()
         self.find_2MASS()
         self.find_WISE()
