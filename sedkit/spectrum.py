@@ -684,6 +684,8 @@ class Spectrum:
         ----------
         photometry: astropy.table.QTable
             A table of the photometry
+        force: bool
+            Force the normalization even if bandpass is not completely covered by spectrum
         exclude: sequence (optional)
             A list of bands to exclude from the normalization
         include: sequence (optional)

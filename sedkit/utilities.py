@@ -1005,6 +1005,11 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
             if isinstance(SpT, bytes):
                 SpT = SpT.decode("utf-8")
 
+            # # Check for multiplicity (i.e. 'M8+L7')
+            # # Use earlier SpT but flag as multiple
+            # if '+' in SpT:
+            #     SpT = SpT.split('+')[0]
+
             # Get the MK spectral class
             MK = types[np.where([i in SpT for i in types])[0][0]]
 
