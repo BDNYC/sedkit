@@ -724,7 +724,7 @@ def pi2pc(parallax, parallax_unc=0, pc2pi=False):
         else:
             pi, sig_pi = parallax * q.arcsec / 1000., parallax_unc * q.arcsec / 1000.
             d, sig_d = (1 * q.pc * q.arcsec) / pi, sig_pi * q.pc * q.arcsec / pi ** 2
-            return (d.round(2), sig_d.round(2))
+            return (d.round(3), sig_d.round(3))
     else:
         return ['', '']
 

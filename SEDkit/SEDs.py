@@ -161,8 +161,8 @@ def get_Lbol(spectrum, d, sig_d, solar_units=False):
     sig_fbol = np.sqrt(np.sum((spectrum[2] * np.gradient(spectrum[0])).to(q.erg / q.s / q.cm ** 2).value ** 2))
     Lbol = (4 * np.pi * fbol * d ** 2).to(q.erg / q.s)
     sig_Lbol = Lbol * np.sqrt((sig_fbol / fbol).value ** 2 + (2 * sig_d / d).value ** 2)
-    return [round(np.log10((Lbol / ac.L_sun).decompose().value), 3),
-            round(abs(sig_Lbol / (Lbol * np.log(10))).value, 3)] if solar_units else [Lbol, sig_Lbol]
+    return [round(np.log10((Lbol / ac.L_sun).decompose().value), 4),
+            round(abs(sig_Lbol / (Lbol * np.log(10))).value, 4)] if solar_units else [Lbol, sig_Lbol]
 
 
 def get_Mbol(spectrum, d, sig_d, app=False):
@@ -2506,7 +2506,7 @@ def norm_to_mags(spec, to_mags, weighting=True, reverse=False, plot=False):
                              mags[b + '_unc'].value if hasattr(mags[b + '_unc'], 'unit') else mags[b + '_unc'], \
                              to_mags[b].value if hasattr(to_mags[b], 'unit') else to_mags[b], \
                              to_mags[b + '_unc'].value if hasattr(to_mags[b + '_unc'], 'unit') else to_mags[b + '_unc'], \
-                             (RSR[b]['max'] - RSR[b]['min']).value if weighting else 1.])
+                             (RSR[b]['max'] - RSR[b]['min']).value if weighting else 1.]) # could try weighting instead of RSR i.e weighting.get(b,1)
 
         # Make arrays of values and calculate normalization factor that minimizes the function
         # w- "filter wavelength", f2, e2- synthetic flux and error , f1 and e1- real flux and error
