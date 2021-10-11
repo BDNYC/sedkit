@@ -356,8 +356,8 @@ class SpectralTypeRadius:
             data = self.MLTY
         else:
             data = self.AFGK
-        radius = np.polyval(data['coeffs'], spt)*q.Rsun
-        radius_unc = np.interp(spt, data['spt'], data['sig_yi'])*q.Rsun
+        radius = np.polyval(data['coeffs'], spt)*q.R_sun
+        radius_unc = np.interp(spt, data['spt'], data['sig_yi'])*q.R_sun
 
         if plot:
             fig = self.plot()
@@ -407,8 +407,8 @@ class SpectralTypeRadius:
         mlty_data.rename_column('e_Rad', 'radius_unc')
 
         # Make solar radii units
-        mlty_data['radius'] = mlty_data['radius'].to(q.Rsun)
-        mlty_data['radius_unc'] = mlty_data['radius_unc'].to(q.Rsun)
+        mlty_data['radius'] = (mlty_data['radius'].value * q.Rjup).to(q.R_sun)
+        mlty_data['radius_unc'] = (mlty_data['radius_unc'].value * q.Rjup).to(q.R_sun)
 
         # ====================================================================
         # Fit and save the data

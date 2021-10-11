@@ -41,7 +41,6 @@ from .uncertainties import Unum
 
 Vizier.columns = ["**", "+_r"]
 Simbad.add_votable_fields('parallax', 'sptype', 'diameter', 'ids', 'flux(U)', 'flux_error(U)', 'flux_bibcode(U)', 'flux(B)', 'flux_error(B)', 'flux_bibcode(B)', 'flux(V)', 'flux_error(V)', 'flux_bibcode(V)', 'flux(R)', 'flux_error(R)', 'flux_bibcode(R)', 'flux(I)', 'flux_error(I)', 'flux_bibcode(I)')
-SptRadius = rel.SpectralTypeRadius()
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
