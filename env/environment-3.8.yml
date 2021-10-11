@@ -8,7 +8,6 @@ dependencies:
   - astropy>=4.3.1
   - python>=3.8
   - bokeh>=1.4.0
-  - bibtexparser>=1.2.0
   - scipy>=1.4.1
   - pandas>=0.23.4
   - pip>=20.3.3
