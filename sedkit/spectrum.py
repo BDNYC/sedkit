@@ -17,6 +17,8 @@ import astropy.constants as ac
 import astropy.units as q
 import astropy.io.votable as vo
 from astropy.io import fits
+from astropy.modeling import fitting, models
+from astropy.modeling.blackbody import FLAM, blackbody_lambda
 from bokeh.plotting import figure, show
 from bokeh.models import ColumnDataSource, HoverTool
 import numpy as np
@@ -94,7 +96,7 @@ class Spectrum:
             raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
 
         # Check flux units are flux density
-        if not u.equivalent(flux, q.erg / q.s / q.cm**2 / q.AA):
+        if not u.equivalent(flux, FLAM):
             raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 
         # Generate uncertainty array
@@ -103,7 +105,7 @@ class Spectrum:
 
         # Make sure the uncertainty array is in the correct units
         if unc is not None:
-            if not u.equivalent(unc, q.erg / q.s / q.cm**2 / q.AA):
+            if not u.equivalent(unc, FLAM):
                 raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 
         # Replace negatives, zeros, and infs with nans
@@ -455,6 +457,39 @@ class Spectrum:
 
         return gstat, ynorm, xnorm
 
+    def fit_blackbody(self, init=8000, epsilon=0.0001, acc=1, maxiter=500, **kwargs):
+        """
+        Fit a blackbody spectrum to the spectrum
+
+        Returns
+        -------
+        int
+            The best fit blackbody temperature
+        """
+        # Determine optimal parameters for data
+        wav, flx, err = self.spectrum
+
+        @models.custom_model
+        def blackbody(wavelength, temperature=2000):
+            wavelength *= q.um
+            temperature *= q.K
+            max_val = blackbody_lambda((ac.b_wien / temperature).to(q.um), temperature).value
+            return blackbody_lambda(wavelength, temperature).value / max_val
+
+        bb = blackbody(temperature=init)
+        fit = fitting.LevMarLSQFitter()
+        bb_fit = fit(bb, wav.to(q.AA).value/10000, flx.to(FLAM).value)
+        teff = int(bb_fit.temperature.value) * q.K
+
+        self.message('{} blackbody fit to {}'.format(teff, self.name))
+
+        fig = figure()
+        fig.line(wav, flx)
+        fig.line(wav, blackbody_lambda(wav.to(q.AA).value, teff), color='red')
+        show(fig)
+
+        return teff
+
     @property
     def flux(self):
         """Getter for the flux"""
@@ -510,7 +545,7 @@ class Spectrum:
             The astropy units of the SED wavelength
         """
         # Check the units
-        if not u.equivalent(flux_units, q.erg / q.s / q.cm**2 / q.AA):
+        if not u.equivalent(flux_units, FLAM):
             raise TypeError("flux_units must be in flux density units, e.g. 'erg/s/cm2/A'")
 
         # Update the flux and unc arrays
@@ -1370,7 +1405,7 @@ class FileSpectrum(Spectrum):
             elif survey == 'SDSS':
                 head = fits.getheader(file)
                 raw = fits.getdata(file)
-                flux_units = 1E-17 * q.erg / q.s / q.cm**2 / q.AA
+                flux_units = 1E-17 * FLAM
                 wave_units = q.AA
                 log_w = head['COEFF0'] + head['COEFF1'] * np.arange(len(raw.flux))
                 data = [10**log_w, raw.flux, raw.ivar]
@@ -1424,7 +1459,7 @@ class FileSpectrum(Spectrum):
 
 class Vega(Spectrum):
     """A Spectrum object of Vega"""
-    def __init__(self, wave_units=q.AA, flux_units=q.erg / q.s / q.cm**2 / q.AA, **kwargs):
+    def __init__(self, wave_units=q.AA, flux_units=FLAM, **kwargs):
         """Initialize the Spectrum object
 
         Parameters
@@ -1439,7 +1474,7 @@ class Vega(Spectrum):
         ref = '2007ASPC..364..315B, 2004AJ....127.3508B, 2005MSAIS...8..189K'
         wave, flux = np.genfromtxt(vega_file, unpack=True)
         wave *= q.AA
-        flux *= q.erg / q.s / q.cm**2 / q.AA
+        flux *= FLAM
 
         # Convert to target units
         wave = wave.to(wave_units)

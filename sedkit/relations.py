@@ -194,9 +194,8 @@ class Relation:
                     y_lower = y_upper = None
 
                 if plot:
-                    print(y_val, y_lower, y_upper)
                     plt = self.plot(rel_name)
-                    plt.circle([x_val], [y_val], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
+                    plt.circle([x_val], [y_val.value], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
                     if y_upper:
                         plt.line([x_val, x_val], [y_val - y_lower, y_val + y_upper], color='red')
                     show(plt)

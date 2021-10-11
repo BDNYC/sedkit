@@ -20,7 +20,6 @@ import astropy.units as q
 import astropy.io.ascii as ii
 import astropy.constants as ac
 import numpy as np
-from astropy.modeling import fitting
 from astropy.coordinates import Angle, SkyCoord
 from astroquery.vizier import Vizier
 from astroquery.simbad import Simbad
@@ -80,10 +79,6 @@ class SED:
         The [W, F, E] of the calculate apparent photometric SED
     app_spec_SED: sequence
         The [W, F, E] of the calculate apparent spectroscopic SED
-    bb_source: str
-        The [W, F, E] fit to calculate Teff_bb
-    blackbody: astropy.modeling.core.blackbody
-        The best fit blackbody function
     distance: astropy.units.quantity.Quantity
         The target distance
     fbol: astropy.units.quantity.Quantity
@@ -155,8 +150,6 @@ class SED:
         self._evo_model = None
 
         # Static attributes
-        self.bb_source = None
-        self.blackbody = None
         self.evo_model = 'DUSTY00'
         self.reddening = 0
         self.SpT = None
@@ -176,7 +169,7 @@ class SED:
 
         # Set the default wavelength and flux units
         self._wave_units = q.um
-        self._flux_units = q.erg / q.s / q.cm**2 / q.AA
+        self._flux_units = u.FLAM
         self.units = [self._wave_units, self._flux_units, self._flux_units]
         self.min_phot = (999 * q.um).to(self.wave_units)
         self.max_phot = (0 * q.um).to(self.wave_units)
@@ -1315,7 +1308,7 @@ class SED:
         # Pause to prevent ConnectionError with astroquery
         time.sleep(self.wait)
 
-    def find_spectra(self, catalog, wave_units=q.AA, flux_units=q.erg/q.s/q.cm**2/q.AA, subdir='sp', filecol='FileName', trim_blue=5, trim_red=5, **kwargs):
+    def find_spectra(self, catalog, wave_units=q.AA, flux_units=u.FLAM, subdir='sp', filecol='FileName', trim_blue=5, trim_red=5, **kwargs):
         """
         Search for spectra from a generic Vizier catalog
 
@@ -1356,70 +1349,6 @@ class SED:
         Search for WISE data
         """
         self.find_photometry('WISE', **kwargs)
-
-    def fit_blackbody(self, fit_to='app_phot_SED', Teff_init=4000, epsilon=0.0001, acc=0.05, trim=[], norm_to=[]):
-        """
-        Fit a blackbody curve to the data
-
-        Parameters
-        ----------
-        fit_to: str
-            The attribute name of the [W, F, E] to fit
-        initial: int
-            The initial guess
-        epsilon: float
-            The step size
-        acc: float
-            The acceptible error
-        """
-        if not self.calculated:
-            self.make_sed()
-
-        # Get the data and remove NaNs
-        data = u.scrub(getattr(self, fit_to).data)
-
-        # Trim manually
-        if isinstance(trim, (list, tuple)):
-            for mn, mx in trim:
-                try:
-                    idx, = np.where((data[0] < mn) | (data[0] > mx))
-                    if any(idx):
-                        data = [i[idx] for i in data]
-                except TypeError:
-                    self.message('Please provide a list of (lower, upper) bounds to exclude from the fit, e.g. [(0, 0.8)]')
-
-        # Initial guess
-        if self.Teff is not None:
-            teff = self.Teff[0].value
-        else:
-            teff = Teff_init
-        init = u.blackbody(temperature=teff)
-
-        # Fit the blackbody
-        fit = fitting.LevMarLSQFitter()
-        norm = np.nanmax(data[1])
-        weight = norm / data[2]
-        if acc is None:
-            acc = np.nanmax(weight)
-        bb_fit = fit(init, data[0], data[1] / norm, weights=weight,
-                     epsilon=epsilon, acc=acc, maxiter=500)
-
-        # Store the results
-        try:
-            self.Teff_bb = int(bb_fit.temperature.value)
-            self.bb_source = fit_to
-            self.bb_norm_to = norm_to
-
-            # Make the blackbody spectrum
-            wav = np.linspace(0.2, 22., 400) * self.wave_units
-            bb = sp.Blackbody(wav, self.Teff_bb * q.K, radius=self.radius, distance=self.distance)
-            bb = bb.norm_to_mags(self.photometry[-3:], include=norm_to)
-            self.blackbody = bb
-
-            self.message('Blackbody fit: {} K'.format(self.Teff_bb))
-
-        except IOError:
-            self.message('No blackbody fit.')
 
     def fit_modelgrid(self, modelgrid, fit_to='spec', name=None, mcmc=False, **kwargs):
         """
@@ -1516,10 +1445,10 @@ class SED:
             The astropy units of the SED wavelength
         """
         # Make sure it's a flux density
-        if not u.equivalent(flux_units, q.erg / q.s / q.cm**2 / q.AA):
+        if not u.equivalent(flux_units, u.FLAM):
             raise TypeError("{}: flux_units must be a unit of flux density, e.g. 'erg/s/cm2/A'".format(flux_units))
 
-        # fnu2flam(f_nu, lam, units=q.erg / q.s / q.cm**2 / q.AA)
+        # fnu2flam(f_nu, lam, units=u.FLAM)
 
         # Set the flux_units!
         self._flux_units = flux_units
@@ -1779,6 +1708,8 @@ class SED:
         """
         Estimate the surface gravity from model isochrones given an age and Lbol
         """
+        self.logg = None
+
         # Try model isochrones
         if self.age is not None and self.Lbol_sun is not None:
 
@@ -1813,6 +1744,8 @@ class SED:
         isochrone: bool
             Use the model isochrones
         """
+        self.mass = None
+
         # Try model isochrones
         if isochrone and self.age is not None and self.Lbol_sun is not None:
 
@@ -1865,8 +1798,10 @@ class SED:
         isochrone: bool
             Use the model isochrones
         """
+        self.radius = None
+
         # Try model isochrones
-        if isochrone and self.age is not None and self.Lbol_sun is not None:
+        if isochrone and (self.age is not None) and (self.Lbol_sun is not None):
 
             # Default
             radius = None
@@ -1920,6 +1855,8 @@ class SED:
         teff_units: astropy.units.quantity.Quantity
             The temperature units to use
         """
+        self.Teff = None
+
         # Try model isochrones
         if isochrone and self.age is not None and self.Lbol_sun is not None:
 
@@ -2278,8 +2215,7 @@ class SED:
 
             # Set the membership!
             self._membership = membership
-
-            self.message('Setting membership to', self.membership)
+            self.message('Setting membership to {}'.format(self.membership))
 
             # Set the age
             self.age = iso.NYMG_AGES.get(membership)
@@ -2387,10 +2323,9 @@ class SED:
         self._photometry.sort('eff')
         return self._photometry
 
-    def plot(self, app=True, photometry=True, spectra=True, integral=True,
-             synthetic_photometry=False, blackbody=False, best_fit=True, normalize=None,
-             scale=['log', 'log'], output=False, fig=None, color='#1f77b4', one_color=False,
-             **kwargs):
+    def plot(self, app=True, photometry=True, spectra=True, integral=True, synthetic_photometry=False,
+             best_fit=True, normalize=None, scale=['log', 'log'], output=False, fig=None,
+             color='#1f77b4', one_color=False, **kwargs):
         """
         Plot the SED
 
@@ -2406,8 +2341,6 @@ class SED:
             Plot the curve used to calculate fbol
         synthetic_photometry: bool
             Plot the synthetic photometry
-        blackbody: bool
-            Plot the blackbody fit
         best_fit: bool
             Plot the best fit model
         normalize: sequence
@@ -2543,11 +2476,6 @@ class SED:
         if integral:
             label = str(self.Teff[0]) if self.Teff is not None else 'Integral'
             self.fig.line(full_SED.wave, full_SED.flux * const, line_color=color if one_color else 'black', alpha=0.3, legend_label=label)
-
-        # Plot the blackbody fit
-        if blackbody and self.blackbody:
-            bb_wav, bb_flx = self.blackbody.data[:2]
-            self.fig.line(bb_wav, bb_flx * const, line_color=color if one_color else 'red', legend_label='{} K'.format(self.Teff_bb))
 
         if best_fit and len(self.best_fit) > 0:
             col_list = u.color_gen('Category10', n=len(self.best_fit) + 1)
