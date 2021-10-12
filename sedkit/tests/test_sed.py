@@ -20,12 +20,12 @@ class TestSED(unittest.TestCase):
         bb6 = sp.Blackbody(np.linspace(21000, 38000, 150) * q.AA, 6000*q.K)
 
         # Make Spectrum class for testing
-        self.WAVE1, self.FLUX1 = bb3.spectrum[:1]
+        self.WAVE1, self.FLUX1 = bb3.spectrum[:2]
         SPEC1 = [self.WAVE1, self.FLUX1, self.FLUX1/100.]
         self.spec1 = sp.Spectrum(*SPEC1)
 
         # Make another
-        self.WAVE2, self.FLUX2 = bb6.spectrum[:1]
+        self.WAVE2, self.FLUX2 = bb6.spectrum[:2]
         SPEC2 = [WAVE2, FLUX2, FLUX2/100.]
         self.spec2 = sp.Spectrum(*SPEC2)
 
