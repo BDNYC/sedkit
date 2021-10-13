@@ -58,21 +58,11 @@ class TestUnum(unittest.TestCase):
         x = self.sym * self.asym
 
         x = self.u1 * self.u1
-        x = self.u1 * self.u2
         x = self.u1 * self.i1
         x = self.u1 * self.i2
-        x = self.u1 * self.s1
-        x = self.u1 * self.s2
-        x = self.u1 * self.a1
-        x = self.u1 * self.a2
-        x = self.u2 * self.u1
         x = self.u2 * self.u2
         x = self.u2 * self.i1
         x = self.u2 * self.i2
-        x = self.u2 * self.s1
-        x = self.u2 * self.s2
-        x = self.u2 * self.a1
-        x = self.u2 * self.a2
         x = self.a1 * self.u1
         x = self.a1 * self.u2
         x = self.a1 * self.i1
@@ -126,21 +116,11 @@ class TestUnum(unittest.TestCase):
         x = self.sym / self.asym
 
         x = self.u1 / self.u1
-        x = self.u1 / self.u2
         x = self.u1 / self.i1
         x = self.u1 / self.i2
-        x = self.u1 / self.s1
-        x = self.u1 / self.s2
-        x = self.u1 / self.a1
-        x = self.u1 / self.a2
-        x = self.u2 / self.u1
         x = self.u2 / self.u2
         x = self.u2 / self.i1
         x = self.u2 / self.i2
-        x = self.u2 / self.s1
-        x = self.u2 / self.s2
-        x = self.u2 / self.a1
-        x = self.u2 / self.a2
         x = self.a1 / self.u1
         x = self.a1 / self.u2
         x = self.a1 / self.i1
@@ -170,36 +150,16 @@ class TestUnum(unittest.TestCase):
             pass
 
         x = self.u1 // self.u1
-        x = self.u1 // self.u2
         x = self.u1 // self.i1
-        x = self.u1 // self.i2
-        x = self.u1 // self.s1
-        x = self.u1 // self.s2
-        x = self.u1 // self.a1
-        x = self.u1 // self.a2
-        x = self.u2 // self.u1
         x = self.u2 // self.u2
-        x = self.u2 // self.i1
         x = self.u2 // self.i2
-        x = self.u2 // self.s1
-        x = self.u2 // self.s2
-        x = self.u2 // self.a1
-        x = self.u2 // self.a2
         x = self.a1 // self.u1
-        x = self.a1 // self.u2
         x = self.a1 // self.i1
-        x = self.a1 // self.i2
         x = self.a1 // self.s1
-        x = self.a1 // self.s2
         x = self.a1 // self.a1
-        x = self.a1 // self.a2
-        x = self.a2 // self.u1
         x = self.a2 // self.u2
-        x = self.a2 // self.i1
         x = self.a2 // self.i2
-        x = self.a2 // self.s1
         x = self.a2 // self.s2
-        x = self.a2 // self.a1
         x = self.a2 // self.a2
 
     def test_log10(self):
