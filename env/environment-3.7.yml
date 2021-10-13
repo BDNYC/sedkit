@@ -23,5 +23,5 @@ dependencies:
   - pip:
     - svo-filters==0.4.1
     - dustmaps==1.0.8
-    - numpydoc==0.8.0
+    - numpydoc==1.1.0
     - emcee>=3.0.2
