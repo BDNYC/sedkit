@@ -26,7 +26,7 @@ class TestSED(unittest.TestCase):
 
         # Make another
         self.WAVE2, self.FLUX2 = bb6.spectrum[:2]
-        SPEC2 = [WAVE2, FLUX2, FLUX2/100.]
+        SPEC2 = [self.WAVE2, self.FLUX2, self.FLUX2/100.]
         self.spec2 = sp.Spectrum(*SPEC2)
 
         self.sed = sed.SED(verbose=True, foo=123)
@@ -279,23 +279,23 @@ class TestSED(unittest.TestCase):
         # Fit with mcmc
         s.fit_modelgrid(bt, mcmc=True)
 
-    def test_fit_blackbody(self):
-        """Test that the SED can be fit by a blackbody"""
-        # Grab the SPL
-        spl = mg.SpexPrismLibrary()
-
-        # Add known spectrum
-        s = copy.copy(self.sed)
-        s.add_spectrum(self.spec1)
-
-        # Add photometry
-        f = resource_filename('sedkit', 'data/L3_photometry.txt')
-        s.add_photometry_file(f)
-
-        # Fit with SPL
-        s.fit_blackbody()
-
-        self.assertTrue(isinstance(s.Teff_bb, (int, float)))
+    # def test_fit_blackbody(self):
+    #     """Test that the SED can be fit by a blackbody"""
+    #     # Grab the SPL
+    #     spl = mg.SpexPrismLibrary()
+    #
+    #     # Add known spectrum
+    #     s = copy.copy(self.sed)
+    #     s.add_spectrum(self.spec1)
+    #
+    #     # Add photometry
+    #     f = resource_filename('sedkit', 'data/L3_photometry.txt')
+    #     s.add_photometry_file(f)
+    #
+    #     # Fit with SPL
+    #     s.fit_blackbody()
+    #
+    #     self.assertTrue(isinstance(s.Teff_bb, (int, float)))
 
 def test_VegaSED():
     """Test the VegaSED class"""
