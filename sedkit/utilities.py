@@ -14,8 +14,6 @@ import warnings
 
 import astropy.constants as ac
 from astropy.io import fits, ascii
-from astropy.modeling.blackbody import blackbody_lambda
-from astropy.modeling import models
 import astropy.table as at
 import astropy.units as q
 import bokeh.palettes as bpal
@@ -28,6 +26,7 @@ warnings.simplefilter('ignore')
 
 # Valid dtypes for units
 UNITS = q.core.PrefixUnit, q.core.Unit, q.core.CompositeUnit, q.quantity.Quantity, q.core.IrreducibleUnit
+FLAM = q.erg / q.s / q.cm**2 / q.AA
 
 # A dict of BDNYCdb band names to work with sedkit
 PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
@@ -46,30 +45,6 @@ PHOT_ALIASES = {'2MASS_J': '2MASS.J', '2MASS_H': '2MASS.H',
                 'Cousins_I': 'Cousins.I', 'FourStar_J': 'FourStar.J',
                 'FourStar_J1': 'FourStar.J1', 'FourStar_J2': 'FourStar.J2',
                 'FourStar_J3': 'FourStar.J3', 'HST_F125W': 'WFC3_IR.F125W'}
-
-
-@models.custom_model
-def blackbody(wavelength, temperature=2000):
-    """
-    Generate a blackbody of the given temperature at the given wavelengths
-
-    Parameters
-    ----------
-    wavelength: array-like
-        The wavelength array [um]
-    temperature: float
-        The temperature of the star [K]
-
-    Returns
-    -------
-    astropy.quantity.Quantity
-        The blackbody curve
-    """
-    wavelength = q.Quantity(wavelength, "um")
-    temperature = q.Quantity(temperature, "K")
-    max_val = blackbody_lambda((ac.b_wien / temperature).to(q.um), temperature).value
-
-    return blackbody_lambda(wavelength, temperature).value / max_val
 
 
 def color_gen(colormap='viridis', key=None, n=10):
@@ -202,6 +177,8 @@ def isnumber(s, nan=False):
     ----------
     s: str, int, float
         The input to test
+    nan: bool
+        Consider NaN a number
 
     Returns
     -------
@@ -1002,6 +979,11 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
             if isinstance(SpT, bytes):
                 SpT = SpT.decode("utf-8")
 
+            # # Check for multiplicity (i.e. 'M8+L7')
+            # # Use earlier SpT but flag as multiple
+            # if '+' in SpT:
+            #     SpT = SpT.split('+')[0]
+
             # Get the MK spectral class
             MK = types[np.where([i in SpT for i in types])[0][0]]
 
@@ -1042,10 +1024,10 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
 
                 # Check for luminosity class
                 LC = []
-                for cl in ['III', 'V', 'IV']:
+                for cl in ['III', 'II', 'IV', 'I', 'V']:
                     if cl in suf:
+                        suf = suf.replace(cl, '')
                         LC.append(cl)
-                        suf.replace(cl, '')
                 LC = '/'.join(LC) or 'V'
 
                 return [val, unc, pre, grv, LC]

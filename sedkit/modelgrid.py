@@ -191,6 +191,7 @@ class ModelGrid:
         self.ref = ref
         self.verbose = verbose
         self.phot = False
+        self.bandpasses = []
 
         # Make all args into attributes
         for key, val in kwargs.items():
@@ -262,7 +263,7 @@ class ModelGrid:
         # Get the relevant table rows
         return u.filter_table(self.index, **kwargs)
 
-    def get_spectrum(self, closest=False, snr=None, interp=True, spec_obj=True, trim=None, resolution=None, **kwargs):
+    def get_spectrum(self, closest=False, snr=None, interp=True, spec_obj=True, trim=None, resolution=None, const=1, **kwargs):
         """Retrieve the first model with the specified parameters
 
         Parameters
@@ -275,6 +276,8 @@ class ModelGrid:
             Interpolate the model grid if not present
         spec_obj: bool
             Return a sedkit.spectrum.Spectrum object
+        const: float
+            Multiplicative factor fof the flux
 
         Returns
         -------
@@ -325,7 +328,7 @@ class ModelGrid:
         spec = u.scrub(spec)
 
         # Convert to specobj
-        spec = Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, phot=self.phot, **kwargs)
+        spec = Spectrum(spec[0] * self.wave_units, spec[1] * self.flux_units, name=name, snr=snr, ref=self.ref, phot=self.phot, const=const, **kwargs)
 
         if trim is not None:
             spec = spec.trim(include=trim, concat=True)
@@ -533,13 +536,11 @@ class ModelGrid:
             # Collect data
             data = []
             weights = []
+            bands = []
             for band in bandpasses:
 
                 # Get the bandpass
                 bp = svo.Filter(band)
-
-                # Weight the bands by the inverse of the band width
-                weights.append((bp.wave_max - bp.wave_min).to(q.um).value if weight else 1)
 
                 # Calculate the synthetic flux
                 flx, flx_unc = spec.synthetic_flux(bp)
@@ -552,11 +553,18 @@ class ModelGrid:
                         # data.append([bp.wave_eff.astype(np.float16).value, flx.to(self.flux_units).value])
                         data.append([wav, flx.value])
 
+                    # Store the band names
+                    bands.append(band)
+
+                    # Weight the bands by the inverse of the band width
+                    weights.append((bp.wave_max - bp.wave_min).to(q.um).value if weight else 1)
+
             # Unpack and save as new spectrum
             dataT = np.array(data).T
             phot.add_model(dataT if err else dataT[:2], weights=weights, label=row['label'], **params)
             phot.phot = True
             phot.native_wave_units = bp.wave_units
+            phot.bandpasses = bands
 
         return phot
 
@@ -722,9 +730,7 @@ class SpexPrismLibrary(ModelGrid):
         self.load(root)
 
         # Add numeric spectral type
-        self.index['SpT'] = [u.specType(i.split(',')[0].replace('Opt:','')\
-                              .replace('NIR:',''))[0] for i in\
-                              self.index['spty']]
+        self.index['SpT'] = [u.specType(i.split(',')[0].replace('Opt:','').replace('NIR:',''))[0] for i in self.index['spty']]
 
 
 def format_XML(modeldir):

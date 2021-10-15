@@ -17,9 +17,8 @@ class TestSpectrum(unittest.TestCase):
     def setUp(self):
         """Setup the tests"""
         # Make 'real' spectrum
-        wave = np.linspace(0.8, 2.5, 200) * q.um
-        flux = u.blackbody_lambda(wave, 3000 * q.K) * q.sr
-        self.spec = sp.Spectrum(wave, flux, flux / 100.)
+        bb3 = sp.Blackbody(np.linspace(0.8, 2.5, 200) * q.um, 3000 * q.K, snr=100)
+        self.spec = sp.Spectrum(*bb3.spectrum)
 
         # Make a flat spectrum
         w1 = np.linspace(0.6, 1, 230) * q.um

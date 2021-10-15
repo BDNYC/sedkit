@@ -200,7 +200,7 @@ A variety of evolutionary model grids can be used to infer fundamental parameter
 
 ```python
 trap1.evo_model = 'DUSTY00'
-trap1.mass_from_age()
+trap1.infer_mass()
 ```
 
 <img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_mass.png" height="400">
@@ -222,7 +222,7 @@ trap1.fit_modelgrid(SpexPrismLibrary())
 Inspect the SED at any time with the interactive plotting method.
 
 ```python
-trap1.plot()
+trap1.plot(integral=True, best_fit=True)
 ```
 
 <img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/sed_plot.png" height="500">
