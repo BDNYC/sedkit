@@ -161,13 +161,13 @@ class SpecSampler(object):
         sampler = emcee.EnsembleSampler(nwalkers, self.ndim, log_probability, args=(self.model_grid, self.spectrum))
 
         # Burn in the walkers
-        pos, prob, state = sampler.run_mcmc(p0, nsteps / 10, progress=True)
+        pos, prob, state = sampler.run_mcmc(p0, int(nsteps / 10), progress=True)
 
         # Reset the walkers, so the burn-in steps aren't included in analysis
         sampler.reset()
 
         # Run MCMC with the walkers starting at the end of the burn-in
-        pos, prob, state = sampler.run_mcmc(pos, nsteps, progress=True)
+        pos, prob, state = sampler.run_mcmc(pos, int(nsteps), progress=True)
 
         # Chains contains the positions for each parameter, for each walker
         self.chain = sampler.chain
