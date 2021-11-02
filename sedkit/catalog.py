@@ -131,7 +131,7 @@ class Catalog:
         # Overwrite duplicate names
         idx = None
         if sed.name in self.results['name']:
-            self.message("{}: Target already in catalog. Overwriting with new SED...")
+            self.message("{}: Target already in catalog. Overwriting with new SED...".format(sed.name))
             idx = np.where(self.results['name'] == sed.name)[0][0]
 
         # Turn off print statements
@@ -578,7 +578,7 @@ class Catalog:
 
             url = "http://www.colors.commutercreative.com/olive/"
             taptool = fig.select(type=TapTool)
-            taptool.callback = OpenURL(url=url)
+            taptool.callback = print('Foobar')#OpenURL(url=url)
 
         # Get marker class
         size = kwargs.get('size', 8)
