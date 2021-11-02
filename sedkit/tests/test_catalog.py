@@ -103,13 +103,14 @@ class TestCatalog(unittest.TestCase):
         """Test get_SED method"""
         # Get the SED using name
         cat = copy.copy(self.cat)
-        cat.add_SED(self.vega)
+        cat.add_SED(copy.copy(self.vega))
         s = cat.get_SED('Vega')
         self.assertEqual(type(s), type(self.vega))
+        del cat
 
         # Get the SED using idx
         cat = copy.copy(self.cat)
-        cat.add_SED(self.vega)
+        cat.add_SED(copy.copy(self.vega))
         s = cat.get_SED(0)
         self.assertEqual(type(s), type(self.vega))
 
