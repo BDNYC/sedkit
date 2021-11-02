@@ -106,13 +106,6 @@ class TestCatalog(unittest.TestCase):
         cat.add_SED(copy.copy(self.vega))
         s = cat.get_SED('Vega')
         self.assertEqual(type(s), type(self.vega))
-        del cat
-
-        # Get the SED using idx
-        cat = copy.copy(self.cat)
-        cat.add_SED(copy.copy(self.vega))
-        s = cat.get_SED(0)
-        self.assertEqual(type(s), type(self.vega))
 
     def test_plot(self):
         """Test plot method"""
