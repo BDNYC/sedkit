@@ -101,13 +101,16 @@ class TestCatalog(unittest.TestCase):
 
     def test_get_SED(self):
         """Test get_SED method"""
-        # Make the catalog
+        # Get the SED using name
         cat = copy.copy(self.cat)
         cat.add_SED(self.vega)
-
-        # Get the SED
         s = cat.get_SED('Vega')
+        self.assertEqual(type(s), type(self.vega))
 
+        # Get the SED using idx
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+        s = cat.get_SED(0)
         self.assertEqual(type(s), type(self.vega))
 
     def test_plot(self):
@@ -149,6 +152,8 @@ class TestCatalog(unittest.TestCase):
         """Test save and load methods"""
         # Make the catalog
         cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+        cat.add_SED(self.sirius)
         cat.save('test.p')
 
         # Try to load it

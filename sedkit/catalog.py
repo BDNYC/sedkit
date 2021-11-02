@@ -362,7 +362,7 @@ class Catalog:
 
         # Get the rows
         if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
-            return copy(self.results.loc[name_or_idx]['SED'])
+            return copy(self.results[self.results['name'] == name_or_idx]['SED'][0])
 
         elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
             return copy(self.results[name_or_idx]['SED'])
