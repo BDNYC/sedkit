@@ -177,6 +177,7 @@ class SED:
 
         # Attributes of arbitrary length
         self.all_names = []
+        self.warnings = []
         self.stitched_spectra = []
         self.app_spec_SED = None
         self.app_phot_SED = None
@@ -647,9 +648,16 @@ class SED:
             # Update the attribute
             self.Teff = Teff, Teff_unc, 'This Work'
 
-    def _calibrate_photometry(self, name='photometry'):
+    def _calibrate_photometry(self, name='photometry', phot_flag=2):
         """
         Calculate the absolute magnitudes and flux values of all rows in the photometry table
+
+        Parameters
+        ----------
+        name: str
+            The name of the attribute to calibrate, ['photometry', 'synthetic_photometry']
+        phot_flag: float
+            The survey-survey color to flag as suspicious
         """
         # Reset photometric SED
         if name == 'photometry':
@@ -707,6 +715,22 @@ class SED:
 
                 # Set SED as uncalculated
                 self.calculated = False
+
+            # Check SDSS-2MASS smoothness
+            if self.get_mag('SDSS.z') is not None and self.get_mag('2MASS.J') is not None:
+                fz = self.get_mag('SDSS.z')
+                fJ = self.get_mag('2MASS.J')
+                xJ = abs(fz[0] - fJ[0])
+                if xJ > phot_flag and not np.isnan(fz[1]) and not np.isnan(fJ[1]):
+                    self.warning('SDSS and 2MASS photometry are not smooth! Ratio = {}. Check your photometry!'.format(xJ))
+
+            # Check 2MASS-WISE smoothness
+            if self.get_mag('2MASS.Ks') is not None and self.get_mag('WISE.W1') is not None:
+                fK = self.get_mag('2MASS.Ks')
+                fW = self.get_mag('WISE.W1')
+                KW = abs(fK[0] - fW[0])
+                if KW > phot_flag and not np.isnan(fK[1]) and not np.isnan(fW[1]):
+                    self.warning('2MASS and WISE photometry are not smooth! Ratio = {}. Check your photometry!'.format(KW))
 
     def _calibrate_spectra(self):
         """
@@ -2922,6 +2946,19 @@ class SED:
         self.calculated = not set_uncalculated
 
         return valid
+
+    def warning(self, msg):
+        """
+        Display and/or save a warning
+
+        Parameters
+        ----------
+        msg: str
+            The message to print
+        """
+        self.message(msg, pre='[WARNING]')
+        if msg not in self.warnings:
+            self.warnings.append(msg)
 
     @property
     def wave_units(self):

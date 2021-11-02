@@ -7,6 +7,7 @@ A module to produce a catalog of spectral energy distributions
 """
 
 import os
+import dill
 import pickle
 from copy import copy
 from pkg_resources import resource_filename
@@ -16,7 +17,7 @@ from astropy.io import ascii
 import astropy.table as at
 import astropy.units as q
 import numpy as np
-from bokeh.models import HoverTool, ColumnDataSource, LabelSet
+from bokeh.models import HoverTool, ColumnDataSource, LabelSet, TapTool, OpenURL
 from bokeh.plotting import figure, show
 from bokeh.models.glyphs import Patch
 
@@ -46,7 +47,7 @@ class Catalog:
                      'mass', 'mass_unc', 'Teff', 'Teff_unc', 'SED']
 
         # A master table of all SED results
-        self.results = self.make_results_table(self)
+        self.results = self.make_results_table()
 
         # Try to set attributes from kwargs
         for k, v in kwargs.items():
@@ -371,21 +372,83 @@ class Catalog:
 
             return
 
+    def generate_SEDs(self, table):
+        """
+        Generate SEDs from a Catalog results table
+
+        Parameters
+        ----------
+        table: astropy.table.QTable
+            The table of data to use
+
+        Returns
+        -------
+        sequence
+            The list of SEDs for each row in the input table
+        """
+        sed_list = []
+        t = self.make_results_table()
+        for row in table:
+            s = SED(row['name'], verbose=False)
+            s.ra = row['ra'] * q.degree
+            s.dec = row['dec'] * q.degree
+
+            for att in ['age', 'parallax', 'radius']:
+                setattr(self, att, (row[att] * t[att].unit, row['{}_unc'.format(att)] * t[att].unit) if row[att] is not None else None)
+
+            s.spectral_type = row['spectral_type'], row['spectral_type_unc']
+            s.membership = row['membership']
+            s.reddening = row['reddening']
+
+            # Add spectra
+            for spec in row['spectra']:
+                s.add_spectrum(spec)
+
+            # Add photometry
+            for col in row.colnames:
+                if '.' in col and not col.startswith('M_') and not col.endswith('_unc'):
+                    if row[col] is not None:
+                        s.add_photometry(col, float(row[col]), float(row['{}_unc'.format(col)]))
+
+            # Make the SED
+            s.make_sed()
+
+            # Add SED object to the list
+            sed_list.append(s)
+            del s
+
+        return sed_list
+
     def load(self, file):
-        """Load a saved Catalog"""
+        """
+        Load a saved Catalog
+
+        Parameters
+        ----------
+        file: str
+            The file to load
+        """
         if os.path.isfile(file):
 
-            f = open(file)
-            cat = pickle.load(f)
-            f.close()
-
+            # Open the file
             f = open(file, 'rb')
-            cat = pickle.load(f)
+            results = pickle.load(f)
             f.close()
 
-            self.results = cat
+            # Make SEDs again
+            seds = self.generate_SEDs(results)
+            results.add_column(seds, name='SED')
+            del results['spectra']
 
-    @staticmethod
+            # Set results attribute
+            self.results = results
+
+            self.message("Catalog loaded from {}".format(file))
+
+        else:
+
+            self.message("Could not load Catalog from {}".format(file))
+
     def make_results_table(self):
         """Generate blank results table"""
         results = at.QTable(names=self.cols, dtype=['O'] * len(self.cols))
@@ -509,9 +572,13 @@ class Catalog:
             hover = HoverTool(tooltips=tips, names=['points'])
 
             # Make the plot
-            TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover]
+            TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover, 'tap']
             title = '{} v {}'.format(x, y)
             fig = figure(plot_width=800, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
+
+            url = "http://www.colors.commutercreative.com/olive/"
+            taptool = fig.select(type=TapTool)
+            taptool.callback = OpenURL(url=url)
 
         # Get marker class
         size = kwargs.get('size', 8)
@@ -686,12 +753,24 @@ class Catalog:
             if not os.path.isfile(file):
                 os.system('touch {}'.format(file))
 
+            # Store the spectra in a clever way
+            specs = [[spec['spectrum'] for spec in row.spectra] for row in self.results['SED']]
+            results = copy(self.results)
+            results.add_column(specs, name='spectra')
+
+            # Get the pickle-safe data
+            results = results[[k for k in results.colnames if k != 'SED']]
+
             # Write the file
             f = open(file, 'wb')
-            pickle.dump(self.results, f, pickle.HIGHEST_PROTOCOL)
+            dill.dump(results, f)
             f.close()
 
             self.message('Catalog saved to {}'.format(file))
+
+        else:
+
+            self.message('{}: Path does not exist. Try again.'.format(path))
 
     @property
     def source(self):
