@@ -129,8 +129,6 @@ class SED:
 
         # Attributes with setters
         self._name = None
-        self._ra = None
-        self._dec = None
         self._age = None
         self._distance = None
         self._parallax = None
@@ -819,36 +817,6 @@ class SED:
 
         else:
             self.message("Sorry, could not fit model to SED")
-
-    @property
-    def dec(self):
-        """
-        A property for declination
-        """
-        return self._dec
-
-    @dec.setter
-    def dec(self, dec, dec_unc=None, frame='icrs'):
-        """
-        Set the declination of the source
-
-        Padecmeters
-        ----------
-        dec: astropy.units.quantity.Quantity
-            The declination
-        dec_unc: astropy.units.quantity.Quantity (optional)
-            The uncertainty
-        frame: str
-            The reference frame
-        """
-        if not isinstance(dec, (q.quantity.Quantity, str)):
-            raise TypeError("{}: Cannot interpret dec".format(dec))
-
-        # Make sure it's decimal degrees
-        self._dec = Angle(dec)
-        if self.ra is not None:
-            sky_coords = SkyCoord(ra=self.ra, dec=self.dec, unit=(q.degree, q.degree), frame='icrs')
-            self._set_sky_coords(sky_coords, simbad=False)
 
     @property
     def distance(self):
@@ -2525,36 +2493,6 @@ class SED:
         return self.fig
 
     @property
-    def ra(self):
-        """
-        A property for right ascension
-        """
-        return self._ra
-
-    @ra.setter
-    def ra(self, ra, ra_unc=None, frame='icrs'):
-        """
-        Set the right ascension of the source
-
-        Parameters
-        ----------
-        ra: astropy.units.quantity.Quantity
-            The right ascension
-        ra_unc: astropy.units.quantity.Quantity (optional)
-            The uncertainty
-        frame: str
-            The reference frame
-        """
-        if not isinstance(ra, (q.quantity.Quantity, str)):
-            raise TypeError("{}: Cannot interpret ra".format(ra))
-
-        # Make sure it's decimal degrees
-        self._ra = Angle(ra)
-        if self.dec is not None:
-            sky_coords = SkyCoord(ra=self.ra, dec=self.dec, unit=q.degree, frame='icrs')
-            self._set_sky_coords(sky_coords, simbad=False)
-
-    @property
     def radius(self):
         """
         A property for radius
@@ -2677,7 +2615,7 @@ class SED:
         return self._sky_coords
 
     @sky_coords.setter
-    def sky_coords(self, sky_coords, frame='icrs'):
+    def sky_coords(self, sky_coords, frame='icrs', simbad=True):
         """
         A setter for sky coordinates
 
@@ -2687,47 +2625,37 @@ class SED:
             The sky coordinates
         frame: str
             The coordinate frame
-        """
-        # Make sure it's a sky coordinate
-        if not isinstance(sky_coords, (SkyCoord, tuple)):
-            raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
-
-        if isinstance(sky_coords, tuple) and len(sky_coords) == 2:
-
-            if isinstance(sky_coords[0], str):
-                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame=frame)
-
-            elif isinstance(sky_coords[0], (float, Angle, q.quantity.Quantity)):
-                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=q.degree, frame=frame)
-
-            else:
-                raise TypeError("Cannot convert type {} to coordinates.".format(type(sky_coords[0])))
-
-        self._set_sky_coords(sky_coords)
-
-    def _set_sky_coords(self, sky_coords, simbad=True):
-        """
-        Calculate and set attributes from sky coords
-
-        Parameters
-        ----------
-        sky_coords: astropy.coordinates.SkyCoord
-            The sky coordinates
         simbad: bool
             Search Simbad by the coordinates
         """
-        # Set the sky coordinates
-        self._sky_coords = sky_coords
-        self._ra = sky_coords.ra.degree
-        self._dec = sky_coords.dec.degree
-        self.message("Setting sky_coords to {}".format(self.sky_coords))
+        # Allow None to be set
+        if sky_coords is None:
+            self._sky_coords = None
 
-        # Try to calculate reddening
-        self.get_reddening()
+        else:
 
-        # Try to find the source in Simbad
-        if simbad:
-            self.find_Simbad()
+            # Make sure it's a sky coordinate
+            if not isinstance(sky_coords, (SkyCoord, tuple)):
+                raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
+
+            if isinstance(sky_coords, tuple) and len(sky_coords) == 2:
+
+                if isinstance(sky_coords[0], str):
+                    self._sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame=frame)
+                    self.message("Setting sky_coords to {}".format(self.sky_coords))
+                    self.get_reddening()
+                    if simbad:
+                        self.find_Simbad()
+
+                elif isinstance(sky_coords[0], (float, Angle, q.quantity.Quantity)):
+                    self._sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=q.degree, frame=frame)
+                    self.message("Setting sky_coords to {}".format(self.sky_coords))
+                    self.get_reddening()
+                    if simbad:
+                        self.find_Simbad()
+
+                else:
+                    raise TypeError("Cannot convert type {} to coordinates.".format(type(sky_coords[0])))
 
     def spectrum_from_modelgrid(self, model_grid, snr=10, **kwargs):
         """

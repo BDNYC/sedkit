@@ -38,7 +38,7 @@ class Catalog:
         self.flux_units = q.erg/q.s/q.cm**2/q.AA
 
         # List all the results columns
-        self.cols = ['name', 'ra', 'dec', 'age', 'age_unc', 'distance', 'distance_unc',
+        self.cols = ['name', 'sky_coords', 'age', 'age_unc', 'distance', 'distance_unc',
                      'parallax', 'parallax_unc', 'radius', 'radius_unc',
                      'spectral_type', 'spectral_type_unc', 'SpT',
                      'membership', 'reddening', 'fbol', 'fbol_unc', 'mbol',
@@ -390,13 +390,12 @@ class Catalog:
         t = self.make_results_table()
         for row in table:
             s = SED(row['name'], verbose=False)
-            s.ra = row['ra'] * q.degree
-            s.dec = row['dec'] * q.degree
 
             for att in ['age', 'parallax', 'radius']:
                 setattr(self, att, (row[att] * t[att].unit, row['{}_unc'.format(att)] * t[att].unit) if row[att] is not None else None)
 
-            s.spectral_type = row['spectral_type'], row['spectral_type_unc']
+            s.sky_coords = row['sky_coords']
+            s.spectral_type = None if row['spectral_type'] is None else (row['spectral_type'], row['spectral_type_unc'])
             s.membership = row['membership']
             s.reddening = row['reddening']
 
@@ -407,7 +406,7 @@ class Catalog:
             # Add photometry
             for col in row.colnames:
                 if '.' in col and not col.startswith('M_') and not col.endswith('_unc'):
-                    if row[col] is not None:
+                    if row[col] is not None and not np.isnan(row[col]):
                         s.add_photometry(col, float(row[col]), float(row['{}_unc'.format(col)]))
 
             # Make the SED
