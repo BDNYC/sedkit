@@ -93,19 +93,10 @@ class TestSED(unittest.TestCase):
         self.assertRaises(TypeError, setattr, s, 'age', (4, 0.1))
         self.assertRaises(TypeError, setattr, s, 'age', (4*q.Jy, 0.1*q.Jy))
 
-        # Dec
-        s.dec = 1.2345 * q.deg
-        self.assertRaises(TypeError, setattr, s, 'dec', 1.2345)
-
-        # RA
-        s.ra = 1.2345 * q.deg
-        self.assertRaises(TypeError, setattr, s, 'ra', 1.2345)
-
         # Sky coords
         s.sky_coords = 1.2345 * q.deg, 1.2345 * q.deg
         s.sky_coords = '1.2345', '1.2345'
         self.assertRaises(TypeError, setattr, s, 'sky_coords', 'foo')
-        self.assertRaises(TypeError, setattr, s, 'sky_coords', None)
 
         # Distance
         s.distance = None
