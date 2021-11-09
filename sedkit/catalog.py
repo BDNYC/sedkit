@@ -36,6 +36,7 @@ class Catalog:
         self.color = color
         self.wave_units = q.um
         self.flux_units = q.erg/q.s/q.cm**2/q.AA
+        self.array_cols = ['SED', 'app_spec_SED', 'abs_spec_SED', 'app_phot_SED', 'abs_phot_SED', 'app_specphot_SED', 'abs_specphot_SED', 'app_SED', 'abs_SED', 'spectra']
 
         # List all the results columns
         self.cols = ['name', 'sky_coords', 'age', 'age_unc', 'distance', 'distance_unc',
@@ -44,10 +45,10 @@ class Catalog:
                      'membership', 'reddening', 'fbol', 'fbol_unc', 'mbol',
                      'mbol_unc', 'Lbol', 'Lbol_unc', 'Lbol_sun',
                      'Lbol_sun_unc', 'Mbol', 'Mbol_unc', 'logg', 'logg_unc',
-                     'mass', 'mass_unc', 'Teff', 'Teff_unc', 'SED']
+                     'mass', 'mass_unc', 'Teff', 'Teff_unc']
 
         # A master table of all SED results
-        self.results = self.make_results_table()
+        self._results = self.make_results_table()
 
         # Try to set attributes from kwargs
         for k, v in kwargs.items():
@@ -73,7 +74,7 @@ class Catalog:
         new_cat = Catalog(name=name or self.name)
 
         # Combine results
-        new_results = at.vstack([at.Table(self.results), at.Table(other.results)])
+        new_results = at.vstack([at.Table(self._results), at.Table(other._results)])
         new_cat.results = new_results
 
         return new_cat
@@ -92,15 +93,15 @@ class Catalog:
             The uncertainty array
         """
         # Make sure column doesn't exist
-        if name in self.results.colnames:
+        if name in self._results.colnames:
             raise ValueError("{}: Column already exists.".format(name))
 
         # Make sure data is the right length
-        if len(data) != len(self.results):
-            raise ValueError("{} != {}: Data is not the right size for this catalog.".format(len(data), len(self.results)))
+        if len(data) != len(self._results):
+            raise ValueError("{} != {}: Data is not the right size for this catalog.".format(len(data), len(self._results)))
 
         # Add the column
-        self.results.add_column(data, name=name)
+        self._results.add_column(data, name=name)
 
         # Add uncertainty column
         if unc is not None:
@@ -109,16 +110,16 @@ class Catalog:
             name = name + '_unc'
 
             # Make sure column doesn't exist
-            if name in self.results.colnames:
+            if name in self._results.colnames:
                 raise ValueError("{}: Column already exists.".format(name))
 
             # Make sure data is the right length
-            if len(unc) != len(self.results):
+            if len(unc) != len(self._results):
                 raise ValueError(
-                    "{} != {}: Data is not the right size for this catalog.".format(len(unc), len(self.results)))
+                    "{} != {}: Data is not the right size for this catalog.".format(len(unc), len(self._results)))
 
             # Add the column
-            self.results.add_column(unc, name=name)
+            self._results.add_column(unc, name=name)
 
     def add_SED(self, sed):
         """Add an SED to the catalog
@@ -146,7 +147,7 @@ class Catalog:
 
         # Add the values and uncertainties if applicable
         new_row = {}
-        for col in self.cols[:-1]:
+        for col in self.cols:
 
             if col + '_unc' in self.cols:
                 if isinstance(getattr(sed, col), tuple):
@@ -165,6 +166,15 @@ class Catalog:
 
             new_row[col] = val
 
+        # Store the spectra
+        new_row['spectra'] = [spec['spectrum'] for spec in sed.spectra]
+
+        # Store the SED arrays
+        for pre in ['app', 'abs']:
+            for dat in ['phot_', 'spec_', 'specphot_', '']:
+                sed_name = '{}_{}SED'.format(pre, dat)
+                new_row[sed_name] = getattr(sed, sed_name).spectrum if getattr(sed, sed_name) is not None else None
+
         # Add the SED
         new_row['SED'] = sed
 
@@ -172,11 +182,11 @@ class Catalog:
         for row in sed.photometry:
 
             # Add the column to the results table
-            if row['band'] not in self.results.colnames:
-                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name=row['band']))
-                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name=row['band'] + '_unc'))
-                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name='M_' + row['band']))
-                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name='M_' + row['band'] + '_unc'))
+            if row['band'] not in self._results.colnames:
+                self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name=row['band']))
+                self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name=row['band'] + '_unc'))
+                self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name='M_' + row['band']))
+                self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name='M_' + row['band'] + '_unc'))
 
             # Add the apparent magnitude
             new_row[row['band']] = row['app_magnitude']
@@ -192,11 +202,11 @@ class Catalog:
 
         # Add the new row...
         if idx is None:
-            self.results.add_row(new_row)
+            self._results.add_row(new_row)
 
         # ...or replace existing
         else:
-            self.results[idx] = new_row
+            self._results[idx] = new_row
 
         self.message("Successfully added SED '{}'".format(sed.name))
 
@@ -270,7 +280,7 @@ class Catalog:
         param: str
             The parameter to filter by, e.g. 'Teff'
         value: str, float, int, sequence
-            The criteria to filter by, 
+            The criteria to filter by,
             which can be single valued like 1400
             or a range with operators [<,<=,>,>=],
             e.g. (>1200,<1400), ()
@@ -358,14 +368,14 @@ class Catalog:
             The name or index of the SED to get
         """
         # Add the index
-        self.results.add_index('name')
+        self._results.add_index('name')
 
         # Get the rows
         if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
-            return copy(self.results[self.results['name'] == name_or_idx]['SED'][0])
+            return copy(self._results[self.results['name'] == name_or_idx]['SED'][0])
 
         elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
-            return copy(self.results[name_or_idx]['SED'])
+            return copy(self._results[name_or_idx]['SED'])
 
         else:
             self.message('Could not retrieve SED {}'.format(name_or_idx))
@@ -391,11 +401,10 @@ class Catalog:
         for row in table:
             s = SED(row['name'], verbose=False)
 
-            for att in ['age', 'parallax', 'radius']:
+            for att in ['age', 'parallax', 'radius', 'spectral_type']:
                 setattr(self, att, (row[att] * t[att].unit, row['{}_unc'.format(att)] * t[att].unit) if row[att] is not None else None)
 
             s.sky_coords = row['sky_coords']
-            s.spectral_type = None if row['spectral_type'] is None else (row['spectral_type'], row['spectral_type_unc'])
             s.membership = row['membership']
             s.reddening = row['reddening']
 
@@ -418,7 +427,7 @@ class Catalog:
 
         return sed_list
 
-    def load(self, file):
+    def load(self, file, make_seds=False):
         """
         Load a saved Catalog
 
@@ -435,12 +444,12 @@ class Catalog:
             f.close()
 
             # Make SEDs again
-            seds = self.generate_SEDs(results)
-            results.add_column(seds, name='SED')
-            del results['spectra']
+            if make_seds:
+                seds = self.generate_SEDs(results)
+                results.add_column(seds, name='SED')
 
             # Set results attribute
-            self.results = results
+            self._results = results
 
             self.message("Catalog loaded from {}".format(file))
 
@@ -450,7 +459,8 @@ class Catalog:
 
     def make_results_table(self):
         """Generate blank results table"""
-        results = at.QTable(names=self.cols, dtype=['O'] * len(self.cols))
+        all_cols = self.cols + self.array_cols
+        results = at.QTable(names=all_cols, dtype=['O'] * len(all_cols))
         results.add_index('name')
 
         # Set the units
@@ -510,7 +520,7 @@ class Catalog:
         xlabel: str
              The label for the x-axis
         ylable : str
-             The label for the y-axis 
+             The label for the y-axis
         fig: bokeh.plotting.figure (optional)
              The figure to plot on
         order: int
@@ -722,22 +732,30 @@ class Catalog:
             The name or index of the SED to remove
         """
         # Add the index
-        self.results.add_index('name')
+        self._results.add_index('name')
 
         # Get the rows
-        if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
-            self.results = self.results[self.results['name'] != name_or_idx]
+        if isinstance(name_or_idx, str) and name_or_idx in self._results['name']:
+            self._results = self._results[self._results['name'] != name_or_idx]
 
-        elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
-            self.results.remove_row([name_or_idx])
+        elif isinstance(name_or_idx, int) and name_or_idx <= len(self._results):
+            self._results.remove_row([name_or_idx])
 
         else:
             self.message('Could not remove SED {}'.format(name_or_idx))
 
             return
 
+    @property
+    def results(self):
+        """
+        Return results table
+        """
+        return self._results[[col for col in self._results.colnames if col not in self.array_cols]]
+
     def save(self, file):
-        """Save the serialized data
+        """
+        Save the serialized data
 
         Parameters
         ----------
@@ -752,12 +770,8 @@ class Catalog:
             if not os.path.isfile(file):
                 os.system('touch {}'.format(file))
 
-            # Store the spectra in a clever way
-            specs = [[spec['spectrum'] for spec in row.spectra] for row in self.results['SED']]
-            results = copy(self.results)
-            results.add_column(specs, name='spectra')
-
             # Get the pickle-safe data
+            results = copy(self._results)
             results = results[[k for k in results.colnames if k != 'SED']]
 
             # Write the file
@@ -774,8 +788,8 @@ class Catalog:
     @property
     def source(self):
         """Generates a ColumnDataSource from the results table"""
-        # Remove SED column
-        results_dict = {key: val for key, val in dict(self.results).items() if key != 'SED'}
+        # Remove array columns
+        results_dict = {key: val for key, val in dict(self.results).items()}
 
         return ColumnDataSource(data=results_dict)
 

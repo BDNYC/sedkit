@@ -1270,7 +1270,7 @@ class SED:
             if self.sky_coords is None:
                 sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame='icrs')
-                self._set_sky_coords(sky_coords, simbad=False)
+                self.sky_coords = sky_coords, 'icrs', False
 
             # Check for a parallax
             if 'parallax' in include and not hasattr(obj['PLX_VALUE'], 'mask'):
