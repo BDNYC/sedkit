@@ -371,16 +371,16 @@ class Catalog:
         self._results.add_index('name')
 
         # Get the rows
-        if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
-            return copy(self._results[self.results['name'] == name_or_idx]['SED'][0])
+        if isinstance(name_or_idx, str) and name_or_idx in self._results['name']:
+            return copy(self._results[self._results['name'] == name_or_idx]['SED'][0])
 
-        elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
+        elif isinstance(name_or_idx, int) and name_or_idx <= len(self._results):
             return copy(self._results[name_or_idx]['SED'])
 
         else:
             self.message('Could not retrieve SED {}'.format(name_or_idx))
 
-            return
+        return
 
     def generate_SEDs(self, table):
         """

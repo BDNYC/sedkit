@@ -990,7 +990,7 @@ def specType(SpT, types=[i for i in 'OBAFGKMLTY'], verbose=False):
             if MK:
 
                 # Get the stuff before and after the MK class
-                pre, suf = SpT.split(MK)
+                pre, suf = SpT.split(MK)[:2]
 
                 # Get the numerical value
                 val = float(re.findall(r'[0-9]\.?[0-9]?', suf)[0])
