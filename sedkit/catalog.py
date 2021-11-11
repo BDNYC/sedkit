@@ -292,7 +292,7 @@ class Catalog:
         """
         # Make a new catalog
         cat = Catalog()
-        cat.results = u.filter_table(self.results, **{param: value})
+        cat.results = u.filter_table(self._results, **{param: value})
 
         return cat
 
