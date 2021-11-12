@@ -34,6 +34,7 @@ class Catalog:
         self.name = name
         self.marker = marker
         self.color = color
+        self.palette = 'viridis'
         self.wave_units = q.um
         self.flux_units = q.erg/q.s/q.cm**2/q.AA
         self.array_cols = ['SED', 'app_spec_SED', 'abs_spec_SED', 'app_phot_SED', 'abs_phot_SED', 'app_specphot_SED', 'abs_specphot_SED', 'app_SED', 'abs_SED', 'spectra']
@@ -259,7 +260,7 @@ class Catalog:
             os.system('mkdir {}'.format(sourcedir))
 
             # Export all SEDs
-            for source in self.results['SED']:
+            for source in self._results['SED']:
                 source.export(sourcedir)
 
             # zip if desired
@@ -696,8 +697,6 @@ class Catalog:
         normalized: bool
             Normalize the SEDs to 1
         """
-        COLORS = u.color_gen('Category10')
-
         # Plot all SEDS
         if name_or_idx in ['all', '*']:
             name_or_idx = list(range(len(self.results)))
@@ -705,6 +704,8 @@ class Catalog:
         # Make it into a list
         if isinstance(name_or_idx, (str, int)):
             name_or_idx = [name_or_idx]
+
+        COLORS = u.color_gen(self.palette, n=len(name_or_idx))
 
         # Make the plot
         TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
@@ -719,7 +720,7 @@ class Catalog:
         for obj in name_or_idx:
             c = next(COLORS)
             targ = self.get_SED(obj)
-            fig = targ.plot(fig=fig, color=c, output=True, normalize=normalize, legend=targ.name, **kwargs)
+            fig = targ.plot(fig=fig, color=c, one_color=True, output=True, normalize=normalize, label=targ.name, **kwargs)
 
         return fig
 

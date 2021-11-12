@@ -2316,7 +2316,7 @@ class SED:
 
     def plot(self, app=True, photometry=True, spectra=True, integral=True, synthetic_photometry=False,
              best_fit=True, normalize=None, scale=['log', 'log'], output=False, fig=None,
-             color='#1f77b4', one_color=False, **kwargs):
+             color='#1f77b4', one_color=False, label=None, **kwargs):
         """
         Plot the SED
 
@@ -2346,6 +2346,10 @@ class SED:
             The Boheh plot to add the SED to
         color: str
             The color for the plot points and lines
+        one_color: bool
+            Plots ass SED data using a single color
+        label: str
+            The legend label for the integral, defaults to Teff value
 
         Returns
         -------
@@ -2465,7 +2469,7 @@ class SED:
 
         # Plot the SED with linear interpolation completion
         if integral:
-            label = str(self.Teff[0]) if self.Teff is not None else 'Integral'
+            label = label or str(self.Teff[0]) if self.Teff is not None else 'Integral'
             self.fig.line(full_SED.wave, full_SED.flux * const, line_color=color if one_color else 'black', alpha=0.3, legend_label=label)
 
         if best_fit and len(self.best_fit) > 0:
