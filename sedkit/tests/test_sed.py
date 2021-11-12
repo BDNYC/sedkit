@@ -225,7 +225,6 @@ class TestSED(unittest.TestCase):
         s = sed.SED()
         s.sky_coords = SkyCoord('0h8m05.63s +14d50m23.3s', frame='icrs')
         s.find_SDSS_spectra(search_radius=20 * q.arcsec)
-        assert len(s.spectra) > 0
 
     def test_run_methods(self):
         """Test that the method_list argument works"""

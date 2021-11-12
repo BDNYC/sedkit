@@ -75,7 +75,7 @@ class Catalog:
 
         # Combine results
         new_results = at.vstack([at.Table(self._results), at.Table(other._results)])
-        new_cat.results = new_results
+        new_cat._results = new_results
 
         return new_cat
 
@@ -292,7 +292,7 @@ class Catalog:
         """
         # Make a new catalog
         cat = Catalog()
-        cat.results = u.filter_table(self._results, **{param: value})
+        cat._results = u.filter_table(self._results, **{param: value})
 
         return cat
 
