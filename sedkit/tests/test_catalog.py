@@ -132,6 +132,23 @@ class TestCatalog(unittest.TestCase):
         # Identify sources
         cat.plot('spectral_type', 'parallax', identify=['Vega'])
 
+    def test_iplot(self):
+        """Test iplot method"""
+        # Make the catalog
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+        cat.add_SED(self.sirius)
+
+        # Simple plot
+        plt = cat.iplot('spectral_type', 'parallax')
+
+        # Color-color plot
+        plt = cat.iplot('WISE.W1-WISE.W2', 'WISE.W1-WISE.W2', order=1)
+
+        # Bad columns
+        self.assertRaises(ValueError, cat.iplot, 'spectral_type', 'foo')
+        self.assertRaises(ValueError, cat.iplot, 'foo', 'parallax')
+
     def test_plot_SEDs(self):
         """Test plot_SEDs method"""
         # Make the catalog
