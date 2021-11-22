@@ -148,6 +148,7 @@ class SED:
 
         # Static attributes
         self.evo_model = 'DUSTY00'
+        self.frame = 'icrs'
         self.reddening = 0
         self.SpT = None
         self.multiple = False
@@ -819,6 +820,13 @@ class SED:
             self.message("Sorry, could not fit model to SED")
 
     @property
+    def dec(self):
+        """
+        A property for dec
+        """
+        return self.sky_coords.dec if self.sky_coords is not None else None
+
+    @property
     def distance(self):
         """
         A property for distance
@@ -1270,7 +1278,7 @@ class SED:
             if self.sky_coords is None:
                 sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame='icrs')
-                self.sky_coords = sky_coords, 'icrs', False
+                self.sky_coords = sky_coords
 
             # Check for a parallax
             if 'parallax' in include and not hasattr(obj['PLX_VALUE'], 'mask'):
@@ -2497,6 +2505,13 @@ class SED:
         return self.fig
 
     @property
+    def ra(self):
+        """
+        A property for ra
+        """
+        return self.sky_coords.ra if self.sky_coords is not None else None
+
+    @property
     def radius(self):
         """
         A property for radius
@@ -2575,6 +2590,9 @@ class SED:
             elif isinstance(attr, (str, float, bytes, int)):
                 rows.append([param, attr, '--', '--'])
 
+            elif hasattr(attr, 'deg'):
+                rows.append([param, attr.deg, '--', 'deg'])
+
             else:
                 pass
 
@@ -2619,7 +2637,7 @@ class SED:
         return self._sky_coords
 
     @sky_coords.setter
-    def sky_coords(self, sky_coords, frame='icrs', simbad=True):
+    def sky_coords(self, sky_coords):
         """
         A setter for sky coordinates
 
@@ -2642,21 +2660,24 @@ class SED:
             if not isinstance(sky_coords, (SkyCoord, tuple)):
                 raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
 
+            # If it's already SkyCoord just set it
+            if isinstance(sky_coords, SkyCoord):
+                self._sky_coords = sky_coords
+                self.message("Setting sky_coords to {}".format(self.sky_coords))
+                self.get_reddening()
+
+            # If it's coordinates, make it into a SkyCoord
             if isinstance(sky_coords, tuple) and len(sky_coords) == 2:
 
                 if isinstance(sky_coords[0], str):
-                    self._sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame=frame)
+                    self._sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame=self.frame)
                     self.message("Setting sky_coords to {}".format(self.sky_coords))
                     self.get_reddening()
-                    if simbad:
-                        self.find_Simbad()
 
                 elif isinstance(sky_coords[0], (float, Angle, q.quantity.Quantity)):
-                    self._sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=q.degree, frame=frame)
+                    self._sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=q.degree, frame=self.frame)
                     self.message("Setting sky_coords to {}".format(self.sky_coords))
                     self.get_reddening()
-                    if simbad:
-                        self.find_Simbad()
 
                 else:
                     raise TypeError("Cannot convert type {} to coordinates.".format(type(sky_coords[0])))

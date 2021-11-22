@@ -17,9 +17,11 @@ from astropy.io import ascii
 import astropy.table as at
 import astropy.units as q
 import numpy as np
-from bokeh.models import HoverTool, ColumnDataSource, LabelSet, TapTool, OpenURL
+from bokeh.models import HoverTool, ColumnDataSource, LabelSet, TapTool, CustomJS
 from bokeh.plotting import figure, show
 from bokeh.models.glyphs import Patch
+from bokeh.events import Tap
+from bokeh.layouts import Row
 
 from .sed import SED
 from . import utilities as u
@@ -37,10 +39,10 @@ class Catalog:
         self.palette = 'viridis'
         self.wave_units = q.um
         self.flux_units = q.erg/q.s/q.cm**2/q.AA
-        self.array_cols = ['SED', 'app_spec_SED', 'abs_spec_SED', 'app_phot_SED', 'abs_phot_SED', 'app_specphot_SED', 'abs_specphot_SED', 'app_SED', 'abs_SED', 'spectra']
+        self.array_cols = ['sky_coords', 'SED', 'app_spec_SED', 'abs_spec_SED', 'app_phot_SED', 'abs_phot_SED', 'app_specphot_SED', 'abs_specphot_SED', 'app_SED', 'abs_SED', 'spectra']
 
         # List all the results columns
-        self.cols = ['name', 'sky_coords', 'age', 'age_unc', 'distance', 'distance_unc',
+        self.cols = ['name', 'age', 'age_unc', 'distance', 'distance_unc',
                      'parallax', 'parallax_unc', 'radius', 'radius_unc',
                      'spectral_type', 'spectral_type_unc', 'SpT',
                      'membership', 'reddening', 'fbol', 'fbol_unc', 'mbol',
@@ -201,13 +203,14 @@ class Catalog:
             # Add the absolute uncertainty
             new_row['M_' + row['band'] + '_unc'] = row['abs_magnitude_unc']
 
-        # Add the new row...
+        # Add the new row to the end of the list...
         if idx is None:
             self._results.add_row(new_row)
 
-        # ...or replace existing
+        # ...or replace the existing row
         else:
-            self._results[idx] = new_row
+            self._results.remove_row(idx)
+            self._results.insert_row(idx, new_row)
 
         self.message("Successfully added SED '{}'".format(sed.name))
 
@@ -501,6 +504,156 @@ class Catalog:
             else:
                 print("{} {}".format(pre, msg))
 
+    def iplot(self, x, y, marker=None, color=None, scale=['linear','linear'],
+             xlabel=None, ylabel=None, draw=True, **kwargs):
+        """Plot parameter x versus parameter y
+
+        Parameters
+        ----------
+        x: str
+             The name of the x axis parameter, e.g. 'SpT'
+        y: str
+             The name of the y axis parameter, e.g. 'Teff'
+        marker: str (optional)
+             The name of the method for the desired marker
+        color: str (optional)
+             The color to use for the points
+        scale: sequence
+             The (x,y) scale for the plot
+        xlabel: str
+             The label for the x-axis
+        ylable : str
+             The label for the y-axis
+        fig: bokeh.plotting.figure (optional)
+             The figure to plot on
+        order: int
+             The polynomial order to fit
+        identify: idx, str, sequence
+             Names of sources to highlight in the plot
+        id_color: str
+             The color of the identified points
+        label_points: bool
+             Print the name of the object next to the point
+
+        Returns
+        -------
+        bokeh.plotting.figure.Figure
+             The figure object
+        """
+        # Grab the source and valid params
+        source = copy(self.source)
+        params = [k for k in source.column_names if not k.endswith('_unc')]
+
+        # If no uncertainty column for parameter, add it
+        if '{}_unc'.format(x) not in source.column_names:
+            _ = source.add([None] * len(source.data['name']), '{}_unc'.format(x))
+        if '{}_unc'.format(y) not in source.column_names:
+            _ = source.add([None] * len(source.data['name']), '{}_unc'.format(y))
+
+        # Check if the x parameter is a color
+        if '-' in x and all([i in params for i in x.split('-')]):
+            colordata = self.get_data(x)[0]
+            if len(colordata) == 3:
+                _ = source.add(colordata[0], x)
+                _ = source.add(colordata[1], '{}_unc'.format(x))
+                params.append(x)
+
+        # Check if the y parameter is a color
+        if '-' in y and all([i in params for i in y.split('-')]):
+            colordata = self.get_data(y)[0]
+            if len(colordata) == 3:
+                _ = source.add(colordata[0], y)
+                _ = source.add(colordata[1], '{}_unc'.format(y))
+                params.append(y)
+
+        # Check the params are in the table
+        if x not in params:
+            raise ValueError("'{}' is not a valid x parameter. Please choose from {}".format(x, params))
+        if y not in params:
+            raise ValueError("'{}' is not a valid y parameter. Please choose from {}".format(y, params))
+
+        # Tooltip names can't have '.' or '-'
+        xname = source.add(source.data[x], x.replace('.', '_').replace('-', '_'))
+        yname = source.add(source.data[y], y.replace('.', '_').replace('-', '_'))
+
+        # Make photometry source
+        phot_source = ColumnDataSource(data={'phot_wave': [], 'phot': []})
+        phot_data = [row['app_phot_SED'][:2] if row['app_phot_SED'] is not None else [[], []] for row in self._results]
+        phot_len = max([len(i[0]) for i in phot_data])
+        for idx, row in enumerate(self._results):
+            w, f = phot_data[idx]
+            w = np.concatenate([w, np.zeros(phot_len - len(w)) * np.nan])
+            f = np.concatenate([f, np.zeros(phot_len - len(f)) * np.nan])
+            _ = phot_source.add(w, 'phot_wave{}'.format(idx))
+            _ = phot_source.add(f, 'phot{}'.format(idx))
+
+        # Make spectra source
+        spec_source = ColumnDataSource(data={'spec_wave': [], 'spec': []})
+        spec_data = [row['app_spec_SED'][:2] if row['app_spec_SED'] is not None else [[], []] for row in self._results]
+        spec_len = max([len(i[0]) for i in spec_data])
+        for idx, row in enumerate(self._results):
+            w, f = spec_data[idx]
+            w = np.concatenate([w, np.zeros(spec_len - len(w)) * np.nan])
+            f = np.concatenate([f, np.zeros(spec_len - len(f)) * np.nan])
+            _ = spec_source.add(w, 'spec_wave{}'.format(idx))
+            _ = spec_source.add(f, 'spec{}'.format(idx))
+
+        # Set up hover tool
+        tips = [('Name', '@name'), (x, '@{}'.format(xname)), (y, '@{}'.format(yname))]
+        hover = HoverTool(tooltips=tips, names=['points'])
+
+        callback = CustomJS(args=dict(source=source, phot_source=phot_source, spec_source=spec_source), code="""
+            var data = source.data;
+            var phot_data = phot_source.data;
+            var spec_data = spec_source.data;
+            var selected = source.selected.indices;
+            phot_source.data['phot_wave'] = phot_data['phot_wave' + selected[0]];
+            phot_source.data['phot'] = phot_data['phot' + selected[0]];
+            phot_source.change.emit();
+            spec_source.data['spec_wave'] = spec_data['spec_wave' + selected[0]];
+            spec_source.data['spec'] = spec_data['spec' + selected[0]];
+            spec_source.change.emit();
+            """)
+        tap = TapTool(callback=callback)
+
+        # Make the plot
+        TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover, tap]
+        title = '{} v {}'.format(x, y)
+        fig = figure(plot_width=500, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
+
+        # Get marker class
+        size = kwargs.get('size', 8)
+        kwargs['size'] = size
+        marker = getattr(fig, marker or self.marker)
+        color = color or self.color
+
+        # Plot nominal values
+        marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
+
+        # Set axis labels
+        xunit = source.data[x].unit
+        yunit = source.data[y].unit
+        fig.xaxis.axis_label = xlabel or '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
+        fig.yaxis.axis_label = ylabel or '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
+
+        # Formatting
+        fig.legend.location = "top_right"
+
+        # Draw sub figure
+        sub = figure(plot_width=500, plot_height=500, title='Selected Source',
+                     x_axis_label=str(self.wave_units), y_axis_label=str(self.flux_units),
+                     x_axis_type='log', y_axis_type='log')
+        sub.circle('phot_wave', 'phot', source=phot_source, size=8, color='red', alpha=0.8)
+        sub.line('spec_wave', 'spec', source=spec_source, color='red', alpha=0.5)
+
+        # Make row layout
+        layout = Row(children=[fig, sub])
+
+        if draw:
+            show(layout)
+
+        return layout
+
     def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
              xlabel=None, ylabel=None, fig=None, order=None, identify=[],
              id_color='red', label_points=False, draw=True, **kwargs):
@@ -705,7 +858,7 @@ class Catalog:
         if isinstance(name_or_idx, (str, int)):
             name_or_idx = [name_or_idx]
 
-        COLORS = u.color_gen(self.palette, n=len(name_or_idx))
+        COLORS = u.color_gen(kwargs.get('palette', self.palette), n=len(name_or_idx))
 
         # Make the plot
         TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
