@@ -6,6 +6,7 @@
 This is the code used to generate the polynomial relations
 used in sedkit's calculations
 """
+import os
 from pkg_resources import resource_filename
 
 import astropy.io.ascii as ii
@@ -13,6 +14,9 @@ import astropy.units as q
 import astropy.table as at
 from astroquery.vizier import Vizier
 from bokeh.plotting import figure, show
+from scipy.optimize import least_squares
+from bokeh.models.glyphs import Patch
+from bokeh.models import ColumnDataSource
 import numpy as np
 
 from . import utilities as u
@@ -24,16 +28,25 @@ V = Vizier(columns=["**"])
 
 class Relation:
     """A base class to store raw data, fit a polynomial, and evaluate quickly"""
-    def __init__(self, file, add_columns=None, ref=None, **kwargs):
+    def __init__(self, table, add_columns=None, ref=None, **kwargs):
         """Load the data
 
         Parameters
         ----------
-        file: str
-            The file to load
+        table: str, astropy.table.Table
+            The file or table to load
         """
         # Load the file into a table
-        self.data = ii.read(file, **kwargs)
+        if isinstance(table, str):
+            if os.path.exists(table):
+                table = ii.read(table, **kwargs)
+
+        # Make sure it's a table
+        if not isinstance(table, at.Table):
+            raise TypeError("{} is not a valid table of data. Please provide a astropy.table.Table or path to an ascii file to ingest.".format(type(table)))
+
+        # Store the data
+        self.data = table
         self.ref = ref
 
         # Fill in masked values
@@ -69,7 +82,7 @@ class Relation:
         # Add the column
         self.data[colname] = values
 
-    def add_relation(self, rel_name, order, xrange=None, xunit=None, yunit=None, plot=True):
+    def add_relation(self, rel_name, order, xrange=None, xunit=None, yunit=None, reject_outliers=False, plot=True):
         """
         Create a polynomial of the given *order* for *yparam* as a function of *xparam*
         which can be evaluated at any x value
@@ -86,6 +99,9 @@ class Relation:
             The units of the x parameter values
         yunit: astropy.units.quantity.Quantity
             The units of the y parameter values
+        reject_outliers: bool
+            Use outlier rejection in the fit if polynomial
+            is of order 3 or less
         """
         # Get params
         xparam, yparam = self._parse_rel_name(rel_name)
@@ -105,33 +121,74 @@ class Relation:
             rel['y'] = rel['y'][idx]
 
         # Remove masked and NaN values
-        rel['x'], rel['y'] = self.validate_data(rel['x'], rel['y'])
+        rel['x'], rel['y'], rel['weight'] = self.validate_data(rel['x'], rel['y'])
+
+        # Set weighting
+        if '{}_unc'.format(yparam) in self.data.colnames:
+            y_unc = np.array(self.data['{}_unc'.format(yparam)])
+            rel['x'], rel['y'], y_unc = self.validate_data(rel['x'], rel['y'], y_unc)
+            rel['weight'] = 1. / y_unc
 
         # Determine monotonicity
         rel['monotonic'] = u.monotonic(rel['x'])
 
-        # Set weighting
-        rel['weight'] = np.ones_like(rel['x'])
-        if '{}_unc'.format(yparam) in self.data.colnames:
-            rel['weight'] = 1. / self.data['{}_unc'].format(yparam)
-
         # Try to fit a polynomial
         try:
 
-            # Fit polynomial
-            rel['coeffs'], rel['C_p'] = np.polyfit(rel['x'], rel['y'], rel['order'], w=rel['weight'], cov=True)
+            # X array
+            rel['x_fit'] = np.linspace(rel['x'].min(), rel['x'].max(), 1000)
 
-            # Matrix with rows 1, spt, spt**2, ...
-            rel['matrix'] = np.vstack([rel['x']**(order-i) for i in range(order + 1)]).T
+            if reject_outliers:
 
-            # Matrix multiplication calculates the polynomial values
-            rel['yi'] = np.dot(rel['matrix'], rel['coeffs'])
+                def f(x, *c):
+                    """Generic polynomial function"""
+                    result = 0
+                    for coeff in c:
+                        result = x * result + coeff
+                    return result
 
-            # C_y = TT*C_z*TT.T
-            rel['C_yi'] = np.dot(rel['matrix'], np.dot(rel['C_p'], rel['matrix'].T))
+                def residual(p, x, y):
+                    """Residual calulation"""
+                    return y - f(x, *p)
 
-            # Standard deviations are sqrt of diagonal
-            rel['sig_yi'] = np.sqrt(np.diag(rel['C_yi']))
+                def errFit(hess_inv, resVariance):
+                    return np.sqrt(np.diag(hess_inv * resVariance))
+
+                # TODO: This fails for order 4 or more
+                # Fit polynomial to data
+                p0 = np.ones(rel['order'] + 1)
+                res_robust = least_squares(residual, p0, loss='soft_l1', f_scale=0.1, args=(rel['x'], rel['y']))
+                rel['coeffs'] = res_robust.x
+                rel['jac'] = res_robust.jac
+                rel['y_fit'] = f(rel['x_fit'], *rel['coeffs'])
+
+                # Calculate errors on coefficients
+                rel['sig_coeffs'] = errFit(np.linalg.inv(np.dot(rel['jac'].T, rel['jac'])), (residual(rel['coeffs'], rel['x'], rel['y']) ** 2).sum() / (len(rel['y']) - len(p0)))
+                rel['sig_coeffs2'] = errFit(np.linalg.inv(2 * np.dot(rel['jac'].T, rel['jac'])), (residual(rel['coeffs'], rel['x'], rel['y']) ** 2).sum() / (len(rel['y']) - len(p0)))
+
+                # Calculate upper and lower bounds on the fit
+                coeff_err = rel['coeffs'] - rel['sig_coeffs']
+                rel['y_fit_err'] = f(rel['x_fit'], *coeff_err)
+
+            else:
+
+                # Fit polynomial
+                rel['coeffs'], rel['C_p'] = np.polyfit(rel['x'], rel['y'], rel['order'], w=rel['weight'], cov=True)
+
+                # Matrix with rows 1, spt, spt**2, ...
+                rel['matrix'] = np.vstack([rel['x'] ** (order - i) for i in range(order + 1)]).T
+
+                # Matrix multiplication calculates the polynomial values
+                rel['yi'] = np.dot(rel['matrix'], rel['coeffs'])
+
+                # C_y = TT*C_z*TT.T
+                rel['C_yi'] = np.dot(rel['matrix'], np.dot(rel['C_p'], rel['matrix'].T))
+
+                # Standard deviations are sqrt of diagonal
+                rel['sig_yi'] = np.sqrt(np.diag(rel['C_yi']))
+
+                # Plot polynomial values
+                rel['y_fit'] = np.polyval(rel['coeffs'], rel['x_fit'])
 
         except Exception as exc:
             print(exc)
@@ -195,7 +252,7 @@ class Relation:
 
                 if plot:
                     plt = self.plot(rel_name)
-                    plt.circle([x_val], [y_val.value], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
+                    plt.circle([x_val], [y_val.value if hasattr(y_val, 'unit') else y_val], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
                     if y_upper:
                         plt.line([x_val, x_val], [y_val - y_lower, y_val + y_upper], color='red')
                     show(plt)
@@ -247,7 +304,7 @@ class Relation:
 
         # Make the figure
         fig = figure(x_axis_label=xparam, y_axis_label=yparam)
-        x, y = self.validate_data(self.data[xparam], self.data[yparam])
+        x, y, _ = self.validate_data(self.data[xparam], self.data[yparam])
         fig.circle(x, y, legend='Data', **kwargs)
 
         if rel_name in self.relations:
@@ -256,13 +313,18 @@ class Relation:
             rel = self.relations[rel_name]
 
             # Plot polynomial values
-            xaxis = np.linspace(rel['x'].min(), rel['x'].max(), 100)
-            evals = np.polyval(rel['coeffs'], xaxis)
-            fig.line(xaxis, evals, color='black', legend='Fit')
+            fig.line(rel['x_fit'], rel['y_fit'], color='black', legend='Fit')
+
+            # # Plot relation error
+            # xpat = np.hstack((rel['x_fit'], rel['x_fit'][::-1]))
+            # ypat = np.hstack((rel['y_fit'] + rel['y_fit_err'], (rel['y_fit'] - rel['y_fit_err'])[::-1]))
+            # err_source = ColumnDataSource(dict(xaxis=xpat, yaxis=ypat))
+            # glyph = Patch(x='xaxis', y='yaxis', fill_color='black', line_color=None, fill_alpha=0.1)
+            # fig.add_glyph(err_source, glyph)
 
         return fig
 
-    def validate_data(self, X, Y):
+    def validate_data(self, X, Y, Y_unc=None):
         """
         Validate the data for onlu numbers
 
@@ -272,13 +334,19 @@ class Relation:
             The x-array
         Y: sequence
             The y-array
+        Y_unc: sequence
+            The uncertainty of the y-array
 
         Returns
         -------
         sequence
             The validated arrays
         """
-        valid = np.asarray([(float(x), float(y)) for x, y in zip(X, Y) if u.isnumber(x) and u.isnumber(y)]).T
+        if Y_unc is None:
+            Y_unc = np.ones_like(Y)
+
+        # Check for valid numbers to plot
+        valid = np.asarray([(float(x), float(y), float(y_unc)) for x, y, y_unc in zip(X, Y, Y_unc) if u.isnumber(x) and u.isnumber(y) and u.isnumber(y_unc)]).T
 
         if len(valid) == 0:
             raise ValueError("No valid data in the arrays")

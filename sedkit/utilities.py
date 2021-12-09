@@ -106,7 +106,8 @@ def convert_mag(band, mag, mag_unc, old='AB', new='Vega'):
     # TODO: Add other bandpasses
     AB_to_Vega = {'Johnson.U': 0.79, 'Johnson.B': -0.09, 'Johnson.V': 0.02, 'Cousins.R': 0.21, 'Cousins.I': 0.45,
                   '2MASS.J': 0.91, '2MASS.H': 1.39, '2MASS.Ks': 1.85,
-                  'SDSS.u': 0.91, 'SDSS.g': -0.08, 'SDSS.r': 0.16, 'SDSS.i': 0.37, 'SDSS.z': 0.54}
+                  'SDSS.u': 0.91 - 0.04, 'SDSS.g': -0.08, 'SDSS.r': 0.16, 'SDSS.i': 0.37, 'SDSS.z': 0.54 + 0.02,
+                  'PS1.g': -0.08, 'PS1.r': 0.16, 'PS1.i': 0.37, 'PS1.z': 0.54, 'PS1.y': 0.63}
 
     if old == 'AB' and new == 'Vega':
         corr = AB_to_Vega.get(band, 0)
@@ -188,7 +189,7 @@ def isnumber(s, nan=False):
     if isinstance(s, (str, bytes)):
         return s.replace('.', '').replace('-', '').replace(' + ', '').isnumeric()
 
-    elif isinstance(s, (int, float, np.int64, np.float32, np.float64)):
+    elif isinstance(s, (int, float, np.int64, np.float16, np.float32, np.float64)):
         if np.isnan(s) and not nan:
             return False
         else:
@@ -500,29 +501,46 @@ def minimize_norm(arr1, arr2, **kwargs):
     return norm_factor
 
 
-def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, color='red', point_kwargs={}, error_kwargs={}):
+def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, source=None, color='red', **kwargs):
     """
     Hack to make errorbar plots in bokeh
 
     Parameters
     ----------
-    x: sequence
-        The x axis data
-    y: sequence
-        The y axis data
-    xerr: sequence (optional)
-        The x axis errors
-    yerr: sequence (optional)
-        The y axis errors
+    x: sequence, str
+        The x axis data or ColumnDataSource key
+    y: sequence, str
+        The y axis data or ColumnDataSource key
+    xerr: sequence, str (optional)
+        The x axis symmetric errors or ColumnDataSource key
+    xlower: sequence, str (optional)
+        The x axis lower errors or ColumnDataSource key
+    xupper: sequence, str (optional)
+        The x axis upper errors or ColumnDataSource key
+    yerr: sequence, str (optional)
+        The y axis symmetric errors or ColumnDataSource key
+    ylower: sequence, str (optional)
+        The y axis lower errors or ColumnDataSource key
+    yupper: sequence, str (optional)
+        The y axis upper errors or ColumnDataSource key
     color: str
         The marker and error bar color
-    point_kwargs: dict
-        kwargs for the point styling
-    error_kwargs: dict
-        kwargs for the error bar styling
     legend: str
         The text for the legend
     """
+    if source is not None:
+
+        # Get data from ColumnDataSource
+        data = source.data
+        x = data[x]
+        xerr = data.get(xerr)
+        xlower = data.get(xlower)
+        xupper = data.get(xupper)
+        y = data[y]
+        yerr = data.get(yerr)
+        ylower = data.get(ylower)
+        yupper = data.get(yupper)
+
     # Add x errorbars if possible
     if xerr is not None or (xupper is not None and xlower is not None):
         x_err_x = []
@@ -546,7 +564,7 @@ def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=
                 except TypeError:
                     pass
 
-        fig.multi_line(x_err_x, x_err_y, color=color, **error_kwargs)
+        fig.multi_line(x_err_x, x_err_y, color=color, **kwargs)
 
     # Add y errorbars if possible
     if yerr is not None or (yupper is not None and ylower is not None):
@@ -571,7 +589,9 @@ def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=
                 except TypeError:
                     pass
 
-        fig.multi_line(y_err_x, y_err_y, color=color, **error_kwargs)
+        fig.multi_line(y_err_x, y_err_y, color=color, **kwargs)
+
+    return fig
 
 
 def goodness(f1, f2, e1=None, e2=None, weights=None):

@@ -20,7 +20,6 @@ import numpy as np
 from bokeh.models import HoverTool, ColumnDataSource, LabelSet, TapTool, CustomJS
 from bokeh.plotting import figure, show
 from bokeh.models.glyphs import Patch
-from bokeh.events import Tap
 from bokeh.layouts import Row
 
 from .sed import SED
@@ -40,6 +39,7 @@ class Catalog:
         self.wave_units = q.um
         self.flux_units = q.erg/q.s/q.cm**2/q.AA
         self.array_cols = ['sky_coords', 'SED', 'app_spec_SED', 'abs_spec_SED', 'app_phot_SED', 'abs_phot_SED', 'app_specphot_SED', 'abs_specphot_SED', 'app_SED', 'abs_SED', 'spectra']
+        self.phot_cols = []
 
         # List all the results columns
         self.cols = ['name', 'age', 'age_unc', 'distance', 'distance_unc',
@@ -190,18 +190,27 @@ class Catalog:
                 self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name=row['band'] + '_unc'))
                 self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name='M_' + row['band']))
                 self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name='M_' + row['band'] + '_unc'))
+                self.phot_cols += [row['band']]
 
             # Add the apparent magnitude
             new_row[row['band']] = row['app_magnitude']
 
             # Add the apparent uncertainty
-            new_row[row['band'] + '_unc'] = row['app_magnitude_unc']
+            new_row['{}_unc'.format(row['band'])] = row['app_magnitude_unc']
 
             # Add the absolute magnitude
-            new_row['M_' + row['band']] = row['abs_magnitude']
+            new_row['M_{}'.format(row['band'])] = row['abs_magnitude']
 
             # Add the absolute uncertainty
-            new_row['M_' + row['band'] + '_unc'] = row['abs_magnitude_unc']
+            new_row['M_{}_unc'.format(row['band'])] = row['abs_magnitude_unc']
+
+        # Ensure missing photometry columns are NANs
+        for band in self.phot_cols:
+            if band not in sed.photometry['band']:
+                new_row[band] = np.nan
+                new_row['{}_unc'.format(band)] = np.nan
+                new_row['M_{}'.format(band)] = np.nan
+                new_row['M_{}_unc'.format(band)] = np.nan
 
         # Add the new row to the end of the list...
         if idx is None:

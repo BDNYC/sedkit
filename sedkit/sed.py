@@ -267,55 +267,56 @@ class SED:
         """
         # Make sure the magnitudes are floats
         if (not isinstance(mag, (float, np.float32))) or np.isnan(mag):
-            raise TypeError("{}: Magnitude must be a float.".format(type(mag)))
+            self.message("{}: {} magnitude must be a float, not {}".format(mag, band, type(mag)))
 
-        # Check the uncertainty
-        if not isinstance(mag_unc, (float, np.float32, type(None), np.ma.core.MaskedConstant)):
-            raise TypeError("{}: Magnitude uncertainty must be a float, NaN, or None.".format(type(mag_unc)))
-
-        # Make NaN if 0 or None
-        if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, (np.ma.core.MaskedConstant, type(None))):
-            mag_unc = np.nan
-
-        # Get the bandpass
-        if isinstance(band, str):
-            bp = svo.Filter(band)
-        elif isinstance(band, svo.Filter):
-            bp, band = band, band.name
         else:
-            self.message('Not a recognized bandpass: {}'.format(band))
+            # Check the uncertainty
+            if not isinstance(mag_unc, (float, np.float32, type(None), np.ma.core.MaskedConstant)):
+                self.message("{}: {} magnitude uncertainty must be a (float, NaN, None), not {}.".format(mag_unc, band, type(mag_unc)))
 
-        # Convert to Vega
-        mag, mag_unc = u.convert_mag(band, mag, mag_unc, old=system, new=self.mag_system)
+            # Make NaN if 0 or None
+            if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, (np.ma.core.MaskedConstant, type(None))):
+                mag_unc = np.nan
 
-        # Convert bandpass to desired units
-        bp.wave_units = self.wave_units
+            # Get the bandpass
+            if isinstance(band, str):
+                bp = svo.Filter(band)
+            elif isinstance(band, svo.Filter):
+                bp, band = band, band.name
+            else:
+                self.message('Not a recognized bandpass: {}'.format(band))
 
-        # Drop the current band if it exists
-        if band in self.photometry['band']:
-            self.drop_photometry(band)
+            # Convert to Vega
+            mag, mag_unc = u.convert_mag(band, mag, mag_unc, old=system, new=self.mag_system)
 
-        # Apply the dereddening by subtracting the (bandpass extinction vector)*(source dust column density)
-        mag -= bp.ext_vector * self.reddening
+            # Convert bandpass to desired units
+            bp.wave_units = self.wave_units
 
-        # Make a dict for the new point
-        mag = round(mag, 3)
-        mag_unc = mag_unc if np.isnan(mag_unc) else round(mag_unc, 3)
-        eff = bp.wave_eff.astype(np.float16)
-        new_photometry = {'band': band, 'eff': eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
+            # Drop the current band if it exists
+            if band in self.photometry['band']:
+                self.drop_photometry(band)
 
-        # Add the kwargs
-        new_photometry.update(kwargs)
+            # Apply the dereddening by subtracting the (bandpass extinction vector)*(source dust column density)
+            mag -= bp.ext_vector * self.reddening
 
-        # Add it to the table
-        self._photometry.add_row(new_photometry)
-        self.message("Setting {} photometry to {:.3f} ({:.3f}) with reference '{}'".format(band, mag, mag_unc, ref))
+            # Make a dict for the new point
+            mag = round(mag, 3)
+            mag_unc = mag_unc if np.isnan(mag_unc) else round(mag_unc, 3)
+            eff = bp.wave_eff.astype(np.float16)
+            new_photometry = {'band': band, 'eff': eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
 
-        # Set SED as uncalculated
-        self.calculated = False
+            # Add the kwargs
+            new_photometry.update(kwargs)
 
-        # Update photometry max and min wavelengths
-        self._calculate_phot_lims()
+            # Add it to the table
+            self._photometry.add_row(new_photometry)
+            self.message("Setting {} photometry to {:.3f} ({:.3f}) with reference '{}'".format(band, mag, mag_unc, ref))
+
+            # Set SED as uncalculated
+            self.calculated = False
+
+            # Update photometry max and min wavelengths
+            self._calculate_phot_lims()
 
     def add_photometry_file(self, file):
         """
@@ -647,7 +648,7 @@ class SED:
             # Update the attribute
             self.Teff = Teff, Teff_unc, 'This Work'
 
-    def _calibrate_photometry(self, name='photometry', phot_flag=2):
+    def _calibrate_photometry(self, name='photometry'):
         """
         Calculate the absolute magnitudes and flux values of all rows in the photometry table
 
@@ -715,21 +716,8 @@ class SED:
                 # Set SED as uncalculated
                 self.calculated = False
 
-            # Check SDSS-2MASS smoothness
-            if self.get_mag('SDSS.z') is not None and self.get_mag('2MASS.J') is not None:
-                fz = self.get_mag('SDSS.z')
-                fJ = self.get_mag('2MASS.J')
-                xJ = abs(fz[0] - fJ[0])
-                if xJ > phot_flag and not np.isnan(fz[1]) and not np.isnan(fJ[1]):
-                    self.warning('SDSS and 2MASS photometry are not smooth! Ratio = {}. Check your photometry!'.format(xJ))
-
-            # Check 2MASS-WISE smoothness
-            if self.get_mag('2MASS.Ks') is not None and self.get_mag('WISE.W1') is not None:
-                fK = self.get_mag('2MASS.Ks')
-                fW = self.get_mag('WISE.W1')
-                KW = abs(fK[0] - fW[0])
-                if KW > phot_flag and not np.isnan(fK[1]) and not np.isnan(fW[1]):
-                    self.warning('2MASS and WISE photometry are not smooth! Ratio = {}. Check your photometry!'.format(KW))
+            # Flag suspicious photometry
+            self._flag_photometry()
 
     def _calibrate_spectra(self):
         """
@@ -1152,7 +1140,7 @@ class SED:
         """
         self.find_photometry('PanSTARRS', **kwargs)
 
-    def find_photometry(self, catalog, col_names=None, target_names=None, search_radius=None, idx=0, **kwargs):
+    def find_photometry(self, catalog, col_names=None, target_names=None, search_radius=None, idx=0, preview=False, **kwargs):
         """
         Search Vizier for photometry in the given catalog
 
@@ -1168,23 +1156,31 @@ class SED:
             The search radius for the Vizier query
         idx: int
             The index of the record to use if multiple Vizier results
+        preview: bool
+            Plot a preview of all queried photometry for visual inspection
         """
         # Get the Vizier catalog
-        results = qu.query_vizier(catalog, col_names=col_names, target_names=target_names, target=self.name, sky_coords=self.sky_coords, search_radius=search_radius or self.search_radius, verbose=self.verbose, idx=idx, **kwargs)
+        results = qu.query_vizier(catalog, col_names=col_names, target_names=target_names, target=self.name, sky_coords=self.sky_coords, search_radius=search_radius or self.search_radius, verbose=self.verbose, idx=idx, preview=preview, **kwargs)
 
-        # Parse the record
-        for result in results:
+        if preview:
+            self.plot(fig=results)
 
-            # Get result
-            band, mag, unc, ref = result
+        else:
 
-            # Ensure Vegamag
-            system = 'AB' if 'SDSS' in band else 'Vega'
+            # Parse the record
+            for result in results:
 
-            self.add_photometry(band, mag, unc, ref=ref, system=system)
+                # Get result
+                band, mag, unc, ref = result
 
-        # Pause to prevent ConnectionError with astroquery
-        time.sleep(self.wait)
+                # Ensure Vegamag
+                system = 'AB' if 'SDSS' in band else 'Vega'
+
+                # Add the magnitude
+                self.add_photometry(band, mag, unc, ref=ref, system=system)
+
+            # Pause to prevent ConnectionError with astroquery
+            time.sleep(self.wait)
 
     def find_SDSS(self, **kwargs):
         """
@@ -1425,6 +1421,29 @@ class SED:
 
         # Run the fit
         self.fit_modelgrid(spl)
+
+    def _flag_photometry(self):
+        """
+        Check that two adjascent photometric bands are reasonable
+
+        Parameters
+        ----------
+        band1: str
+            The first band name
+        band2: str
+            The second band name
+        phot_flag: float
+            The maximum allowed magnitude difference
+        """
+        checks = [('SDSS.g', 'PS1.g', 0.3), ('SDSS.r', 'PS1.r', 0.3), ('SDSS.i', 'PS1.i', 0.3), ('SDSS.z', 'PS1.z', 0.3),
+                  ('SDSS.z', '2MASS.J', 1.5), ('PS1.y', '2MASS.J', 1.5), ('2MASS.Ks', 'WISE.W1', 2)]
+        for band1, band2, flag in checks:
+            if self.get_mag(band1) is not None and self.get_mag(band2) is not None:
+                m1 = self.get_mag(band1)
+                m2 = self.get_mag(band2)
+                md = abs(m1[0] - m2[0])
+                if md > flag and not np.isnan(m1[1]) and not np.isnan(m2[1]):
+                    self.warning('{} and {} photometry are not smooth! Ratio = {}. Check your photometry!'.format(band1, band2, md))
 
     @property
     def flux_units(self):
@@ -2414,7 +2433,7 @@ class SED:
             TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
             xlab = 'Wavelength [{}]'.format(self.wave_units)
             ylab = 'Flux Density [{}]'.format(str(self.flux_units))
-            self.fig = figure(plot_width=800, plot_height=500, title=self.name,
+            self.fig = figure(plot_width=900, plot_height=400, title=self.name,
                               y_axis_type=scale[1], x_axis_type=scale[0],
                               x_axis_label=xlab, y_axis_label=ylab,
                               tools=TOOLS)
@@ -2434,7 +2453,7 @@ class SED:
 
             # Set up hover tool
             phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
-            hover = HoverTool(names=['photometry', 'nondetection'], tooltips=phot_tips, mode='vline')
+            hover = HoverTool(names=['photometry', 'nondetection'], tooltips=phot_tips)
             self.fig.add_tools(hover)
 
             # Plot points with errors
@@ -2442,12 +2461,7 @@ class SED:
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
                 self.fig.circle('x', 'y', source=source, legend_label='Photometry', name='photometry', color=color, fill_alpha=0.7, size=8)
-                y_err_x = []
-                y_err_y = []
-                for name, px, py, err in pts:
-                    y_err_x.append((px, px))
-                    y_err_y.append((py - err, py + err))
-                self.fig.multi_line(y_err_x, y_err_y, color=color)
+                self.fig = u.errorbars(self.fig, 'x', 'y', yerr='z', source=source, color=color)
 
             # Plot points without errors
             pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if (np.isnan(err) or err <= 0) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
@@ -2468,12 +2482,7 @@ class SED:
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
                 self.fig.square('x', 'y', source=source, legend_label='Synthetic Photometry', name='synthetic photometry', color=color, fill_alpha=0.7, size=8)
-                y_err_x = []
-                y_err_y = []
-                for name, px, py, err in pts:
-                    y_err_x.append((px, px))
-                    y_err_y.append((py - err, py + err))
-                self.fig.multi_line(y_err_x, y_err_y, color=color)
+                self.fig = u.errorbars(self.fig, 'x', 'y', yerr='z', source=source, color=color)
 
         # Plot the SED with linear interpolation completion
         if integral:
