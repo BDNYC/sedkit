@@ -1174,7 +1174,9 @@ class SED:
                 band, mag, unc, ref = result
 
                 # Ensure Vegamag
-                system = 'AB' if 'SDSS' in band else 'Vega'
+                # TODO: Vizier results in Vegamag already?
+                system = 'Vega'
+                # system = 'AB' if 'SDSS' in band else 'Vega'
 
                 # Add the magnitude
                 self.add_photometry(band, mag, unc, ref=ref, system=system)

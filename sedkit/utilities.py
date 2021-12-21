@@ -268,6 +268,9 @@ def filter_table(table, **kwargs):
         pandas = True
         table = at.Table.from_pandas(table)
 
+    # Fill None values
+    
+
     for param, value in kwargs.items():
 
         # Check it is a valid column
@@ -285,7 +288,7 @@ def filter_table(table, **kwargs):
             if not value.endswith('*'):
                 value = value + '$'
 
-            # Strip souble quotes
+            # Strip double quotes
             value = value.replace("'", '').replace('"', '').replace('*', '(.*)')
 
             # Regex
@@ -307,7 +310,7 @@ def filter_table(table, **kwargs):
                 if any([value.startswith(o) for o in ['<', '>', '=']]):
                     value = [value]
 
-                # Assume eqality if no operator
+                # Assume equality if no operator
                 else:
                     value = ['== ' + value]
 

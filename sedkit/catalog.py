@@ -305,7 +305,13 @@ class Catalog:
         """
         # Make a new catalog
         cat = Catalog()
-        cat._results = u.filter_table(self._results, **{param: value})
+
+        # If it's a list, just get the rows in the list
+        if isinstance(value, (list, np.ndarray)):
+            cat._results = self._results[[idx for idx, val in enumerate(self._results[param]) if val in value]]
+
+        else:
+            cat._results = u.filter_table(self._results, **{param: value})
 
         return cat
 
@@ -473,7 +479,7 @@ class Catalog:
     def make_results_table(self):
         """Generate blank results table"""
         all_cols = self.cols + self.array_cols
-        results = at.QTable(names=all_cols, dtype=['O'] * len(all_cols))
+        results = at.QTable(names=all_cols, masked=True, dtype=['O'] * len(all_cols))
         results.add_index('name')
 
         # Set the units
@@ -740,7 +746,7 @@ class Catalog:
             yname = source.add(source.data[y], y.replace('.', '_').replace('-', '_'))
 
             # Set up hover tool
-            tips = [('Name', '@name'), (x, '@{}'.format(xname)), (y, '@{}'.format(yname))]
+            tips = [('Name', '@name'), ('Idx', '@idx'), (x, '@{}'.format(xname)), (y, '@{}'.format(yname))]
             hover = HoverTool(tooltips=tips, names=['points'])
 
             # Make the plot
@@ -880,9 +886,12 @@ class Catalog:
 
         # Plot each SED
         for obj in name_or_idx:
-            c = next(COLORS)
             targ = self.get_SED(obj)
-            fig = targ.plot(fig=fig, color=c, one_color=True, output=True, normalize=normalize, label=targ.name, **kwargs)
+            if targ.calculated:
+                c = next(COLORS)
+                fig = targ.plot(fig=fig, color=c, one_color=True, output=True, normalize=normalize, label=targ.name, **kwargs)
+            else:
+                print("No SED to plot for source {}".format(targ.name if targ.name == obj else '{} ({})'.format(obj, targ.name)))
 
         return fig
 
@@ -953,6 +962,9 @@ class Catalog:
         """Generates a ColumnDataSource from the results table"""
         # Remove array columns
         results_dict = {key: val for key, val in dict(self.results).items()}
+
+        # Add the index as a column in the table for tooltips
+        results_dict['idx'] = np.arange(len(self.results))
 
         return ColumnDataSource(data=results_dict)
 
