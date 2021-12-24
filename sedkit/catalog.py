@@ -186,31 +186,32 @@ class Catalog:
 
             # Add the column to the results table
             if row['band'] not in self._results.colnames:
-                self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name=row['band']))
-                self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name=row['band'] + '_unc'))
-                self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name='M_' + row['band']))
-                self._results.add_column(at.Column([np.nan] * len(self._results), dtype=np.float16, name='M_' + row['band'] + '_unc'))
+                self._results.add_column(at.Column([None] * len(self._results), dtype='O', name=row['band']))
+                self._results.add_column(at.Column([None] * len(self._results), dtype='O', name=row['band'] + '_unc'))
+                self._results.add_column(at.Column([None] * len(self._results), dtype='O', name='M_' + row['band']))
+                self._results.add_column(at.Column([None] * len(self._results), dtype='O', name='M_' + row['band'] + '_unc'))
                 self.phot_cols += [row['band']]
 
             # Add the apparent magnitude
-            new_row[row['band']] = row['app_magnitude']
+            if u.isnumber(row['app_magnitude']):
+                new_row[row['band']] = row['app_magnitude']
 
-            # Add the apparent uncertainty
-            new_row['{}_unc'.format(row['band'])] = row['app_magnitude_unc']
+                # Add the apparent uncertainty
+                new_row['{}_unc'.format(row['band'])] = None if np.isnan(row['app_magnitude_unc']) else row['app_magnitude_unc']
 
-            # Add the absolute magnitude
-            new_row['M_{}'.format(row['band'])] = row['abs_magnitude']
+                # Add the absolute magnitude
+                new_row['M_{}'.format(row['band'])] = None if np.isnan(row['abs_magnitude']) else row['abs_magnitude']
 
-            # Add the absolute uncertainty
-            new_row['M_{}_unc'.format(row['band'])] = row['abs_magnitude_unc']
+                # Add the absolute uncertainty
+                new_row['M_{}_unc'.format(row['band'])] = None if np.isnan(row['abs_magnitude_unc']) else row['abs_magnitude_unc']
 
-        # Ensure missing photometry columns are NANs
+        # Ensure missing photometry columns are None
         for band in self.phot_cols:
             if band not in sed.photometry['band']:
-                new_row[band] = np.nan
-                new_row['{}_unc'.format(band)] = np.nan
-                new_row['M_{}'.format(band)] = np.nan
-                new_row['M_{}_unc'.format(band)] = np.nan
+                new_row[band] = None
+                new_row['{}_unc'.format(band)] = None
+                new_row['M_{}'.format(band)] = None
+                new_row['M_{}_unc'.format(band)] = None
 
         # Add the new row to the end of the list...
         if idx is None:
@@ -354,29 +355,34 @@ class Catalog:
     def get_data(self, *args):
         """Fetch the data for the given columns
         """
-        results = []
+        data = []
+        
+        # Fill results table
+        results = self.results.filled(np.nan)
 
         for x in args:
 
             # Get the data
             if '-' in x:
                 x1, x2 = x.split('-')
-                if self.results[x1].unit != self.results[x2].unit:
+                if results[x1].unit != results[x2].unit:
                     raise TypeError('Columns must be the same units.')
 
-                xunit = self.results[x1].unit
-                xdata = self.results[x1] - self.results[x2]
-                xerror = np.sqrt(self.results['{}_unc'.format(x1)]**2 + self.results['{}_unc'.format(x2)]**2)
+                xunit = results[x1].unit
+                xdata = np.array(results[x1].tolist()) - np.array(results[x2].tolist())
+                xerr1 = np.array(results['{}_unc'.format(x1)].tolist())
+                xerr2 = np.array(results['{}_unc'.format(x2)].tolist())
+                xerror = np.sqrt(xerr1**2 + xerr2**2)
 
             else:
-                xunit = self.results[x].unit
-                xdata = self.results[x]
-                xerror = self.results['{}_unc'.format(x)]
+                xunit = results[x].unit
+                xdata = np.array(results[x].value.tolist()) if hasattr(results[x], 'unit') else np.array(results[x].tolist())
+                xerror = np.array(results['{}_unc'.format(x)].value.tolist()) if hasattr(results['{}_unc'.format(x)], 'unit') else np.array(results['{}_unc'.format(x)].tolist())
 
             # Append to results
-            results.append([xdata, xerror, xunit])
+            data.append([xdata, xerror, xunit])
 
-        return results
+        return data
 
     def get_SED(self, name_or_idx):
         """Retrieve the SED for the given object
@@ -642,8 +648,9 @@ class Catalog:
         marker = getattr(fig, marker or self.marker)
         color = color or self.color
 
-        # Plot nominal values
+        # Plot nominal values and errors
         marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
+        fig = u.errorbars(fig, x, y, xerr='{}_unc'.format(x), yerr='{}_unc'.format(y), source=source, color=color)
 
         # Set axis labels
         xunit = source.data[x].unit
@@ -658,6 +665,7 @@ class Catalog:
         sub = figure(plot_width=500, plot_height=500, title='Selected Source',
                      x_axis_label=str(self.wave_units), y_axis_label=str(self.flux_units),
                      x_axis_type='log', y_axis_type='log')
+        sub.line('phot_wave', 'phot', source=phot_source, color='black', alpha=0.2)
         sub.circle('phot_wave', 'phot', source=phot_source, size=8, color='red', alpha=0.8)
         sub.line('spec_wave', 'spec', source=spec_source, color='red', alpha=0.5)
 
@@ -717,19 +725,21 @@ class Catalog:
             _ = source.add([None] * len(source.data['name']), '{}_unc'.format(y))
 
         # Check if the x parameter is a color
+        xname = x.replace('.', '_').replace('-', '_')
         if '-' in x and all([i in params for i in x.split('-')]):
             colordata = self.get_data(x)[0]
             if len(colordata) == 3:
-                _ = source.add(colordata[0], x)
-                _ = source.add(colordata[1], '{}_unc'.format(x))
+                _ = source.add(at.Column(data=colordata[0], unit=colordata[2]), x)
+                _ = source.add(at.Column(data=colordata[1], unit=colordata[2]), '{}_unc'.format(x))
                 params.append(x)
 
         # Check if the y parameter is a color
+        yname = y.replace('.', '_').replace('-', '_')
         if '-' in y and all([i in params for i in y.split('-')]):
             colordata = self.get_data(y)[0]
             if len(colordata) == 3:
-                _ = source.add(colordata[0], y)
-                _ = source.add(colordata[1], '{}_unc'.format(y))
+                _ = source.add(at.Column(data=colordata[0], unit=colordata[2]), y)
+                _ = source.add(at.Column(data=colordata[1], unit=colordata[2]), '{}_unc'.format(y))
                 params.append(y)
 
         # Check the params are in the table
@@ -742,21 +752,19 @@ class Catalog:
         if fig is None:
 
             # Tooltip names can't have '.' or '-'
-            xname = source.add(source.data[x], x.replace('.', '_').replace('-', '_'))
-            yname = source.add(source.data[y], y.replace('.', '_').replace('-', '_'))
+            _ = source.add(at.Column(data=source.data[x]), xname)
+            _ = source.add(at.Column(data=source.data[y]), yname)
+            _ = source.add(at.Column(data=source.data['{}_unc'.format(x)]), '{}_unc'.format(xname))
+            _ = source.add(at.Column(data=source.data['{}_unc'.format(y)]), '{}_unc'.format(yname))
 
             # Set up hover tool
-            tips = [('Name', '@name'), ('Idx', '@idx'), (x, '@{}'.format(xname)), (y, '@{}'.format(yname))]
+            tips = [('Name', '@name'), ('Idx', '@idx'), (x, '@{0} (@{0}_unc)'.format(xname)), (y, '@{0} (@{0}_unc)'.format(yname))]
             hover = HoverTool(tooltips=tips, names=['points'])
 
             # Make the plot
-            TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover, 'tap']
+            TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover]
             title = '{} v {}'.format(x, y)
             fig = figure(plot_width=800, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
-
-            url = "http://www.colors.commutercreative.com/olive/"
-            taptool = fig.select(type=TapTool)
-            taptool.callback = print('Foobar')#OpenURL(url=url)
 
         # Get marker class
         size = kwargs.get('size', 8)
@@ -767,11 +775,10 @@ class Catalog:
         # Prep data
         names = source.data['name']
         xval, xerr = source.data[x], source.data['{}_unc'.format(x)]
-        xval[xval == None] = np.nan
-        xerr[xerr == None] = np.nan
         yval, yerr = source.data[y], source.data['{}_unc'.format(y)]
-        yval[yval == None] = np.nan
-        yerr[yerr == None] = np.nan
+
+        # Make error bars
+        fig = u.errorbars(fig, xval, yval, xerr=xerr, yerr=yerr, color=color)
 
         # Plot nominal values
         marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
@@ -779,16 +786,6 @@ class Catalog:
         # Identify sources
         idx = [ni for ni, name in enumerate(names) if name in identify]
         fig.circle(xval[idx], yval[idx], size=size + 5, color=id_color, fill_color=None, line_width=2)
-
-        # Plot y errorbars
-        y_err_x = [(i, i) for i in source.data[x]]
-        y_err_y = [(yval[n] if np.isnan(i - j) else i - j, yval[n] if np.isnan(i + j) else i + j) for n, (i, j) in enumerate(zip(yval, yerr))]
-        fig.multi_line(y_err_x, y_err_y, color=color)
-
-        # Plot x errorbars
-        x_err_y = [(i, i) for i in source.data[y]]
-        x_err_x = [(xval[n] if np.isnan(i - j) else i - j, xval[n] if np.isnan(i + j) else i + j) for n, (i, j) in enumerate(zip(xval, xerr))]
-        fig.multi_line(x_err_x, x_err_y, color=color)
 
         # Label points
         if label_points:
@@ -884,14 +881,14 @@ class Catalog:
                      y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
                      tools=TOOLS)
 
-        # Plot each SED
+        # Plot each SED if it has been calculated
         for obj in name_or_idx:
             targ = self.get_SED(obj)
             if targ.calculated:
                 c = next(COLORS)
                 fig = targ.plot(fig=fig, color=c, one_color=True, output=True, normalize=normalize, label=targ.name, **kwargs)
             else:
-                print("No SED to plot for source {}".format(targ.name if targ.name == obj else '{} ({})'.format(obj, targ.name)))
+                print("No SED to plot for source {}".format(obj))
 
         return fig
 
@@ -923,7 +920,14 @@ class Catalog:
         """
         Return results table
         """
-        return self._results[[col for col in self._results.colnames if col not in self.array_cols]]
+        # Get results table
+        res_tab = self._results[[col for col in self._results.colnames if col not in self.array_cols]]
+
+        # Mask empty elements
+        for col in res_tab.columns.values():
+            col.mask = [not bool(val) for val in col]
+
+        return res_tab
 
     def save(self, file):
         """
@@ -960,8 +964,13 @@ class Catalog:
     @property
     def source(self):
         """Generates a ColumnDataSource from the results table"""
+        results = copy(self.results)
+
+        # Fill masked values with NaNs
+        results = results.filled(np.nan)
+
         # Remove array columns
-        results_dict = {key: val for key, val in dict(self.results).items()}
+        results_dict = {key: val for key, val in dict(results).items()}
 
         # Add the index as a column in the table for tooltips
         results_dict['idx'] = np.arange(len(self.results))

@@ -269,7 +269,7 @@ def filter_table(table, **kwargs):
         table = at.Table.from_pandas(table)
 
     # Fill None values
-    
+    table = table.filled(np.nan)
 
     for param, value in kwargs.items():
 
@@ -504,7 +504,7 @@ def minimize_norm(arr1, arr2, **kwargs):
     return norm_factor
 
 
-def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, source=None, color='red', **kwargs):
+def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=None, ylower=None, source=None, color='red', name='errors', **kwargs):
     """
     Hack to make errorbar plots in bokeh
 
@@ -528,6 +528,8 @@ def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=
         The y axis upper errors or ColumnDataSource key
     color: str
         The marker and error bar color
+    name: str
+        A name for the glyph
     legend: str
         The text for the legend
     """
@@ -544,6 +546,12 @@ def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=
         ylower = data.get(ylower)
         yupper = data.get(yupper)
 
+    # Make dimensionless for bokeh plotting (increase precision for small errors)
+    if hasattr(x, 'unit'):
+        x = x.value.astype(float)
+    if hasattr(y, 'unit'):
+        y = y.value.astype(float)
+
     # Add x errorbars if possible
     if xerr is not None or (xupper is not None and xlower is not None):
         x_err_x = []
@@ -551,23 +559,25 @@ def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=
 
         # Symmetric uncertainties
         if xerr is not None:
+            if hasattr(xerr, 'unit'):
+                xerr = xerr.value
             for px, py, err in zip(x, y, xerr):
-                try:
-                    x_err_x.append((px - err, px + err))
-                    x_err_y.append((py, py))
-                except TypeError:
-                    pass
+                if isnumber(px) and isnumber(py):
+                    x_err_x.append([px - err, px + err])
+                    x_err_y.append([py, py])
 
         # Asymmetric uncertainties
         elif xupper is not None and xlower is not None:
+            if hasattr(xlower, 'unit'):
+                xlower = xlower.value
+            if hasattr(xupper, 'unit'):
+                xupper = xupper.value
             for px, py, lower, upper in zip(x, y, xlower, xupper):
-                try:
-                    x_err_x.append((px - lower, px + upper))
-                    x_err_y.append((py, py))
-                except TypeError:
-                    pass
+                if isnumber(px) and isnumber(py):
+                    x_err_x.append([px - lower, px + upper])
+                    x_err_y.append([py, py])
 
-        fig.multi_line(x_err_x, x_err_y, color=color, **kwargs)
+        fig.multi_line(x_err_x, x_err_y, color=color, name=name, **kwargs)
 
     # Add y errorbars if possible
     if yerr is not None or (yupper is not None and ylower is not None):
@@ -576,23 +586,25 @@ def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=
 
         # Symmetric uncertainties
         if yerr is not None:
+            if hasattr(yerr, 'unit'):
+                yerr = yerr.value
             for px, py, err in zip(x, y, yerr):
-                try:
-                    y_err_y.append((py - err, py + err))
-                    y_err_x.append((px, px))
-                except TypeError:
-                    pass
+                if isnumber(px) and isnumber(py):
+                    y_err_y.append([py - err, py + err])
+                    y_err_x.append([px, px])
 
         # Asymmetric uncertainties
         elif yupper is not None and ylower is not None:
+            if hasattr(ylower, 'unit'):
+                ylower = ylower.value
+            if hasattr(yupper, 'unit'):
+                yupper = yupper.value
             for px, py, lower, upper in zip(x, y, ylower, yupper):
-                try:
-                    y_err_y.append((py - lower, py + upper))
-                    y_err_x.append((px, px))
-                except TypeError:
-                    pass
+                if isnumber(px) and isnumber(py):
+                    y_err_y.append([py - lower, py + upper])
+                    y_err_x.append([px, px])
 
-        fig.multi_line(y_err_x, y_err_y, color=color, **kwargs)
+        fig.multi_line(y_err_x, y_err_y, color=color, name=name, **kwargs)
 
     return fig
 

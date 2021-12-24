@@ -2029,6 +2029,8 @@ class SED:
         # Make sure there is data
         if len(self.spectra) == 0 and len(self.photometry) == 0:
             self.message('Cannot make the SED without spectra or photometry!')
+            self.calculated = False
+
             return
 
         # Calculate flux and calibrate
