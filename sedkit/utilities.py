@@ -268,9 +268,6 @@ def filter_table(table, **kwargs):
         pandas = True
         table = at.Table.from_pandas(table)
 
-    # Fill None values
-    table = table.filled(np.nan)
-
     for param, value in kwargs.items():
 
         # Check it is a valid column

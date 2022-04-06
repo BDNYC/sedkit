@@ -318,17 +318,64 @@ class SED:
             # Update photometry max and min wavelengths
             self._calculate_phot_lims()
 
-    def add_photometry_file(self, file):
+    def add_photometry_row(self, row, bands=None, rename=None, unc_wildcard='e_*', ref=None):
         """
-        Add a table of photometry from an ASCII file that contains the columns 'band', 'magnitude', and 'uncertainty'
+        Parse a table row into a separate table of photometry. Used mostly to parse the
+        photometry from a single row of Vizier table output for ingestion into SED object.
 
         Parameters
         ----------
-        file: str
-            The path to the ascii file
+        row: astropy.table.Row
+            The table row of data to add
+        bands: sequence
+            The list of bands to preserve
+        rename: sequence
+            A list of new band names
+        unc_wildcard: str
+            The wildcard to look for when fetching uncertainties
+        ref: str, sequence
+            The reference for all photometry of a list of references for each band
+
+        Returns
+        -------
+        astropy.table.Table
+            The resulting table
         """
-        # Read the data
-        table = ii.read(file)
+        self.message("Reading photometry from Table row")
+
+        # Assume SDSS, Gaia, 2MASS, WISE
+        if bands is None:
+            bands = ['FUVmag', 'NUVmag', 'umag', 'gmag', 'rmag', 'imag', 'zmag', 'Gmag', 'Jmag', 'Hmag', 'Kmag', 'W1mag', 'W2mag',
+                     'W3mag', 'W4mag']
+            rename = ['GALEX.FUV', 'GALEX.NUV', 'SDSS.u', 'SDSS.g', 'SDSS.r', 'SDSS.i', 'SDSS.z', 'Gaia.G', '2MASS.J', '2MASS.H', '2MASS.Ks',
+                      'WISE.W1', 'WISE.W2', 'WISE.W3', 'WISE.W4']
+
+        # Add photometry to phot table
+        for idx, band in enumerate(bands):
+            if band in row.colnames:
+                goodmag = isinstance(row[band], (float, np.float16, np.float32))
+                goodunc = isinstance(row[unc_wildcard.replace('*', band)], (float, np.float16, np.float32))
+                if goodmag:
+                    mag = row[band]
+                    unc = row[unc_wildcard.replace('*', band)] if goodunc else np.nan
+                    rf = row['ref'] if isinstance(ref, str) else ref[idx] if isinstance(ref, (list, tuple, np.ndarray)) else None
+                    band = rename[idx] if rename is not None else band
+
+                    # Add the table to the object
+                    self.add_photometry(**{'band': band, 'mag': mag, 'mag_unc': unc, 'ref': rf})
+
+    def add_photometry_table(self, table, **kwargs):
+        """
+        Add photometry from a table or ASCII file that contains the columns 'band', 'magnitude', and 'uncertainty'
+
+        Parameters
+        ----------
+        table: str, astropy.table.Table, astropy.table.row.Row
+            The file path to an ASCII table, astropy Table, or astropy Row to convert to a table ()
+        """
+        # Read the table data
+        if isinstance(table, str):
+            table = ii.read(file)
 
         # Test to see if columns are present
         cols = ['band', 'magnitude', 'uncertainty']
@@ -2767,7 +2814,7 @@ class SED:
                 if '+' in spectral_type:
                     self.multiple = True
                     raw_SpT = spectral_type
-                    self.message("{}: This source appears to be a multiple".format(spectral_type))
+                    self.warning("{}: This source appears to be a multiple".format(spectral_type))
 
                 spec_type = u.specType(spectral_type)
                 spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type

@@ -966,9 +966,6 @@ class Catalog:
         """Generates a ColumnDataSource from the results table"""
         results = copy(self.results)
 
-        # Fill masked values with NaNs
-        results = results.filled(np.nan)
-
         # Remove array columns
         results_dict = {key: val for key, val in dict(results).items()}
 
