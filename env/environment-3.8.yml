@@ -1,7 +1,7 @@
 name: sedkit-3.8
 channels:
-  - http://ssb.stsci.edu/astroconda
   - conda-forge
+  - defaults
 dependencies:
   - numpy>=1.21.5
   - astropy>=4.3.1
