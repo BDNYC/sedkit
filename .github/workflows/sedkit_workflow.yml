@@ -9,10 +9,15 @@ jobs:
     strategy:
       max-parallel: 5
       matrix:
-        os: [ubuntu-latest]
+        os: [macos-latest]
         python-version: ['3.7', '3.8']
     steps:
     - uses: actions/checkout@v2
+    - name: Run script file
+      run: |
+        ../ci/install_conda.sh
+        ../ci/setup_conda_env.sh
+      shell: bash
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
