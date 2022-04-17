@@ -13,10 +13,10 @@ jobs:
         python-version: ['3.7', '3.8']
     steps:
     - uses: actions/checkout@v2
-    - name: Run script file
+    - name: Run script files
       run: |
-        ../ci/install_conda.sh
-        ../ci/setup_conda_env.sh
+        install_conda.sh
+        setup_conda_env.sh
       shell: bash
     - name: Set up Python
       uses: actions/setup-python@v2
