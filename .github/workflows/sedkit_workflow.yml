@@ -14,9 +14,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install conda
-      run: ./install_conda.sh
+      run: install_conda.sh
     - name: Make conda env
-      run: ./setup_conda_env.sh
+      run: setup_conda_env.sh
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
