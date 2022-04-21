@@ -8,8 +8,8 @@ dependencies:
 - pip
 - python==3.7.1
 - pip:
-  - astropy==5.0.4
-  - astroquery==0.4.6
+  - astropy==4.3.1
+  - astroquery==0.4.2
   - bokeh>=2.2.3
   - dustmaps==1.0.9
   - emcee>=3.1.1
