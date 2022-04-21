@@ -76,6 +76,7 @@ class TestCatalog(unittest.TestCase):
 
         # Check there are two SEDs
         self.assertEqual(len(cat.results), 2)
+        print('SpT:', cat.get_data('spectral_type'))
 
         # Filter so there is only one result
         f_cat = cat.filter('spectral_type', '>30')
@@ -115,6 +116,8 @@ class TestCatalog(unittest.TestCase):
         cat.add_SED(self.sirius)
 
         # Simple plot
+        print(cat.get_data('spectral_type'))
+        print(cat.get_data('parallax'))
         plt = cat.plot('spectral_type', 'parallax')
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
 
@@ -140,6 +143,8 @@ class TestCatalog(unittest.TestCase):
         cat.add_SED(self.sirius)
 
         # Simple plot
+        print(cat.get_data('spectral_type'))
+        print(cat.get_data('parallax'))
         plt = cat.iplot('spectral_type', 'parallax')
 
         # Color-color plot

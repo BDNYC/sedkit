@@ -375,7 +375,7 @@ class SED:
         """
         # Read the table data
         if isinstance(table, str):
-            table = ii.read(file)
+            table = ii.read(table)
 
         # Test to see if columns are present
         cols = ['band', 'magnitude', 'uncertainty']
