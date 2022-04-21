@@ -1,8 +1,13 @@
 name: sedkit-3.7
+
 channels:
-  - conda-forge
-  - defaults
+- http://ssb.stsci.edu/astroconda
+- conda-forge
+- defaults
 dependencies:
+- pip
+- python==3.7.1
+- pip:
   - numpy>=1.21.5
   - astropy>=4.3.1
   - astroquery>=0.4.6
@@ -20,8 +25,7 @@ dependencies:
   - pygments>=2.11.2
   - jupyter>=1.0.0
   - ipython>=7.32.0
-  - pip:
-    - svo-filters>=0.4.1
-    - dustmaps>=1.0.9
-    - numpydoc>=1.2.1
-    - emcee>=3.1.1
+  - svo-filters>=0.4.1
+  - dustmaps>=1.0.9
+  - numpydoc>=1.2.1
+  - emcee>=3.1.1
