@@ -43,13 +43,13 @@ class TestSED(unittest.TestCase):
         s.drop_photometry(0)
         self.assertEqual(len(s.photometry), 0)
 
-    def test_add_photometry_file(self):
+    def test_add_photometry_table(self):
         """Test that photometry is added properly from file"""
         s = copy.copy(self.sed)
 
         # Add the photometry
         f = resource_filename('sedkit', 'data/L3_photometry.txt')
-        s.add_photometry_file(f)
+        s.add_photometry_table(f)
         self.assertEqual(len(s.photometry), 8)
 
     def test_add_spectrum(self):
