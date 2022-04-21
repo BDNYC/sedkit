@@ -7,11 +7,7 @@ else
     echo "Installing Miniconda..."
     rm -rf $HOME/miniconda3  # Just in case...
 
-    if [ "${TRAVIS_OS_NAME}" == "osx" ]; then
-        wget http://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh || exit 1
-    else
-        wget http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh || exit 1
-    fi
+    wget http://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh || exit 1
 
     bash miniconda.sh -b -p "$HOME/miniconda3" || exit 1
 fi
