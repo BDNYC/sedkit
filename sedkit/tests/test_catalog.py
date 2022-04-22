@@ -120,7 +120,7 @@ class TestCatalog(unittest.TestCase):
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
 
         # Color-color plot
-        plt = cat.plot('WISE.W1-WISE.W2', 'WISE.W1-WISE.W2', order=1)
+        plt = cat.plot('distance', 'parallax', order=1)
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
 
         # Bad columns
@@ -128,10 +128,10 @@ class TestCatalog(unittest.TestCase):
         self.assertRaises(ValueError, cat.plot, 'foo', 'parallax')
 
         # Fit polynomial
-        cat.plot('spectral_type', 'parallax', order=1)
+        cat.plot('distance', 'parallax', order=1)
 
         # Identify sources
-        cat.plot('spectral_type', 'parallax', identify=['Vega'])
+        cat.plot('distance', 'parallax', identify=['Vega'])
 
     def test_iplot(self):
         """Test iplot method"""
@@ -141,10 +141,10 @@ class TestCatalog(unittest.TestCase):
         cat.add_SED(self.sirius)
 
         # Simple plot
-        plt = cat.iplot('spectral_type', 'parallax')
+        plt = cat.iplot('distance', 'parallax')
 
         # Color-color plot
-        plt = cat.iplot('WISE.W1-WISE.W2', 'WISE.W1-WISE.W2', order=1)
+        plt = cat.iplot('distance', 'parallax', order=1)
 
         # Bad columns
         self.assertRaises(ValueError, cat.iplot, 'spectral_type', 'foo')
