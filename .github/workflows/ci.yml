@@ -20,13 +20,13 @@ jobs:
       matrix:
         include:
           - name: Unit tests Python 3.7
-            os: osx-latest
+            os: macos-latest
             python-version: 3.7
             extras: test
             test-command: pytest
 
           - name: Unit tests Python 3.8
-            os: osx-latest
+            os: macos-latest
             python-version: 3.8
             extras: test
             test-command: pytest
