@@ -320,28 +320,53 @@ def filter_table(table, **kwargs):
 
                 # Equality
                 if cond.startswith('='):
-                    v = cond.replace('=', '')
-                    table = table[table[param] == eval(v)]
+                    val = cond.replace('=', '')
+                    idx = []
+                    for i, v in enumerate(table[param].value):
+                        if v is not None:
+                            if v == float(val):
+                                idx.append(i)
+                    table = table[idx]
 
                 # Less than or equal
                 elif cond.startswith('<='):
-                    v = cond.replace('<=', '')
-                    table = table[table[param] <= eval(v)]
+                    val = cond.replace('<=', '')
+                    idx = []
+                    for i, v in enumerate(table[param].value):
+                        if v is not None:
+                            if v <= float(val):
+                                idx.append(i)
+                    table = table[idx]
 
                 # Less than
                 elif cond.startswith('<'):
-                    v = cond.replace('<', '')
-                    table = table[table[param] < eval(v)]
+                    val = cond.replace('<', '')
+                    idx = []
+                    for i, v in enumerate(table[param].value):
+                        if v is not None:
+                            if v < float(val):
+                                idx.append(i)
+                    table = table[idx]
 
                 # Greater than or equal
                 elif cond.startswith('>='):
-                    v = cond.replace('>=', '')
-                    table = table[table[param] >= eval(v)]
+                    val = cond.replace('>=', '')
+                    idx = []
+                    for i, v in enumerate(table[param].value):
+                        if v is not None:
+                            if v >= float(val):
+                                idx.append(i)
+                    table = table[idx]
 
                 # Greater than
                 elif cond.startswith('>'):
-                    v = cond.replace('>', '')
-                    table = table[table[param] > eval(v)]
+                    val = cond.replace('>', '')
+                    idx = []
+                    for i, v in enumerate(table[param].value):
+                        if v is not None:
+                            if v > float(val):
+                                idx.append(i)
+                    table = table[idx]
 
                 else:
                     raise ValueError("'{}' operator not understood.".format(cond))
