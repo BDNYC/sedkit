@@ -60,4 +60,4 @@ jobs:
           conda update --all
       - name: Test with pytest
         run: |
-          conda run -n sedkit-${{ matrix.python-version }} pytest
+          conda activate sedkit-${{ matrix.python-version }} && pytest
