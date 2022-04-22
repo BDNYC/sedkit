@@ -526,7 +526,7 @@ class Catalog:
                 print("{} {}".format(pre, msg))
 
     def iplot(self, x, y, marker=None, color=None, scale=['linear','linear'],
-             xlabel=None, ylabel=None, draw=True, **kwargs):
+             xlabel=None, ylabel=None, draw=True, order=None, **kwargs):
         """Plot parameter x versus parameter y
 
         Parameters
@@ -653,8 +653,8 @@ class Catalog:
         fig = u.errorbars(fig, x, y, xerr='{}_unc'.format(x), yerr='{}_unc'.format(y), source=source, color=color)
 
         # Set axis labels
-        xunit = source.data[x].unit
-        yunit = source.data[y].unit
+        xunit = source.data[x].unit if hasattr(source.data[x], 'unit') else None
+        yunit = source.data[y].unit if hasattr(source.data[y], 'unit') else None
         fig.xaxis.axis_label = xlabel or '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
         fig.yaxis.axis_label = ylabel or '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
 

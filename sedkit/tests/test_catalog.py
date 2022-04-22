@@ -116,8 +116,6 @@ class TestCatalog(unittest.TestCase):
         cat.add_SED(self.sirius)
 
         # Simple plot
-        print(cat.get_data('spectral_type'))
-        print(cat.get_data('parallax'))
         plt = cat.plot('spectral_type', 'parallax')
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
 
@@ -143,8 +141,6 @@ class TestCatalog(unittest.TestCase):
         cat.add_SED(self.sirius)
 
         # Simple plot
-        print(cat.get_data('spectral_type'))
-        print(cat.get_data('parallax'))
         plt = cat.iplot('spectral_type', 'parallax')
 
         # Color-color plot

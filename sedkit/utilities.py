@@ -568,12 +568,6 @@ def errorbars(fig, x, y, xerr=None, xupper=None, xlower=None, yerr=None, yupper=
         ylower = data.get(ylower)
         yupper = data.get(yupper)
 
-    # Make dimensionless for bokeh plotting (increase precision for small errors)
-    if hasattr(x, 'unit'):
-        x = x.value.astype(float)
-    if hasattr(y, 'unit'):
-        y = y.value.astype(float)
-
     # Add x errorbars if possible
     if xerr is not None or (xupper is not None and xlower is not None):
         x_err_x = []
