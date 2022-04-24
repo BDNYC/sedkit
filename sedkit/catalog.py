@@ -7,6 +7,7 @@ A module to produce a catalog of spectral energy distributions
 """
 
 import os
+import dill
 import pickle
 from copy import copy
 from pkg_resources import resource_filename
@@ -16,9 +17,10 @@ from astropy.io import ascii
 import astropy.table as at
 import astropy.units as q
 import numpy as np
-from bokeh.models import HoverTool, ColumnDataSource, LabelSet
+from bokeh.models import HoverTool, ColumnDataSource, LabelSet, TapTool, CustomJS
 from bokeh.plotting import figure, show
 from bokeh.models.glyphs import Patch
+from bokeh.layouts import Row
 
 from .sed import SED
 from . import utilities as u
@@ -33,20 +35,23 @@ class Catalog:
         self.name = name
         self.marker = marker
         self.color = color
+        self.palette = 'viridis'
         self.wave_units = q.um
         self.flux_units = q.erg/q.s/q.cm**2/q.AA
+        self.array_cols = ['sky_coords', 'SED', 'app_spec_SED', 'abs_spec_SED', 'app_phot_SED', 'abs_phot_SED', 'app_specphot_SED', 'abs_specphot_SED', 'app_SED', 'abs_SED', 'spectra']
+        self.phot_cols = []
 
         # List all the results columns
-        self.cols = ['name', 'ra', 'dec', 'age', 'age_unc', 'distance', 'distance_unc',
+        self.cols = ['name', 'age', 'age_unc', 'distance', 'distance_unc',
                      'parallax', 'parallax_unc', 'radius', 'radius_unc',
                      'spectral_type', 'spectral_type_unc', 'SpT',
                      'membership', 'reddening', 'fbol', 'fbol_unc', 'mbol',
                      'mbol_unc', 'Lbol', 'Lbol_unc', 'Lbol_sun',
                      'Lbol_sun_unc', 'Mbol', 'Mbol_unc', 'logg', 'logg_unc',
-                     'mass', 'mass_unc', 'Teff', 'Teff_unc', 'SED']
+                     'mass', 'mass_unc', 'Teff', 'Teff_unc']
 
         # A master table of all SED results
-        self.results = self.make_results_table(self)
+        self._results = self.make_results_table()
 
         # Try to set attributes from kwargs
         for k, v in kwargs.items():
@@ -72,8 +77,8 @@ class Catalog:
         new_cat = Catalog(name=name or self.name)
 
         # Combine results
-        new_results = at.vstack([at.Table(self.results), at.Table(other.results)])
-        new_cat.results = new_results
+        new_results = at.vstack([at.Table(self._results), at.Table(other._results)])
+        new_cat._results = new_results
 
         return new_cat
 
@@ -91,15 +96,15 @@ class Catalog:
             The uncertainty array
         """
         # Make sure column doesn't exist
-        if name in self.results.colnames:
+        if name in self._results.colnames:
             raise ValueError("{}: Column already exists.".format(name))
 
         # Make sure data is the right length
-        if len(data) != len(self.results):
-            raise ValueError("{} != {}: Data is not the right size for this catalog.".format(len(data), len(self.results)))
+        if len(data) != len(self._results):
+            raise ValueError("{} != {}: Data is not the right size for this catalog.".format(len(data), len(self._results)))
 
         # Add the column
-        self.results.add_column(data, name=name)
+        self._results.add_column(data, name=name)
 
         # Add uncertainty column
         if unc is not None:
@@ -108,16 +113,16 @@ class Catalog:
             name = name + '_unc'
 
             # Make sure column doesn't exist
-            if name in self.results.colnames:
+            if name in self._results.colnames:
                 raise ValueError("{}: Column already exists.".format(name))
 
             # Make sure data is the right length
-            if len(unc) != len(self.results):
+            if len(unc) != len(self._results):
                 raise ValueError(
-                    "{} != {}: Data is not the right size for this catalog.".format(len(unc), len(self.results)))
+                    "{} != {}: Data is not the right size for this catalog.".format(len(unc), len(self._results)))
 
             # Add the column
-            self.results.add_column(unc, name=name)
+            self._results.add_column(unc, name=name)
 
     def add_SED(self, sed):
         """Add an SED to the catalog
@@ -130,7 +135,7 @@ class Catalog:
         # Overwrite duplicate names
         idx = None
         if sed.name in self.results['name']:
-            self.message("{}: Target already in catalog. Overwriting with new SED...")
+            self.message("{}: Target already in catalog. Overwriting with new SED...".format(sed.name))
             idx = np.where(self.results['name'] == sed.name)[0][0]
 
         # Turn off print statements
@@ -145,7 +150,7 @@ class Catalog:
 
         # Add the values and uncertainties if applicable
         new_row = {}
-        for col in self.cols[:-1]:
+        for col in self.cols:
 
             if col + '_unc' in self.cols:
                 if isinstance(getattr(sed, col), tuple):
@@ -164,6 +169,15 @@ class Catalog:
 
             new_row[col] = val
 
+        # Store the spectra
+        new_row['spectra'] = [spec['spectrum'] for spec in sed.spectra]
+
+        # Store the SED arrays
+        for pre in ['app', 'abs']:
+            for dat in ['phot_', 'spec_', 'specphot_', '']:
+                sed_name = '{}_{}SED'.format(pre, dat)
+                new_row[sed_name] = getattr(sed, sed_name).spectrum if getattr(sed, sed_name) is not None else None
+
         # Add the SED
         new_row['SED'] = sed
 
@@ -171,31 +185,42 @@ class Catalog:
         for row in sed.photometry:
 
             # Add the column to the results table
-            if row['band'] not in self.results.colnames:
-                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name=row['band']))
-                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name=row['band'] + '_unc'))
-                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name='M_' + row['band']))
-                self.results.add_column(at.Column([np.nan] * len(self.results), dtype=np.float16, name='M_' + row['band'] + '_unc'))
+            if row['band'] not in self._results.colnames:
+                self._results.add_column(at.Column([None] * len(self._results), dtype='O', name=row['band']))
+                self._results.add_column(at.Column([None] * len(self._results), dtype='O', name=row['band'] + '_unc'))
+                self._results.add_column(at.Column([None] * len(self._results), dtype='O', name='M_' + row['band']))
+                self._results.add_column(at.Column([None] * len(self._results), dtype='O', name='M_' + row['band'] + '_unc'))
+                self.phot_cols += [row['band']]
 
             # Add the apparent magnitude
-            new_row[row['band']] = row['app_magnitude']
+            if u.isnumber(row['app_magnitude']):
+                new_row[row['band']] = row['app_magnitude']
 
-            # Add the apparent uncertainty
-            new_row[row['band'] + '_unc'] = row['app_magnitude_unc']
+                # Add the apparent uncertainty
+                new_row['{}_unc'.format(row['band'])] = None if np.isnan(row['app_magnitude_unc']) else row['app_magnitude_unc']
 
-            # Add the absolute magnitude
-            new_row['M_' + row['band']] = row['abs_magnitude']
+                # Add the absolute magnitude
+                new_row['M_{}'.format(row['band'])] = None if np.isnan(row['abs_magnitude']) else row['abs_magnitude']
 
-            # Add the absolute uncertainty
-            new_row['M_' + row['band'] + '_unc'] = row['abs_magnitude_unc']
+                # Add the absolute uncertainty
+                new_row['M_{}_unc'.format(row['band'])] = None if np.isnan(row['abs_magnitude_unc']) else row['abs_magnitude_unc']
 
-        # Add the new row...
+        # Ensure missing photometry columns are None
+        for band in self.phot_cols:
+            if band not in sed.photometry['band']:
+                new_row[band] = None
+                new_row['{}_unc'.format(band)] = None
+                new_row['M_{}'.format(band)] = None
+                new_row['M_{}_unc'.format(band)] = None
+
+        # Add the new row to the end of the list...
         if idx is None:
-            self.results.add_row(new_row)
+            self._results.add_row(new_row)
 
-        # ...or replace existing
+        # ...or replace the existing row
         else:
-            self.results[idx] = new_row
+            self._results.remove_row(idx)
+            self._results.insert_row(idx, new_row)
 
         self.message("Successfully added SED '{}'".format(sed.name))
 
@@ -248,7 +273,7 @@ class Catalog:
             os.system('mkdir {}'.format(sourcedir))
 
             # Export all SEDs
-            for source in self.results['SED']:
+            for source in self._results['SED']:
                 source.export(sourcedir)
 
             # zip if desired
@@ -269,7 +294,7 @@ class Catalog:
         param: str
             The parameter to filter by, e.g. 'Teff'
         value: str, float, int, sequence
-            The criteria to filter by, 
+            The criteria to filter by,
             which can be single valued like 1400
             or a range with operators [<,<=,>,>=],
             e.g. (>1200,<1400), ()
@@ -281,7 +306,13 @@ class Catalog:
         """
         # Make a new catalog
         cat = Catalog()
-        cat.results = u.filter_table(self.results, **{param: value})
+
+        # If it's a list, just get the rows in the list
+        if isinstance(value, (list, np.ndarray)):
+            cat._results = self._results[[idx for idx, val in enumerate(self._results[param]) if val in value]]
+
+        else:
+            cat._results = u.filter_table(self._results, **{param: value})
 
         return cat
 
@@ -324,29 +355,34 @@ class Catalog:
     def get_data(self, *args):
         """Fetch the data for the given columns
         """
-        results = []
+        data = []
+        
+        # Fill results table
+        results = self.results.filled(np.nan)
 
         for x in args:
 
             # Get the data
             if '-' in x:
                 x1, x2 = x.split('-')
-                if self.results[x1].unit != self.results[x2].unit:
+                if results[x1].unit != results[x2].unit:
                     raise TypeError('Columns must be the same units.')
 
-                xunit = self.results[x1].unit
-                xdata = self.results[x1] - self.results[x2]
-                xerror = np.sqrt(self.results['{}_unc'.format(x1)]**2 + self.results['{}_unc'.format(x2)]**2)
+                xunit = results[x1].unit
+                xdata = np.array(results[x1].tolist()) - np.array(results[x2].tolist())
+                xerr1 = np.array(results['{}_unc'.format(x1)].tolist())
+                xerr2 = np.array(results['{}_unc'.format(x2)].tolist())
+                xerror = np.sqrt(xerr1**2 + xerr2**2)
 
             else:
-                xunit = self.results[x].unit
-                xdata = self.results[x]
-                xerror = self.results['{}_unc'.format(x)]
+                xunit = results[x].unit
+                xdata = np.array(results[x].value.tolist()) if hasattr(results[x], 'unit') else np.array(results[x].tolist())
+                xerror = np.array(results['{}_unc'.format(x)].value.tolist()) if hasattr(results['{}_unc'.format(x)], 'unit') else np.array(results['{}_unc'.format(x)].tolist())
 
             # Append to results
-            results.append([xdata, xerror, xunit])
+            data.append([xdata, xerror, xunit])
 
-        return results
+        return data
 
     def get_SED(self, name_or_idx):
         """Retrieve the SED for the given object
@@ -357,38 +393,99 @@ class Catalog:
             The name or index of the SED to get
         """
         # Add the index
-        self.results.add_index('name')
+        self._results.add_index('name')
 
         # Get the rows
-        if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
-            return copy(self.results.loc[name_or_idx]['SED'])
+        if isinstance(name_or_idx, str) and name_or_idx in self._results['name']:
+            return copy(self._results[self._results['name'] == name_or_idx]['SED'][0])
 
-        elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
-            return copy(self.results[name_or_idx]['SED'])
+        elif isinstance(name_or_idx, int) and name_or_idx <= len(self._results):
+            return copy(self._results[name_or_idx]['SED'])
 
         else:
             self.message('Could not retrieve SED {}'.format(name_or_idx))
 
-            return
+        return
 
-    def load(self, file):
-        """Load a saved Catalog"""
+    def generate_SEDs(self, table):
+        """
+        Generate SEDs from a Catalog results table
+
+        Parameters
+        ----------
+        table: astropy.table.QTable
+            The table of data to use
+
+        Returns
+        -------
+        sequence
+            The list of SEDs for each row in the input table
+        """
+        sed_list = []
+        t = self.make_results_table()
+        for row in table:
+            s = SED(row['name'], verbose=False)
+
+            for att in ['age', 'parallax', 'radius', 'spectral_type']:
+                setattr(self, att, (row[att] * t[att].unit, row['{}_unc'.format(att)] * t[att].unit) if row[att] is not None else None)
+
+            s.sky_coords = row['sky_coords']
+            s.membership = row['membership']
+            s.reddening = row['reddening']
+
+            # Add spectra
+            for spec in row['spectra']:
+                s.add_spectrum(spec)
+
+            # Add photometry
+            for col in row.colnames:
+                if '.' in col and not col.startswith('M_') and not col.endswith('_unc'):
+                    if row[col] is not None and not np.isnan(row[col]):
+                        s.add_photometry(col, float(row[col]), float(row['{}_unc'.format(col)]))
+
+            # Make the SED
+            s.make_sed()
+
+            # Add SED object to the list
+            sed_list.append(s)
+            del s
+
+        return sed_list
+
+    def load(self, file, make_seds=False):
+        """
+        Load a saved Catalog
+
+        Parameters
+        ----------
+        file: str
+            The file to load
+        """
         if os.path.isfile(file):
 
-            f = open(file)
-            cat = pickle.load(f)
-            f.close()
-
+            # Open the file
             f = open(file, 'rb')
-            cat = pickle.load(f)
+            results = pickle.load(f)
             f.close()
 
-            self.results = cat
+            # Make SEDs again
+            if make_seds:
+                seds = self.generate_SEDs(results)
+                results.add_column(seds, name='SED')
 
-    @staticmethod
+            # Set results attribute
+            self._results = results
+
+            self.message("Catalog loaded from {}".format(file))
+
+        else:
+
+            self.message("Could not load Catalog from {}".format(file))
+
     def make_results_table(self):
         """Generate blank results table"""
-        results = at.QTable(names=self.cols, dtype=['O'] * len(self.cols))
+        all_cols = self.cols + self.array_cols
+        results = at.QTable(names=all_cols, masked=True, dtype=['O'] * len(all_cols))
         results.add_index('name')
 
         # Set the units
@@ -428,9 +525,8 @@ class Catalog:
             else:
                 print("{} {}".format(pre, msg))
 
-    def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
-             xlabel=None, ylabel=None, fig=None, order=None, identify=[],
-             id_color='red', label_points=False, draw=True, **kwargs):
+    def iplot(self, x, y, marker=None, color=None, scale=['linear','linear'],
+             xlabel=None, ylabel=None, draw=True, order=None, **kwargs):
         """Plot parameter x versus parameter y
 
         Parameters
@@ -448,7 +544,7 @@ class Catalog:
         xlabel: str
              The label for the x-axis
         ylable : str
-             The label for the y-axis 
+             The label for the y-axis
         fig: bokeh.plotting.figure (optional)
              The figure to plot on
         order: int
@@ -497,15 +593,172 @@ class Catalog:
         if y not in params:
             raise ValueError("'{}' is not a valid y parameter. Please choose from {}".format(y, params))
 
+        # Tooltip names can't have '.' or '-'
+        xname = source.add(source.data[x], x.replace('.', '_').replace('-', '_'))
+        yname = source.add(source.data[y], y.replace('.', '_').replace('-', '_'))
+
+        # Make photometry source
+        phot_source = ColumnDataSource(data={'phot_wave': [], 'phot': []})
+        phot_data = [row['app_phot_SED'][:2] if row['app_phot_SED'] is not None else [[], []] for row in self._results]
+        phot_len = max([len(i[0]) for i in phot_data])
+        for idx, row in enumerate(self._results):
+            w, f = phot_data[idx]
+            w = np.concatenate([w, np.zeros(phot_len - len(w)) * np.nan])
+            f = np.concatenate([f, np.zeros(phot_len - len(f)) * np.nan])
+            _ = phot_source.add(w, 'phot_wave{}'.format(idx))
+            _ = phot_source.add(f, 'phot{}'.format(idx))
+
+        # Make spectra source
+        spec_source = ColumnDataSource(data={'spec_wave': [], 'spec': []})
+        spec_data = [row['app_spec_SED'][:2] if row['app_spec_SED'] is not None else [[], []] for row in self._results]
+        spec_len = max([len(i[0]) for i in spec_data])
+        for idx, row in enumerate(self._results):
+            w, f = spec_data[idx]
+            w = np.concatenate([w, np.zeros(spec_len - len(w)) * np.nan])
+            f = np.concatenate([f, np.zeros(spec_len - len(f)) * np.nan])
+            _ = spec_source.add(w, 'spec_wave{}'.format(idx))
+            _ = spec_source.add(f, 'spec{}'.format(idx))
+
+        # Set up hover tool
+        tips = [('Name', '@name'), (x, '@{}'.format(xname)), (y, '@{}'.format(yname))]
+        hover = HoverTool(tooltips=tips, names=['points'])
+
+        callback = CustomJS(args=dict(source=source, phot_source=phot_source, spec_source=spec_source), code="""
+            var data = source.data;
+            var phot_data = phot_source.data;
+            var spec_data = spec_source.data;
+            var selected = source.selected.indices;
+            phot_source.data['phot_wave'] = phot_data['phot_wave' + selected[0]];
+            phot_source.data['phot'] = phot_data['phot' + selected[0]];
+            phot_source.change.emit();
+            spec_source.data['spec_wave'] = spec_data['spec_wave' + selected[0]];
+            spec_source.data['spec'] = spec_data['spec' + selected[0]];
+            spec_source.change.emit();
+            """)
+        tap = TapTool(callback=callback)
+
+        # Make the plot
+        TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover, tap]
+        title = '{} v {}'.format(x, y)
+        fig = figure(plot_width=500, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
+
+        # Get marker class
+        size = kwargs.get('size', 8)
+        kwargs['size'] = size
+        marker = getattr(fig, marker or self.marker)
+        color = color or self.color
+
+        # Plot nominal values and errors
+        marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
+        fig = u.errorbars(fig, x, y, xerr='{}_unc'.format(x), yerr='{}_unc'.format(y), source=source, color=color)
+
+        # Set axis labels
+        xunit = source.data[x].unit if hasattr(source.data[x], 'unit') else None
+        yunit = source.data[y].unit if hasattr(source.data[y], 'unit') else None
+        fig.xaxis.axis_label = xlabel or '{}{}'.format(x, ' [{}]'.format(xunit) if xunit else '')
+        fig.yaxis.axis_label = ylabel or '{}{}'.format(y, ' [{}]'.format(yunit) if yunit else '')
+
+        # Formatting
+        fig.legend.location = "top_right"
+
+        # Draw sub figure
+        sub = figure(plot_width=500, plot_height=500, title='Selected Source',
+                     x_axis_label=str(self.wave_units), y_axis_label=str(self.flux_units),
+                     x_axis_type='log', y_axis_type='log')
+        sub.line('phot_wave', 'phot', source=phot_source, color='black', alpha=0.2)
+        sub.circle('phot_wave', 'phot', source=phot_source, size=8, color='red', alpha=0.8)
+        sub.line('spec_wave', 'spec', source=spec_source, color='red', alpha=0.5)
+
+        # Make row layout
+        layout = Row(children=[fig, sub])
+
+        if draw:
+            show(layout)
+
+        return layout
+
+    def plot(self, x, y, marker=None, color=None, scale=['linear','linear'],
+             xlabel=None, ylabel=None, fig=None, order=None, identify=[],
+             id_color='red', label_points=False, draw=True, **kwargs):
+        """Plot parameter x versus parameter y
+
+        Parameters
+        ----------
+        x: str
+             The name of the x axis parameter, e.g. 'SpT'
+        y: str
+             The name of the y axis parameter, e.g. 'Teff'
+        marker: str (optional)
+             The name of the method for the desired marker
+        color: str (optional)
+             The color to use for the points
+        scale: sequence
+             The (x,y) scale for the plot
+        xlabel: str
+             The label for the x-axis
+        ylable : str
+             The label for the y-axis
+        fig: bokeh.plotting.figure (optional)
+             The figure to plot on
+        order: int
+             The polynomial order to fit
+        identify: idx, str, sequence
+             Names of sources to highlight in the plot
+        id_color: str
+             The color of the identified points
+        label_points: bool
+             Print the name of the object next to the point
+
+        Returns
+        -------
+        bokeh.plotting.figure.Figure
+             The figure object
+        """
+        # Grab the source and valid params
+        source = copy(self.source)
+        params = [k for k in source.column_names if not k.endswith('_unc')]
+
+        # If no uncertainty column for parameter, add it
+        if '{}_unc'.format(x) not in source.column_names:
+            _ = source.add([None] * len(source.data['name']), '{}_unc'.format(x))
+        if '{}_unc'.format(y) not in source.column_names:
+            _ = source.add([None] * len(source.data['name']), '{}_unc'.format(y))
+
+        # Check if the x parameter is a color
+        xname = x.replace('.', '_').replace('-', '_')
+        if '-' in x and all([i in params for i in x.split('-')]):
+            colordata = self.get_data(x)[0]
+            if len(colordata) == 3:
+                _ = source.add(at.Column(data=colordata[0], unit=colordata[2]), x)
+                _ = source.add(at.Column(data=colordata[1], unit=colordata[2]), '{}_unc'.format(x))
+                params.append(x)
+
+        # Check if the y parameter is a color
+        yname = y.replace('.', '_').replace('-', '_')
+        if '-' in y and all([i in params for i in y.split('-')]):
+            colordata = self.get_data(y)[0]
+            if len(colordata) == 3:
+                _ = source.add(at.Column(data=colordata[0], unit=colordata[2]), y)
+                _ = source.add(at.Column(data=colordata[1], unit=colordata[2]), '{}_unc'.format(y))
+                params.append(y)
+
+        # Check the params are in the table
+        if x not in params:
+            raise ValueError("'{}' is not a valid x parameter. Please choose from {}".format(x, params))
+        if y not in params:
+            raise ValueError("'{}' is not a valid y parameter. Please choose from {}".format(y, params))
+
         # Make the figure
         if fig is None:
 
             # Tooltip names can't have '.' or '-'
-            xname = source.add(source.data[x], x.replace('.', '_').replace('-', '_'))
-            yname = source.add(source.data[y], y.replace('.', '_').replace('-', '_'))
+            _ = source.add(at.Column(data=source.data[x]), xname)
+            _ = source.add(at.Column(data=source.data[y]), yname)
+            _ = source.add(at.Column(data=source.data['{}_unc'.format(x)]), '{}_unc'.format(xname))
+            _ = source.add(at.Column(data=source.data['{}_unc'.format(y)]), '{}_unc'.format(yname))
 
             # Set up hover tool
-            tips = [('Name', '@name'), (x, '@{}'.format(xname)), (y, '@{}'.format(yname))]
+            tips = [('Name', '@name'), ('Idx', '@idx'), (x, '@{0} (@{0}_unc)'.format(xname)), (y, '@{0} (@{0}_unc)'.format(yname))]
             hover = HoverTool(tooltips=tips, names=['points'])
 
             # Make the plot
@@ -522,11 +775,10 @@ class Catalog:
         # Prep data
         names = source.data['name']
         xval, xerr = source.data[x], source.data['{}_unc'.format(x)]
-        xval[xval == None] = np.nan
-        xerr[xerr == None] = np.nan
         yval, yerr = source.data[y], source.data['{}_unc'.format(y)]
-        yval[yval == None] = np.nan
-        yerr[yerr == None] = np.nan
+
+        # Make error bars
+        fig = u.errorbars(fig, xval, yval, xerr=xerr, yerr=yerr, color=color)
 
         # Plot nominal values
         marker(x, y, source=source, color=color, fill_alpha=0.7, name='points', **kwargs)
@@ -534,16 +786,6 @@ class Catalog:
         # Identify sources
         idx = [ni for ni, name in enumerate(names) if name in identify]
         fig.circle(xval[idx], yval[idx], size=size + 5, color=id_color, fill_color=None, line_width=2)
-
-        # Plot y errorbars
-        y_err_x = [(i, i) for i in source.data[x]]
-        y_err_y = [(yval[n] if np.isnan(i - j) else i - j, yval[n] if np.isnan(i + j) else i + j) for n, (i, j) in enumerate(zip(yval, yerr))]
-        fig.multi_line(y_err_x, y_err_y, color=color)
-
-        # Plot x errorbars
-        x_err_y = [(i, i) for i in source.data[y]]
-        x_err_x = [(xval[n] if np.isnan(i - j) else i - j, xval[n] if np.isnan(i + j) else i + j) for n, (i, j) in enumerate(zip(xval, xerr))]
-        fig.multi_line(x_err_x, x_err_y, color=color)
 
         # Label points
         if label_points:
@@ -620,8 +862,6 @@ class Catalog:
         normalized: bool
             Normalize the SEDs to 1
         """
-        COLORS = u.color_gen('Category10')
-
         # Plot all SEDS
         if name_or_idx in ['all', '*']:
             name_or_idx = list(range(len(self.results)))
@@ -629,6 +869,8 @@ class Catalog:
         # Make it into a list
         if isinstance(name_or_idx, (str, int)):
             name_or_idx = [name_or_idx]
+
+        COLORS = u.color_gen(kwargs.get('palette', self.palette), n=len(name_or_idx))
 
         # Make the plot
         TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
@@ -639,11 +881,14 @@ class Catalog:
                      y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
                      tools=TOOLS)
 
-        # Plot each SED
+        # Plot each SED if it has been calculated
         for obj in name_or_idx:
-            c = next(COLORS)
             targ = self.get_SED(obj)
-            fig = targ.plot(fig=fig, color=c, output=True, normalize=normalize, legend=targ.name, **kwargs)
+            if targ.calculated:
+                c = next(COLORS)
+                fig = targ.plot(fig=fig, color=c, one_color=True, output=True, normalize=normalize, label=targ.name, **kwargs)
+            else:
+                print("No SED to plot for source {}".format(obj))
 
         return fig
 
@@ -656,22 +901,37 @@ class Catalog:
             The name or index of the SED to remove
         """
         # Add the index
-        self.results.add_index('name')
+        self._results.add_index('name')
 
         # Get the rows
-        if isinstance(name_or_idx, str) and name_or_idx in self.results['name']:
-            self.results = self.results[self.results['name'] != name_or_idx]
+        if isinstance(name_or_idx, str) and name_or_idx in self._results['name']:
+            self._results = self._results[self._results['name'] != name_or_idx]
 
-        elif isinstance(name_or_idx, int) and name_or_idx <= len(self.results):
-            self.results.remove_row([name_or_idx])
+        elif isinstance(name_or_idx, int) and name_or_idx <= len(self._results):
+            self._results.remove_row([name_or_idx])
 
         else:
             self.message('Could not remove SED {}'.format(name_or_idx))
 
             return
 
+    @property
+    def results(self):
+        """
+        Return results table
+        """
+        # Get results table
+        res_tab = self._results[[col for col in self._results.colnames if col not in self.array_cols]]
+
+        # Mask empty elements
+        for col in res_tab.columns.values():
+            col.mask = [not bool(val) for val in col]
+
+        return res_tab
+
     def save(self, file):
-        """Save the serialized data
+        """
+        Save the serialized data
 
         Parameters
         ----------
@@ -686,18 +946,31 @@ class Catalog:
             if not os.path.isfile(file):
                 os.system('touch {}'.format(file))
 
+            # Get the pickle-safe data
+            results = copy(self._results)
+            results = results[[k for k in results.colnames if k != 'SED']]
+
             # Write the file
             f = open(file, 'wb')
-            pickle.dump(self.results, f, pickle.HIGHEST_PROTOCOL)
+            dill.dump(results, f)
             f.close()
 
             self.message('Catalog saved to {}'.format(file))
 
+        else:
+
+            self.message('{}: Path does not exist. Try again.'.format(path))
+
     @property
     def source(self):
         """Generates a ColumnDataSource from the results table"""
-        # Remove SED column
-        results_dict = {key: val for key, val in dict(self.results).items() if key != 'SED'}
+        results = copy(self.results)
+
+        # Remove array columns
+        results_dict = {key: val for key, val in dict(results).items()}
+
+        # Add the index as a column in the table for tooltips
+        results_dict['idx'] = np.arange(len(self.results))
 
         return ColumnDataSource(data=results_dict)
 

@@ -129,8 +129,6 @@ class SED:
 
         # Attributes with setters
         self._name = None
-        self._ra = None
-        self._dec = None
         self._age = None
         self._distance = None
         self._parallax = None
@@ -150,6 +148,7 @@ class SED:
 
         # Static attributes
         self.evo_model = 'DUSTY00'
+        self.frame = 'icrs'
         self.reddening = 0
         self.SpT = None
         self.multiple = False
@@ -177,6 +176,7 @@ class SED:
 
         # Attributes of arbitrary length
         self.all_names = []
+        self.warnings = []
         self.stitched_spectra = []
         self.app_spec_SED = None
         self.app_phot_SED = None
@@ -267,67 +267,115 @@ class SED:
         """
         # Make sure the magnitudes are floats
         if (not isinstance(mag, (float, np.float32))) or np.isnan(mag):
-            raise TypeError("{}: Magnitude must be a float.".format(type(mag)))
+            self.message("{}: {} magnitude must be a float, not {}".format(mag, band, type(mag)))
 
-        # Check the uncertainty
-        if not isinstance(mag_unc, (float, np.float32, type(None), np.ma.core.MaskedConstant)):
-            raise TypeError("{}: Magnitude uncertainty must be a float, NaN, or None.".format(type(mag_unc)))
-
-        # Make NaN if 0 or None
-        if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, (np.ma.core.MaskedConstant, type(None))):
-            mag_unc = np.nan
-
-        # Get the bandpass
-        if isinstance(band, str):
-            bp = svo.Filter(band)
-        elif isinstance(band, svo.Filter):
-            bp, band = band, band.name
         else:
-            self.message('Not a recognized bandpass: {}'.format(band))
+            # Check the uncertainty
+            if not isinstance(mag_unc, (float, np.float32, type(None), np.ma.core.MaskedConstant)):
+                self.message("{}: {} magnitude uncertainty must be a (float, NaN, None), not {}.".format(mag_unc, band, type(mag_unc)))
 
-        # Convert to Vega
-        mag, mag_unc = u.convert_mag(band, mag, mag_unc, old=system, new=self.mag_system)
+            # Make NaN if 0 or None
+            if (isinstance(mag_unc, (float, int)) and mag_unc == 0) or isinstance(mag_unc, (np.ma.core.MaskedConstant, type(None))):
+                mag_unc = np.nan
 
-        # Convert bandpass to desired units
-        bp.wave_units = self.wave_units
+            # Get the bandpass
+            if isinstance(band, str):
+                bp = svo.Filter(band)
+            elif isinstance(band, svo.Filter):
+                bp, band = band, band.name
+            else:
+                self.message('Not a recognized bandpass: {}'.format(band))
 
-        # Drop the current band if it exists
-        if band in self.photometry['band']:
-            self.drop_photometry(band)
+            # Convert to Vega
+            mag, mag_unc = u.convert_mag(band, mag, mag_unc, old=system, new=self.mag_system)
 
-        # Apply the dereddening by subtracting the (bandpass extinction vector)*(source dust column density)
-        mag -= bp.ext_vector * self.reddening
+            # Convert bandpass to desired units
+            bp.wave_units = self.wave_units
 
-        # Make a dict for the new point
-        mag = round(mag, 3)
-        mag_unc = mag_unc if np.isnan(mag_unc) else round(mag_unc, 3)
-        eff = bp.wave_eff.astype(np.float16)
-        new_photometry = {'band': band, 'eff': eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
+            # Drop the current band if it exists
+            if band in self.photometry['band']:
+                self.drop_photometry(band)
 
-        # Add the kwargs
-        new_photometry.update(kwargs)
+            # Apply the dereddening by subtracting the (bandpass extinction vector)*(source dust column density)
+            mag -= bp.ext_vector * self.reddening
 
-        # Add it to the table
-        self._photometry.add_row(new_photometry)
-        self.message("Setting {} photometry to {:.3f} ({:.3f}) with reference '{}'".format(band, mag, mag_unc, ref))
+            # Make a dict for the new point
+            mag = round(mag, 3)
+            mag_unc = mag_unc if np.isnan(mag_unc) else round(mag_unc, 3)
+            eff = bp.wave_eff.astype(np.float16)
+            new_photometry = {'band': band, 'eff': eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
 
-        # Set SED as uncalculated
-        self.calculated = False
+            # Add the kwargs
+            new_photometry.update(kwargs)
 
-        # Update photometry max and min wavelengths
-        self._calculate_phot_lims()
+            # Add it to the table
+            self._photometry.add_row(new_photometry)
+            self.message("Setting {} photometry to {:.3f} ({:.3f}) with reference '{}'".format(band, mag, mag_unc, ref))
 
-    def add_photometry_file(self, file):
+            # Set SED as uncalculated
+            self.calculated = False
+
+            # Update photometry max and min wavelengths
+            self._calculate_phot_lims()
+
+    def add_photometry_row(self, row, bands=None, rename=None, unc_wildcard='e_*', ref=None):
         """
-        Add a table of photometry from an ASCII file that contains the columns 'band', 'magnitude', and 'uncertainty'
+        Parse a table row into a separate table of photometry. Used mostly to parse the
+        photometry from a single row of Vizier table output for ingestion into SED object.
 
         Parameters
         ----------
-        file: str
-            The path to the ascii file
+        row: astropy.table.Row
+            The table row of data to add
+        bands: sequence
+            The list of bands to preserve
+        rename: sequence
+            A list of new band names
+        unc_wildcard: str
+            The wildcard to look for when fetching uncertainties
+        ref: str, sequence
+            The reference for all photometry of a list of references for each band
+
+        Returns
+        -------
+        astropy.table.Table
+            The resulting table
         """
-        # Read the data
-        table = ii.read(file)
+        self.message("Reading photometry from Table row")
+
+        # Assume SDSS, Gaia, 2MASS, WISE
+        if bands is None:
+            bands = ['FUVmag', 'NUVmag', 'umag', 'gmag', 'rmag', 'imag', 'zmag', 'Gmag', 'Jmag', 'Hmag', 'Kmag', 'W1mag', 'W2mag',
+                     'W3mag', 'W4mag']
+            rename = ['GALEX.FUV', 'GALEX.NUV', 'SDSS.u', 'SDSS.g', 'SDSS.r', 'SDSS.i', 'SDSS.z', 'Gaia.G', '2MASS.J', '2MASS.H', '2MASS.Ks',
+                      'WISE.W1', 'WISE.W2', 'WISE.W3', 'WISE.W4']
+
+        # Add photometry to phot table
+        for idx, band in enumerate(bands):
+            if band in row.colnames:
+                goodmag = isinstance(row[band], (float, np.float16, np.float32))
+                goodunc = isinstance(row[unc_wildcard.replace('*', band)], (float, np.float16, np.float32))
+                if goodmag:
+                    mag = row[band]
+                    unc = row[unc_wildcard.replace('*', band)] if goodunc else np.nan
+                    rf = row['ref'] if isinstance(ref, str) else ref[idx] if isinstance(ref, (list, tuple, np.ndarray)) else None
+                    band = rename[idx] if rename is not None else band
+
+                    # Add the table to the object
+                    self.add_photometry(**{'band': band, 'mag': mag, 'mag_unc': unc, 'ref': rf})
+
+    def add_photometry_table(self, table, **kwargs):
+        """
+        Add photometry from a table or ASCII file that contains the columns 'band', 'magnitude', and 'uncertainty'
+
+        Parameters
+        ----------
+        table: str, astropy.table.Table, astropy.table.row.Row
+            The file path to an ASCII table, astropy Table, or astropy Row to convert to a table ()
+        """
+        # Read the table data
+        if isinstance(table, str):
+            table = ii.read(table)
 
         # Test to see if columns are present
         cols = ['band', 'magnitude', 'uncertainty']
@@ -650,6 +698,13 @@ class SED:
     def _calibrate_photometry(self, name='photometry'):
         """
         Calculate the absolute magnitudes and flux values of all rows in the photometry table
+
+        Parameters
+        ----------
+        name: str
+            The name of the attribute to calibrate, ['photometry', 'synthetic_photometry']
+        phot_flag: float
+            The survey-survey color to flag as suspicious
         """
         # Reset photometric SED
         if name == 'photometry':
@@ -707,6 +762,9 @@ class SED:
 
                 # Set SED as uncalculated
                 self.calculated = False
+
+            # Flag suspicious photometry
+            self._flag_photometry()
 
     def _calibrate_spectra(self):
         """
@@ -799,32 +857,9 @@ class SED:
     @property
     def dec(self):
         """
-        A property for declination
+        A property for dec
         """
-        return self._dec
-
-    @dec.setter
-    def dec(self, dec, dec_unc=None, frame='icrs'):
-        """
-        Set the declination of the source
-
-        Padecmeters
-        ----------
-        dec: astropy.units.quantity.Quantity
-            The declination
-        dec_unc: astropy.units.quantity.Quantity (optional)
-            The uncertainty
-        frame: str
-            The reference frame
-        """
-        if not isinstance(dec, (q.quantity.Quantity, str)):
-            raise TypeError("{}: Cannot interpret dec".format(dec))
-
-        # Make sure it's decimal degrees
-        self._dec = Angle(dec)
-        if self.ra is not None:
-            sky_coords = SkyCoord(ra=self.ra, dec=self.dec, unit=(q.degree, q.degree), frame='icrs')
-            self._set_sky_coords(sky_coords, simbad=False)
+        return self.sky_coords.dec if self.sky_coords is not None else None
 
     @property
     def distance(self):
@@ -1152,7 +1187,7 @@ class SED:
         """
         self.find_photometry('PanSTARRS', **kwargs)
 
-    def find_photometry(self, catalog, col_names=None, target_names=None, search_radius=None, idx=0, **kwargs):
+    def find_photometry(self, catalog, col_names=None, target_names=None, search_radius=None, idx=0, preview=False, **kwargs):
         """
         Search Vizier for photometry in the given catalog
 
@@ -1168,23 +1203,33 @@ class SED:
             The search radius for the Vizier query
         idx: int
             The index of the record to use if multiple Vizier results
+        preview: bool
+            Plot a preview of all queried photometry for visual inspection
         """
         # Get the Vizier catalog
-        results = qu.query_vizier(catalog, col_names=col_names, target_names=target_names, target=self.name, sky_coords=self.sky_coords, search_radius=search_radius or self.search_radius, verbose=self.verbose, idx=idx, **kwargs)
+        results = qu.query_vizier(catalog, col_names=col_names, target_names=target_names, target=self.name, sky_coords=self.sky_coords, search_radius=search_radius or self.search_radius, verbose=self.verbose, idx=idx, preview=preview, **kwargs)
 
-        # Parse the record
-        for result in results:
+        if preview:
+            self.plot(fig=results)
 
-            # Get result
-            band, mag, unc, ref = result
+        else:
 
-            # Ensure Vegamag
-            system = 'AB' if 'SDSS' in band else 'Vega'
+            # Parse the record
+            for result in results:
 
-            self.add_photometry(band, mag, unc, ref=ref, system=system)
+                # Get result
+                band, mag, unc, ref = result
 
-        # Pause to prevent ConnectionError with astroquery
-        time.sleep(self.wait)
+                # Ensure Vegamag
+                # TODO: Vizier results in Vegamag already?
+                system = 'Vega'
+                # system = 'AB' if 'SDSS' in band else 'Vega'
+
+                # Add the magnitude
+                self.add_photometry(band, mag, unc, ref=ref, system=system)
+
+            # Pause to prevent ConnectionError with astroquery
+            time.sleep(self.wait)
 
     def find_SDSS(self, **kwargs):
         """
@@ -1278,7 +1323,7 @@ class SED:
             if self.sky_coords is None:
                 sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame='icrs')
-                self._set_sky_coords(sky_coords, simbad=False)
+                self.sky_coords = sky_coords
 
             # Check for a parallax
             if 'parallax' in include and not hasattr(obj['PLX_VALUE'], 'mask'):
@@ -1425,6 +1470,29 @@ class SED:
 
         # Run the fit
         self.fit_modelgrid(spl)
+
+    def _flag_photometry(self):
+        """
+        Check that two adjascent photometric bands are reasonable
+
+        Parameters
+        ----------
+        band1: str
+            The first band name
+        band2: str
+            The second band name
+        phot_flag: float
+            The maximum allowed magnitude difference
+        """
+        checks = [('SDSS.g', 'PS1.g', 0.3), ('SDSS.r', 'PS1.r', 0.3), ('SDSS.i', 'PS1.i', 0.3), ('SDSS.z', 'PS1.z', 0.3),
+                  ('SDSS.z', '2MASS.J', 1.5), ('PS1.y', '2MASS.J', 1.5), ('2MASS.Ks', 'WISE.W1', 2)]
+        for band1, band2, flag in checks:
+            if self.get_mag(band1) is not None and self.get_mag(band2) is not None:
+                m1 = self.get_mag(band1)
+                m2 = self.get_mag(band2)
+                md = abs(m1[0] - m2[0])
+                if md > flag and not np.isnan(m1[1]) and not np.isnan(m2[1]):
+                    self.warning('{} and {} photometry are not smooth! Ratio = {}. Check your photometry!'.format(band1, band2, md))
 
     @property
     def flux_units(self):
@@ -2008,6 +2076,8 @@ class SED:
         # Make sure there is data
         if len(self.spectra) == 0 and len(self.photometry) == 0:
             self.message('Cannot make the SED without spectra or photometry!')
+            self.calculated = False
+
             return
 
         # Calculate flux and calibrate
@@ -2324,7 +2394,7 @@ class SED:
 
     def plot(self, app=True, photometry=True, spectra=True, integral=True, synthetic_photometry=False,
              best_fit=True, normalize=None, scale=['log', 'log'], output=False, fig=None,
-             color='#1f77b4', one_color=False, **kwargs):
+             color='#1f77b4', one_color=False, label=None, **kwargs):
         """
         Plot the SED
 
@@ -2354,6 +2424,10 @@ class SED:
             The Boheh plot to add the SED to
         color: str
             The color for the plot points and lines
+        one_color: bool
+            Plots ass SED data using a single color
+        label: str
+            The legend label for the integral, defaults to Teff value
 
         Returns
         -------
@@ -2410,7 +2484,7 @@ class SED:
             TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
             xlab = 'Wavelength [{}]'.format(self.wave_units)
             ylab = 'Flux Density [{}]'.format(str(self.flux_units))
-            self.fig = figure(plot_width=800, plot_height=500, title=self.name,
+            self.fig = figure(plot_width=900, plot_height=400, title=self.name,
                               y_axis_type=scale[1], x_axis_type=scale[0],
                               x_axis_label=xlab, y_axis_label=ylab,
                               tools=TOOLS)
@@ -2430,7 +2504,7 @@ class SED:
 
             # Set up hover tool
             phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
-            hover = HoverTool(names=['photometry', 'nondetection'], tooltips=phot_tips, mode='vline')
+            hover = HoverTool(names=['photometry', 'nondetection'], tooltips=phot_tips)
             self.fig.add_tools(hover)
 
             # Plot points with errors
@@ -2438,12 +2512,7 @@ class SED:
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
                 self.fig.circle('x', 'y', source=source, legend_label='Photometry', name='photometry', color=color, fill_alpha=0.7, size=8)
-                y_err_x = []
-                y_err_y = []
-                for name, px, py, err in pts:
-                    y_err_x.append((px, px))
-                    y_err_y.append((py - err, py + err))
-                self.fig.multi_line(y_err_x, y_err_y, color=color)
+                self.fig = u.errorbars(self.fig, 'x', 'y', yerr='z', source=source, color=color)
 
             # Plot points without errors
             pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if (np.isnan(err) or err <= 0) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
@@ -2464,16 +2533,11 @@ class SED:
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
                 self.fig.square('x', 'y', source=source, legend_label='Synthetic Photometry', name='synthetic photometry', color=color, fill_alpha=0.7, size=8)
-                y_err_x = []
-                y_err_y = []
-                for name, px, py, err in pts:
-                    y_err_x.append((px, px))
-                    y_err_y.append((py - err, py + err))
-                self.fig.multi_line(y_err_x, y_err_y, color=color)
+                self.fig = u.errorbars(self.fig, 'x', 'y', yerr='z', source=source, color=color)
 
         # Plot the SED with linear interpolation completion
         if integral:
-            label = str(self.Teff[0]) if self.Teff is not None else 'Integral'
+            label = label or str(self.Teff[0]) if self.Teff is not None else 'Integral'
             self.fig.line(full_SED.wave, full_SED.flux * const, line_color=color if one_color else 'black', alpha=0.3, legend_label=label)
 
         if best_fit and len(self.best_fit) > 0:
@@ -2503,32 +2567,9 @@ class SED:
     @property
     def ra(self):
         """
-        A property for right ascension
+        A property for ra
         """
-        return self._ra
-
-    @ra.setter
-    def ra(self, ra, ra_unc=None, frame='icrs'):
-        """
-        Set the right ascension of the source
-
-        Parameters
-        ----------
-        ra: astropy.units.quantity.Quantity
-            The right ascension
-        ra_unc: astropy.units.quantity.Quantity (optional)
-            The uncertainty
-        frame: str
-            The reference frame
-        """
-        if not isinstance(ra, (q.quantity.Quantity, str)):
-            raise TypeError("{}: Cannot interpret ra".format(ra))
-
-        # Make sure it's decimal degrees
-        self._ra = Angle(ra)
-        if self.dec is not None:
-            sky_coords = SkyCoord(ra=self.ra, dec=self.dec, unit=q.degree, frame='icrs')
-            self._set_sky_coords(sky_coords, simbad=False)
+        return self.sky_coords.ra if self.sky_coords is not None else None
 
     @property
     def radius(self):
@@ -2609,6 +2650,9 @@ class SED:
             elif isinstance(attr, (str, float, bytes, int)):
                 rows.append([param, attr, '--', '--'])
 
+            elif hasattr(attr, 'deg'):
+                rows.append([param, attr.deg, '--', 'deg'])
+
             else:
                 pass
 
@@ -2653,7 +2697,7 @@ class SED:
         return self._sky_coords
 
     @sky_coords.setter
-    def sky_coords(self, sky_coords, frame='icrs'):
+    def sky_coords(self, sky_coords):
         """
         A setter for sky coordinates
 
@@ -2663,47 +2707,40 @@ class SED:
             The sky coordinates
         frame: str
             The coordinate frame
-        """
-        # Make sure it's a sky coordinate
-        if not isinstance(sky_coords, (SkyCoord, tuple)):
-            raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
-
-        if isinstance(sky_coords, tuple) and len(sky_coords) == 2:
-
-            if isinstance(sky_coords[0], str):
-                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame=frame)
-
-            elif isinstance(sky_coords[0], (float, Angle, q.quantity.Quantity)):
-                sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=q.degree, frame=frame)
-
-            else:
-                raise TypeError("Cannot convert type {} to coordinates.".format(type(sky_coords[0])))
-
-        self._set_sky_coords(sky_coords)
-
-    def _set_sky_coords(self, sky_coords, simbad=True):
-        """
-        Calculate and set attributes from sky coords
-
-        Parameters
-        ----------
-        sky_coords: astropy.coordinates.SkyCoord
-            The sky coordinates
         simbad: bool
             Search Simbad by the coordinates
         """
-        # Set the sky coordinates
-        self._sky_coords = sky_coords
-        self._ra = sky_coords.ra.degree
-        self._dec = sky_coords.dec.degree
-        self.message("Setting sky_coords to {}".format(self.sky_coords))
+        # Allow None to be set
+        if sky_coords is None:
+            self._sky_coords = None
 
-        # Try to calculate reddening
-        self.get_reddening()
+        else:
 
-        # Try to find the source in Simbad
-        if simbad:
-            self.find_Simbad()
+            # Make sure it's a sky coordinate
+            if not isinstance(sky_coords, (SkyCoord, tuple)):
+                raise TypeError('Sky coordinates must be astropy.coordinates.SkyCoord or (ra, dec) tuple.')
+
+            # If it's already SkyCoord just set it
+            if isinstance(sky_coords, SkyCoord):
+                self._sky_coords = sky_coords
+                self.message("Setting sky_coords to {}".format(self.sky_coords))
+                self.get_reddening()
+
+            # If it's coordinates, make it into a SkyCoord
+            if isinstance(sky_coords, tuple) and len(sky_coords) == 2:
+
+                if isinstance(sky_coords[0], str):
+                    self._sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame=self.frame)
+                    self.message("Setting sky_coords to {}".format(self.sky_coords))
+                    self.get_reddening()
+
+                elif isinstance(sky_coords[0], (float, Angle, q.quantity.Quantity)):
+                    self._sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=q.degree, frame=self.frame)
+                    self.message("Setting sky_coords to {}".format(self.sky_coords))
+                    self.get_reddening()
+
+                else:
+                    raise TypeError("Cannot convert type {} to coordinates.".format(type(sky_coords[0])))
 
     def spectrum_from_modelgrid(self, model_grid, snr=10, **kwargs):
         """
@@ -2777,7 +2814,7 @@ class SED:
                 if '+' in spectral_type:
                     self.multiple = True
                     raw_SpT = spectral_type
-                    self.message("{}: This source appears to be a multiple".format(spectral_type))
+                    self.warning("{}: This source appears to be a multiple".format(spectral_type))
 
                 spec_type = u.specType(spectral_type)
                 spectral_type, spectral_type_unc, prefix, gravity, lum_class = spec_type
@@ -2922,6 +2959,19 @@ class SED:
         self.calculated = not set_uncalculated
 
         return valid
+
+    def warning(self, msg):
+        """
+        Display and/or save a warning
+
+        Parameters
+        ----------
+        msg: str
+            The message to print
+        """
+        self.message(msg, pre='[WARNING]')
+        if msg not in self.warnings:
+            self.warnings.append(msg)
 
     @property
     def wave_units(self):

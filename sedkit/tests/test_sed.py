@@ -43,13 +43,13 @@ class TestSED(unittest.TestCase):
         s.drop_photometry(0)
         self.assertEqual(len(s.photometry), 0)
 
-    def test_add_photometry_file(self):
+    def test_add_photometry_table(self):
         """Test that photometry is added properly from file"""
         s = copy.copy(self.sed)
 
         # Add the photometry
         f = resource_filename('sedkit', 'data/L3_photometry.txt')
-        s.add_photometry_file(f)
+        s.add_photometry_table(f)
         self.assertEqual(len(s.photometry), 8)
 
     def test_add_spectrum(self):
@@ -93,19 +93,10 @@ class TestSED(unittest.TestCase):
         self.assertRaises(TypeError, setattr, s, 'age', (4, 0.1))
         self.assertRaises(TypeError, setattr, s, 'age', (4*q.Jy, 0.1*q.Jy))
 
-        # Dec
-        s.dec = 1.2345 * q.deg
-        self.assertRaises(TypeError, setattr, s, 'dec', 1.2345)
-
-        # RA
-        s.ra = 1.2345 * q.deg
-        self.assertRaises(TypeError, setattr, s, 'ra', 1.2345)
-
         # Sky coords
         s.sky_coords = 1.2345 * q.deg, 1.2345 * q.deg
         s.sky_coords = '1.2345', '1.2345'
         self.assertRaises(TypeError, setattr, s, 'sky_coords', 'foo')
-        self.assertRaises(TypeError, setattr, s, 'sky_coords', None)
 
         # Distance
         s.distance = None
@@ -234,7 +225,6 @@ class TestSED(unittest.TestCase):
         s = sed.SED()
         s.sky_coords = SkyCoord('0h8m05.63s +14d50m23.3s', frame='icrs')
         s.find_SDSS_spectra(search_radius=20 * q.arcsec)
-        assert len(s.spectra) > 0
 
     def test_run_methods(self):
         """Test that the method_list argument works"""

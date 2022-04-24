@@ -76,6 +76,7 @@ class TestCatalog(unittest.TestCase):
 
         # Check there are two SEDs
         self.assertEqual(len(cat.results), 2)
+        print('SpT:', cat.get_data('spectral_type'))
 
         # Filter so there is only one result
         f_cat = cat.filter('spectral_type', '>30')
@@ -101,13 +102,10 @@ class TestCatalog(unittest.TestCase):
 
     def test_get_SED(self):
         """Test get_SED method"""
-        # Make the catalog
+        # Get the SED using name
         cat = copy.copy(self.cat)
-        cat.add_SED(self.vega)
-
-        # Get the SED
+        cat.add_SED(copy.copy(self.vega))
         s = cat.get_SED('Vega')
-
         self.assertEqual(type(s), type(self.vega))
 
     def test_plot(self):
@@ -122,7 +120,7 @@ class TestCatalog(unittest.TestCase):
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
 
         # Color-color plot
-        plt = cat.plot('WISE.W1-WISE.W2', 'WISE.W1-WISE.W2', order=1)
+        plt = cat.plot('distance', 'parallax', order=1)
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting.figure.Figure'>")
 
         # Bad columns
@@ -130,10 +128,27 @@ class TestCatalog(unittest.TestCase):
         self.assertRaises(ValueError, cat.plot, 'foo', 'parallax')
 
         # Fit polynomial
-        cat.plot('spectral_type', 'parallax', order=1)
+        cat.plot('distance', 'parallax', order=1)
 
         # Identify sources
-        cat.plot('spectral_type', 'parallax', identify=['Vega'])
+        cat.plot('distance', 'parallax', identify=['Vega'])
+
+    def test_iplot(self):
+        """Test iplot method"""
+        # Make the catalog
+        cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+        cat.add_SED(self.sirius)
+
+        # Simple plot
+        plt = cat.iplot('distance', 'parallax')
+
+        # Color-color plot
+        plt = cat.iplot('distance', 'parallax', order=1)
+
+        # Bad columns
+        self.assertRaises(ValueError, cat.iplot, 'spectral_type', 'foo')
+        self.assertRaises(ValueError, cat.iplot, 'foo', 'parallax')
 
     def test_plot_SEDs(self):
         """Test plot_SEDs method"""
@@ -149,6 +164,8 @@ class TestCatalog(unittest.TestCase):
         """Test save and load methods"""
         # Make the catalog
         cat = copy.copy(self.cat)
+        cat.add_SED(self.vega)
+        cat.add_SED(self.sirius)
         cat.save('test.p')
 
         # Try to load it

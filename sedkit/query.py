@@ -15,7 +15,12 @@ from astropy.io import fits
 import astropy.units as q
 from astroquery.vizier import Vizier
 from astroquery.sdss import SDSS
+from bokeh.plotting import figure, show
+from bokeh.models import HoverTool, ColumnDataSource
 import numpy as np
+from svo_filters import Filter
+
+from . import utilities as u
 
 
 # A list of photometry catalogs from Vizier
@@ -263,7 +268,7 @@ def query_SDSS_apogee_spectra(target=None, sky_coords=None, verbose=True, **kwar
 #     return [wav, flx, err], catalog, header
 
 
-def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcards=['e_*'], target_names=None, search_radius=20 * q.arcsec, idx=0, cat_name=None, verbose=True, **kwargs):
+def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcards=['e_*'], target_names=None, search_radius=20 * q.arcsec, idx=0, cat_name=None, verbose=True, preview=False, **kwargs):
     """
     Search Vizier for photometry in the given catalog
 
@@ -285,6 +290,8 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
         The search radius for the Vizier query
     idx: int
         The index of the record to use if multiple Vizier results
+    preview: bool
+        Make a plot of all photometry results
     """
     # Get the catalog
     if catalog in PHOT_CATALOGS:
@@ -363,33 +370,64 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
     results = []
     if n_rec > 0:
 
-        # Grab the record
-        rec = dict(viz_cat[idx])
-        ref = viz_cat.meta['name']
+        if preview:
 
-        # Pull out the photometry
-        for name, col in zip(names, cols):
+            # Make the figure
+            prev = figure(width=900, height=400, y_axis_type="log", x_axis_type="log")
+            filters = [Filter(name) for name in names]
+            colors = u.color_gen(kwargs.get('palette', 'viridis'), n=n_rec)
+            phot_tips = [('Band', '@desc'), ('Wave', '@wav'), ('Flux', '@flx'), ('Unc', '@unc'), ('Idx', '@idx')]
+            hover = HoverTool(names=['phot'], tooltips=phot_tips)
+            prev.add_tools(hover)
 
-            # Data for this column
-            data = []
+            def valid(flx, err):
+                return err > 0 and not np.isnan(flx) and not np.isnan(err)
 
-            # Add name
-            data.append(name)
+            # Get all mags from the queried results table
+            for n, row in enumerate(viz_cat):
+                try:
+                    color = next(colors)
+                    mags = [row[col] for col in cols if valid(row[col], row['e_{}'.format(col)])]
+                    uncs = [row['e_{}'.format(col)] for col in cols if valid(row[col], row['e_{}'.format(col)])]
+                    flxs, uncs = np.array([u.mag2flux(filt, m, e) for filt, m, e in zip(filters, mags, uncs)]).T
+                    source = ColumnDataSource(data=dict(wav=[filt.wave_eff.value for filt in filters], flx=flxs, unc=uncs, idx=[n] * len(flxs), desc=names))
+                    prev.line('wav', 'flx', source=source, color=color, name='phot', alpha=0.1, hover_color="firebrick", hover_alpha=1)
+                    prev.circle('wav', 'flx', source=source, color=color, size=8, alpha=0.3, hover_color="firebrick", hover_alpha=1)
+                    prev = u.errorbars(prev, 'wav', 'flx', yerr='unc', source=source, color=color, alpha=0.3, hover_color="firebrick", hover_alpha=1)
+                except ValueError:
+                    pass
 
-            # Check for nominal value
-            nom = rec.get(col)
-            data.append(nom)
-            if nom is None:
-                print("[sedkit] Could not find '{}' column in '{}' catalog.".format(col, cat_name))
+            return prev
 
-            # Check for wildcards
-            for wc in wildcards:
-                wc_col = wc.replace('*', col)
-                val = rec.get(wc_col)
-                data.append(val)
+        else:
 
-            # Add reference
-            data.append(ref)
-            results.append(data)
+            # Grab the record
+            rec = dict(viz_cat[idx])
+            ref = viz_cat.meta['name']
+
+            # Pull out the photometry
+            for name, col in zip(names, cols):
+
+                # Data for this column
+                data = []
+
+                # Add name
+                data.append(name)
+
+                # Check for nominal value
+                nom = rec.get(col)
+                data.append(nom)
+                if nom is None:
+                    print("[sedkit] Could not find '{}' column in '{}' catalog.".format(col, cat_name))
+
+                # Check for wildcards
+                for wc in wildcards:
+                    wc_col = wc.replace('*', col)
+                    val = rec.get(wc_col)
+                    data.append(val)
+
+                # Add reference
+                data.append(ref)
+                results.append(data)
 
     return results
