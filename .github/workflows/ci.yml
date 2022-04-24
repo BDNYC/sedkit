@@ -25,12 +25,6 @@ jobs:
             extras: test
             test-command: pytest
 
-          - name: Unit tests Python 3.8
-            os: macos-latest
-            python-version: 3.8
-            extras: test
-            test-command: pytest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
