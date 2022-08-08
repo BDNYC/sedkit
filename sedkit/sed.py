@@ -1110,7 +1110,7 @@ class SED:
             try:
                 pltopath = os.path.join(dirpath, '{}_plot.png'.format(name))
                 export_png(self.fig, filename=pltopath)
-            except:
+            except Exception:
                 # Bokeh dropped support for PhantomJS so image saving is now browser dependent and fails occasionally
                 self.message("Could not export SED for {}".format(self.name))
 

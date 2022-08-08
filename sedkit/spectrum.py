@@ -95,7 +95,7 @@ class Spectrum:
             raise TypeError("Wavelength array must be in astropy.units.quantity.Quantity length units, e.g. 'um'")
 
         # Check flux units are flux density
-        if not u.equivalent(flux, u.FLAM):
+        if not u.equivalent(flux, (u.FLAM, q.Jy)):
             raise TypeError("Flux array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 
         # Generate uncertainty array
@@ -104,7 +104,7 @@ class Spectrum:
 
         # Make sure the uncertainty array is in the correct units
         if unc is not None:
-            if not u.equivalent(unc, u.FLAM):
+            if not u.equivalent(unc, (u.FLAM, q.Jy)):
                 raise TypeError("Uncertainty array must be in astropy.units.quantity.Quantity flux density units, e.g. 'erg/s/cm2/A'")
 
         # Replace negatives, zeros, and infs with nans
@@ -548,13 +548,28 @@ class Spectrum:
             The astropy units of the SED wavelength
         """
         # Check the units
-        if not u.equivalent(flux_units, u.FLAM):
-            raise TypeError("flux_units must be in flux density units, e.g. 'erg/s/cm2/A'")
+        if not u.equivalent(flux_units, (u.FLAM, q.Jy)):
+            raise TypeError("flux_units must be in flux density units, e.g. 'erg/s/cm2/A' or 'Jy'")
 
-        # Update the flux and unc arrays
-        self._flux = self._flux * self.flux_units.to(flux_units)
-        if self.unc is not None:
-            self._unc = self._unc * self.flux_units.to(flux_units)
+        # Check if units are Fnu of Flam
+        if u.equivalent(flux_units, q.Jy) and u.equivalent(self.flux_units, u.FLAM):
+
+            # Convert native FLAM units to Jy
+            self._flux = self._flux * self.wave ** 2 * 3.34e-19
+            self._unc = self._unc * self.wave ** 2 * 3.34e-19
+
+        elif u.equivalent(self.flux_units, q.Jy) and u.equivalent(flux_units, u.FLAM):
+
+            # Convert native Jy units to FLAM
+            self._flux = self._flux * 3e18 / (self.wave ** 2)
+            self._unc = self._unc * 3e18 / (self.wave ** 2)
+
+        else:
+
+            # Update the flux and unc arrays
+            self._flux = self._flux * self.flux_units.to(flux_units)
+            if self.unc is not None:
+                self._unc = self._unc * self.flux_units.to(flux_units)
 
         # Set the flux_units
         self._flux_units = flux_units
