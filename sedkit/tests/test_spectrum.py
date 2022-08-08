@@ -60,6 +60,18 @@ class TestSpectrum(unittest.TestCase):
         self.assertEqual(s.spectrum[1].unit, fu)
         self.assertEqual(s.spectrum[2].unit, fu)
 
+    def test_unit_conversion(self):
+        """Test Fnu support works"""
+        s = copy.copy(self.spec)
+
+        # Change the flux units
+        fu = q.Jy
+        s.flux_units = fu
+
+        # Make sure the units are being updated
+        self.assertEqual(s.spectrum[1].unit, fu)
+        self.assertEqual(s.spectrum[2].unit, fu)
+
     def test_model_fit(self):
         """Test that a model grid can be fit"""
         # Empty fit results
