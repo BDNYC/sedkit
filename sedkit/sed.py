@@ -1114,13 +1114,13 @@ class SED:
         res_table.write(resultspath, format='ipac')
 
         # The SED plot
-        if self.fig is not None:
-            try:
-                pltopath = os.path.join(dirpath, '{}_plot.png'.format(name))
-                export_png(self.fig, filename=pltopath)
-            except Exception:
-                # Bokeh dropped support for PhantomJS so image saving is now browser dependent and fails occasionally
-                self.message("Could not export SED for {}".format(self.name))
+        # if self.fig is not None:
+        #     try:
+        #         pltopath = os.path.join(dirpath, '{}_plot.png'.format(name))
+        #         export_png(self.fig, filename=pltopath)
+        #     except Exception:
+        #         # Bokeh dropped support for PhantomJS so image saving is now browser dependent and fails occasionally
+        #         self.message("Could not export SED for {}".format(self.name))
 
         # zip if desired
         if zipped:
