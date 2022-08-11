@@ -419,6 +419,14 @@ class SED:
             else:
                 raise ValueError('Input spectrum must be [W,F] or [W,F,E].')
 
+        # also ok if specutils.spectra.spectrum1d.Spectrum1D
+        elif hasattr(spectrum, 'spectral_axis'):
+
+            if spectrum.uncertainty is None:
+                spec = sp.Spectrum(spectrum.spectral_axis, spectrum.flux, ** kwargs)
+            else:
+                spec = sp.Spectrum(spectrum.spectral_axis, spectrum.flux, unc=spectrum.uncertainty.array * spectrum.uncertainty.unit, **kwargs)
+
         # or it's no good
         else:
             raise TypeError('Must enter [W,F], [W,F,E], or a Spectrum object')

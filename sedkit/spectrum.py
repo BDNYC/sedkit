@@ -24,6 +24,7 @@ import numpy as np
 from pandas import DataFrame
 from svo_filters import Filter
 
+
 from . import mcmc as mc
 from . import utilities as u
 
@@ -556,13 +557,15 @@ class Spectrum:
 
             # Convert native FLAM units to Jy
             self._flux = self._flux * self.wave ** 2 * 3.34e-19
-            self._unc = self._unc * self.wave ** 2 * 3.34e-19
+            if self.unc is not None:
+                self._unc = self._unc * self.wave ** 2 * 3.34e-19
 
         elif u.equivalent(self.flux_units, q.Jy) and u.equivalent(flux_units, u.FLAM):
 
             # Convert native Jy units to FLAM
             self._flux = self._flux * 3e18 / (self.wave ** 2)
-            self._unc = self._unc * 3e18 / (self.wave ** 2)
+            if self.unc is not None:
+                self._unc = self._unc * 3e18 / (self.wave ** 2)
 
         else:
 
