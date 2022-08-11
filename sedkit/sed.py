@@ -419,6 +419,14 @@ class SED:
             else:
                 raise ValueError('Input spectrum must be [W,F] or [W,F,E].')
 
+        # also ok if specutils.spectra.spectrum1d.Spectrum1D
+        elif hasattr(spectrum, 'spectral_axis'):
+
+            if spectrum.uncertainty is None:
+                spec = sp.Spectrum(spectrum.spectral_axis, spectrum.flux, ** kwargs)
+            else:
+                spec = sp.Spectrum(spectrum.spectral_axis, spectrum.flux, unc=spectrum.uncertainty.array * spectrum.uncertainty.unit, **kwargs)
+
         # or it's no good
         else:
             raise TypeError('Must enter [W,F], [W,F,E], or a Spectrum object')
@@ -1106,13 +1114,13 @@ class SED:
         res_table.write(resultspath, format='ipac')
 
         # The SED plot
-        if self.fig is not None:
-            try:
-                pltopath = os.path.join(dirpath, '{}_plot.png'.format(name))
-                export_png(self.fig, filename=pltopath)
-            except:
-                # Bokeh dropped support for PhantomJS so image saving is now browser dependent and fails occasionally
-                self.message("Could not export SED for {}".format(self.name))
+        # if self.fig is not None:
+        #     try:
+        #         pltopath = os.path.join(dirpath, '{}_plot.png'.format(name))
+        #         export_png(self.fig, filename=pltopath)
+        #     except Exception:
+        #         # Bokeh dropped support for PhantomJS so image saving is now browser dependent and fails occasionally
+        #         self.message("Could not export SED for {}".format(self.name))
 
         # zip if desired
         if zipped:
@@ -1835,19 +1843,19 @@ class SED:
             if self.mass is None and self.Lbol_sun is not None:
 
                 # Infer from Dwarf Sequence
-                self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, plot=plot)
+                self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, fit_local=5, yunits=mass_units, plot=plot)
 
             # Try mass(M_J) relation
             elif self.mass is None and self.get_mag('2MASS.J', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), plot=plot)
+                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), fit_local=5, yunits=mass_units, plot=plot)
 
             # Try mass(M_Ks) relation
             elif self.mass is None and self.get_mag('2MASS.Ks', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
+                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), fit_local=5, yunits=mass_units, plot=plot)
 
             # No dice
             else:
