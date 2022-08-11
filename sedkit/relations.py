@@ -15,6 +15,7 @@ import astropy.table as at
 from astroquery.vizier import Vizier
 from bokeh.plotting import figure, show
 from scipy.optimize import least_squares
+from scipy.interpolate import CubicSpline, UnivariateSpline
 from bokeh.models.glyphs import Patch
 from bokeh.models import ColumnDataSource
 import numpy as np
@@ -116,7 +117,7 @@ class Relation:
 
         # Set x range for fit
         if xrange is not None:
-            idx = np.where(np.logical_and(rel['x'] > xrange[0], rel['x'] < xrange[1]))
+            idx = np.where(np.logical_and(rel['x'] > np.nanmin(xrange), rel['x'] < np.nanmax(xrange)))
             rel['x'] = rel['x'][idx]
             rel['y'] = rel['y'][idx]
 
@@ -200,7 +201,7 @@ class Relation:
         if plot:
             show(self.plot(rel_name))
 
-    def evaluate(self, rel_name, x_val, plot=False):
+    def evaluate(self, rel_name, x_val, xunits=None, yunits=None, fit_local=False, plot=False):
         """
         Evaluate the given relation at the given xval
 
@@ -210,6 +211,10 @@ class Relation:
             The relation name, i.e. 'yparam(xparam)'
         x_val: float, int
             The xvalue to evaluate
+        xunits: astropy.units.quantity.Quantity
+            The output x units
+        yunits: astropy.units.quantity.Quantity
+            The output y units
 
         Returns
         -------
@@ -230,7 +235,22 @@ class Relation:
             try:
 
                 # Get the relation
-                rel = self.relations[rel_name]
+                full_rel = self.relations[rel_name]
+                out_xunits = full_rel['xunit'].to(xunits) * xunits if xunits is not None else full_rel['xunit'] or 1
+                out_yunits = full_rel['yunit'].to(yunits) * yunits if yunits is not None else full_rel['yunit'] or 1
+
+                # Use local points for relation
+                if isinstance(fit_local, int):
+
+                    # Trim relation data to nearby points, refit with low order polynomial, and evaluate
+                    idx = np.argmin(np.abs(full_rel['x'] - (x_val[0] if isinstance(x_val, (list, tuple)) else x_val)))
+                    x_min, x_max = full_rel['x'][max(0, idx - fit_local)], full_rel['x'][min(idx + fit_local, len(full_rel['x'])-1)]
+                    self.add_relation('mass(Lbol)', 2, xrange=[x_min, x_max], yunit=full_rel['yunit'], reject_outliers=True, plot=False)
+                    rel = self.relations[rel_name]
+
+                # ... or use the full relation
+                else:
+                    rel = full_rel
 
                 # Evaluate the polynomial
                 if isinstance(x_val, (list, tuple)):
@@ -238,24 +258,27 @@ class Relation:
                     # With uncertainties
                     x = Unum(*x_val)
                     y = x.polyval(rel['coeffs'])
-                    x_val = x.nominal
-                    y_val = y.nominal * rel['yunit']
-                    y_upper = y.upper * rel['yunit']
-                    y_lower = y.lower * rel['yunit']
+                    x_val = x.nominal * out_xunits
+                    y_val = y.nominal * out_yunits
+                    y_upper = y.upper * out_yunits
+                    y_lower = y.lower * out_yunits
 
                 else:
 
                     # Without uncertainties
-                    x_val = x_val.value if hasattr(x_val, 'unit') else x_val
-                    y_val = np.polyval(rel['coeffs'], x_val) * rel['yunit']
+                    x_val = x_val * out_xunits
+                    y_val = np.polyval(rel['coeffs'], x_val) * out_yunits
                     y_lower = y_upper = None
 
                 if plot:
-                    plt = self.plot(rel_name)
-                    plt.circle([x_val], [y_val.value if hasattr(y_val, 'unit') else y_val], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
+                    plt = self.plot(rel_name, xunits=xunits, yunits=yunits)
+                    plt.circle([x_val.value if hasattr(x_val, 'unit') else x_val], [y_val.value if hasattr(y_val, 'unit') else y_val], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
                     if y_upper:
                         plt.line([x_val, x_val], [y_val - y_lower, y_val + y_upper], color='red')
                     show(plt)
+
+                # Restore full relation
+                self.relations[rel_name] = full_rel
 
                 if y_upper:
                     return y_val, y_upper, y_lower, self.ref
@@ -292,9 +315,18 @@ class Relation:
         """
         return rel_name.replace(')', '').split('(')[::-1]
 
-    def plot(self, rel_name, **kwargs):
+    def plot(self, rel_name, xunits=None, yunits=None, **kwargs):
         """
         Plot the data for the given parameters
+
+        Parameters
+        ----------
+        rel_name: str
+            The name of the relation
+        xunits: astropy.units.quantity.Quantity
+            The units to display
+        yunits: astropy.units.quantity.Quantity
+            The units to display
         """
         # Get params
         xparam, yparam = self._parse_rel_name(rel_name)
@@ -305,15 +337,18 @@ class Relation:
         # Make the figure
         fig = figure(x_axis_label=xparam, y_axis_label=yparam)
         x, y, _ = self.validate_data(self.data[xparam], self.data[yparam])
-        fig.circle(x, y, legend='Data', **kwargs)
 
+        xu = 1
+        yu = 1
         if rel_name in self.relations:
 
             # Get the relation
             rel = self.relations[rel_name]
 
             # Plot polynomial values
-            fig.line(rel['x_fit'], rel['y_fit'], color='black', legend='Fit')
+            xu = rel['xunit'].to(xunits) if xunits is not None else rel['xunit'] or 1
+            yu = rel['yunit'].to(yunits) if yunits is not None else rel['yunit'] or 1
+            fig.line(rel['x_fit'] * xu, rel['y_fit'] * yu, color='black', legend='Fit')
 
             # # Plot relation error
             # xpat = np.hstack((rel['x_fit'], rel['x_fit'][::-1]))
@@ -321,6 +356,13 @@ class Relation:
             # err_source = ColumnDataSource(dict(xaxis=xpat, yaxis=ypat))
             # glyph = Patch(x='xaxis', y='yaxis', fill_color='black', line_color=None, fill_alpha=0.1)
             # fig.add_glyph(err_source, glyph)
+
+            # Update axis labels
+            fig.xaxis.axis_label = '{}{}'.format(xparam, '[{}]'.format(xunits or rel['xunit']))
+            fig.yaxis.axis_label = '{}{}'.format(yparam, '[{}]'.format(yunits or rel['yunit']))
+
+        # Draw points
+        fig.circle(x * xu, y * yu, legend='Data', **kwargs)
 
         return fig
 

@@ -575,13 +575,15 @@ class Spectrum:
         self._flux_units = flux_units
         self._set_units()
 
-    def integrate(self, units=q.erg / q.s / q.cm**2):
+    def integrate(self, units=q.erg / q.s / q.cm**2, n_samples=10):
         """Calculate the area under the spectrum
 
         Parameters
         ----------
         units: astropy.units.quantity.Quantity
             The target units for the integral
+        n_samples: int
+            The number of samples to take for uncertainty calculations
 
         Returns
         -------
@@ -600,11 +602,23 @@ class Spectrum:
         val = (np.trapz(spec[1], x=spec[0]) * m).to(units)
 
         if self.unc is None:
-            unc = None
+            vunc = None
         else:
-            unc = np.sqrt(np.nansum((spec[2] * np.gradient(spec[0]) * m)**2)).to(units)
 
-        return val, unc
+            # Sum approximation to integral
+            # vunc = np.sqrt(np.nansum((spec[2] * np.gradient(spec[0]) * m)**2)).to(units)
+
+            # Bootstrap errors
+            uvals = []
+            for n in range(n_samples):
+                usamp = np.random.normal(spec[1], spec[2])
+                err = (np.trapz(usamp, x=spec[0]) * m).to(units)
+                uvals.append(abs(err.value - val.value))
+
+            # Get 1-sigma of distribution
+            vunc = np.max(abs(np.asarray(uvals))) * units
+
+        return val, vunc
 
     @copy_raw
     def interpolate(self, wave):

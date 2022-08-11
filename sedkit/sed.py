@@ -1835,19 +1835,19 @@ class SED:
             if self.mass is None and self.Lbol_sun is not None:
 
                 # Infer from Dwarf Sequence
-                self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, plot=plot)
+                self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, fit_local=5, yunits=mass_units, plot=plot)
 
             # Try mass(M_J) relation
             elif self.mass is None and self.get_mag('2MASS.J', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), plot=plot)
+                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), fit_local=5, yunits=mass_units, plot=plot)
 
             # Try mass(M_Ks) relation
             elif self.mass is None and self.get_mag('2MASS.Ks', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
+                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), fit_local=5, yunits=mass_units, plot=plot)
 
             # No dice
             else:
