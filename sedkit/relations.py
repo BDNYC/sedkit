@@ -240,12 +240,12 @@ class Relation:
                 out_yunits = full_rel['yunit'].to(yunits) * yunits if yunits is not None else full_rel['yunit'] or 1
 
                 # Use local points for relation
-                if isinstance(fit_local, int):
+                if isinstance(fit_local, int) and fit_local is not False:
 
                     # Trim relation data to nearby points, refit with low order polynomial, and evaluate
                     idx = np.argmin(np.abs(full_rel['x'] - (x_val[0] if isinstance(x_val, (list, tuple)) else x_val)))
                     x_min, x_max = full_rel['x'][max(0, idx - fit_local)], full_rel['x'][min(idx + fit_local, len(full_rel['x'])-1)]
-                    self.add_relation('mass(Lbol)', 2, xrange=[x_min, x_max], yunit=full_rel['yunit'], reject_outliers=True, plot=False)
+                    self.add_relation(rel_name, 2, xrange=[x_min, x_max], yunit=full_rel['yunit'], reject_outliers=True, plot=False)
                     rel = self.relations[rel_name]
 
                 # ... or use the full relation
@@ -285,7 +285,7 @@ class Relation:
                 else:
                     return y_val, self.ref
 
-            except ValueError as exc:
+            except IndexError as exc:
 
                 print(exc)
                 print("Could not evaluate the {} relation at {}".format(rel_name, x_val))
