@@ -108,7 +108,7 @@ class SED:
     wave_units: astropy.units.quantity.Quantity
         The desired wavelength units
     """
-    def __init__(self, name='My Target', verbose=True, method_list=None, **kwargs):
+    def __init__(self, name='My Target', verbose=True, method_list=None, substellar=False, **kwargs):
         """
         Initialize an SED object
 
@@ -147,12 +147,13 @@ class SED:
         self._evo_model = None
 
         # Static attributes
-        self.evo_model = 'DUSTY00'
+        self.evo_model = None
         self.frame = 'icrs'
         self.reddening = 0
         self.SpT = None
         self.multiple = False
         self.mainsequence = rel.DwarfSequence()
+        self.substellar = substellar
 
         # Dictionary to keep track of references
         self._refs = {}
@@ -281,7 +282,7 @@ class SED:
             # Get the bandpass
             if isinstance(band, str):
                 bp = svo.Filter(band)
-            elif isinstance(band, svo.Filter):
+            elif isinstance(band, svo.Filter) or hasattr(band, 'wave_peak'):
                 bp, band = band, band.name
             else:
                 self.message('Not a recognized bandpass: {}'.format(band))
@@ -1048,6 +1049,8 @@ class SED:
 
             self._evo_model = iso.Isochrone(model, verbose=self.verbose)
 
+            self.message("Setting evolutionary model to {}".format(model))
+
         # Set as uncalculated
         self.calculated = False
 
@@ -1783,10 +1786,10 @@ class SED:
         """
         Estimate the surface gravity from model isochrones given an age and Lbol
         """
-        self.logg = None
+        self._logg = None
 
         # Try model isochrones
-        if self.age is not None and self.Lbol_sun is not None:
+        if self.evo_model is not None and self.age is not None and self.Lbol_sun is not None:
 
             # Default
             logg = None
@@ -1808,7 +1811,7 @@ class SED:
         else:
             self.message('Could not calculate logg without Lbol and age')
 
-    def infer_mass(self, mass_units=q.Msun, isochrone=False, plot=False):
+    def infer_mass(self, mass_units=q.Msun, plot=False):
         """
         Estimate the mass from model isochrones given an age and Lbol
 
@@ -1816,13 +1819,16 @@ class SED:
         ----------
         mass_units: astropy.units.quantity.Quantity
             The units for the mass
-        isochrone: bool
-            Use the model isochrones
+        plot: bool
+            Plot the relation and the evaluated radius
         """
-        self.mass = None
+        self._mass = None
+
+        if self.substellar:
+            mass_units = q.Mjup
 
         # Try model isochrones
-        if isochrone and self.age is not None and self.Lbol_sun is not None:
+        if self.evo_model is not None and self.age is not None and self.Lbol_sun is not None:
 
             # Default
             mass = None
@@ -1862,7 +1868,7 @@ class SED:
                 self.message('Could not calculate mass without Lbol, M_2MASS.J, or M_2MASS.Ks')
 
 
-    def infer_radius(self, radius_units=q.Rsun, isochrone=False, plot=False):
+    def infer_radius(self, radius_units=q.Rsun, plot=False):
         """
         Estimate the radius from model isochrones given an age and Lbol
 
@@ -1870,13 +1876,16 @@ class SED:
         ----------
         radius_units: astropy.units.quantity.Quantity
             The radius units
-        isochrone: bool
-            Use the model isochrones
+        plot: bool
+            Plot the relation and the evaluated radius
         """
-        self.radius = None
+        self._radius = None
+
+        if self.substellar:
+            radius_units = q.Rjup
 
         # Try model isochrones
-        if isochrone and (self.age is not None) and (self.Lbol_sun is not None):
+        if (self.evo_model is not None) and (self.age is not None) and (self.Lbol_sun is not None):
 
             # Default
             radius = None
@@ -1897,31 +1906,31 @@ class SED:
             if self.radius is None and self.spectral_type is not None:
 
                 # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(spt)', self.spectral_type, plot=plot)
+                self.radius = self.mainsequence.evaluate('radius(spt)', self.spectral_type, yunits=radius_units, fit_local=10, plot=plot)
 
             # Try radius(Lbol) relation
             elif self.radius is None and self.Lbol_sun is not None:
 
                 # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, plot=plot)
+                self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, yunits=radius_units, fit_local=10, plot=plot)
 
             # Try radius(M_J) relation
             elif self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), plot=plot)
+                self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), yunits=radius_units, fit_local=10, plot=plot)
 
             # Try radius(M_Ks) relation
             elif self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.Ks'), plot=plot)
+                self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.Ks'), yunits=radius_units, fit_local=10, plot=plot)
 
             # No dice
             else:
                 self.message('Could not calculate radius without spectral_type, Lbol, M_2MASS.J, or M_2MASS.Ks')
 
-    def infer_Teff(self, teff_units=q.K, isochrone=False, plot=False):
+    def infer_Teff(self, teff_units=q.K, plot=False):
         """
         Infer the effective temperature
 
@@ -1929,11 +1938,13 @@ class SED:
         ----------
         teff_units: astropy.units.quantity.Quantity
             The temperature units to use
+        plot: bool
+            Plot the relation and the evaluated radius
         """
-        self.Teff = None
+        self._Teff = None
 
         # Try model isochrones
-        if isochrone and self.age is not None and self.Lbol_sun is not None:
+        if self.evo_model is not None and self.age is not None and self.Lbol_sun is not None:
 
             # Default
             teff = None

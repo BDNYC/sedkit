@@ -23,4 +23,4 @@ dependencies:
   - pytest==7.1.1
   - sphinx==4.5.0
   - scipy==1.8.0
-  - svo-filters==0.4.1
+  - svo-filters==0.4.4
