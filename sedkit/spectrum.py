@@ -548,31 +548,15 @@ class Spectrum:
         flux_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
-        # Check the units
-        if not u.equivalent(flux_units, (u.FLAM, q.Jy)):
-            raise TypeError("flux_units must be in flux density units, e.g. 'erg/s/cm2/A' or 'Jy'")
+        # Convert units
+        new_spectrum = u.unit_conversion(self.spectrum, flux_units=flux_units)
 
-        # Check if units are Fnu of Flam
-        if u.equivalent(flux_units, q.Jy) and u.equivalent(self.flux_units, u.FLAM):
+        # Set flux values
+        self._flux = new_spectrum[1].value
 
-            # Convert native FLAM units to Jy
-            self._flux = self._flux * self.wave ** 2 * 3.34e-19
-            if self.unc is not None:
-                self._unc = self._unc * self.wave ** 2 * 3.34e-19
-
-        elif u.equivalent(self.flux_units, q.Jy) and u.equivalent(flux_units, u.FLAM):
-
-            # Convert native Jy units to FLAM
-            self._flux = self._flux * 3e18 / (self.wave ** 2)
-            if self.unc is not None:
-                self._unc = self._unc * 3e18 / (self.wave ** 2)
-
-        else:
-
-            # Update the flux and unc arrays
-            self._flux = self._flux * self.flux_units.to(flux_units)
-            if self.unc is not None:
-                self._unc = self._unc * self.flux_units.to(flux_units)
+        # Set uncertainty values
+        if self.unc is not None:
+            self._unc = new_spectrum[2].value
 
         # Set the flux_units
         self._flux_units = flux_units
@@ -1082,6 +1066,7 @@ class Spectrum:
         Smooths the spectrum using a Kaiser-Bessel smoothing window of
         narrowness *beta* (~1 => very smooth, ~100 => not smooth)
 
+
         Parameters
         ----------
         beta: float, int
@@ -1107,8 +1092,7 @@ class Spectrum:
 
     @property
     def spectrum(self):
-        """Store the spectrum with units
-        """
+        """Return the spectrum with units"""
         return [i * Q for i, Q in zip(self.data, self.units)]
 
     def synthetic_flux(self, bandpass, force=False, plot=False):
@@ -1282,12 +1266,11 @@ class Spectrum:
         wave_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
-        # Make sure the values are in length units
-        if not u.equivalent(wave_units, q.um):
-            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
+        # Convert units
+        new_spectrum = u.unit_conversion(self.spectrum, wave_units=wave_units)
 
-        # Update the wavelength array
-        self.wave = self.wave * self.wave_units.to(wave_units)
+        # Set flux values
+        self._wave = new_spectrum[0].value
 
         # Set the wave_units
         self._wave_units = wave_units

@@ -1421,3 +1421,93 @@ def __get_spec(fitsData, fitsHeader, fileName, verb=True):
         validData[2] = np.array([np.nan] * len(validData[1]))
 
     return validData
+
+
+def unit_conversion(spectrum, flux_units=None, wave_units=None):
+    """
+    Convert the input spectrum to the given units
+
+    Parameters
+    ----------
+    spectrum: sequence
+        The [W, F] or [W, F, E] with units
+    flux_units: astropy.units.quantity.Quantity
+        The output flux units
+    wave_units: astropy.units.quantity.Quantity
+        The output wavelength units
+
+    Returns
+    -------
+    new_spectrum
+        The spectrum with new units
+    """
+    # Do nothing
+    if flux_units is None and wave_units is None:
+        return spectrum
+
+    # Convert wavelength units
+    if wave_units is not None:
+
+        # Check the units
+        if not equivalent(wave_units, (q.um, q.Hz)):
+            raise TypeError("{}: wave_units must be in wavelength or frequency units, e.g. 'um' or 'Hz'".format(wave_units))
+
+        # Convert wavelength -> wavelength or frequency -> frequency
+        if equivalent(wave_units, spectrum[0].unit):
+            spectrum[0] = spectrum[0].to(wave_units)
+
+        # Convert wavelength -> frequency (nu = c / lam) or frequency -> wavelength (lam = c / nu)
+        elif (equivalent(wave_units, q.um) and equivalent(spectrum[0].unit, q.Hz)) or (equivalent(wave_units, q.Hz) and equivalent(spectrum[0].unit, q.um)):
+            spectrum[0] = (ac.c / spectrum[0]).to(wave_units)
+
+        # Problem units
+        else:
+            raise ValueError("{} not convertible to {}. Try wavelength or frequency units.".format(spectrum[0].unit, wave_units))
+
+    # Convert flux units
+    if flux_units is not None:
+
+        # Check the units
+        if not equivalent(flux_units, (FLAM, q.Jy)):
+            raise TypeError("{}: flux_units must be in flux density units, e.g. 'erg/s/cm2/A' or 'Jy'".format(flux_units))
+
+        # Convert F_nu -> F_nu or F_lambda -> F_lambda
+        if equivalent(flux_units, spectrum[1].unit):
+            spectrum[1] = spectrum[1].to(flux_units)
+
+        # Convert to F_nu (F_nu = F_lam * lam**2 / c)
+        elif equivalent(spectrum[1].unit, FLAM) and equivalent(flux_units, q.Jy):
+            spectrum[1] = (spectrum[1] * spectrum[0]**2 / ac.c).to(flux_units)
+
+        # Convert to F_lambda (F_lambda = F_nu * c / lam**2)
+        elif equivalent(spectrum[1].unit, q.Jy) and equivalent(flux_units, FLAM):
+            spectrum[1] = (spectrum[1] * ac.c / spectrum[0]**2).to(flux_units)
+
+        # Problem units
+        else:
+            raise ValueError("{} not convertible to {}. Try F_lambda or F_nu units.".format(spectrum[1].unit, flux_units))
+
+    # Convert uncertainty if applicable
+    if len(spectrum) == 3 and flux_units is not None:
+
+        # Check the units
+        if not equivalent(flux_units, (FLAM, q.Jy)):
+            raise TypeError("{}: flux_units must be in flux density units, e.g. 'erg/s/cm2/A' or 'Jy'".format(flux_units))
+
+        # Convert F_nu -> F_nu or F_lambda -> F_lambda
+        if equivalent(flux_units, spectrum[2].unit):
+            spectrum[2] = spectrum[2].to(flux_units)
+
+        # Convert to F_nu (F_nu = F_lam * lam**2 / c)
+        elif equivalent(spectrum[2].unit, FLAM) and equivalent(flux_units, q.Jy):
+            spectrum[2] = (spectrum[2] * spectrum[0]**2 / ac.c).to(flux_units)
+
+        # Convert to F_lambda (F_lambda = F_nu * c / lam**2)
+        elif equivalent(spectrum[2].unit, q.Jy) and equivalent(flux_units, FLAM):
+            spectrum[2] = (spectrum[2] * ac.c / spectrum[0]**2).to(flux_units)
+
+        # Problem units
+        else:
+            raise ValueError("{} not convertible to {}. Try wavelength or frequency units.".format(spectrum[2].unit, flux_units))
+
+    return spectrum

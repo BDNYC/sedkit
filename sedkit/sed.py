@@ -1523,10 +1523,8 @@ class SED:
             The astropy units of the SED wavelength
         """
         # Make sure it's a flux density
-        if not u.equivalent(flux_units, u.FLAM):
-            raise TypeError("{}: flux_units must be a unit of flux density, e.g. 'erg/s/cm2/A'".format(flux_units))
-
-        # fnu2flam(f_nu, lam, units=u.FLAM)
+        if not u.equivalent(flux_units, (u.FLAM, q.Jy)):
+            raise TypeError("{}: flux_units must be in flux density units, e.g. 'erg/s/cm2/A' or 'Jy'".format(flux_units))
 
         # Set the flux_units!
         self._flux_units = flux_units
