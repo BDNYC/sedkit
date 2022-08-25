@@ -562,7 +562,7 @@ class Spectrum:
         self._flux_units = flux_units
         self._set_units()
 
-    def integrate(self, units=q.erg / q.s / q.cm**2, n_samples=10):
+    def integrate(self, units=None, n_samples=10):
         """Calculate the area under the spectrum
 
         Parameters
@@ -578,14 +578,30 @@ class Spectrum:
             The integrated flux and uncertainty
         """
         # Make sure the target units are flux units
-        if not u.equivalent(units, q.erg / q.s / q.cm**2):
-            raise TypeError("units must be in flux units, e.g. 'erg/s/cm2'")
+        if units is not None:
+
+            if not (u.equivalent(units, q.erg / q.s / q.cm ** 2) or u.equivalent(units, q.Jy * q.um)):
+                raise TypeError("units must be in flux units, e.g. 'erg/s/cm2' or 'Jy * um'")
+
+        else:
+
+            # F_lambda * lambda
+            if u.equivalent(self.flux_units, q.erg / q.s / q.cm ** 2 / q.AA):
+                units = q.erg / q.s / q.cm ** 2
+
+            elif u.equivalent(self.flux_units, q.Jy):
+                units = q.Jy * q.um
+
+            else:
+                raise TypeError("units must be in flux units, e.g. 'erg/s/cm2' or 'Jy * um'")
 
         # Calculate the factor for the given units
         m = self.flux_units * self.wave_units
 
         # Scrub the spectrum
         spec = u.scrub(self.data)
+
+        # Integrate the spectrum
         val = (np.trapz(spec[1], x=spec[0]) * m).to(units)
 
         if self.unc is None:
