@@ -1950,8 +1950,15 @@ class SED:
         """
         self._radius = None
 
+        # Change units to Jupiter radii for substellar objects
         if self.substellar:
             radius_units = q.Rjup
+
+        # Check infer_from value
+        if infer_from is not None:
+            infer_froms = ['spt', 'Lbol', 'M_J', 'M_Ks']
+            if infer_from not in infer_froms:
+                raise ValueError("{}: Please choose valid relation to infer the radius. Try {}".format(infer_from, infer_froms))
 
         # Try model isochrones
         if infer_from == 'evo_model' or (self.evo_model is not None) and (self.age is not None) and (self.Lbol_sun is not None):
@@ -1978,22 +1985,22 @@ class SED:
                 self.radius = self.mainsequence.evaluate('radius(spt)', self.spectral_type, yunits=radius_units, fit_local=10, plot=plot)
 
             # Try radius(Lbol) relation
-            elif (self.radius is None and self.Lbol_sun is not None):
+            elif infer_from == 'Lbol' or (self.radius is None and self.Lbol_sun is not None):
 
                 # Infer from Dwarf Sequence
                 self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, yunits=radius_units, fit_local=10, plot=plot)
 
             # Try radius(M_J) relation
-            elif self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
+            elif infer_from == 'M_J' or self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
                 self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), yunits=radius_units, fit_local=10, plot=plot)
 
             # Try radius(M_Ks) relation
-            elif self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
+            elif infer_from == 'M_Ks' or self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.Ks'), yunits=radius_units, fit_local=10, plot=plot)
+                self.radius = self.mainsequence.evaluate('radius(M_Ks)', self.get_mag('2MASS.Ks'), yunits=radius_units, fit_local=10, plot=plot)
 
             # No dice
             else:
