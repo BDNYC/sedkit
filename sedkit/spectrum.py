@@ -548,37 +548,21 @@ class Spectrum:
         flux_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
-        # Check the units
-        if not u.equivalent(flux_units, (u.FLAM, q.Jy)):
-            raise TypeError("flux_units must be in flux density units, e.g. 'erg/s/cm2/A' or 'Jy'")
+        # Convert units
+        new_spectrum = u.unit_conversion(self.spectrum, flux_units=flux_units)
 
-        # Check if units are Fnu of Flam
-        if u.equivalent(flux_units, q.Jy) and u.equivalent(self.flux_units, u.FLAM):
+        # Set flux values
+        self._flux = new_spectrum[1].value
 
-            # Convert native FLAM units to Jy
-            self._flux = self._flux * self.wave ** 2 * 3.34e-19
-            if self.unc is not None:
-                self._unc = self._unc * self.wave ** 2 * 3.34e-19
-
-        elif u.equivalent(self.flux_units, q.Jy) and u.equivalent(flux_units, u.FLAM):
-
-            # Convert native Jy units to FLAM
-            self._flux = self._flux * 3e18 / (self.wave ** 2)
-            if self.unc is not None:
-                self._unc = self._unc * 3e18 / (self.wave ** 2)
-
-        else:
-
-            # Update the flux and unc arrays
-            self._flux = self._flux * self.flux_units.to(flux_units)
-            if self.unc is not None:
-                self._unc = self._unc * self.flux_units.to(flux_units)
+        # Set uncertainty values
+        if self.unc is not None:
+            self._unc = new_spectrum[2].value
 
         # Set the flux_units
         self._flux_units = flux_units
         self._set_units()
 
-    def integrate(self, units=q.erg / q.s / q.cm**2, n_samples=10):
+    def integrate(self, units=None, n_samples=10):
         """Calculate the area under the spectrum
 
         Parameters
@@ -594,14 +578,30 @@ class Spectrum:
             The integrated flux and uncertainty
         """
         # Make sure the target units are flux units
-        if not u.equivalent(units, q.erg / q.s / q.cm**2):
-            raise TypeError("units must be in flux units, e.g. 'erg/s/cm2'")
+        if units is not None:
+
+            if not (u.equivalent(units, q.erg / q.s / q.cm ** 2) or u.equivalent(units, q.Jy * q.um)):
+                raise TypeError("units must be in flux units, e.g. 'erg/s/cm2' or 'Jy * um'")
+
+        else:
+
+            # F_lambda * lambda
+            if u.equivalent(self.flux_units, q.erg / q.s / q.cm ** 2 / q.AA):
+                units = q.erg / q.s / q.cm ** 2
+
+            elif u.equivalent(self.flux_units, q.Jy):
+                units = q.Jy * q.um
+
+            else:
+                raise TypeError("units must be in flux units, e.g. 'erg/s/cm2' or 'Jy * um'")
 
         # Calculate the factor for the given units
         m = self.flux_units * self.wave_units
 
         # Scrub the spectrum
         spec = u.scrub(self.data)
+
+        # Integrate the spectrum
         val = (np.trapz(spec[1], x=spec[0]) * m).to(units)
 
         if self.unc is None:
@@ -1082,6 +1082,7 @@ class Spectrum:
         Smooths the spectrum using a Kaiser-Bessel smoothing window of
         narrowness *beta* (~1 => very smooth, ~100 => not smooth)
 
+
         Parameters
         ----------
         beta: float, int
@@ -1107,8 +1108,7 @@ class Spectrum:
 
     @property
     def spectrum(self):
-        """Store the spectrum with units
-        """
+        """Return the spectrum with units"""
         return [i * Q for i, Q in zip(self.data, self.units)]
 
     def synthetic_flux(self, bandpass, force=False, plot=False):
@@ -1282,12 +1282,11 @@ class Spectrum:
         wave_units: astropy.units.quantity.Quantity
             The astropy units of the SED wavelength
         """
-        # Make sure the values are in length units
-        if not u.equivalent(wave_units, q.um):
-            raise TypeError("wave_units must be a unit of length, e.g. 'um'")
+        # Convert units
+        new_spectrum = u.unit_conversion(self.spectrum, wave_units=wave_units)
 
-        # Update the wavelength array
-        self.wave = self.wave * self.wave_units.to(wave_units)
+        # Set flux values
+        self._wave = new_spectrum[0].value
 
         # Set the wave_units
         self._wave_units = wave_units

@@ -445,7 +445,7 @@ def flux_calibrate(mag, dist, sig_m=None, sig_d=None, scale_to=10 * q.pc):
         return [np.nan, np.nan]
 
 
-def flux2mag(flx, bandpass):
+def flux2mag(flx, bandpass, photon=True):
     """Calculate the magnitude for a given flux
 
     Parameters
@@ -454,6 +454,8 @@ def flux2mag(flx, bandpass):
         The flux or (flux, uncertainty)
     bandpass: pysynphot.spectrum.ArraySpectralElement
         The bandpass to use
+    photon: bool
+        Convert energy units to photon counts
     """
     if isinstance(flx, UNITS):
         flx = flx, np.nan * flx.unit
@@ -468,36 +470,18 @@ def flux2mag(flx, bandpass):
     unc = unc or np.nan * unit
 
     # Convert energy units to photon counts
-    flx = (flx * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(unit / q.erg)
-    zp = (zp * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(unit / q.erg)
-    unc = (unc * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(unit / q.erg)
+    if photon:
+
+        eff, flx, unc = unit_conversion([eff, flx, unc], flux_units=zp.unit)
+        flx = (flx * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(zp.unit / q.erg)
+        unc = (unc * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(zp.unit / q.erg)
+        zp = (zp * (eff / (ac.h * ac.c)).to(1 / q.erg)).to(zp.unit / q.erg)
 
     # Calculate magnitude
     m = -2.5 * np.log10((flx / zp).value)
     m_unc = (2.5 / np.log(10)) * (unc / flx).value
 
     return m, m_unc
-
-
-def fnu2flam(f_nu, lam, units=q.erg / q.s / q.cm**2 / q.AA):
-    """
-    Convert a flux density as a function of frequency
-    into a function of wavelength
-
-    Parameters
-    ----------
-    f_nu: astropy.unit.quantity.Quantity
-        The flux density
-    lam: astropy.unit.quantity.Quantity
-        The effective wavelength of the flux
-    units: astropy.unit.quantity.Quantity
-        The desired units
-    """
-    # ergs_per_photon = (ac.h*ac.c/lam).to(q.erg)
-
-    f_lam = (f_nu * ac.c / lam**2).to(units)
-
-    return f_lam
 
 
 def minimize_norm(arr1, arr2, **kwargs):
@@ -773,17 +757,24 @@ def mag2flux(band, mag, sig_m='', units=q.erg / q.s / q.cm**2 / q.AA):
             sig_m = sig_m.value
 
         # Calculate the flux density
-        f = (band.zp * 10**(mag / -2.5)).to(units)
+        f = band.zp * 10**(mag / -2.5)
 
         if isinstance(sig_m, str):
             sig_m = np.nan
 
-        sig_f = (f * sig_m * np.log(10) / 2.5).to(units)
+        # Calculate the uncertainty in the flux density
+        sig_f = f * sig_m * np.log(10) / 2.5
 
-        return np.array([f.value, sig_f.value]) * units
+        # Vals to return
+        vals = [f, sig_f]
 
     except IOError:
-        return np.array([np.nan, np.nan]) * units
+        vals = [np.nan, np.nan]
+
+    # Check flux units
+    vals = unit_conversion([band.wave_eff, vals[0], vals[1]], flux_units=units)
+
+    return vals[1:]
 
 
 def monotonic(x):
@@ -1421,3 +1412,93 @@ def __get_spec(fitsData, fitsHeader, fileName, verb=True):
         validData[2] = np.array([np.nan] * len(validData[1]))
 
     return validData
+
+
+def unit_conversion(spectrum, flux_units=None, wave_units=None):
+    """
+    Convert the input spectrum to the given units
+
+    Parameters
+    ----------
+    spectrum: sequence
+        The [W, F] or [W, F, E] with units
+    flux_units: astropy.units.quantity.Quantity
+        The output flux units
+    wave_units: astropy.units.quantity.Quantity
+        The output wavelength units
+
+    Returns
+    -------
+    new_spectrum
+        The spectrum with new units
+    """
+    # Do nothing
+    if flux_units is None and wave_units is None:
+        return spectrum
+
+    # Convert wavelength units
+    if wave_units is not None:
+
+        # Check the units
+        if not equivalent(wave_units, (q.um, q.Hz)):
+            raise TypeError("{}: wave_units must be in wavelength or frequency units, e.g. 'um' or 'Hz'".format(wave_units))
+
+        # Convert wavelength -> wavelength or frequency -> frequency
+        if equivalent(wave_units, spectrum[0].unit):
+            spectrum[0] = spectrum[0].to(wave_units)
+
+        # Convert wavelength -> frequency (nu = c / lam) or frequency -> wavelength (lam = c / nu)
+        elif (equivalent(wave_units, q.um) and equivalent(spectrum[0].unit, q.Hz)) or (equivalent(wave_units, q.Hz) and equivalent(spectrum[0].unit, q.um)):
+            spectrum[0] = (ac.c / spectrum[0]).to(wave_units)
+
+        # Problem units
+        else:
+            raise ValueError("{} not convertible to {}. Try wavelength or frequency units.".format(spectrum[0].unit, wave_units))
+
+    # Convert flux units
+    if flux_units is not None:
+
+        # Check the units
+        if not equivalent(flux_units, (FLAM, q.Jy)):
+            raise TypeError("{}: flux_units must be in flux density units, e.g. 'erg/s/cm2/A' or 'Jy'".format(flux_units))
+
+        # Convert F_nu -> F_nu or F_lambda -> F_lambda
+        if equivalent(flux_units, spectrum[1].unit):
+            spectrum[1] = spectrum[1].to(flux_units)
+
+        # Convert to F_nu (F_nu = F_lam * lam**2 / c)
+        elif equivalent(spectrum[1].unit, FLAM) and equivalent(flux_units, q.Jy):
+            spectrum[1] = (spectrum[1] * spectrum[0]**2 / ac.c).to(flux_units)
+
+        # Convert to F_lambda (F_lambda = F_nu * c / lam**2)
+        elif equivalent(spectrum[1].unit, q.Jy) and equivalent(flux_units, FLAM):
+            spectrum[1] = (spectrum[1] * ac.c / spectrum[0]**2).to(flux_units)
+
+        # Problem units
+        else:
+            raise ValueError("{} not convertible to {}. Try F_lambda or F_nu units.".format(spectrum[1].unit, flux_units))
+
+    # Convert uncertainty if applicable
+    if len(spectrum) == 3 and flux_units is not None:
+
+        # Check the units
+        if not equivalent(flux_units, (FLAM, q.Jy)):
+            raise TypeError("{}: flux_units must be in flux density units, e.g. 'erg/s/cm2/A' or 'Jy'".format(flux_units))
+
+        # Convert F_nu -> F_nu or F_lambda -> F_lambda
+        if equivalent(flux_units, spectrum[2].unit):
+            spectrum[2] = spectrum[2].to(flux_units)
+
+        # Convert to F_nu (F_nu = F_lam * lam**2 / c)
+        elif equivalent(spectrum[2].unit, FLAM) and equivalent(flux_units, q.Jy):
+            spectrum[2] = (spectrum[2] * spectrum[0]**2 / ac.c).to(flux_units)
+
+        # Convert to F_lambda (F_lambda = F_nu * c / lam**2)
+        elif equivalent(spectrum[2].unit, q.Jy) and equivalent(flux_units, FLAM):
+            spectrum[2] = (spectrum[2] * ac.c / spectrum[0]**2).to(flux_units)
+
+        # Problem units
+        else:
+            raise ValueError("{} not convertible to {}. Try wavelength or frequency units.".format(spectrum[2].unit, flux_units))
+
+    return spectrum

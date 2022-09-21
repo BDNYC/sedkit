@@ -24,7 +24,7 @@ from astropy.coordinates import Angle, SkyCoord
 from astroquery.vizier import Vizier
 from astroquery.simbad import Simbad
 from astropy.utils.exceptions import AstropyWarning
-from bokeh.io import export_png
+# from bokeh.io import export_png
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 from dustmaps.bayestar import BayestarWebQuery
@@ -549,17 +549,21 @@ class SED:
             self.min_spec = (999 * q.um).to(self.wave_units)
             self.max_spec = (0 * q.um).to(self.wave_units)
 
-    def calculate_fbol(self, units=q.erg / q.s / q.cm**2):
+    def calculate_fbol(self, units=None):
         """
         Calculate the bolometric flux of the SED
 
         Parameters
         ----------
         units: astropy.units.quantity.Quantity
-            The target untis for fbol
+            The target units for fbol
         """
+        # Get SED in CGS units
+        app_SED = copy(self.app_SED)
+        app_SED.flux_units = q.erg / q.s / q.cm**2 / q.AA
+
         # Integrate the SED to get fbol
-        fbol = self.app_SED.integrate(units=units)
+        fbol = app_SED.integrate(units=units)
 
         # Set the attribute
         self.fbol = tuple([val for val in fbol] + ['This Work'])
@@ -722,44 +726,34 @@ class SED:
         # Fetch the table (photometry or synthetic_photometry)
         table = getattr(self, '_{}'.format(name))
 
-        # Reset absolute photometry
-        table['abs_flux'] = np.nan
-        table['abs_flux_unc'] = np.nan
-        table['abs_magnitude'] = np.nan
-        table['abs_magnitude_unc'] = np.nan
+        # Set flux cols to correct units
+        for idx, col in zip([4, 5, 8, 9], ['app_flux', 'app_flux_unc', 'abs_flux', 'abs_flux_unc']):
+            if col in table.colnames:
+                table.remove_column(col)
+            table.add_column([np.nan * self.flux_units] * len(table), name=col, index=idx)
 
+        # If any photometry is in the table, calculate the flux values from the magnitudes and put in desired units
         if len(table) > 0:
-
-            # Update the photometry
-            table['eff'] = table['eff'].to(self.wave_units)
-            table['app_flux'] = table['app_flux'].to(self.flux_units)
-            table['app_flux_unc'] = table['app_flux_unc'].to(self.flux_units)
-            table['abs_flux'] = table['abs_flux'].to(self.flux_units)
-            table['abs_flux_unc'] = table['abs_flux_unc'].to(self.flux_units)
-
-            # Get the app_mags
-            m = np.array(table)['app_magnitude']
-            m_unc = np.array(table)['app_magnitude_unc']
 
             # Calculate app_flux values
             for n, row in enumerate(table):
-                app_flux, app_flux_unc = u.mag2flux(row['bandpass'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
-                table['app_flux'][n] = app_flux.to(self.flux_units)
-                table['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
+                app_flux, app_flux_unc = u.mag2flux(row['bandpass'], row['app_magnitude'], sig_m=row['app_magnitude_unc'], units=self.flux_units)
+                table['app_flux'][n] = app_flux
+                table['app_flux_unc'][n] = app_flux_unc
 
             # Calculate absolute mags
             if self.distance is not None:
 
                 # Calculate abs_mags
-                M, M_unc = u.flux_calibrate(m, self.distance[0], m_unc, self.distance[1])
-                table['abs_magnitude'] = M
-                table['abs_magnitude_unc'] = M_unc
+                M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance[0], row['app_magnitude_unc'], self.distance[1])
+                table['abs_magnitude'][n] = M
+                table['abs_magnitude_unc'][n] = M_unc
 
                 # Calculate abs_flux values
                 for n, row in enumerate(table):
-                    abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
-                    table['abs_flux'][n] = abs_flux.to(self.flux_units)
-                    table['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
+                    abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'], units=self.flux_units)
+                    table['abs_flux'][n] = abs_flux
+                    table['abs_flux_unc'][n] = abs_flux_unc
 
             if name == 'photometry':
 
@@ -774,6 +768,81 @@ class SED:
 
             # Flag suspicious photometry
             self._flag_photometry()
+
+    # def _calibrate_photometry(self, name='photometry'):
+    #     """
+    #     Calculate the absolute magnitudes and flux values of all rows in the photometry table
+    #
+    #     Parameters
+    #     ----------
+    #     name: str
+    #         The name of the attribute to calibrate, ['photometry', 'synthetic_photometry']
+    #     phot_flag: float
+    #         The survey-survey color to flag as suspicious
+    #     """
+    #     # Reset photometric SED
+    #     if name == 'photometry':
+    #         self.app_phot_SED = None
+    #
+    #     # Fetch the table (photometry or synthetic_photometry)
+    #     table = getattr(self, '_{}'.format(name))
+    #
+    #     # Reset absolute photometry
+    #     table['abs_flux'] = np.nan
+    #     table['abs_flux_unc'] = np.nan
+    #     table['abs_magnitude'] = np.nan
+    #     table['abs_magnitude_unc'] = np.nan
+    #
+    #     if len(table) > 0:
+    #
+    #         # Update the photometry units
+    #         table['eff'], table['app_flux'], table['app_flux_unc'] = u.unit_conversion([table['eff'], table['app_flux'], table['app_flux_unc']], wave_units=self.wave_units, flux_units=self.flux_units)
+    #         table['eff'], table['abs_flux'], table['abs_flux_unc'] = u.unit_conversion([table['eff'], table['abs_flux'], table['abs_flux_unc']], wave_units=self.wave_units, flux_units=self.flux_units)
+    #
+    #         # table['eff'] = table['eff'].to(self.wave_units)
+    #         # table['app_flux'] = table['app_flux'].to(self.flux_units)
+    #         # table['app_flux_unc'] = table['app_flux_unc'].to(self.flux_units)
+    #         # table['abs_flux'] = table['abs_flux'].to(self.flux_units)
+    #         # table['abs_flux_unc'] = table['abs_flux_unc'].to(self.flux_units)
+    #
+    #         # Get the app_mags
+    #         m = np.array(table)['app_magnitude']
+    #         m_unc = np.array(table)['app_magnitude_unc']
+    #
+    #         # Calculate app_flux values
+    #         for n, row in enumerate(table):
+    #             app_flux, app_flux_unc = u.mag2flux(row['bandpass'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
+    #             app_wave, app_flux, app_flux_unc =
+    #             table['app_flux'][n] = app_flux.to(self.flux_units)
+    #             table['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
+    #
+    #         # Calculate absolute mags
+    #         if self.distance is not None:
+    #
+    #             # Calculate abs_mags
+    #             M, M_unc = u.flux_calibrate(m, self.distance[0], m_unc, self.distance[1])
+    #             table['abs_magnitude'] = M
+    #             table['abs_magnitude_unc'] = M_unc
+    #
+    #             # Calculate abs_flux values
+    #             for n, row in enumerate(table):
+    #                 abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
+    #                 table['abs_flux'][n] = abs_flux.to(self.flux_units)
+    #                 table['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
+    #
+    #         if name == 'photometry':
+    #
+    #             # Make apparent photometric SED with photometry
+    #             app_cols = ['eff', 'app_flux', 'app_flux_unc']
+    #             phot_array = np.array(getattr(self, name)[app_cols])
+    #             phot_array = phot_array[(getattr(self, name)['app_flux'] > 0) & (getattr(self, name)['app_flux_unc'] > 0)]
+    #             self.app_phot_SED = sp.Spectrum(*[phot_array[i] * Q for i, Q in zip(app_cols, self.units)])
+    #
+    #             # Set SED as uncalculated
+    #             self.calculated = False
+    #
+    #         # Flag suspicious photometry
+    #         self._flag_photometry()
 
     def _calibrate_spectra(self):
         """
@@ -1523,10 +1592,8 @@ class SED:
             The astropy units of the SED wavelength
         """
         # Make sure it's a flux density
-        if not u.equivalent(flux_units, u.FLAM):
-            raise TypeError("{}: flux_units must be a unit of flux density, e.g. 'erg/s/cm2/A'".format(flux_units))
-
-        # fnu2flam(f_nu, lam, units=u.FLAM)
+        if not u.equivalent(flux_units, (u.FLAM, q.Jy)):
+            raise TypeError("{}: flux_units must be in flux density units, e.g. 'erg/s/cm2/A' or 'Jy'".format(flux_units))
 
         # Set the flux_units!
         self._flux_units = flux_units
@@ -1868,7 +1935,7 @@ class SED:
                 self.message('Could not calculate mass without Lbol, M_2MASS.J, or M_2MASS.Ks')
 
 
-    def infer_radius(self, radius_units=q.Rsun, plot=False):
+    def infer_radius(self, radius_units=q.Rsun, infer_from=None, plot=False):
         """
         Estimate the radius from model isochrones given an age and Lbol
 
@@ -1876,16 +1943,25 @@ class SED:
         ----------
         radius_units: astropy.units.quantity.Quantity
             The radius units
+        infer_from: str
+            Infer radius from specific source, ['spt', 'Lbol', 'M_J', 'M_Ks']
         plot: bool
             Plot the relation and the evaluated radius
         """
         self._radius = None
 
+        # Change units to Jupiter radii for substellar objects
         if self.substellar:
             radius_units = q.Rjup
 
+        # Check infer_from value
+        if infer_from is not None:
+            infer_froms = ['spt', 'Lbol', 'M_J', 'M_Ks']
+            if infer_from not in infer_froms:
+                raise ValueError("{}: Please choose valid relation to infer the radius. Try {}".format(infer_from, infer_froms))
+
         # Try model isochrones
-        if (self.evo_model is not None) and (self.age is not None) and (self.Lbol_sun is not None):
+        if infer_from == 'evo_model' or (self.evo_model is not None) and (self.age is not None) and (self.Lbol_sun is not None):
 
             # Default
             radius = None
@@ -1903,28 +1979,28 @@ class SED:
         else:
 
             # Try radius(spt) relation
-            if self.radius is None and self.spectral_type is not None:
+            if infer_from == 'spectral_type' or (self.radius is None and self.spectral_type is not None):
 
                 # Infer from Dwarf Sequence
                 self.radius = self.mainsequence.evaluate('radius(spt)', self.spectral_type, yunits=radius_units, fit_local=10, plot=plot)
 
             # Try radius(Lbol) relation
-            elif self.radius is None and self.Lbol_sun is not None:
+            elif infer_from == 'Lbol' or (self.radius is None and self.Lbol_sun is not None):
 
                 # Infer from Dwarf Sequence
                 self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, yunits=radius_units, fit_local=10, plot=plot)
 
             # Try radius(M_J) relation
-            elif self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
+            elif infer_from == 'M_J' or self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
                 self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), yunits=radius_units, fit_local=10, plot=plot)
 
             # Try radius(M_Ks) relation
-            elif self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
+            elif infer_from == 'M_Ks' or self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.Ks'), yunits=radius_units, fit_local=10, plot=plot)
+                self.radius = self.mainsequence.evaluate('radius(M_Ks)', self.get_mag('2MASS.Ks'), yunits=radius_units, fit_local=10, plot=plot)
 
             # No dice
             else:
@@ -2867,8 +2943,8 @@ class SED:
                     self.message("{} is an invalid gravity. Please use 'beta' or 'gamma' instead.".format(gravity))
 
             # If radius not explicitly set, estimate it from spectral type
-            if self.spectral_type is not None and self.radius is None:
-                self.infer_radius()
+            # if self.spectral_type is not None and self.radius is None:
+            #     self.infer_radius()
 
             # Update the reference
             self._refs['spectral_type'] = ref
