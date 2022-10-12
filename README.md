@@ -1,6 +1,6 @@
 # `sedkit`
 [![Powered by Astropy](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org)
-[![Build Status](https://github.com/hover2pi/sedkit/actions/workflows/sedkit_workflow.yml/badge.svg)](https://github.com/hover2pi/sedkit/actions/workflows/sedkit_workflow.yml)
+[![Build Status](https://github.com/hover2pi/sedkit/actions/workflows/ci.yml/badge.svg)](https://github.com/hover2pi/sedkit/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/hover2pi/sedkit/badge.svg?branch=master&service=github)](https://coveralls.io/github/hover2pi/sedkit?branch=master)
 [![Documentation Status](https://readthedocs.org/projects/sedkit/badge/?version=latest)](https://sedkit.readthedocs.io/en/latest/?badge=latest)
 
