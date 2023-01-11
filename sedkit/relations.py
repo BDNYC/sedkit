@@ -112,7 +112,7 @@ class Relation:
             raise NameError("{}, {}: Make sure both parameters are in the data, {}".format(xparam, yparam, self.data.colnames))
 
         # Grab data
-        rel = {'xparam': xparam, 'yparam': yparam, 'order': order, 'x': np.array(self.data[xparam]), 'y': np.array(self.data[yparam]),
+        rel = {'xparam': xparam, 'yparam': yparam, 'order': order, 'x': np.asarray(self.data[xparam], dtype=float), 'y': np.asarray(self.data[yparam], dtype=float),
                'coeffs': None, 'C_p': None, 'matrix': None, 'yi': None, 'C_yi': None, 'sig_yi': None, 'xunit': xunit or 1, 'yunit': yunit or 1}
 
         # Set x range for fit

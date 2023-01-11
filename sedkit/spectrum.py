@@ -111,7 +111,7 @@ class Spectrum:
         # Replace negatives, zeros, and infs with nans
         spectrum = [wave, flux]
         spectrum += [unc] if unc is not None else []
-        spectrum = u.scrub(spectrum, fill_value=np.nan)
+        spectrum = u.scrub(spectrum)
 
         # Store history info and raw data
         self.history = {}

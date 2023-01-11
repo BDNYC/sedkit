@@ -29,6 +29,7 @@ from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 from dustmaps.bayestar import BayestarWebQuery
 from svo_filters import svo
+import pysnooper
 
 from . import utilities as u
 from . import spectrum as sp
@@ -66,6 +67,7 @@ class SED:
         The [W, F, E] of the calculated absolute SED
     abs_phot_SED: sequence
         The [W, F, E] of the calculated absolute photometric SED
+    abs_spec_SED: sequence
     abs_spec_SED: sequence
         The [W, F, E] of the calculated absolute spectroscopic SED
     age_max: astropy.units.quantity.Quantity
@@ -152,7 +154,7 @@ class SED:
         self.reddening = 0
         self.SpT = None
         self.multiple = False
-        self.mainsequence = rel.DwarfSequence()
+        self.HRsequence = rel.DwarfSequence()
         self.substellar = substellar
 
         # Dictionary to keep track of references
@@ -685,8 +687,8 @@ class SED:
                             # Add it to the table
                             self._synthetic_photometry.add_row(new_photometry)
 
-                    except IndexError:
-                        self.message("'{}' not a supported bandpass. Skipping...")
+                    except NameError:
+                        self.message("'{}' not a supported bandpass. Skipping...".format(band))
 
             # Calibrate the synthetic photometry
             self._calibrate_photometry('synthetic_photometry')
@@ -724,7 +726,7 @@ class SED:
             self.app_phot_SED = None
 
         # Fetch the table (photometry or synthetic_photometry)
-        table = getattr(self, '_{}'.format(name))
+        table = copy(getattr(self, '_{}'.format(name)))
 
         # Set flux cols to correct units
         for idx, col in zip([4, 5, 8, 9], ['app_flux', 'app_flux_unc', 'abs_flux', 'abs_flux_unc']):
@@ -741,19 +743,19 @@ class SED:
                 table['app_flux'][n] = app_flux
                 table['app_flux_unc'][n] = app_flux_unc
 
-            # Calculate absolute mags
-            if self.distance is not None:
+                # Calculate absolute mags
+                if self.distance is not None:
 
-                # Calculate abs_mags
-                M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance[0], row['app_magnitude_unc'], self.distance[1])
-                table['abs_magnitude'][n] = M
-                table['abs_magnitude_unc'][n] = M_unc
+                    # Calculate abs_mags
+                    M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance[0], row['app_magnitude_unc'], self.distance[1])
+                    table['abs_magnitude'][n] = M
+                    table['abs_magnitude_unc'][n] = M_unc
 
-                # Calculate abs_flux values
-                for n, row in enumerate(table):
-                    abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'], units=self.flux_units)
-                    table['abs_flux'][n] = abs_flux
-                    table['abs_flux_unc'][n] = abs_flux_unc
+                    # Calculate abs_flux values
+                    for n, row in enumerate(table):
+                        abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'], units=self.flux_units)
+                        table['abs_flux'][n] = abs_flux
+                        table['abs_flux_unc'][n] = abs_flux_unc
 
             if name == 'photometry':
 
@@ -769,80 +771,8 @@ class SED:
             # Flag suspicious photometry
             self._flag_photometry()
 
-    # def _calibrate_photometry(self, name='photometry'):
-    #     """
-    #     Calculate the absolute magnitudes and flux values of all rows in the photometry table
-    #
-    #     Parameters
-    #     ----------
-    #     name: str
-    #         The name of the attribute to calibrate, ['photometry', 'synthetic_photometry']
-    #     phot_flag: float
-    #         The survey-survey color to flag as suspicious
-    #     """
-    #     # Reset photometric SED
-    #     if name == 'photometry':
-    #         self.app_phot_SED = None
-    #
-    #     # Fetch the table (photometry or synthetic_photometry)
-    #     table = getattr(self, '_{}'.format(name))
-    #
-    #     # Reset absolute photometry
-    #     table['abs_flux'] = np.nan
-    #     table['abs_flux_unc'] = np.nan
-    #     table['abs_magnitude'] = np.nan
-    #     table['abs_magnitude_unc'] = np.nan
-    #
-    #     if len(table) > 0:
-    #
-    #         # Update the photometry units
-    #         table['eff'], table['app_flux'], table['app_flux_unc'] = u.unit_conversion([table['eff'], table['app_flux'], table['app_flux_unc']], wave_units=self.wave_units, flux_units=self.flux_units)
-    #         table['eff'], table['abs_flux'], table['abs_flux_unc'] = u.unit_conversion([table['eff'], table['abs_flux'], table['abs_flux_unc']], wave_units=self.wave_units, flux_units=self.flux_units)
-    #
-    #         # table['eff'] = table['eff'].to(self.wave_units)
-    #         # table['app_flux'] = table['app_flux'].to(self.flux_units)
-    #         # table['app_flux_unc'] = table['app_flux_unc'].to(self.flux_units)
-    #         # table['abs_flux'] = table['abs_flux'].to(self.flux_units)
-    #         # table['abs_flux_unc'] = table['abs_flux_unc'].to(self.flux_units)
-    #
-    #         # Get the app_mags
-    #         m = np.array(table)['app_magnitude']
-    #         m_unc = np.array(table)['app_magnitude_unc']
-    #
-    #         # Calculate app_flux values
-    #         for n, row in enumerate(table):
-    #             app_flux, app_flux_unc = u.mag2flux(row['bandpass'], row['app_magnitude'], sig_m=row['app_magnitude_unc'])
-    #             app_wave, app_flux, app_flux_unc =
-    #             table['app_flux'][n] = app_flux.to(self.flux_units)
-    #             table['app_flux_unc'][n] = app_flux_unc.to(self.flux_units)
-    #
-    #         # Calculate absolute mags
-    #         if self.distance is not None:
-    #
-    #             # Calculate abs_mags
-    #             M, M_unc = u.flux_calibrate(m, self.distance[0], m_unc, self.distance[1])
-    #             table['abs_magnitude'] = M
-    #             table['abs_magnitude_unc'] = M_unc
-    #
-    #             # Calculate abs_flux values
-    #             for n, row in enumerate(table):
-    #                 abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'])
-    #                 table['abs_flux'][n] = abs_flux.to(self.flux_units)
-    #                 table['abs_flux_unc'][n] = abs_flux_unc.to(self.flux_units)
-    #
-    #         if name == 'photometry':
-    #
-    #             # Make apparent photometric SED with photometry
-    #             app_cols = ['eff', 'app_flux', 'app_flux_unc']
-    #             phot_array = np.array(getattr(self, name)[app_cols])
-    #             phot_array = phot_array[(getattr(self, name)['app_flux'] > 0) & (getattr(self, name)['app_flux_unc'] > 0)]
-    #             self.app_phot_SED = sp.Spectrum(*[phot_array[i] * Q for i, Q in zip(app_cols, self.units)])
-    #
-    #             # Set SED as uncalculated
-    #             self.calculated = False
-    #
-    #         # Flag suspicious photometry
-    #         self._flag_photometry()
+            # Save the table
+            setattr(self, '_{}'.format(name), table)
 
     def _calibrate_spectra(self):
         """
@@ -885,7 +815,7 @@ class SED:
         self.calculated = False
 
         # Get synthetic magnitudes
-        self.calculate_synthetic_photometry(self.photometry['band'])
+        self.calculate_synthetic_photometry([bp.filterID for bp in self.photometry['bandpass']])
 
     def compare_model(self, modelgrid, fit_to='spec', rebin=True, **kwargs):
         """
@@ -1916,19 +1846,19 @@ class SED:
             if self.mass is None and self.Lbol_sun is not None:
 
                 # Infer from Dwarf Sequence
-                self.mass = self.mainsequence.evaluate('mass(Lbol)', self.Lbol_sun, fit_local=5, yunits=mass_units, plot=plot)
+                self.mass = self.HRsequence.evaluate('mass(Lbol)', self.Lbol_sun, fit_local=5, yunits=mass_units, plot=plot)
 
             # Try mass(M_J) relation
             elif self.mass is None and self.get_mag('2MASS.J', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), fit_local=5, yunits=mass_units, plot=plot)
+                self.mass = self.HRsequence.evaluate('mass(M_J)', self.get_mag('2MASS.J'), fit_local=5, yunits=mass_units, plot=plot)
 
             # Try mass(M_Ks) relation
             elif self.mass is None and self.get_mag('2MASS.Ks', 'abs') is not None:
 
                 # Infer from Dwarf Sequence
-                self.mass = self.mainsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), fit_local=5, yunits=mass_units, plot=plot)
+                self.mass = self.HRsequence.evaluate('mass(M_J)', self.get_mag('2MASS.Ks'), fit_local=5, yunits=mass_units, plot=plot)
 
             # No dice
             else:
@@ -1954,14 +1884,31 @@ class SED:
         if self.substellar:
             radius_units = q.Rjup
 
+        # Calibrate photometry in case abs mags are needed
+        self._calibrate_photometry()
+
+        # Determine valid relations from which inferences can be made
+        infer_froms = []
+        if self.age is not None and self.Lbol_sun is not None:
+            infer_froms.append('evo_model')
+        if self.spectral_type is not None:
+            infer_froms.append('spt')
+        if self.Lbol_sun is not None:
+            infer_froms.append('Lbol')
+        if self.get_mag('2MASS.J', 'abs') is not None:
+            infer_froms.append('M_J')
+        if self.get_mag('2MASS.Ks', 'abs') is not None:
+            infer_froms.append('M_Ks')
+
         # Check infer_from value
-        if infer_from is not None:
-            infer_froms = ['spt', 'Lbol', 'M_J', 'M_Ks']
-            if infer_from not in infer_froms:
-                raise ValueError("{}: Please choose valid relation to infer the radius. Try {}".format(infer_from, infer_froms))
+        if infer_from is None:
+            if len(infer_froms) > 0:
+                infer_from = infer_froms[0]
+        if infer_from not in infer_froms or infer_from is None:
+            raise ValueError("{}: Please choose valid relation to infer the radius. Try {}".format('None' if infer_from is None else infer_from, infer_froms))
 
         # Try model isochrones
-        if infer_from == 'evo_model' or (self.evo_model is not None) and (self.age is not None) and (self.Lbol_sun is not None):
+        if infer_from == 'evo_model':
 
             # Default
             radius = None
@@ -1976,35 +1923,79 @@ class SED:
             # Store the value
             self.radius = [radius[0].round(3), radius[1].round(3), radius[2]] if radius is not None else radius
 
+        # Try radius(spt) relation
+        elif infer_from == 'spt':
+
+            # Infer from Dwarf Sequence
+            self.radius = self.HRsequence.evaluate('radius(spt)', self.spectral_type, yunits=radius_units, fit_local=5, plot=plot)
+
+        # Try radius(Lbol) relation
+        elif infer_from == 'Lbol':
+
+            # Infer from Dwarf Sequence
+            self.radius = self.HRsequence.evaluate('radius(Lbol)', self.Lbol_sun, yunits=radius_units, fit_local=5, plot=plot)
+
+        # Try radius(M_J) relation
+        elif infer_from == 'M_J':
+
+            # Infer from Dwarf Sequence
+            self.radius = self.HRsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), yunits=radius_units, fit_local=5, plot=plot)
+
+        # Try radius(M_Ks) relation
+        elif infer_from == 'M_Ks':
+
+            # Infer from Dwarf Sequence
+            self.radius = self.HRsequence.evaluate('radius(M_Ks)', self.get_mag('2MASS.Ks'), yunits=radius_units, fit_local=5, plot=plot)
+
+        # No dice
         else:
+            self.message('Could not calculate radius without spectral_type, Lbol, M_2MASS.J, or M_2MASS.Ks')
 
-            # Try radius(spt) relation
-            if infer_from == 'spectral_type' or (self.radius is None and self.spectral_type is not None):
-
-                # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(spt)', self.spectral_type, yunits=radius_units, fit_local=10, plot=plot)
-
-            # Try radius(Lbol) relation
-            elif infer_from == 'Lbol' or (self.radius is None and self.Lbol_sun is not None):
-
-                # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(Lbol)', self.Lbol_sun, yunits=radius_units, fit_local=10, plot=plot)
-
-            # Try radius(M_J) relation
-            elif infer_from == 'M_J' or self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
-
-                # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), yunits=radius_units, fit_local=10, plot=plot)
-
-            # Try radius(M_Ks) relation
-            elif infer_from == 'M_Ks' or self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
-
-                # Infer from Dwarf Sequence
-                self.radius = self.mainsequence.evaluate('radius(M_Ks)', self.get_mag('2MASS.Ks'), yunits=radius_units, fit_local=10, plot=plot)
-
-            # No dice
-            else:
-                self.message('Could not calculate radius without spectral_type, Lbol, M_2MASS.J, or M_2MASS.Ks')
+        # # Try model isochrones
+        # if infer_from == 'evo_model' or (self.evo_model is not None) and (self.age is not None) and (self.Lbol_sun is not None):
+        #
+        #     # Default
+        #     radius = None
+        #
+        #     # Check for uncertainties
+        #     if self.Lbol_sun[1] is None:
+        #         self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the radius.'.format(self))
+        #     else:
+        #         self.evo_model.radius_units = radius_units
+        #         radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
+        #
+        #     # Store the value
+        #     self.radius = [radius[0].round(3), radius[1].round(3), radius[2]] if radius is not None else radius
+        #
+        # else:
+        #
+        #     # Try radius(spt) relation
+        #     if infer_from == 'spt' or (self.radius is None and self.spectral_type is not None):
+        #
+        #         # Infer from Dwarf Sequence
+        #         self.radius = self.HRsequence.evaluate('radius(spt)', self.spectral_type, yunits=radius_units, fit_local=5, plot=plot)
+        #
+        #     # Try radius(Lbol) relation
+        #     elif infer_from == 'Lbol' or (self.radius is None and self.Lbol_sun is not None):
+        #
+        #         # Infer from Dwarf Sequence
+        #         self.radius = self.HRsequence.evaluate('radius(Lbol)', self.Lbol_sun, yunits=radius_units, fit_local=5, plot=plot)
+        #
+        #     # Try radius(M_J) relation
+        #     elif infer_from == 'M_J' or self.radius is None and self.get_mag('2MASS.J', 'abs') is not None:
+        #
+        #         # Infer from Dwarf Sequence
+        #         self.radius = self.HRsequence.evaluate('radius(M_J)', self.get_mag('2MASS.J'), yunits=radius_units, fit_local=5, plot=plot)
+        #
+        #     # Try radius(M_Ks) relation
+        #     elif infer_from == 'M_Ks' or self.radius is None and self.get_mag('2MASS.Ks', 'abs') is not None:
+        #
+        #         # Infer from Dwarf Sequence
+        #         self.radius = self.HRsequence.evaluate('radius(M_Ks)', self.get_mag('2MASS.Ks'), yunits=radius_units, fit_local=5, plot=plot)
+        #
+        #     # No dice
+        #     else:
+        #         self.message('Could not calculate radius without spectral_type, Lbol, M_2MASS.J, or M_2MASS.Ks')
 
     def infer_Teff(self, teff_units=q.K, plot=False):
         """
@@ -2041,13 +2032,13 @@ class SED:
             if self.Teff is None and self.spectral_type is not None:
 
                 # Infer from Dwarf Sequence
-                self.Teff = self.mainsequence.evaluate('Teff(spt)', self.spectral_type, plot=plot)
+                self.Teff = self.HRsequence.evaluate('Teff(spt)', self.spectral_type, plot=plot)
 
             # Try Teff(Lbol) relation
             elif self.Teff is None and self.Lbol_sun is not None:
 
                 # Infer from Dwarf Sequence
-                self.Teff = self.mainsequence.evaluate('Teff(Lbol)', self.Lbol_sun, plot=plot)
+                self.Teff = self.HRsequence.evaluate('Teff(Lbol)', self.Lbol_sun, plot=plot)
 
             # No dice
             else:
@@ -2114,7 +2105,7 @@ class SED:
         """
         self._validate_and_set_param('logg', logg, None, False, vmin=0, vmax=6)
 
-    def make_rj_tail(self, teff=3000 * q.K):
+    def make_rj_tail(self, teff=5000 * q.K):
         """
         Generate a Rayleigh Jeans tail for the SED
 
@@ -2144,11 +2135,13 @@ class SED:
 
             # If sufficient RJ tail, ignore OPT and NIR...
             if self.max_phot > 3 * q.um:
+
+                # Make sure the photometry is calibrated
                 rj = rj.norm_to_mags(self.photometry[self.photometry['eff'] > 3 * q.um])
 
-            # ...or just ignore OPT...
-            elif self.max_phot > 3 * q.um:
-                rj = rj.norm_to_mags(self.photometry[self.photometry['eff'] > 3 * q.um])
+            # # ...or just ignore OPT...
+            # elif self.max_phot > 3 * q.um:
+            #     rj = rj.norm_to_mags(self.photometry[self.photometry['eff'] > 3 * q.um])
 
             # ...or just normalize to whatever you have
             else:
@@ -2176,10 +2169,12 @@ class SED:
             return
 
         # Calculate flux and calibrate
-        self._calibrate_photometry()
+        if len(self.photometry) > 0:
+            self._calibrate_photometry()
 
         # Combine spectra and flux calibrate
-        self._calibrate_spectra()
+        if len(self.spectra) > 0:
+            self._calibrate_spectra()
 
         # Turn off print statements
         verb = self.verbose
