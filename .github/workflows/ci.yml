@@ -1,19 +1,12 @@
-name: CI
+name: sedkit CI
 
-on:
-  push:
-    branches:
-      - master
-    tags:
-      - "*"
-  pull_request:
-  schedule:
-    # Run every Monday at 6am UTC
-    - cron: "0 6 * * 1"
+on: [pull_request]
 
 jobs:
-  test:
-    name: ${{ matrix.name }}
+
+  SEDkit-CI:
+
+    name: Python - ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -21,7 +14,7 @@ jobs:
         include:
           - name: Unit tests Python 3.7
             os: macos-latest
-            python-version: 3.7
+            python-version: ['3.9', '3.10', '3.11']
             extras: test
             test-command: pytest
 
