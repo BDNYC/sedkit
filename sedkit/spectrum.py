@@ -125,7 +125,7 @@ class Spectrum:
         spectrum = [i.value for i in spectrum]
 
         # Add the data
-        self.wave = spectrum[0]
+        self._wave = spectrum[0]
         self._flux = spectrum[1]
         self._unc = None if unc is None else spectrum[2]
 
@@ -1259,14 +1259,19 @@ class Spectrum:
             return self.flux / (self._flux / self._unc)
 
     @property
+    def wave(self):
+        """Getter for the wavelength"""
+        return self._wave
+
+    @property
     def wave_max(self):
         """The minimum wavelength"""
-        return max(self.wave) * self.wave_units
+        return max(self._wave) * self.wave_units
 
     @property
     def wave_min(self):
         """The minimum wavelength"""
-        return min(self.wave) * self.wave_units
+        return min(self._wave) * self.wave_units
 
     @property
     def wave_units(self):
