@@ -852,7 +852,7 @@ class Spectrum:
 
         # Trim both to just overlapping wavelengths
         idx = u.idx_overlap(w0, spec.wave, inclusive=True)
-        spec0 = slf.data[:, idx]
+        spec0 = slf.data
         spec1 = spec.data[:, idx]
 
         # Find the normalization factor
@@ -1433,7 +1433,15 @@ class FileSpectrum(Spectrum):
         # Read the fits data...
         if file.endswith('.fits'):
 
-            if file.endswith('.fits'):
+            if file.endswith('_x1d.fits'):
+                raw = fits.getdata(file)
+                data = [raw['WAVELENGTH'], raw['FLUX'], raw['FLUX_ERROR']]
+
+                # Filter to just quality data (dq == 0)
+                idx, = np.where(raw['DQ'] == 0)
+                data = [dat[idx] for dat in data]
+
+            elif file.endswith('.fits') and survey is None:
                 data = u.spectrum_from_fits(file, ext=ext)
 
             elif survey == 'SDSS':

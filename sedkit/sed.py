@@ -439,8 +439,8 @@ class SED:
         spec.flux_units = self.flux_units
 
         # Add the spectrum object to the list of spectra
-        mn = spec.wave_min.astype(np.float16)
-        mx = spec.wave_max.astype(np.float16)
+        mn = spec.wave_min#.astype(np.float16)
+        mx = spec.wave_max#.astype(np.float16)
         res = int(((mx - mn) / np.nanmean(np.diff(spec.wave))).value)
 
         # Make sure it's not a duplicate
@@ -743,16 +743,17 @@ class SED:
                 table['app_flux'][n] = app_flux
                 table['app_flux_unc'][n] = app_flux_unc
 
-                # Calculate absolute mags
+                # Calculate absolute mags and fluxes
                 if self.distance is not None:
 
-                    # Calculate abs_mags
-                    M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance[0], row['app_magnitude_unc'], self.distance[1])
-                    table['abs_magnitude'][n] = M
-                    table['abs_magnitude_unc'][n] = M_unc
-
-                    # Calculate abs_flux values
                     for n, row in enumerate(table):
+
+                        # Calculate abs_mags
+                        M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance[0], row['app_magnitude_unc'], self.distance[1])
+                        table['abs_magnitude'][n] = M
+                        table['abs_magnitude_unc'][n] = M_unc
+
+                        # Calculate abs_flux values
                         abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'], units=self.flux_units)
                         table['abs_flux'][n] = abs_flux
                         table['abs_flux_unc'][n] = abs_flux_unc
@@ -2139,10 +2140,6 @@ class SED:
                 # Make sure the photometry is calibrated
                 rj = rj.norm_to_mags(self.photometry[self.photometry['eff'] > 3 * q.um])
 
-            # # ...or just ignore OPT...
-            # elif self.max_phot > 3 * q.um:
-            #     rj = rj.norm_to_mags(self.photometry[self.photometry['eff'] > 3 * q.um])
-
             # ...or just normalize to whatever you have
             else:
                 rj = rj.norm_to_mags(self.photometry)
@@ -2577,7 +2574,7 @@ class SED:
             self.fig = figure(plot_width=900, plot_height=400, title=self.name,
                               y_axis_type=scale[1], x_axis_type=scale[0],
                               x_axis_label=xlab, y_axis_label=ylab,
-                              tools=TOOLS)
+                              tools=TOOLS, **kwargs)
 
         # Plot spectra
         if spectra and len(self.spectra) > 0:
