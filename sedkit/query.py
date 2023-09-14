@@ -377,7 +377,7 @@ def query_vizier(catalog, target=None, sky_coords=None, col_names=None, wildcard
             filters = [Filter(name) for name in names]
             colors = u.color_gen(kwargs.get('palette', 'viridis'), n=n_rec)
             phot_tips = [('Band', '@desc'), ('Wave', '@wav'), ('Flux', '@flx'), ('Unc', '@unc'), ('Idx', '@idx')]
-            hover = HoverTool(names=['phot'], tooltips=phot_tips)
+            hover = HoverTool(name='phot', tooltips=phot_tips)
             prev.add_tools(hover)
 
             def valid(flx, err):

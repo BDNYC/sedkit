@@ -27,9 +27,10 @@ from astropy.utils.exceptions import AstropyWarning
 # from bokeh.io import export_png
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
+from bokeh.palettes import Dark2_5 as palette
+import itertools
 from dustmaps.bayestar import BayestarWebQuery
 from svo_filters import svo
-import pysnooper
 
 from . import utilities as u
 from . import spectrum as sp
@@ -44,6 +45,9 @@ Vizier.columns = ["**", "+_r"]
 Simbad.add_votable_fields('parallax', 'sptype', 'diameter', 'ids', 'flux(U)', 'flux_error(U)', 'flux_bibcode(U)', 'flux(B)', 'flux_error(B)', 'flux_bibcode(B)', 'flux(V)', 'flux_error(V)', 'flux_bibcode(V)', 'flux(R)', 'flux_error(R)', 'flux_bibcode(R)', 'flux(I)', 'flux_error(I)', 'flux_bibcode(I)')
 
 warnings.simplefilter('ignore', category=AstropyWarning)
+
+# Color iterator
+COLORS = itertools.cycle(palette)
 
 
 class SED:
@@ -758,11 +762,16 @@ class SED:
                         table['abs_flux'][n] = abs_flux
                         table['abs_flux_unc'][n] = abs_flux_unc
 
+            # Store the table
+            setattr(self, '_{}'.format(name), table)
+
             if name == 'photometry':
 
                 # Make apparent photometric SED with photometry
                 app_cols = ['eff', 'app_flux', 'app_flux_unc']
                 phot_array = np.array(getattr(self, name)[app_cols])
+
+                # Only include photometry with errors
                 phot_array = phot_array[(getattr(self, name)['app_flux'] > 0) & (getattr(self, name)['app_flux_unc'] > 0)]
                 self.app_phot_SED = sp.Spectrum(*[phot_array[i] * Q for i, Q in zip(app_cols, self.units)])
 
@@ -2571,7 +2580,7 @@ class SED:
             TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
             xlab = 'Wavelength [{}]'.format(self.wave_units)
             ylab = 'Flux Density [{}]'.format(str(self.flux_units))
-            self.fig = figure(plot_width=900, plot_height=400, title=self.name,
+            self.fig = figure(width=900, height=400, title=self.name,
                               y_axis_type=scale[1], x_axis_type=scale[0],
                               x_axis_label=xlab, y_axis_label=ylab,
                               tools=TOOLS, **kwargs)
@@ -2580,18 +2589,27 @@ class SED:
         if spectra and len(self.spectra) > 0:
 
             if spectra == 'all':
+
                 for n, spec in enumerate(self.spectra['spectrum']):
-                    self.fig = spec.plot(fig=self.fig, components=True, const=const)
+
+                    # Different color
+                    norm_color = COLORS[n]
+
+                    # Normalize to the integral
+                    norm_spec = spec.norm_to_spec(full_SED)
+                    self.fig.line(norm_spec.wave, norm_spec.flux * const, color=norm_color, alpha=0.8, name='spectra',
+                                  legend_label=spec.name)
 
             else:
-                self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, alpha=0.8, legend_label='Spectrum')
+                self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, alpha=0.8, name='spectrum', legend_label='Spectrum')
 
         # Plot photometry
         if photometry and len(self.photometry) > 0:
 
             # Set up hover tool
             phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
-            hover = HoverTool(names=['photometry', 'nondetection'], tooltips=phot_tips)
+            # hover = HoverTool(name=['photometry', 'nondetection'], tooltips=phot_tips)
+            hover = HoverTool(name='photometry', tooltips=phot_tips)
             self.fig.add_tools(hover)
 
             # Plot points with errors
@@ -2612,7 +2630,7 @@ class SED:
 
             # Set up hover tool
             phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
-            hover = HoverTool(names=['synthetic photometry'], tooltips=phot_tips, mode='vline')
+            hover = HoverTool(name='synthetic photometry', tooltips=phot_tips)
             self.fig.add_tools(hover)
 
             # Plot points with errors
@@ -2625,7 +2643,7 @@ class SED:
         # Plot the SED with linear interpolation completion
         if integral:
             label = label or str(self.Teff[0]) if self.Teff is not None else 'Integral'
-            self.fig.line(full_SED.wave, full_SED.flux * const, line_color=color if one_color else 'black', alpha=0.3, legend_label=label)
+            self.fig.line(full_SED.wave, full_SED.flux * const, line_color=color if one_color else 'black', alpha=0.3, name='integral', legend_label=label)
 
         if best_fit and len(self.best_fit) > 0:
             col_list = u.color_gen('Category10', n=len(self.best_fit) + 1)
@@ -2634,9 +2652,9 @@ class SED:
                 mod = mod_fit['full_model']
                 mod.wave_units = self.wave_units
                 if mod_fit['fit_to'] == 'phot':
-                    self.fig.square(mod.wave, mod.flux, alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], size=12)
+                    self.fig.square(mod.wave, mod.flux, alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], name='best_fit_phot', size=12)
                 else:
-                    self.fig.line(mod.wave, mod.flux, alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], line_width=2)
+                    self.fig.line(mod.wave, mod.flux, alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], name='best_fit_spec', line_width=2)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
@@ -3023,8 +3041,8 @@ class SED:
                 raise TypeError("{} values must be {}".format(param, 'unitless' if units is None else "astropy.units.quantity.Quantity of the appropriate units , e.g. '{}'".format(units)))
 
             # Ensure valid range but don't throw error
-            vmin = vmin or -np.inf * (units or 1)
-            vmax = vmax or np.inf * (units or 1)
+            vmin = vmin if vmin is not None else -np.inf * (1 if units is None else units)
+            vmax = vmax if vmax is not None else np.inf * (1 if units is None else units)
             if (values[0] < vmin) or (values[0] > vmax):
                 self.message("{}: {} value is not in valid range [{}, {}].".format(values, param, vmin, vmax))
 

@@ -304,7 +304,7 @@ class Spectrum:
 
             # Configure plot
             tools = "pan, wheel_zoom, box_zoom, reset"
-            rep = figure(tools=tools, x_axis_label=report, y_axis_label='Goodness-of-fit', plot_width=600, plot_height=400)
+            rep = figure(tools=tools, x_axis_label=report, y_axis_label='Goodness-of-fit', width=600, height=400)
 
             # Single out best fit
             best = ColumnDataSource(data=models.iloc[:1])
