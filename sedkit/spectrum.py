@@ -851,7 +851,7 @@ class Spectrum:
         slf = self.resamp(spec.spectrum[0])
 
         # Trim both to just overlapping wavelengths
-        idx = u.idx_overlap(w0, spec.wave, inclusive=True)
+        idx = u.idx_overlap(w0, spec.wave, inclusive=False)
         spec0 = slf.data
         spec1 = spec.data[:, idx]
 

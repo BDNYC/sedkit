@@ -24,10 +24,9 @@ from astropy.coordinates import Angle, SkyCoord
 from astroquery.vizier import Vizier
 from astroquery.simbad import Simbad
 from astropy.utils.exceptions import AstropyWarning
-# from bokeh.io import export_png
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
-from bokeh.palettes import Dark2_5 as palette
+from bokeh.palettes import Category10
 import itertools
 from dustmaps.bayestar import BayestarWebQuery
 from svo_filters import svo
@@ -47,7 +46,9 @@ Simbad.add_votable_fields('parallax', 'sptype', 'diameter', 'ids', 'flux(U)', 'f
 warnings.simplefilter('ignore', category=AstropyWarning)
 
 # Color iterator
-COLORS = itertools.cycle(palette)
+def color_gen():
+    yield from itertools.cycle(Category10[10])
+COLORS = color_gen()
 
 
 class SED:
@@ -2592,13 +2593,9 @@ class SED:
 
                 for n, spec in enumerate(self.spectra['spectrum']):
 
-                    # Different color
-                    norm_color = COLORS[n]
-
                     # Normalize to the integral
                     norm_spec = spec.norm_to_spec(full_SED)
-                    self.fig.line(norm_spec.wave, norm_spec.flux * const, color=norm_color, alpha=0.8, name='spectra',
-                                  legend_label=spec.name)
+                    self.fig.line(norm_spec.wave, norm_spec.flux * const, color=next(COLORS), alpha=0.8, name='spectra', legend_label=spec.name)
 
             else:
                 self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, alpha=0.8, name='spectrum', legend_label='Spectrum')

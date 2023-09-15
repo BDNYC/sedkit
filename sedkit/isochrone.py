@@ -14,10 +14,11 @@ import astropy.units as q
 import astropy.constants as ac
 from astropy.io.ascii import read
 from bokeh.plotting import figure, show
-from bokeh.models import LinearColorMapper, BasicTicker, ColorBar
+from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Text
 import numpy as np
 
 from . import utilities as u
+from . import uncertainties as un
 
 # A dictionary of all supported moving group ages from Bell et al. (2015)
 NYMG_AGES = {'AB Dor': (149 * q.Myr, 51 * q.Myr, '2015MNRAS.454..593B'),
@@ -34,7 +35,7 @@ try:
     EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
 # Fails RTD build for some reason
 except:
-    EVO_MODELS = ['COND03', 'dmestar_solar', 'DUSTY00', 'f2_solar_age', 'hybrid_solar_age', 'nc+03_age', 'nc-03_age', 'nc_solar_age', 'parsec12_solar']
+    EVO_MODELS = ['COND03', 'dmestar_solar', 'DUSTY00', 'f2_solar_age', 'hybrid_solar_age', 'nc+03_age', 'nc-03_age', 'nc_solar_age', 'parsec12_solar', 'ATMO_NEQ_strong']
 
 class Isochrone:
     """A class to handle model isochrones"""
@@ -166,39 +167,44 @@ class Isochrone:
             self.message('{}: age must be between {} and {} to infer {} from {} isochrones.'.format(*args))
             return None
 
-        # Get the lower, nominal, and upper values
-        lower = self.interpolate(xval[0] - xval[1], age[0]-age[1], xparam, yparam)
-        nominal = self.interpolate(xval[0], age[0], xparam, yparam)
-        upper = self.interpolate(xval[0] + xval[1], age[0]+age[1], xparam, yparam)
+        # Monte Carlo Approach
+        mu, sigma = xval[0], xval[1]  # mean and standard deviation for values on the x-axis
+        mu_a, sigma_a = age[0].value, age[1].value  # mean and standard deviation for the age range provided
+        xsample = np.random.normal(mu, sigma, 1000)
+        ysample = np.random.normal(mu_a, sigma_a, 1000)
+        values_list = []
+        nan_counter = 0
 
-        if nominal is None:
-            return None
-        if lower is None:
-            lower = upper
-        if upper is None:
-            upper = lower
-        if upper is None:
-            return None
+        for x, y in zip(xsample, ysample):
+            result = self.interpolate(x, y * age[0].unit, xparam, yparam)
+            if result is not None:
+                values_list.append(result.value if hasattr(result, 'unit') else result)
+            elif result is None:
+                print("Interpolate resulted in NaN")
+                nan_counter = nan_counter + 1
 
-        # Calculate the symmetric error
-        error = max(abs(nominal - lower), abs(nominal - upper)) * 2
+        # Get final values
+        unit = self.data[yparam].unit or 1
+        average = np.mean(np.array(values_list) * unit)
+        std = np.std(values_list)
+        error = std * unit
 
         # Plot the figure and evaluated point
         if plot:
-            val = nominal.value if hasattr(nominal, 'unit') else nominal
+            val = average.value if hasattr(average, 'unit') else average
             err = error.value if hasattr(error, 'unit') else error
             fig = self.plot(xparam, yparam)
             legend = '{} = {:.3f} ({:.3f})'.format(yparam, val, err)
-            fig.circle(xval[0], val, color='red', legend=legend)
+            fig.circle(xval[0], val, color='red', legend_label=legend)
             u.errorbars(fig, [xval[0]], [val], xerr=[xval[1]*2], yerr=[err], color='red')
 
             show(fig)
 
         # Balk at nans
-        if np.isnan(nominal):
+        if np.isnan(average):
             raise ValueError("I got a nan from {} for some reason.".format(self.name))
 
-        return nominal, error, self.name
+        return average, error, self.name
 
     def interpolate(self, xval, age, xparam, yparam):
         """Interpolate a value between two isochrones
