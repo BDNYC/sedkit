@@ -154,8 +154,10 @@ class Isochrone:
         age = age[0], age[1].to(age[0].unit)
 
         # Check if the xval has an uncertainty
+        no_xerr = False
         if not isinstance(xval, (tuple, list)):
-            xval = (xval, 0)
+            xval = (xval, xval * 0)
+            no_xerr = True
 
         # Test the age range is inbounds
         if age[0] < self.ages.min() or age[0] > self.ages.max():
@@ -163,27 +165,33 @@ class Isochrone:
             self.message('{}: age must be between {} and {} to infer {} from {} isochrones.'.format(*args))
             return None
 
+        # x-errors required for MC routine
+        if no_xerr:
+            average = self.interpolate(xval[0], age[0], xparam, yparam)
+            error = average * 0
+
         # Monte Carlo Approach
-        mu, sigma = xval[0], xval[1]  # mean and standard deviation for values on the x-axis
-        mu_a, sigma_a = age[0].value, age[1].value  # mean and standard deviation for the age range provided
-        xsample = np.random.normal(mu, sigma, 1000)
-        ysample = np.random.normal(mu_a, sigma_a, 1000)
-        values_list = []
-        nan_counter = 0
+        else:
+            mu, sigma = xval[0], xval[1]  # mean and standard deviation for values on the x-axis
+            mu_a, sigma_a = age[0].value, age[1].value  # mean and standard deviation for the age range provided
+            xsample = np.random.normal(mu, sigma, 1000)
+            ysample = np.random.normal(mu_a, sigma_a, 1000)
+            values_list = []
+            nan_counter = 0
 
-        for x, y in zip(xsample, ysample):
-            result = self.interpolate(x, y * age[0].unit, xparam, yparam)
-            if result is not None:
-                values_list.append(result.value if hasattr(result, 'unit') else result)
-            elif result is None:
-                print("Interpolate resulted in NaN")
-                nan_counter = nan_counter + 1
+            for x, y in zip(xsample, ysample):
+                result = self.interpolate(x, y * age[0].unit, xparam, yparam)
+                if result is not None:
+                    values_list.append(result.value if hasattr(result, 'unit') else result)
+                elif result is None:
+                    print("Interpolate resulted in NaN")
+                    nan_counter = nan_counter + 1
 
-        # Get final values
-        unit = self.data[yparam].unit or 1
-        average = np.mean(np.array(values_list) * unit)
-        std = np.std(values_list)
-        error = std * unit
+            # Get final values
+            unit = self.data[yparam].unit or 1
+            average = np.mean(np.array(values_list) * unit)
+            std = np.std(values_list)
+            error = std * unit
 
         # Plot the figure and evaluated point
         if plot:
