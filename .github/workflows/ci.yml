@@ -42,7 +42,7 @@ jobs:
 
       - name: Install package
         run: |
-          pip install -e .[${{ matrix.extras }}]
+          python setup.py develop --no-deps
 
       - name: Update conda
         run: |
