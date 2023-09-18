@@ -157,10 +157,6 @@ class Isochrone:
         if not isinstance(xval, (tuple, list)):
             xval = (xval, 0)
 
-        # Convert (age, unc) into age range
-        min_age = age[0] - age[1]
-        max_age = age[0] + age[1]
-
         # Test the age range is inbounds
         if age[0] < self.ages.min() or age[0] > self.ages.max():
             args = age[0], self.ages.min(), self.ages.max(), yparam, self.name
