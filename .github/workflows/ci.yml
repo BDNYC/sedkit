@@ -9,11 +9,10 @@ jobs:
     name: Python - ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
-      strategy:
-        max-parallel: 5
-        matrix:
-          os: macos-latest
-          python-version: [ '3.9', '3.10', '3.11' ]
+      max-parallel: 5
+      matrix:
+        os: macos-latest
+        python-version: [ '3.9', '3.10', '3.11' ]
 
     steps:
       - name: Checkout code
