@@ -218,7 +218,8 @@ class ModelGrid:
         new_rec = pd.DataFrame({k: [v] for k, v in kwargs.items()})
 
         # Add it to the index
-        self.index = self.index.append(new_rec)
+        print(self.index.columns, new_rec.keys())
+        self.index.loc[len(self.index)] = new_rec
 
     @staticmethod
     def closest_value(input_value, possible_values, n_vals=1):
@@ -475,6 +476,7 @@ class ModelGrid:
         # See if there is a table of parameters
         self.path = dirname
         self.index_path = os.path.join(dirname, 'index.p')
+
         if not os.path.isfile(self.index_path):
             os.system("touch {}".format(self.index_path))
 
@@ -547,10 +549,8 @@ class ModelGrid:
                 wav = bp.wave_eff.astype(np.float16).value
                 if flx is not None and not np.isnan(flx):
                     if err:
-                        # data.append([bp.wave_eff.astype(np.float16).value, flx.to(self.flux_units).value, flx_unc.to(self.flux_units).value])
                         data.append([wav, flx.value, flx_unc.value])
                     else:
-                        # data.append([bp.wave_eff.astype(np.float16).value, flx.to(self.flux_units).value])
                         data.append([wav, flx.value])
 
                     # Store the band names
@@ -562,7 +562,7 @@ class ModelGrid:
             # Unpack and save as new spectrum
             dataT = np.array(data).T
             phot.add_model(dataT if err else dataT[:2], weights=weights, label=row['label'], **params)
-            phot.phot = True
+            phot.phot = True # Indicate it is a 'photometry' modelgrid
             phot.native_wave_units = bp.wave_units
             phot.bandpasses = bands
 
