@@ -9,6 +9,9 @@ jobs:
   build:
 
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -el {0}
     strategy:
       fail-fast: false
       matrix:
@@ -33,7 +36,7 @@ jobs:
       - name: Display Conda environment
         run: |
           conda info
-          conda list
+          conda env list
 
       - name: Display Python version
         run: python -c "import sys; print(sys.version)"
