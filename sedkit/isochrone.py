@@ -19,6 +19,7 @@ import numpy as np
 
 from . import utilities as u
 
+
 # A dictionary of all supported moving group ages from Bell et al. (2015)
 NYMG_AGES = {'AB Dor': (149 * q.Myr, 51 * q.Myr, '2015MNRAS.454..593B'),
              'beta Pic': (24 * q.Myr, 3 * q.Myr, '2015MNRAS.454..593B'),
@@ -34,7 +35,7 @@ try:
     EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
 # Fails RTD build for some reason
 except:
-    EVO_MODELS = ['COND03', 'dmestar_solar', 'DUSTY00', 'f2_solar_age', 'hybrid_solar_age', 'nc+03_age', 'nc-03_age', 'nc_solar_age', 'parsec12_solar']
+    EVO_MODELS = ['COND03', 'dmestar_solar', 'DUSTY00', 'f2_solar_age', 'hybrid_solar_age', 'nc+03_age','nc+0.0_age', 'nc-03_age', 'nc_solar_age','nc+0.5_age','nc-0.5_age', 'parsec12_solar','ATMO_NEQ_strong','ATMO_NEQ_strong_MIRI']
 
 class Isochrone:
     """A class to handle model isochrones"""
@@ -166,39 +167,77 @@ class Isochrone:
             self.message('{}: age must be between {} and {} to infer {} from {} isochrones.'.format(*args))
             return None
 
-        # Get the lower, nominal, and upper values
-        lower = self.interpolate(xval[0] - xval[1], age[0]-age[1], xparam, yparam)
-        nominal = self.interpolate(xval[0], age[0], xparam, yparam)
-        upper = self.interpolate(xval[0] + xval[1], age[0]+age[1], xparam, yparam)
+        # Monte Carlo Approach
+        mu, sigma = xval[0], xval[1]  # mean and standard deviation for values on the x-axis
+        mu_a, sigma_a = age[0].value, age[1].value  # mean and standard deviation for the age range provided
 
-        if nominal is None:
-            return None
-        if lower is None:
-            lower = upper
-        if upper is None:
-            upper = lower
-        if upper is None:
-            return None
+        xsample = np.random.normal(mu, sigma, 1000)
+        ysample = np.random.uniform(mu_a-sigma_a, mu_a+sigma_a, 1000)
+        values_list = []
+        nan_counter = 0
 
-        # Calculate the symmetric error
-        error = max(abs(nominal - lower), abs(nominal - upper)) * 2
+        for x, y in zip(xsample, ysample):
+            result = self.interpolate(x, y * age[0].unit, xparam, yparam)
+            if result is not None:
+                values_list.append(result.value if hasattr(result, 'unit') else result)
+            elif result is None:
+                print("Interpolate resulted in NaN")
+                nan_counter = nan_counter + 1
+
+        # Get final values
+        unit = self.data[yparam].unit or 1
+        # average = np.mean(np.array(values_list) * unit)
+        # # std = np.std(values_list)
+        # # error = std * unit
+        # min = np.min(np.array(values_list) * unit)
+        # max = np.max(np.array(values_list) * unit)
+        # error = abs(max-min)/2
+
+        #Error Propagation
+        dist_hist, hist_edges = np.histogram(values_list)
+
+        #Normalize Histogram
+        dist_hist = dist_hist/ np.sum(dist_hist)
+        # cumulative PDF
+        cum_PDF_hist_x = hist_edges[1:]  # right edges of the bins
+        cum_PDF_hist = np.zeros(hist_edges.size - 1)
+        for i in range(hist_edges.size - 1):
+            cum_PDF_hist[i] = np.sum(dist_hist[:i + 1])
+
+        # interquartile range of the PDF
+        error_lower_per = 0.16
+        error_upper_per = 0.84
+
+        Q1_hist = np.interp(error_lower_per, cum_PDF_hist, cum_PDF_hist_x)  # lower error
+        Q2_hist = np.interp(0.50, cum_PDF_hist, cum_PDF_hist_x )    # median
+        Q3_hist = np.interp(error_upper_per, cum_PDF_hist, cum_PDF_hist_x)  # upper error
+
+        # print("This is the lower error",Q1_hist)
+        # print("This is the median", Q2_hist)
+        # print("This is the upper error", Q3_hist)
+        lower_err = (Q2_hist - Q1_hist) * unit
+        upper_err = (Q3_hist - Q2_hist) * unit
+        average = Q2_hist * unit
+
 
         # Plot the figure and evaluated point
         if plot:
-            val = nominal.value if hasattr(nominal, 'unit') else nominal
-            err = error.value if hasattr(error, 'unit') else error
+            # val = average.value if hasattr(average, 'unit') else average
+            # lower_err = lower_err.value if hasattr(lower_err, 'unit') else lower_err
+            # upper_err = upper_err.value if hasattr(upper_err, 'unit') else upper_err
             fig = self.plot(xparam, yparam)
-            legend = '{} = {:.3f} ({:.3f})'.format(yparam, val, err)
-            fig.circle(xval[0], val, color='red', legend=legend)
-            u.errorbars(fig, [xval[0]], [val], xerr=[xval[1]*2], yerr=[err], color='red')
-
+            legend = '{} = {:.3f} ({:-.3f} {:+.3f})'.format(yparam, average.value, lower_err.value,upper_err.value)
+            fig.circle(xval[0], average.value, color='purple', legend_label=legend)
+            u.errorbars(fig, [xval[0]], [average.value], xerr=[xval[1]*2], yerr=[lower_err.value*-1,upper_err.value], color='purple')
             show(fig)
 
-        # Balk at nans
-        if np.isnan(nominal):
-            raise ValueError("I got a nan from {} for some reason.".format(self.name))
-
-        return nominal, error, self.name
+        # # Balk at nans
+        if np.isnan(average):
+            print("I got a nan from {} for some reason.".format(self.name))
+            # raise ValueError("I got a nan from {} for some reason.".format(self.name))
+        return average, lower_err, upper_err, self.name
+        # return average, lower_error, upper_error, self.name
+        # return average, error, self.name
 
     def interpolate(self, xval, age, xparam, yparam):
         """Interpolate a value between two isochrones
@@ -250,6 +289,7 @@ class Isochrone:
         result = np.average([lower_val, upper_val], weights=weights)
         unit = self.data[yparam].unit or 1
 
+        # return result
         return result * unit
 
     def message(self, msg, pre='[sedkit]'):
@@ -301,6 +341,9 @@ class Isochrone:
         color_mapper = LinearColorMapper(palette='Viridis256',
                                          low=self.ages.min().value,
                                          high=self.ages.max().value)
+        # color_mapper = LinearColorMapper(palette='Viridis256',
+        #                                  low=.05,
+        #                                  high=.15)
         color_bar = ColorBar(color_mapper=color_mapper, ticker=BasicTicker(),
                              label_standoff=5, border_line_color=None,
                              title='Age [{}]'.format(self.age_units),
