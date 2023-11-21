@@ -648,7 +648,7 @@ class ModelGrid:
                 pars['filepath'] = 'interp'
 
                 # Add line to the new dataframe
-                new_index = new_index.append(pars, ignore_index=True)
+                new_index = pd.concat([new_index, pd.DataFrame([pars])], ignore_index=True)
 
             except ValueError:
                 print("Could not interpolate grid point {}".format(pars))
