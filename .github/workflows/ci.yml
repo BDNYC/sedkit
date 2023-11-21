@@ -1,15 +1,9 @@
 name: CI
 
-on:
-  push:
-    branches:
-      - master
-    tags:
-      - "*"
+on: 
   pull_request:
-  schedule:
-    # Run every Monday at 6am UTC
-    - cron: "0 6 * * 1"
+    branches: [ master ]
+  workflow_dispatch:  # allows manual execution
 
 jobs:
   test:
@@ -18,40 +12,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: Unit tests Python 3.7
-            os: macos-latest
-            python-version: 3.7
-            extras: test
-            test-command: pytest
+        os: [macos-latest]
+        python-version: [ '3.10' ]
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
-          fetch-depth: 0
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of the git history  
+      - uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Upgrade pip
-        run: |
-          pip install --upgrade pip
-      - name: Add conda to system path
-        run: |
-          # $CONDA is an environment variable pointing to the root of the miniconda directory
-          echo $CONDA/bin >> $GITHUB_PATH
-      - name: Install dependencies
-        run: |
-          conda env update --file env/environment-${PYTHONVERSION}.yml --name sedkit-${{ matrix.python-version }}
-        env:
-            PYTHONVERSION: ${{ matrix.python-version }}
-      - name: Install package
-        run: |
-          pip install -e .[${{ matrix.extras }}]
-      - name: Update conda
-        run: |
-          conda update --all
+          environment-file: env/environment-${{ matrix.python-version }}.yml
+          miniforge-version: latest
+
       - name: Test with pytest
         run: |
-          conda run -n sedkit-${{ matrix.python-version }} pytest
+          pytest -s 
