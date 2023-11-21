@@ -6,26 +6,33 @@ on:
   workflow_dispatch:  # allows manual execution
 
 jobs:
-  test:
-    name: Python - ${{ matrix.python-version }}
+  build:
+
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest]
-        python-version: [ '3.10' ]
+        os: ["macos-latest"]
+        python-version: ["3.10"]
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of the git history  
-      - uses: conda-incubator/setup-miniconda@v2
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
         with:
           auto-update-conda: true
           python-version: ${{ matrix.python-version }}
           environment-file: env/environment-${{ matrix.python-version }}.yml
           miniforge-version: latest
 
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+
       - name: Test with pytest
         run: |
+          pip install pytest
           pytest -s 
