@@ -6,7 +6,7 @@ channels:
 - defaults
 dependencies:
 - pip
-- python>=3.10
+- python=3.10
 - pip:
   - astropy>=5.3.1
   - astroquery>=0.4.6
