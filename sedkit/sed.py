@@ -1165,7 +1165,7 @@ class SED:
         # Absolute spectral SED
         if self.abs_spec_SED is not None:
             specpath = os.path.join(dirpath, '{}_absolute_SED.txt'.format(name))
-            header = '{} absolute spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(name)
+            header = '{} absolute spectrum (erg/s/cm2/A) at 10 pc as a function of wavelength (um)'.format(name)
             self.abs_spec_SED.export(specpath, header=header)
 
         # All photometry
