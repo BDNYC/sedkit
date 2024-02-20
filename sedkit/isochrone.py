@@ -35,7 +35,7 @@ try:
     EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
 # Fails RTD build for some reason
 except:
-    EVO_MODELS = ['COND03', 'dmestar_solar', 'DUSTY00', 'f2_solar_age', 'hybrid_solar_age', 'nc+03_age','nc+0.0_age', 'nc-03_age', 'nc_solar_age','nc+0.5_age','nc-0.5_age', 'parsec12_solar','ATMO_NEQ_strong','ATMO_NEQ_strong_MIRI']
+    EVO_MODELS = ['COND03', 'dmestar_solar', 'DUSTY00', 'f2_solar_age', 'hybrid_solar_age', 'nc+03_age','nc+0.0_age', 'nc-03_age', 'nc_solar_age','nc+0.5_age','nc-0.5_age', 'parsec12_solar','ATMO_NEQ_strong','ATMO_NEQ_strong_MIRI','chaubrier_2022.txt']
 
 class Isochrone:
     """A class to handle model isochrones"""
