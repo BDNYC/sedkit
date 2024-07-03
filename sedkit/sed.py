@@ -745,9 +745,10 @@ class SED:
             if self.distance is not None:
 
                 # Calculate abs_mags
-                M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance[0], row['app_magnitude_unc'], self.distance[1])
-                table['abs_magnitude'][n] = M
-                table['abs_magnitude_unc'][n] = M_unc
+                for n, row in enumerate(table):
+                    M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance[0], row['app_magnitude_unc'], self.distance[1])
+                    table['abs_magnitude'][n] = M
+                    table['abs_magnitude_unc'][n] = M_unc
 
                 # Calculate abs_flux values
                 for n, row in enumerate(table):
