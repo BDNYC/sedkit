@@ -171,9 +171,9 @@ class Isochrone:
         # Monte Carlo Approach
         mu, sigma = xval[0], xval[1]  # mean and standard deviation for values on the x-axis
         mu_a, sigma_a = age[0].value, age[1].value  # mean and standard deviation for the age range provided
-        print("THIS IS NEW SAMPLE SIZE,5000")
-        xsample = np.random.normal(mu, sigma, 5000)
-        ysample = np.random.uniform(mu_a-sigma_a, mu_a+sigma_a, 5000)
+        print("THIS IS NEW SAMPLE SIZE,10000")
+        xsample = np.random.normal(mu, sigma, 10000)
+        ysample = np.random.uniform(mu_a-sigma_a, mu_a+sigma_a, 10000)
         values_list = []
         nan_counter = 0
 
