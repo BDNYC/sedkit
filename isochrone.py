@@ -187,12 +187,6 @@ class Isochrone:
 
         # Get final values
         unit = self.data[yparam].unit or 1
-        # average = np.mean(np.array(values_list) * unit)
-        # # std = np.std(values_list)
-        # # error = std * unit
-        # min = np.min(np.array(values_list) * unit)
-        # max = np.max(np.array(values_list) * unit)
-        # error = abs(max-min)/2
 
         #Error Propagation
         dist_hist, hist_edges = np.histogram(values_list)
