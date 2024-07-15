@@ -186,16 +186,10 @@ class Isochrone:
 
         # Get final values
         unit = self.data[yparam].unit or 1
-        # average = np.mean(np.array(values_list) * unit)
-        # # std = np.std(values_list)
-        # # error = std * unit
-        # min = np.min(np.array(values_list) * unit)
-        # max = np.max(np.array(values_list) * unit)
-        # error = abs(max-min)/2
 
         #Error Propagation
         dist_hist, hist_edges = np.histogram(values_list)
-
+        
         #Normalize Histogram
         dist_hist = dist_hist/ np.sum(dist_hist)
         # cumulative PDF
@@ -212,9 +206,7 @@ class Isochrone:
         Q2_hist = np.interp(0.50, cum_PDF_hist, cum_PDF_hist_x )    # median
         Q3_hist = np.interp(error_upper_per, cum_PDF_hist, cum_PDF_hist_x)  # upper error
 
-        # print("This is the lower error",Q1_hist)
-        # print("This is the median", Q2_hist)
-        # print("This is the upper error", Q3_hist)
+
         lower_err = (Q2_hist - Q1_hist) * unit
         upper_err = (Q3_hist - Q2_hist) * unit
         average = Q2_hist * unit
