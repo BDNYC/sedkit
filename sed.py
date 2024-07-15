@@ -587,6 +587,7 @@ class SED:
                 Lbol_sun_unc = None
             else:
                 Lbol_unc = Lbol * np.sqrt((self.fbol[1] / self.fbol[0]).value**2 + (2 * self.distance[1] / self.distance[0]).value**2)
+                print(Lbol,Lbol_unc)
                 Lbol_sun_unc = round(abs(Lbol_unc / (Lbol * np.log(10))).value, 3)
 
 
