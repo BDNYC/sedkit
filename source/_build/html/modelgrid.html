@@ -1,0 +1,156 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ModelGrid &#8212; sedkit  documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Catalog" href="catalog.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="modelgrid">
+<span id="id1"></span><h1>ModelGrid<a class="headerlink" href="#modelgrid" title="Permalink to this headline">¶</a></h1>
+<p>Theoretical model atmosphere grids and spectral atlases are useful tools for characterizing stellar and substellar atmospheres. These data can be managed in <code class="docutils literal notranslate"><span class="pre">sedkit</span></code> with the <code class="xref py py-class docutils literal notranslate"><span class="pre">ModelGrid</span></code> class.</p>
+<p>To use this resource, create a <code class="xref py py-class docutils literal notranslate"><span class="pre">ModelGrid</span></code> object, specify the parameters to track, and load it with data from a directory of XML files.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">ModelGrid</span>
+<span class="kn">import</span> <span class="nn">astropy.units</span> <span class="k">as</span> <span class="nn">q</span>
+<span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;alpha&#39;</span><span class="p">,</span> <span class="s1">&#39;logg&#39;</span><span class="p">,</span> <span class="s1">&#39;teff&#39;</span><span class="p">,</span> <span class="s1">&#39;meta&#39;</span><span class="p">]</span>
+<span class="n">mgrid</span> <span class="o">=</span> <span class="n">ModelGrid</span><span class="p">(</span><span class="s1">&#39;BT-Settl&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">q</span><span class="o">.</span><span class="n">AA</span><span class="p">,</span> <span class="n">q</span><span class="o">.</span><span class="n">erg</span><span class="o">/</span><span class="n">q</span><span class="o">.</span><span class="n">s</span><span class="o">/</span><span class="n">q</span><span class="o">.</span><span class="n">cm</span><span class="o">**</span><span class="mi">2</span><span class="o">/</span><span class="n">q</span><span class="o">.</span><span class="n">AA</span><span class="p">,</span> <span class="n">ref</span><span class="o">=</span><span class="s1">&#39;2014IAUS..299..271A&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<span class="n">mgrid</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;/path/to/data/models&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The table of model data can be viewed via the <code class="xref py py-attr docutils literal notranslate"><span class="pre">index`</span></code> property and the parameter values can be returned via a parameter name + ‘_vals’ property.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">mgrid</span><span class="o">.</span><span class="n">index</span>
+<span class="n">mgrid</span><span class="o">.</span><span class="n">teff_vals</span>
+<span class="n">mgrid</span><span class="o">.</span><span class="n">logg_vals</span>
+<span class="n">mgrid</span><span class="o">.</span><span class="n">meta_vals</span>
+<span class="n">mgrid</span><span class="o">.</span><span class="n">alpha_vals</span>
+</pre></div>
+</div>
+<p>An individual model can be retrieved as a <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> object by passing the desired parameter values as keyword arguments to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_spectrum()</span></code> method. If the given parameter values do not correspond to a point on the grid, the spectrum can be interpolated or the closest grid point spectrum can be retrieved.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">spec1</span> <span class="o">=</span> <span class="n">mgrid</span><span class="o">.</span><span class="n">get_spectrum</span><span class="p">(</span><span class="n">teff</span><span class="o">=</span><span class="mi">3500</span><span class="p">,</span> <span class="n">logg</span><span class="o">=</span><span class="mf">5.5</span><span class="p">,</span> <span class="n">meta</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">spec2</span> <span class="o">=</span> <span class="n">mgrid</span><span class="o">.</span><span class="n">get_spectrum</span><span class="p">(</span><span class="n">teff</span><span class="o">=</span><span class="mi">3534</span><span class="p">,</span> <span class="n">logg</span><span class="o">=</span><span class="mf">5.3</span><span class="p">,</span> <span class="n">meta</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">interp</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">spec3</span> <span class="o">=</span> <span class="n">mgrid</span><span class="o">.</span><span class="n">get_spectrum</span><span class="p">(</span><span class="n">teff</span><span class="o">=</span><span class="mi">3500</span><span class="p">,</span> <span class="n">logg</span><span class="o">=</span><span class="mf">5.5</span><span class="p">,</span> <span class="n">meta</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">closest</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="xref py py-class docutils literal notranslate"><span class="pre">ModelGrid</span></code>. can be resampled to new parameter values by passing arrays to the desired keyword arguments.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="n">new_mgrid</span> <span class="o">=</span> <span class="n">mgrid</span><span class="o">.</span><span class="n">resample_grid</span><span class="p">(</span><span class="n">teff</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>Models can be inspected by passing the desired parameter values to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">plot()</span></code> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">mgrid</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">teff</span><span class="o">=</span><span class="mi">3500</span><span class="p">,</span> <span class="n">logg</span><span class="o">=</span><span class="mf">5.5</span><span class="p">,</span> <span class="n">meta</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>And a grid can be saved as a pickle file <code class="xref py py-meth docutils literal notranslate"><span class="pre">save()</span></code> method and loaded into a new object with the <code class="xref py py-func docutils literal notranslate"><span class="pre">load_ModelGrid`()</span></code> function.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">modelgrid</span> <span class="k">as</span> <span class="n">mg</span>
+<span class="n">mgrid_path</span> <span class="o">=</span> <span class="s1">&#39;/path/to/model/grid/file.p&#39;</span>
+<span class="n">mgrid</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">mgrid_path</span><span class="p">)</span>
+<span class="n">new_grid</span> <span class="o">=</span> <span class="n">mg</span><span class="o">.</span><span class="n">load_ModelGrid</span><span class="p">(</span><span class="n">mgrid_path</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Several <code class="xref py py-class docutils literal notranslate"><span class="pre">ModelGrid</span></code>. child classes exist for convenience.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">btsettl</span> <span class="o">=</span> <span class="n">mg</span><span class="o">.</span><span class="n">BTSettl</span><span class="p">()</span>          <span class="c1"># BT-Settl model atmosphere grid</span>
+<span class="n">spl</span> <span class="o">=</span> <span class="n">mg</span><span class="o">.</span><span class="n">SpexPrismLibrary</span><span class="p">()</span>     <span class="c1"># Spex Prism Library substellar spectral atlas</span>
+<span class="n">fili15</span> <span class="o">=</span> <span class="n">mg</span><span class="o">.</span><span class="n">Filippazzo2016</span><span class="p">()</span>    <span class="c1"># Substellar SED atlas from Filippazzo (2016)</span>
+</pre></div>
+</div>
+<p>The true utility of the <code class="xref py py-class docutils literal notranslate"><span class="pre">ModelGrid</span></code>. class is that it can be passed to a <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">SED</span></code> object to find a best fit model or best fit parameters.</p>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">sedkit</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="spectrum.html">Spectrum</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sed.html">SED</a></li>
+<li class="toctree-l1"><a class="reference internal" href="catalog.html">Catalog</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">ModelGrid</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="catalog.html" title="previous chapter">Catalog</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Joe Filippazzo.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/modelgrid.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

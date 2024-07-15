@@ -1,0 +1,208 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spectrum &#8212; sedkit  documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="SED" href="sed.html" />
+    <link rel="prev" title="SEDkit Documentation" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="spectrum">
+<span id="id1"></span><h1>Spectrum<a class="headerlink" href="#spectrum" title="Permalink to this headline">¶</a></h1>
+<p>The <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> class handles any 1D data representing the light from an astronomical source. A <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> object is created by passing the wavelength, flux density, and (optional) uncertainty with <code class="docutils literal notranslate"><span class="pre">astropy.units</span></code> to the class.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">astropy.units</span> <span class="k">as</span> <span class="nn">q</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">Spectrum</span>
+<span class="n">wavelength</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">um</span>
+<span class="n">flux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">erg</span> <span class="o">/</span> <span class="n">q</span><span class="o">.</span><span class="n">s</span> <span class="o">/</span> <span class="n">q</span><span class="o">.</span><span class="n">cm</span><span class="o">**</span><span class="mi">2</span> <span class="o">/</span> <span class="n">q</span><span class="o">.</span><span class="n">AA</span>
+<span class="n">unc</span> <span class="o">=</span> <span class="n">flux</span> <span class="o">/</span> <span class="mf">100.</span>
+<span class="n">spec</span> <span class="o">=</span> <span class="n">Spectrum</span><span class="p">(</span><span class="n">wavelength</span><span class="p">,</span> <span class="n">flux</span><span class="p">,</span> <span class="n">unc</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;My spectrum&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> has a number of useful attributes.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">spec</span><span class="o">.</span><span class="n">name</span>           <span class="c1"># The object&#39;s name</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">ref</span>            <span class="c1"># Reference(s)</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">header</span>         <span class="c1"># A header for the data</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">wave</span>           <span class="c1"># Unitless wavelength array</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">flux</span>           <span class="c1"># Unitless flux density array</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">unc</span>            <span class="c1"># Unitless uncertainty array (optional)</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">data</span>           <span class="c1"># Unitless array of [W, F] or [W, F, E]</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">spectrum</span>       <span class="c1"># List of [W, F] or [W, F, E] with units</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">wave_max</span>       <span class="c1"># The max wavelength</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">wave_min</span>       <span class="c1"># The min wavelength</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">wave_units</span>     <span class="c1"># The wavelength units</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">flux_units</span>     <span class="c1"># The flux density units</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">size</span>           <span class="c1"># The number of data points</span>
+</pre></div>
+</div>
+<p>After the <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> has been created, it be manipulated in a number of ways.</p>
+<p>It can be trimmed by passing a list of lower and upper bounds to <code class="xref py py-meth docutils literal notranslate"><span class="pre">trim()</span></code> method. The <code class="docutils literal notranslate"><span class="pre">include</span></code> argument accepts bounds for wavelength regions to include and the <code class="docutils literal notranslate"><span class="pre">exclude</span></code> argument accepts bounds for regions to exclude. A list of <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> objects are returned unless the <code class="docutils literal notranslate"><span class="pre">concat</span></code> argument is set to <code class="docutils literal notranslate"><span class="pre">True</span></code>, which simply concatenated the trimmed segment(s) into one <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trim_spec_include</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">trim</span><span class="p">(</span><span class="n">include</span><span class="o">=</span><span class="p">[(</span><span class="mf">1.2</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">um</span><span class="p">,</span> <span class="mf">1.6</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">um</span><span class="p">)])</span>
+<span class="n">trim_spec_exclude</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">trim</span><span class="p">(</span><span class="n">exclude</span><span class="o">=</span><span class="p">[(</span><span class="mf">1.2</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">um</span><span class="p">,</span> <span class="mf">1.6</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">um</span><span class="p">)],</span> <span class="n">concat</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="xref py py-meth docutils literal notranslate"><span class="pre">interpolate()</span></code> method accepts a new wavelength array and returns a new <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> object interpolated to those values. The <code class="xref py py-meth docutils literal notranslate"><span class="pre">resamp()</span></code> method accepts the same input and resamples the spectrum onto the new wavelength array while preserving the total flux.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">new_wav</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">1.2</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mi">50</span><span class="p">)</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">um</span>
+<span class="n">new_wav_interp</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">new_wav</span><span class="p">)</span>
+<span class="n">new_wav_resamp</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">resamp</span><span class="p">(</span><span class="n">new_wav</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="xref py py-meth docutils literal notranslate"><span class="pre">integrate()</span></code> method integrates the curve to calculate the area underneath using the trapezoidal rule.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">area</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">integrate</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> can be smoothed using a Kaiser-Bessel smoothing window of narrowness <code class="docutils literal notranslate"><span class="pre">beta</span></code> and a given <code class="docutils literal notranslate"><span class="pre">window</span></code> size.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">smooth_spec</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">smooth</span><span class="p">(</span><span class="n">beta</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="mi">11</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> may be flux calibrated to a given distance by passing a distance to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">flux_calibrate()</span></code> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cal_spec</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">flux_calibrate</span><span class="p">(</span><span class="mf">5.1</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">pc</span><span class="p">,</span> <span class="mi">10</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">pc</span><span class="p">)</span>   <span class="c1"># Flux calibrates the spectrum from 5.1 to 10 pc</span>
+</pre></div>
+</div>
+<p>A bandpass name or <code class="docutils literal notranslate"><span class="pre">svo_filters.svo.Filter</span></code> object can be used to convolve the spectrum, calculate a synthetic flux or magnitude, or renormalize it to a given magnitude.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">svo_filters</span> <span class="kn">import</span> <span class="n">Filter</span>
+<span class="n">jband</span> <span class="o">=</span> <span class="n">Filter</span><span class="p">(</span><span class="s1">&#39;2MASS.J&#39;</span><span class="p">)</span>
+<span class="n">conv_spec</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">convolve_filter</span><span class="p">(</span><span class="n">jband</span><span class="p">)</span>     <span class="c1"># Convolved spectrum</span>
+<span class="n">norm_spec</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">renormalize</span><span class="p">(</span><span class="mf">12.3</span><span class="p">,</span> <span class="n">jband</span><span class="p">)</span>   <span class="c1"># Renormalized spectrum</span>
+<span class="n">jmag</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">synthetic_magnitude</span><span class="p">(</span><span class="n">jband</span><span class="p">)</span>      <span class="c1"># Synthetic magnitude</span>
+<span class="n">jflux</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">synthetic_flux</span><span class="p">(</span><span class="n">jband</span><span class="p">)</span>          <span class="c1"># Synthetic flux</span>
+</pre></div>
+</div>
+<p>It can also be normalized to a table of photometry weighted by the magnitude uncertainties with the <code class="xref py py-meth docutils literal notranslate"><span class="pre">norm_to_mags()</span></code> method. See the <a class="reference internal" href="sed.html#sed"><span class="std std-ref">SED</span></a> class for an example.</p>
+<p>A <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> object may also interact with another <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> object in a number of ways. The <code class="xref py py-meth docutils literal notranslate"><span class="pre">norm_to_spec()</span></code> method creates a new object normalized to the input <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> object and the <code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code> operation combines two <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> objects in their common wavelength region or concatenates the segments.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">spec2</span> <span class="o">=</span> <span class="n">Spectrum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">um</span><span class="p">,</span> <span class="n">flux</span> <span class="o">*</span> <span class="mf">1E-11</span><span class="p">,</span> <span class="n">unc</span> <span class="o">*</span> <span class="mf">1E-11</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;Redder spectrum&#39;</span><span class="p">)</span>
+<span class="n">normed_spec</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">norm_to_spec</span><span class="p">(</span><span class="n">spec2</span><span class="p">)</span>  <span class="c1"># spec normalized to spec2</span>
+<span class="n">combined_spec</span> <span class="o">=</span> <span class="n">spec</span> <span class="o">+</span> <span class="n">spec2</span>            <span class="c1"># New combined spectrum</span>
+</pre></div>
+</div>
+<p>Any <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> may also be fit by a <code class="xref py py-class docutils literal notranslate"><span class="pre">ModelGrid</span></code> object to find the best fit model or spectrum. The <code class="xref py py-meth docutils literal notranslate"><span class="pre">best_fit_model()</span></code> method performs a simple goodness of fit test and returns the model with the best fit. The <code class="xref py py-meth docutils literal notranslate"><span class="pre">mcmc_fit()</span></code> method performs a MCMC fit to the grid and returns the best fit parameters with uncertainties. The details of any fit are stored as a dictionary in the <code class="xref py py-attr docutils literal notranslate"><span class="pre">best_fit</span></code> attribute.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">BTSettl</span>
+<span class="n">bt_grid</span> <span class="o">=</span> <span class="n">BTSettl</span><span class="p">()</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">best_fit_model</span><span class="p">(</span><span class="n">bt</span><span class="p">)</span>             <span class="c1"># Goodness of fit</span>
+<span class="n">spec</span><span class="o">.</span><span class="n">mcmc_fit</span><span class="p">(</span><span class="n">bt</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;teff&#39;</span><span class="p">])</span>  <span class="c1"># MCMC fit</span>
+</pre></div>
+</div>
+<p>For visual inspection of an interactive <code class="docutils literal notranslate"><span class="pre">bokeh.plotting.figure</span></code>, use the <code class="xref py py-meth docutils literal notranslate"><span class="pre">plot()</span></code> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">spec</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Several child classes are also available. The <code class="xref py py-class docutils literal notranslate"><span class="pre">Blackbody</span></code> class creates a blackbody spectrum for a given wavelength range and effective temperature.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit.spectrum</span> <span class="kn">import</span> <span class="n">Blackbody</span>
+<span class="n">bb_spec</span> <span class="o">=</span> <span class="n">Blackbody</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">um</span><span class="p">,</span> <span class="n">teff</span><span class="o">=</span><span class="mi">2456</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">K</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The ever useful spectrum of <code class="xref py py-class docutils literal notranslate"><span class="pre">Vega</span></code> is easily created.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit.spectrum</span> <span class="kn">import</span> <span class="n">Vega</span>
+<span class="n">vega</span> <span class="o">=</span> <span class="n">Vega</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>And a <code class="xref py py-class docutils literal notranslate"><span class="pre">Spectrum</span></code> object can be created directly from a FITS or ASCII file with the <code class="xref py py-class docutils literal notranslate"><span class="pre">FileSpectrum</span></code> class.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit.spectrum</span> <span class="kn">import</span> <span class="n">FileSpectrum</span>
+<span class="n">file_spec</span> <span class="o">=</span> <span class="n">FileSpectrum</span><span class="p">(</span><span class="s1">&#39;/path/to/the/file.fits&#39;</span><span class="p">,</span> <span class="n">wave_units</span><span class="o">=</span><span class="n">q</span><span class="o">.</span><span class="n">um</span><span class="p">,</span> <span class="n">flux_units</span><span class="o">=</span><span class="n">q</span><span class="o">.</span><span class="n">erg</span><span class="o">/</span><span class="n">q</span><span class="o">.</span><span class="n">s</span><span class="o">/</span><span class="n">q</span><span class="o">.</span><span class="n">cm</span><span class="o">**</span><span class="mi">2</span><span class="o">/</span><span class="n">q</span><span class="o">.</span><span class="n">AA</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Finally, the data can be exported to an ASCII file by passing a filepath to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">export()</span></code> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">spec</span><span class="o">.</span><span class="n">export</span><span class="p">(</span><span class="s1">&#39;path/to/the/new/file.txt&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">sedkit</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Spectrum</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sed.html">SED</a></li>
+<li class="toctree-l1"><a class="reference internal" href="catalog.html">Catalog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modelgrid.html">ModelGrid</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">SEDkit Documentation</a></li>
+      <li>Next: <a href="sed.html" title="next chapter">SED</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Joe Filippazzo.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/spectrum.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

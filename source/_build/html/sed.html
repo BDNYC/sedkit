@@ -1,0 +1,172 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SED &#8212; sedkit  documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Catalog" href="catalog.html" />
+    <link rel="prev" title="Spectrum" href="spectrum.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="sed">
+<span id="id1"></span><h1>SED<a class="headerlink" href="#sed" title="Permalink to this headline">¶</a></h1>
+<p>An SED (spectral energy distribution) can be constructed by importing and initializing an <code class="xref py py-class docutils literal notranslate"><span class="pre">SED</span></code> object.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">SED</span>
+<span class="n">trap1</span> <span class="o">=</span> <span class="n">SED</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;Trappist-1&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">name</span></code> argument triggers a lookup in the Simbad database for meta,
+astrometric, and spectral type data. Interstellar reddening is
+calculated when possible.</p>
+<p>Photometry can be added manually…</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trap1</span><span class="o">.</span><span class="n">add_photometry</span><span class="p">(</span><span class="s1">&#39;Johnson.V&#39;</span><span class="p">,</span> <span class="mf">18.798</span><span class="p">,</span> <span class="mf">0.082</span><span class="p">)</span>
+<span class="n">trap1</span><span class="o">.</span><span class="n">add_photometry</span><span class="p">(</span><span class="s1">&#39;Cousins.R&#39;</span><span class="p">,</span> <span class="mf">16.466</span><span class="p">,</span> <span class="mf">0.065</span><span class="p">)</span>
+<span class="n">trap1</span><span class="o">.</span><span class="n">add_photometry</span><span class="p">(</span><span class="s1">&#39;Cousins.I&#39;</span><span class="p">,</span> <span class="mf">14.024</span><span class="p">,</span> <span class="mf">0.115</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>…and/or retrieved from Vizier catalogs with built-in methods.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trap1</span><span class="o">.</span><span class="n">find_2MASS</span><span class="p">()</span>
+<span class="n">trap1</span><span class="o">.</span><span class="n">find_WISE</span><span class="p">()</span>
+<span class="n">trap</span><span class="o">.</span><span class="n">find_SDSS</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Spectrum arrays or ASCII/FITS files can also be added to the SED data.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pkg_resources</span> <span class="kn">import</span> <span class="n">resource_filename</span>
+<span class="n">spec_file</span> <span class="o">=</span> <span class="n">resource_filename</span><span class="p">(</span><span class="s1">&#39;sedkit&#39;</span><span class="p">,</span> <span class="s1">&#39;data/Trappist-1_NIR.fits&#39;</span><span class="p">)</span>
+<span class="kn">import</span> <span class="nn">astropy.units</span> <span class="k">as</span> <span class="nn">q</span>
+<span class="n">trap1</span><span class="o">.</span><span class="n">add_spectrum_file</span><span class="p">(</span><span class="n">spec_file</span><span class="p">,</span> <span class="n">wave_units</span><span class="o">=</span><span class="n">q</span><span class="o">.</span><span class="n">um</span><span class="p">,</span> <span class="n">flux_units</span><span class="o">=</span><span class="n">q</span><span class="o">.</span><span class="n">erg</span> <span class="o">/</span> <span class="n">q</span><span class="o">.</span><span class="n">s</span> <span class="o">/</span> <span class="n">q</span><span class="o">.</span><span class="n">cm</span><span class="o">**</span><span class="mi">2</span> <span class="o">/</span> <span class="n">q</span><span class="o">.</span><span class="n">AA</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Other data which may affect the calculated and inferred fundamantal
+parameters can be set at any time.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trap1</span><span class="o">.</span><span class="n">spectral_type</span> <span class="o">=</span> <span class="s1">&#39;M8&#39;</span>
+<span class="n">trap1</span><span class="o">.</span><span class="n">age</span> <span class="o">=</span> <span class="mf">7.6</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">Gyr</span><span class="p">,</span> <span class="mf">2.2</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">Gyr</span>
+<span class="n">trap1</span><span class="o">.</span><span class="n">radius</span> <span class="o">=</span> <span class="mf">0.121</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">R_sun</span><span class="p">,</span> <span class="mf">0.003</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">R_sun</span>
+</pre></div>
+</div>
+<p>Results can be calculated at any time by checking the <code class="xref py py-attr docutils literal notranslate"><span class="pre">results</span></code> property.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trap1</span><span class="o">.</span><span class="n">results</span>
+</pre></div>
+</div>
+<p>A variety of evolutionary model grids can be used to infer fundamental parameters,</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trap1</span><span class="o">.</span><span class="n">evo_model</span> <span class="o">=</span> <span class="s1">&#39;DUSTY00&#39;</span>
+<span class="n">trap1</span><span class="o">.</span><span class="n">mass_from_age</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>A variety of atmospheric model grids can be fit to the data,</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">BTSettl</span>
+<span class="n">trap1</span><span class="o">.</span><span class="n">fit_modelgrid</span><span class="p">(</span><span class="n">BTSettl</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>And any arbitrary atlas of models can be applied as well.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">SpexPrismLibrary</span>
+<span class="n">trap1</span><span class="o">.</span><span class="n">fit_modelgrid</span><span class="p">(</span><span class="n">SpexPrismLibrary</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>Inspect the SED at any time with the interactive plotting method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">trap1</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Entire catalogs of <code class="xref py py-class docutils literal notranslate"><span class="pre">SED</span></code> objects can also be created and their
+properties can be arbitrarily compared and analyzed with the
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Catalog</span></code> object.</p>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">sedkit</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="spectrum.html">Spectrum</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">SED</a></li>
+<li class="toctree-l1"><a class="reference internal" href="catalog.html">Catalog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modelgrid.html">ModelGrid</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="spectrum.html" title="previous chapter">Spectrum</a></li>
+      <li>Next: <a href="catalog.html" title="next chapter">Catalog</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Joe Filippazzo.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/sed.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

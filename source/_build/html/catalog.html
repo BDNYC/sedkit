@@ -1,0 +1,177 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Catalog &#8212; sedkit  documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="ModelGrid" href="modelgrid.html" />
+    <link rel="prev" title="SED" href="sed.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="catalog">
+<span id="id1"></span><h1>Catalog<a class="headerlink" href="#catalog" title="Permalink to this headline">¶</a></h1>
+<p>Collections of <code class="xref py py-class docutils literal notranslate"><span class="pre">SED</span></code> objects can be stored and analyzed in a <code class="xref py py-class docutils literal notranslate"><span class="pre">Catalog</span></code> object. One can be initialized and populated with an <code class="xref py py-class docutils literal notranslate"><span class="pre">SED</span></code> object using the <code class="xref py py-meth docutils literal notranslate"><span class="pre">add_SED()</span></code> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">Catalog</span><span class="p">,</span> <span class="n">VegaSED</span>
+<span class="n">vega</span> <span class="o">=</span> <span class="n">VegaSED</span><span class="p">()</span>
+<span class="n">cat1</span> <span class="o">=</span> <span class="n">Catalog</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;My New Catalog&#39;</span><span class="p">)</span>
+<span class="n">cat1</span><span class="o">.</span><span class="n">add_SED</span><span class="p">(</span><span class="n">vega</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Catalogs can be merged with the addition operator.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sedkit</span> <span class="kn">import</span> <span class="n">SED</span>
+<span class="n">sirius</span> <span class="o">=</span> <span class="n">SED</span><span class="p">(</span><span class="s1">&#39;Sirius&#39;</span><span class="p">,</span> <span class="n">spectral_type</span><span class="o">=</span><span class="s1">&#39;A1V&#39;</span><span class="p">,</span> <span class="n">method_list</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;find_2MASS&#39;</span><span class="p">,</span> <span class="s1">&#39;find_WISE&#39;</span><span class="p">])</span>
+<span class="n">cat2</span> <span class="o">=</span> <span class="n">Catalog</span><span class="p">(</span><span class="s1">&#39;My Second Catalog&#39;</span><span class="p">)</span>
+<span class="n">cat2</span><span class="o">.</span><span class="n">add_SED</span><span class="p">(</span><span class="n">sirius</span><span class="p">)</span>
+<span class="n">cat</span> <span class="o">=</span> <span class="n">cat1</span> <span class="o">+</span> <span class="n">cat2</span>
+</pre></div>
+</div>
+<p>To check the table of data and calculated parameters, just call the <code class="xref py py-attr docutils literal notranslate"><span class="pre">results`</span></code> property. The wavelength and flux density units of all the SEDs can be checked and set with the <code class="xref py py-attr docutils literal notranslate"><span class="pre">wave_units`</span></code> and <code class="xref py py-attr docutils literal notranslate"><span class="pre">flux_units`</span></code> properties.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cat</span><span class="o">.</span><span class="n">results</span>
+<span class="kn">import</span> <span class="nn">astropy.units</span> <span class="k">as</span> <span class="nn">q</span>
+<span class="n">cat</span><span class="o">.</span><span class="n">wave_units</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">AA</span>
+<span class="n">cat</span><span class="o">.</span><span class="n">flux_units</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">W</span> <span class="o">/</span> <span class="n">q</span><span class="o">.</span><span class="n">m</span><span class="o">**</span><span class="mi">3</span>
+</pre></div>
+</div>
+<p>Additional columns of data can be added to the results table with the <code class="xref py py-meth docutils literal notranslate"><span class="pre">add_column()</span></code> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">rv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">-</span><span class="mf">13.9</span><span class="p">,</span> <span class="o">-</span><span class="mf">5.5</span><span class="p">])</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">km</span> <span class="o">/</span> <span class="n">q</span><span class="o">.</span><span class="n">s</span>
+<span class="n">rv_unc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">])</span> <span class="o">*</span> <span class="n">q</span><span class="o">.</span><span class="n">km</span> <span class="o">/</span> <span class="n">q</span><span class="o">.</span><span class="n">s</span>
+<span class="n">cat</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s1">&#39;radial_velocity&#39;</span><span class="p">,</span> <span class="n">rv</span><span class="p">,</span> <span class="n">rv_unc</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Data for individual columns (and associated uncertainties when applicable) can be retrieved by passing the desired column names to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data()</span></code> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">spt_data</span><span class="p">,</span> <span class="n">plx_data</span> <span class="o">=</span> <span class="n">cat</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="s1">&#39;spectral_type&#39;</span><span class="p">,</span> <span class="s1">&#39;parallax&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="xref py py-class docutils literal notranslate"><span class="pre">SED</span></code> object for a source can be retrieved with the <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_SED()</span></code> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">vega</span> <span class="o">=</span> <span class="n">cat</span><span class="o">.</span><span class="n">get_SED</span><span class="p">(</span><span class="s1">&#39;Vega&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>An interactive scatter plot of any two numeric columns can be made by passing the desired <cite>x</cite> and <cite>y</cite> parameter names from the results table to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">plot()</span></code> method. Photometric colors can be calculated by passing two photometric band names with a <code class="docutils literal notranslate"><span class="pre">-</span></code> sign. The <code class="docutils literal notranslate"><span class="pre">order</span></code> argument accepts an integer and plots a polynomial of the given order. For busy plots, individual sources can be identified by passing the SED name to the <code class="docutils literal notranslate"><span class="pre">identify</span></code> argument. Similarly, setting the argument <code class="docutils literal notranslate"><span class="pre">label_points=True</span></code> prints the name of each source next to its data point.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cat</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="s1">&#39;Lbol&#39;</span><span class="p">,</span> <span class="s1">&#39;spectral_type&#39;</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>      <span class="c1"># Lbol v. SpT plot with first order polynomial fit</span>
+<span class="n">cat</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="s1">&#39;spectral_type&#39;</span><span class="p">,</span> <span class="s1">&#39;2MASS.J-2MASS.H&#39;</span><span class="p">)</span>    <span class="c1"># SpT v. J-H color plot</span>
+<span class="n">cat</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="s1">&#39;age&#39;</span><span class="p">,</span> <span class="s1">&#39;distance&#39;</span><span class="p">,</span> <span class="n">identify</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Vega&#39;</span><span class="p">])</span>  <span class="c1"># Age v. Dist with Vega circled in red</span>
+<span class="n">cat</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="s1">&#39;parallax&#39;</span><span class="p">,</span> <span class="s1">&#39;mbol&#39;</span><span class="p">,</span> <span class="n">label_points</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="c1"># Plx v. mbol with labeled points</span>
+</pre></div>
+</div>
+<p>The SEDs can be plotted for visual comparison with the <code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_SEDs()</span></code> method. The can be normalized to 1 by setting the argument <code class="docutils literal notranslate"><span class="pre">normalize=True</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cat</span><span class="o">.</span><span class="n">plot_SEDs</span><span class="p">(</span><span class="s1">&#39;*&#39;</span><span class="p">,</span> <span class="n">normalize</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Plot of all SEDs</span>
+<span class="n">cat</span><span class="o">.</span><span class="n">plot_SEDs</span><span class="p">([</span><span class="s1">&#39;Vega&#39;</span><span class="p">,</span> <span class="s1">&#39;Sirius&#39;</span><span class="p">])</span>   <span class="c1"># Normalized plot of Vega and Sirius</span>
+</pre></div>
+</div>
+<p>The results table, photometry, and plots of each SED can be exported to a zip file or directory with the <code class="xref py py-meth docutils literal notranslate"><span class="pre">export()</span></code> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cat</span><span class="o">.</span><span class="n">export</span><span class="p">(</span><span class="s1">&#39;/path/to/target/dir&#39;</span><span class="p">,</span> <span class="nb">zip</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The whole <code class="xref py py-class docutils literal notranslate"><span class="pre">Catalog</span></code> object can be serialized and loaded with the <code class="xref py py-meth docutils literal notranslate"><span class="pre">save()</span></code> and <code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code> methods, respectively.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cat_file</span> <span class="o">=</span> <span class="s1">&#39;/path/to/cat.p&#39;</span>
+<span class="n">cat</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">cat_file</span><span class="p">)</span>
+<span class="n">new_cat</span> <span class="o">=</span> <span class="n">Catalog</span><span class="p">(</span><span class="s1">&#39;A-type stars&#39;</span><span class="p">)</span>
+<span class="n">new_cat</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">cat_file</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A catalog can also be made from an ASCII file with column names <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">ra</span></code>, and <code class="docutils literal notranslate"><span class="pre">dec</span></code> by passing the filepath to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">from_file()</span></code> method. For each source in the list, an SED is created, the methods in the <code class="docutils literal notranslate"><span class="pre">run_methods</span></code> argument are run, and the SED is added to the catalog.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">source_list</span> <span class="o">=</span> <span class="s1">&#39;/path/to/sources.csv&#39;</span>
+<span class="n">new_cat</span> <span class="o">=</span> <span class="n">Catalog</span><span class="p">()</span>
+<span class="n">new_cat</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="n">source_list</span><span class="p">,</span> <span class="n">run_methods</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;find_2MASS&#39;</span><span class="p">,</span> <span class="s1">&#39;find_WISE&#39;</span><span class="p">,</span> <span class="s1">&#39;find_Gaia&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">sedkit</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="spectrum.html">Spectrum</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sed.html">SED</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Catalog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modelgrid.html">ModelGrid</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="sed.html" title="previous chapter">SED</a></li>
+      <li>Next: <a href="modelgrid.html" title="next chapter">ModelGrid</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Joe Filippazzo.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/catalog.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
