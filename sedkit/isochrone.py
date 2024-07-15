@@ -175,7 +175,7 @@ class Isochrone:
         ysample = np.random.uniform(mu_a-sigma_a, mu_a+sigma_a, 5000)
         values_list = []
         nan_counter = 0
-        print('I AM USING NEW SAMPLE SIZE')
+
         for x, y in zip(xsample, ysample):
             result = self.interpolate(x, y * age[0].unit, xparam, yparam)
             if result is not None:
