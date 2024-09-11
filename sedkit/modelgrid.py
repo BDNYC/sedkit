@@ -507,6 +507,58 @@ class ModelGrid:
             else:
                 print("{} {}".format(pre, msg))
 
+    def calculate_photometry(self, bandpasses):
+        """
+        Calculate the synthetic photometry of the modelgrid in the given bands
+        and add it as a column to the index
+
+        Parameters
+        ----------
+        bandpasses: sequence
+            The list of bandpasses to calculate
+        """
+        # Make sure the columns exist
+        for band in bandpasses:
+            self.index[band + '_flx'] = np.nan
+            self.index[band + '_eff'] = np.nan
+            self.index[band + '_unc'] = np.nan
+
+        # Iterate over the rows
+        spectra = []
+        for n, row in self.index.iterrows():
+
+            # Get the spectrum
+            params = {param: val for param, val in dict(row).items() if param in self.parameters}
+            spec = self.get_spectrum(**params)
+
+            # Collect data
+            for band in bandpasses:
+
+                # Get the bandpass
+                bp = svo.Filter(band)
+
+                # Calculate the synthetic flux
+                flx, unc = spec.synthetic_flux(bp)
+
+                # Set the values
+                self.index.at[n, band + '_flx'] = flx.to(self.flux_units).value
+                self.index.at[n, band + '_eff'] = bp.wave_eff.to(self.wave_units).value
+                if unc is not None:
+                    self.index.at[n, band + '_unc'] = unc.to(self.flux_units).value
+
+        # Gather flux column names (including previously calculate ones)
+        flx_cols = [col for col in self.index.columns if col.endswith('_flx')]
+        wav_cols = [col for col in self.index.columns if col.endswith('_eff')]
+        unc_cols = [col for col in self.index.columns if col.endswith('_unc')]
+
+        # Store synthetic fluxes as a photometric spectrum
+        phot_flx = self.index[flx_cols].to_numpy()
+        phot_wav = self.index[wav_cols].to_numpy()
+        phot_unc = self.index[unc_cols].to_numpy()
+        self.index['photometry'] = list(np.array([phot_wav, phot_flx, phot_unc]).swapaxes(0, 1))
+
+        # self.index.iloc[n]['weights'] = (bp.wave_max - bp.wave_min).to(q.um).value if weight else 1
+
     def photometry(self, bandpasses, weight=False):
         """
         Generate a new ModelGrid object of photometry in the given bands
