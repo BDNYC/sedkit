@@ -110,8 +110,8 @@ class Unum:
         self._nominal = nominal.value if hasattr(nominal, 'unit') else nominal
         self.upper = upper
         self._upper = upper.value if hasattr(upper, 'unit') else upper
-        self.lower = lower or self.upper
-        self._lower = lower.value if hasattr(lower, 'unit') else lower or self._upper
+        self.lower = lower if lower is not None else self.upper
+        self._lower = lower.value if hasattr(lower, 'unit') else lower if lower is not None else self._upper
         self.units = nominal.unit if hasattr(nominal, 'unit') else None
         self.n = n_samples
         self.sig_figs = sig_figs

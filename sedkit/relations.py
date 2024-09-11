@@ -112,7 +112,7 @@ class Relation:
             raise NameError("{}, {}: Make sure both parameters are in the data, {}".format(xparam, yparam, self.data.colnames))
 
         # Grab data
-        rel = {'xparam': xparam, 'yparam': yparam, 'order': order, 'x': np.array(self.data[xparam]), 'y': np.array(self.data[yparam]),
+        rel = {'xparam': xparam, 'yparam': yparam, 'order': order, 'x': np.asarray(self.data[xparam], dtype=float), 'y': np.asarray(self.data[yparam], dtype=float),
                'coeffs': None, 'C_p': None, 'matrix': None, 'yi': None, 'C_yi': None, 'sig_yi': None, 'xunit': xunit or 1, 'yunit': yunit or 1}
 
         # Set x range for fit
@@ -272,7 +272,7 @@ class Relation:
 
                 if plot:
                     plt = self.plot(rel_name, xunits=xunits, yunits=yunits)
-                    plt.circle([x_val.value if hasattr(x_val, 'unit') else x_val], [y_val.value if hasattr(y_val, 'unit') else y_val], color='red', size=10, legend='{}({})'.format(rel['yparam'], x_val))
+                    plt.circle([x_val.value if hasattr(x_val, 'unit') else x_val], [y_val.value if hasattr(y_val, 'unit') else y_val], color='red', size=10, legend_label='{}({})'.format(rel['yparam'], x_val))
                     if y_upper:
                         plt.line([x_val, x_val], [y_val - y_lower, y_val + y_upper], color='red')
                     show(plt)
@@ -280,7 +280,7 @@ class Relation:
                 # Restore full relation
                 self.relations[rel_name] = full_rel
 
-                if y_upper:
+                if y_upper is not None:
                     return y_val, y_upper, y_lower, self.ref
                 else:
                     return y_val, self.ref
@@ -348,7 +348,7 @@ class Relation:
             # Plot polynomial values
             xu = rel['xunit'].to(xunits) if xunits is not None else rel['xunit'] or 1
             yu = rel['yunit'].to(yunits) if yunits is not None else rel['yunit'] or 1
-            fig.line(rel['x_fit'] * xu, rel['y_fit'] * yu, color='black', legend='Fit')
+            fig.line(rel['x_fit'] * xu, rel['y_fit'] * yu, color='black', legend_label='Fit')
 
             # # Plot relation error
             # xpat = np.hstack((rel['x_fit'], rel['x_fit'][::-1]))
@@ -362,7 +362,7 @@ class Relation:
             fig.yaxis.axis_label = '{}{}'.format(yparam, '[{}]'.format(yunits or rel['yunit']))
 
         # Draw points
-        fig.circle(x * xu, y * yu, legend='Data', **kwargs)
+        fig.circle(x * xu, y * yu, legend_label='Data', **kwargs)
 
         return fig
 
@@ -471,7 +471,7 @@ class SpectralTypeRadius:
 
         if plot:
             fig = self.plot()
-            fig.triangle([spt], [radius.value], color='red', size=15, legend=u.specType(spt))
+            fig.triangle([spt], [radius.value], color='red', size=15, legend_label=u.specType(spt))
             show(fig)
 
         return radius.round(3), radius_unc.round(3)
@@ -610,7 +610,7 @@ class SpectralTypeRadius:
         TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
         xlab = 'Spectral Type'
         ylab = 'Solar Radii'
-        fig = figure(plot_width=800, plot_height=500, title=self.name,
+        fig = figure(width=800, height=500, title=self.name,
                           x_axis_label=xlab, y_axis_label=ylab,
                           tools=TOOLS)
 
@@ -620,14 +620,14 @@ class SpectralTypeRadius:
             # Add the data
             if n == 0:
                 fig.circle(data['data']['spt'], data['data']['radius'], size=8,
-                           color=color, legend=data['ref'])
+                           color=color, legend_label=data['ref'])
             else:
                 fig.square(data['data']['spt'], data['data']['radius'], size=8,
-                           color=color, legend=data['ref'])
+                           color=color, legend_label=data['ref'])
 
             # Add the fit line and uncertainty
             fig.line(data['spt'], data['yi'], color=color,
-                     legend='Order {} Fit'.format(data['order']))
+                     legend_label='Order {} Fit'.format(data['order']))
             x = np.append(data['spt'], data['spt'][::-1])
             y = np.append(data['yi']-data['sig_yi'], (data['yi']+data['sig_yi'])[::-1])
             fig.patch(x, y, fill_alpha=0.1, line_alpha=0, color=color)

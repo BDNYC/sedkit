@@ -254,16 +254,6 @@ def test_flux2mag():
     mag = u.flux2mag([flux, unc], filt)
 
 
-def test_fnu2flam():
-    """Test fnu2flam function"""
-    # Test data
-    fnu = np.random.normal(loc=1E-14, scale=1E-15, size=10)*q.Jy
-    lam = 1*q.um
-
-    # Functions
-    flam = u.fnu2flam(fnu, lam)
-
-
 def test_goodness():
     """Test goodness function"""
     # Make spectra

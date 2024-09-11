@@ -467,7 +467,7 @@ def flux2mag(flx, bandpass, photon=True):
     unit = flx.unit
 
     # Set uncertainty
-    unc = unc or np.nan * unit
+    unc = unc if unc is not None else np.nan * unit
 
     # Convert energy units to photon counts
     if photon:
@@ -852,6 +852,9 @@ def scrub(raw_data, fill_value=None):
     # Remove nans or replace with fill_value
     if fill_value is None:
         data = [i[np.where(~np.isnan(data[1]))] for i in data]
+
+        if len(raw_data) == 3:
+            data = [i[np.where(~np.isnan(data[2]))] for i in data]
     else:
         if not isinstance(fill_value, (int, float)):
             raise ValueError("Please use float or int for fill_value")
