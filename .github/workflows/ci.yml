@@ -7,9 +7,6 @@ jobs:
   SEDkit-CI:
 
     name: Python - ${{ matrix.python-version }}
-    channels:
-      - conda-forge
-      - defaults
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 5
