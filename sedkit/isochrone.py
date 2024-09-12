@@ -14,10 +14,11 @@ import astropy.units as q
 import astropy.constants as ac
 from astropy.io.ascii import read
 from bokeh.plotting import figure, show
-from bokeh.models import LinearColorMapper, BasicTicker, ColorBar
+from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Text, ColumnDataSource
 import numpy as np
 
 from . import utilities as u
+from . import uncertainties as un
 
 
 # A dictionary of all supported moving group ages from Bell et al. (2015)
@@ -154,12 +155,10 @@ class Isochrone:
         age = age[0], age[1].to(age[0].unit)
 
         # Check if the xval has an uncertainty
+        no_xerr = False
         if not isinstance(xval, (tuple, list)):
-            xval = (xval, 0)
-
-        # Convert (age, unc) into age range
-        min_age = age[0] - age[1]
-        max_age = age[0] + age[1]
+            xval = (xval, xval * 0)
+            no_xerr = True
 
         # Test the age range is inbounds
         if age[0] < self.ages.min() or age[0] > self.ages.max():
@@ -214,9 +213,6 @@ class Isochrone:
 
         # Plot the figure and evaluated point
         if plot:
-            # val = average.value if hasattr(average, 'unit') else average
-            # lower_err = lower_err.value if hasattr(lower_err, 'unit') else lower_err
-            # upper_err = upper_err.value if hasattr(upper_err, 'unit') else upper_err
             fig = self.plot(xparam, yparam)
             legend = '{} = {:.3f} ({:-.3f} {:+.3f})'.format(yparam, average.value, lower_err.value,upper_err.value)
             fig.circle(xval[0], average.value, color='purple', legend_label=legend)
@@ -226,10 +222,9 @@ class Isochrone:
         # # Balk at nans
         if np.isnan(average):
             print("I got a nan from {} for some reason.".format(self.name))
-            # raise ValueError("I got a nan from {} for some reason.".format(self.name))
+            raise ValueError("I got a nan from {} for some reason.".format(self.name))
         return average, lower_err, upper_err, self.name
-        # return average, lower_error, upper_error, self.name
-        # return average, error, self.name
+
 
     def interpolate(self, xval, age, xparam, yparam):
         """Interpolate a value between two isochrones
@@ -301,7 +296,7 @@ class Isochrone:
             else:
                 print("{} {}".format(pre, msg))
 
-    def plot(self, xparam, yparam, draw=False, **kwargs):
+    def plot(self, xparam, yparam, draw=False, labels=True, **kwargs):
         """Plot an evaluated isochrone, isochrone, or set of isochrones
 
         Parameters
@@ -310,6 +305,10 @@ class Isochrone:
             The column name to plot on the x-axis
         yparam: str
             The column name to plot on the y-axis
+        draw: bool
+            Show the figure
+        labels: bool
+            Annotate the isochrone ages
 
         Returns
         -------
@@ -342,9 +341,22 @@ class Isochrone:
                              location=(0, 0))
 
         # Plot a line for each isochrone
-        for age in self.ages.value:
+        xlabels = []
+        ylabels = []
+        age_text = []
+        for idx, age in enumerate(self.ages.value):
             data = self.data[self.data['age'] == age][[xparam, yparam]].as_array()
             fig.line(data[xparam], data[yparam], color=next(colors))
+            if idx % 2 == 1:
+                xlabels.append(data[xparam][len(data) // 2])
+                ylabels.append(data[yparam][len(data) // 2])
+                age_text.append("{} {}".format(age, self.age_units))
+
+        # Add the isochrone ages labels
+        if labels:
+            source = ColumnDataSource(dict(x=xlabels, y=ylabels, text=age_text))
+            glyph = Text(x='x', y='y', text='text', angle=0.5, background_fill_color='white', text_alpha=0.7, background_fill_alpha=0.3, border_line_color='black', border_line_alpha=0.3, border_radius=5, padding=2, text_align='center', text_baseline='middle')
+            fig.add_glyph(source, glyph)
 
         # Add the colorbar
         fig.add_layout(color_bar, 'right')

@@ -111,7 +111,7 @@ class Spectrum:
         # Replace negatives, zeros, and infs with nans
         spectrum = [wave, flux]
         spectrum += [unc] if unc is not None else []
-        spectrum = u.scrub(spectrum, fill_value=np.nan)
+        spectrum = u.scrub(spectrum)
 
         # Store history info and raw data
         self.history = {}
@@ -125,7 +125,7 @@ class Spectrum:
         spectrum = [i.value for i in spectrum]
 
         # Add the data
-        self.wave = spectrum[0]
+        self._wave = spectrum[0]
         self._flux = spectrum[1]
         self._unc = None if unc is None else spectrum[2]
 
@@ -304,7 +304,7 @@ class Spectrum:
 
             # Configure plot
             tools = "pan, wheel_zoom, box_zoom, reset"
-            rep = figure(tools=tools, x_axis_label=report, y_axis_label='Goodness-of-fit', plot_width=600, plot_height=400)
+            rep = figure(tools=tools, x_axis_label=report, y_axis_label='Goodness-of-fit', width=600, height=400)
 
             # Single out best fit
             best = ColumnDataSource(data=models.iloc[:1])
@@ -852,8 +852,8 @@ class Spectrum:
         slf = self.resamp(spec.spectrum[0])
 
         # Trim both to just overlapping wavelengths
-        idx = u.idx_overlap(w0, spec.wave, inclusive=True)
-        spec0 = slf.data[:, idx]
+        idx = u.idx_overlap(w0, spec.wave, inclusive=False)
+        spec0 = slf.data
         spec1 = spec.data[:, idx]
 
         # Find the normalization factor
@@ -1260,14 +1260,19 @@ class Spectrum:
             return self.flux / (self._flux / self._unc)
 
     @property
+    def wave(self):
+        """Getter for the wavelength"""
+        return self._wave
+
+    @property
     def wave_max(self):
         """The minimum wavelength"""
-        return max(self.wave) * self.wave_units
+        return max(self._wave) * self.wave_units
 
     @property
     def wave_min(self):
         """The minimum wavelength"""
-        return min(self.wave) * self.wave_units
+        return min(self._wave) * self.wave_units
 
     @property
     def wave_units(self):
@@ -1434,7 +1439,15 @@ class FileSpectrum(Spectrum):
         # Read the fits data...
         if file.endswith('.fits'):
 
-            if file.endswith('.fits'):
+            if file.endswith('_x1d.fits'):
+                raw = fits.getdata(file)
+                data = [raw['WAVELENGTH'], raw['FLUX'], raw['FLUX_ERROR']]
+
+                # Filter to just quality data (dq == 0)
+                idx, = np.where(raw['DQ'] == 0)
+                data = [dat[idx] for dat in data]
+
+            elif file.endswith('.fits') and survey is None:
                 data = u.spectrum_from_fits(file, ext=ext)
 
             elif survey == 'SDSS':
