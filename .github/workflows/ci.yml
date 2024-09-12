@@ -10,16 +10,12 @@ jobs:
   SEDkit-CI:
 
     name: Python - ${{ matrix.python-version }}
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash -el {0}
     strategy:
       max-parallel: 5
       matrix:
         os: ['macos-latest']
         python-version: [ '3.11' ]
-
+    runs-on:  ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
