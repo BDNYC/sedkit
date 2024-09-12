@@ -64,3 +64,4 @@ target/
 *checkpoint.ipynb
 .idea/
 .idea/*
+.vscode/settings.json
