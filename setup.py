@@ -50,17 +50,3 @@ DOCS_REQUIRE = [
 TESTS_REQUIRE = [
     'pytest',
 ]
-
-setup(
-    name='sedkit',
-    packages=find_packages(exclude=["examples"]),
-    setup_requires=['setuptools_scm'],
-    include_package_data=True,
-    extras_require={
-        'docs': DOCS_REQUIRE,
-        'test': TESTS_REQUIRE,
-    },
-    tests_require=TESTS_REQUIRE,
-    cmdclass={
-        'build_sphinx': BuildSphinx
-    },)

@@ -42,3 +42,6 @@ dynamic = ["version"]
 test = [
     "pytest",
     ]
+
+[tool.setuptools_scm]
+root = '.'
