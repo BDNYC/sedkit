@@ -8,6 +8,7 @@ name = "sedkit"
 authors = [
     {name = "Joe Filippazzo", email = "jfilippazzo@stsci.edu"},
 	{name= "Sherelyn Alejandro Merchan"}
+	]
 maintainers = [
     {name= "Kelle Cruz", email="kellecruz@gmail.com"}
 	]
