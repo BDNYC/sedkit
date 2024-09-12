@@ -2,7 +2,7 @@ name: CI
 
 on: 
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
   workflow_dispatch:  # allows manual execution
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
       max-parallel: 5
       matrix:
         os: ['macos-latest']
-        python-version: [ '3.9', '3.10', '3.11' ]
+        python-version: [ '3.11' ]
 
     steps:
       - name: Checkout code
@@ -26,20 +26,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up miniconda ${{ matrix.python-version }}
-        uses: conda-incubator/setup-miniconda@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
-          activate-environment: sedkit-${{ matrix.python-version }}
-          environment-file: env/environment-${{ matrix.python-version }}.yml
           python-version: ${{ matrix.python-version }}
-          miniforge-version: latest
-          auto-activate-base: false
-
-      - name: Display Conda environment
+      
+      - name: Install dependencies
         run: |
-          conda info    
+          python -m pip install --upgrade pip
+          pip install .[test]
 
       - name: Test with pytest
         run: |
-          pip install pytest
-          conda run -n sedkit-${{ matrix.python-version }} pytest
+          pytest
