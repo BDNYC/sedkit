@@ -46,4 +46,4 @@ test = [
 root = '.'
 
 [tool.setuptools.packages]
-packages = "sedkit"
+packages = ["sedkit"]
