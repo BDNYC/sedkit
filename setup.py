@@ -53,24 +53,8 @@ TESTS_REQUIRE = [
 
 setup(
     name='sedkit',
-    description='Spectral energy distribution construction and analysis tools',
-    author='Joe Filippazzo',
-    author_email='jfilippazzo@stsci.edu',
-    license='MIT',
-    url='https://github.com/hover2pi/sedkit',
-    keywords=['astronomy'],
-    classifiers=[
-        'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: BSD License',
-        'Operating System :: OS Independent',
-        'Programming Language :: Python',
-        'Topic :: Scientific/Engineering :: Astronomy',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-    ],
     packages=find_packages(exclude=["examples"]),
-    version='1.2.5',
     setup_requires=['setuptools_scm'],
-    install_requires=['numpy', 'astropy', 'bokeh', 'emcee', 'pysynphot', 'scipy', 'astroquery', 'dustmaps', 'pandas','svo_filters', 'healpy'],
     include_package_data=True,
     extras_require={
         'docs': DOCS_REQUIRE,

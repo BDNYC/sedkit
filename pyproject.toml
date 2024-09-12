@@ -9,13 +9,19 @@ authors = [
     {name = "Joe Filippazzo"},
     {name= "Kelle Cruz"},
     {name= "Sherelyn Alejandro Merchan"}
+	]
+description="Spectral energy distribution construction and analysis tools"
+license = "MIT"
+keywords=['astronomy']
+classifiers=[
+	'Intended Audience :: Science/Research',
+	'License :: OSI Approved :: BSD License',
+	'Operating System :: OS Independent',
+	'Programming Language :: Python :: 3',
+	'Topic :: Scientific/Engineering :: Astronomy',
+	'Topic :: Software Development :: Libraries :: Python Modules',
 ]
-
 requires-python = ">=3.11"
-
-classifiers = [
-    "Programming Language :: Python :: 3",
-]
 dependencies = [
 	"astropy>=5.3.1",
 	"astroquery>=0.4.6",
