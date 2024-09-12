@@ -1,5 +1,37 @@
-# pyproject.toml
 [build-system]
-requires = ["setuptools<=54.2.0",
-			"wheel",
-			"setuptools_scm"]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sedkit"
+
+authors = [
+    {name = "Joe Filippazzo",},
+    {name= "Kelle Cruz"},
+    {name= "Sherelyn Alejandro Merchan"}
+]
+
+requires-python = ">=3.9"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+	"astropy>=5.3.1",
+	"astroquery>=0.4.6",
+	"bokeh>=3.2.1",
+	"dill>=0.3.4"
+	"dustmaps>=1.0.9",
+	"emcee>=3.1.1",
+	"numpy>=1.25.1",
+	"pandas>=1.3.5",
+	"PyQt5>=5.15.6",
+	"scipy>=1.8.0",
+	"svo-filters>=0.4.4" 
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    ]
