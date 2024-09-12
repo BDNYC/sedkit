@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from setuptools import setup, find_packages, Extension, Command
 
 # allows you to build sphinx docs from the package
 # main directory with "python setup.py build_sphinx"
