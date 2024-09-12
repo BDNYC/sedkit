@@ -44,3 +44,6 @@ test = [
 
 [tool.setuptools_scm]
 root = '.'
+
+[tool.setuptools.packages]
+packages = "sedkit"
