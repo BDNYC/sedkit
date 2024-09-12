@@ -6,12 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "sedkit"
 
 authors = [
-    {name = "Joe Filippazzo",},
+    {name = "Joe Filippazzo"},
     {name= "Kelle Cruz"},
     {name= "Sherelyn Alejandro Merchan"}
 ]
 
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -20,7 +20,7 @@ dependencies = [
 	"astropy>=5.3.1",
 	"astroquery>=0.4.6",
 	"bokeh>=3.2.1",
-	"dill>=0.3.4"
+	"dill>=0.3.4",
 	"dustmaps>=1.0.9",
 	"emcee>=3.1.1",
 	"numpy>=1.25.1",
