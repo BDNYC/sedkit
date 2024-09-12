@@ -41,3 +41,6 @@ dynamic = ["version"]
 test = [
     "pytest",
     ]
+
+[tool.setuptools.packages.find]
+exclude = ["source"]
