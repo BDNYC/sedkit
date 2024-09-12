@@ -41,9 +41,3 @@ dynamic = ["version"]
 test = [
     "pytest",
     ]
-
-[tool.setuptools_scm]
-root = '.'
-
-[tool.setuptools.packages]
-packages = ["sedkit"]
