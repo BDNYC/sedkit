@@ -602,7 +602,7 @@ class Spectrum:
         spec = u.scrub(self.data)
 
         # Integrate the spectrum
-        val = (np.trapz(spec[1], x=spec[0]) * m).to(units)
+        val = (np.trapezoid(spec[1], x=spec[0]) * m).to(units)
 
         if self.unc is None:
             vunc = None
@@ -615,7 +615,7 @@ class Spectrum:
             uvals = []
             for n in range(n_samples):
                 usamp = np.random.normal(spec[1], spec[2])
-                err = (np.trapz(usamp, x=spec[0]) * m).to(units)
+                err = (np.trapezoid(usamp, x=spec[0]) * m).to(units)
                 uvals.append(abs(err.value - val.value))
 
             # Get 1-sigma of distribution
@@ -1153,7 +1153,7 @@ class Spectrum:
             idx = np.where([not np.isnan(i) for i in f])[0]
 
             # Calculate the flux
-            flx = (np.trapz(f[idx] * rsr[0][idx], x=wav[idx]) / np.trapz(rsr[0][idx], x=wav[idx])).to(self.flux_units)
+            flx = (np.trapezoid(f[idx] * rsr[0][idx], x=wav[idx]) / np.trapezoid(rsr[0][idx], x=wav[idx])).to(self.flux_units)
 
             # Calculate uncertainty
             if self.unc is not None:
