@@ -6,16 +6,16 @@ build-backend = "setuptools.build_meta"
 name = "sedkit"
 
 authors = [
-    {name = "Joe Filippazzo"},
-    {name= "Kelle Cruz"},
-    {name= "Sherelyn Alejandro Merchan"}
+    {name = "Joe Filippazzo", email = "jfilippazzo@stsci.edu"},
+	{name= "Sherelyn Alejandro Merchan"}
+maintainers = [
+    {name= "Kelle Cruz", email="kellecruz@gmail.com"}
 	]
 description="Spectral energy distribution construction and analysis tools"
-license = "MIT"
 keywords=['astronomy']
 classifiers=[
 	'Intended Audience :: Science/Research',
-	'License :: OSI Approved :: BSD License',
+	"License :: OSI Approved :: MIT License",
 	'Operating System :: OS Independent',
 	'Programming Language :: Python :: 3',
 	'Topic :: Scientific/Engineering :: Astronomy',
