@@ -16,8 +16,7 @@ class TestIsochrone(unittest.TestCase):
     def test_evaluate(self):
         """Test the evaluate method"""
         # With uncertainties
-        result = self.hsa.evaluate((-4, 0.1), (4*q.Gyr, 0.1*q.Gyr), 'Lbol',
-                                   'mass')
+        result = self.hsa.evaluate((-4, 0.1), (4*q.Gyr, 0.1*q.Gyr), 'Lbol', 'mass')
         self.assertTrue(isinstance(result, tuple))
 
         # No xparam uncertainty

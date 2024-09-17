@@ -290,3 +290,5 @@ class TestSED(unittest.TestCase):
 def test_VegaSED():
     """Test the VegaSED class"""
     vega = sed.VegaSED()
+
+    assert vega.Teff[0] > 9500 * q.K

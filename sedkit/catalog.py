@@ -621,7 +621,7 @@ class Catalog:
 
         # Set up hover tool
         tips = [('Name', '@name'), (x, '@{}'.format(xname)), (y, '@{}'.format(yname))]
-        hover = HoverTool(tooltips=tips, names=['points'])
+        hover = HoverTool(tooltips=tips, name='points')
 
         callback = CustomJS(args=dict(source=source, phot_source=phot_source, spec_source=spec_source), code="""
             var data = source.data;
@@ -640,7 +640,7 @@ class Catalog:
         # Make the plot
         TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover, tap]
         title = '{} v {}'.format(x, y)
-        fig = figure(plot_width=500, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
+        fig = figure(width=500, height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
 
         # Get marker class
         size = kwargs.get('size', 8)
@@ -662,7 +662,7 @@ class Catalog:
         fig.legend.location = "top_right"
 
         # Draw sub figure
-        sub = figure(plot_width=500, plot_height=500, title='Selected Source',
+        sub = figure(width=500, height=500, title='Selected Source',
                      x_axis_label=str(self.wave_units), y_axis_label=str(self.flux_units),
                      x_axis_type='log', y_axis_type='log')
         sub.line('phot_wave', 'phot', source=phot_source, color='black', alpha=0.2)
@@ -759,12 +759,12 @@ class Catalog:
 
             # Set up hover tool
             tips = [('Name', '@name'), ('Idx', '@idx'), (x, '@{0} (@{0}_unc)'.format(xname)), (y, '@{0} (@{0}_unc)'.format(yname))]
-            hover = HoverTool(tooltips=tips, names=['points'])
+            hover = HoverTool(tooltips=tips, name='points')
 
             # Make the plot
             TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save', hover]
             title = '{} v {}'.format(x, y)
-            fig = figure(plot_width=800, plot_height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
+            fig = figure(width=800, height=500, title=title, y_axis_type=scale[1], x_axis_type=scale[0], tools=TOOLS)
 
         # Get marker class
         size = kwargs.get('size', 8)
@@ -875,7 +875,7 @@ class Catalog:
         # Make the plot
         TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
         title = self.name
-        fig = figure(plot_width=800, plot_height=500, title=title,
+        fig = figure(width=800, height=500, title=title,
                      y_axis_type=scale[1], x_axis_type=scale[0],
                      x_axis_label='Wavelength [{}]'.format(self.wave_units),
                      y_axis_label='Flux Density [{}]'.format(str(self.flux_units)),
