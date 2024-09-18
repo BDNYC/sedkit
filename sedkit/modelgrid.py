@@ -12,10 +12,10 @@ import fileinput
 import glob
 import itertools
 import pickle
-from copy import copy
 from functools import partial
 from multiprocessing import Pool
-from pkg_resources import resource_filename
+import importlib_resources
+from pathlib import Path
 
 import astropy.units as q
 import astropy.io.votable as vo
@@ -24,8 +24,8 @@ import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
 from svo_filters import svo
 
-from . import utilities as u
-from .spectrum import Spectrum
+from sedkit import utilities as u
+from sedkit.spectrum import Spectrum
 
 
 def interp_flux(flux, params, values):
@@ -478,7 +478,7 @@ class ModelGrid:
         self.index_path = os.path.join(dirname, 'index.p')
 
         if not os.path.isfile(self.index_path):
-            os.system("touch {}".format(self.index_path))
+            Path(self.index_path).touch()
 
             # Index the models
             self.index_models(parameters=self.parameters, **kwargs)
@@ -732,7 +732,8 @@ class ModelGrid:
 
             # Make the file if necessary
             if not os.path.isfile(file):
-                os.system('touch {}'.format(file))
+                Path(file).touch()
+
 
             # Write the file
             f = open(file, 'wb')
@@ -762,7 +763,7 @@ class BTSettl(ModelGrid):
 
         # Load the model grid
         modeldir = 'data/models/atmospheric/btsettl'
-        root = root or resource_filename('sedkit', modeldir)
+        root = root or importlib_resources.files('sedkit')/ modeldir
         self.load(root)
 
 
@@ -778,7 +779,7 @@ class SpexPrismLibrary(ModelGrid):
 
         # Load the model grid
         model_path = 'data/models/atmospheric/spexprismlibrary'
-        root = resource_filename('sedkit', model_path)
+        root = importlib_resources.files('sedkit')/ model_path
         self.load(root)
 
         # Add numeric spectral type

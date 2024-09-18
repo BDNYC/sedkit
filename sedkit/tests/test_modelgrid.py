@@ -4,8 +4,8 @@ from pkg_resources import resource_filename
 
 import astropy.units as q
 
-from .. import modelgrid as mg
-from .. import utilities as u
+from sedkit import modelgrid as mg
+from sedkit import utilities as u
 
 
 class TestModelGrid(unittest.TestCase):
@@ -18,7 +18,7 @@ class TestModelGrid(unittest.TestCase):
         path = resource_filename('sedkit', 'data/models/atmospheric/spexprismlibrary')
 
         # Delete the pickle so the models need to be indexed
-        os.system('rm {}'.format(os.path.join(path, 'index.p')))
+        os.remove(os.path.join(path, 'index.p'))
 
         # Load the model grid
         grid.load(path)
@@ -82,11 +82,11 @@ def test_load_model():
 def test_load_ModelGrid():
     """Test the load_ModelGrid function"""
     grid = mg.BTSettl()
-    path = './test.p'
-    grid.save(path)
-    lmg = mg.load_ModelGrid(path)
+    test_p = './test.p'
+    grid.save(test_p)
+    lmg = mg.load_ModelGrid(test_p)
     assert isinstance(lmg, mg.ModelGrid)
-    os.system('rm test.p')
+    os.remove(test_p)
 
 
 def test_BTSettl():
