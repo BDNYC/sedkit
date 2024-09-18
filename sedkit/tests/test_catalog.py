@@ -1,11 +1,9 @@
 """A suite of tests for the catalog.py module"""
 import unittest
 import copy
-import os
-from pkg_resources import resource_filename
 
-from .. import sed
-from .. import catalog
+from sedkit import sed
+from sedkit import catalog
 
 
 class TestCatalog(unittest.TestCase):
