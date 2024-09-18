@@ -1,5 +1,5 @@
 import copy
-from pkg_resources import resource_filename
+import importlib.resources
 import unittest
 
 import astropy.units as q
@@ -50,7 +50,7 @@ class TestRelation(unittest.TestCase):
     """Tests for the Relation base class"""
     def setUp(self):
         # Set the file
-        self.file = resource_filename('sedkit', 'data/dwarf_sequence.txt')
+        self.file = str(importlib.resources.files('sedkit')/ 'sedkit', 'data/dwarf_sequence.txt')
 
     def test_init(self):
         """Test class initialization"""

@@ -8,7 +8,7 @@ A module to estimate fundamental parameters from model isochrones
 
 import os
 import glob
-from pkg_resources import resource_filename
+import importlib.resources
 
 import astropy.units as q
 import astropy.constants as ac
@@ -32,7 +32,7 @@ NYMG_AGES = {'AB Dor': (149 * q.Myr, 51 * q.Myr, '2015MNRAS.454..593B'),
 
 # A list of all supported evolutionary models
 try:
-    EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(resource_filename('sedkit', 'data/models/evolutionary/*'))]
+    EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(str(importlib.resources.files('sedkit')/ 'data/models/evolutionary/*'))]
 # Fails RTD build for some reason
 except:
     EVO_MODELS = ['COND03', 'dmestar_solar', 'DUSTY00', 'f2_solar_age', 'hybrid_solar_age', 'nc+03_age', 'nc-03_age', 'nc_solar_age', 'parsec12_solar', 'ATMO_NEQ_strong']
@@ -53,7 +53,7 @@ class Isochrone:
 
         # Set the path
         self.name = name
-        self.path = resource_filename('sedkit', 'data/models/evolutionary/{}.txt'.format(self.name))
+        self.path = str(importlib.resources.files('sedkit')/ 'data/models/evolutionary/{}.txt').format(self.name)
         self._age_units = None
         self._mass_units = None
         self._radius_units = None

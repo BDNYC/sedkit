@@ -1,7 +1,7 @@
 """A suite of tests for the spectrum.py module"""
 import unittest
 import copy
-from pkg_resources import resource_filename
+import importlib.resources
 
 import numpy as np
 import astropy.units as q
@@ -258,8 +258,8 @@ class TestFileSpectrum(unittest.TestCase):
     def setUp(self):
         """Setup the tests"""
         # Files for testing
-        self.fitsfile = resource_filename('sedkit', 'data/Trappist-1_NIR.fits')
-        self.txtfile = resource_filename('sedkit', 'data/STScI_Vega.txt')
+        self.fitsfile = str(importlib.resources.files('sedkit')/ 'data/Trappist-1_NIR.fits')
+        self.txtfile = str(importlib.resources.files('sedkit')/ 'data/STScI_Vega.txt')
 
     def test_fits(self):
         """Test that a fits file can be loaded"""
