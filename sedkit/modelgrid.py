@@ -14,7 +14,7 @@ import itertools
 import pickle
 from functools import partial
 from multiprocessing import Pool
-import importlib_resources
+import importlib.resources
 from pathlib import Path
 
 import astropy.units as q
@@ -761,7 +761,7 @@ class BTSettl(ModelGrid):
 
         # Load the model grid
         modeldir = 'data/models/atmospheric/btsettl'
-        root = root or importlib_resources.files('sedkit')/ modeldir
+        root = root or str(importlib.resources.files('sedkit')/ modeldir)
         self.load(root)
 
 
@@ -777,7 +777,7 @@ class SpexPrismLibrary(ModelGrid):
 
         # Load the model grid
         model_path = 'data/models/atmospheric/spexprismlibrary'
-        root = importlib_resources.files('sedkit')/ model_path
+        root = str(importlib.resources.files('sedkit')/ model_path)
         self.load(root)
 
         # Add numeric spectral type
