@@ -50,7 +50,7 @@ class TestRelation(unittest.TestCase):
     """Tests for the Relation base class"""
     def setUp(self):
         # Set the file
-        self.file = str(importlib.resources.files('sedkit')/ 'sedkit', 'data/dwarf_sequence.txt')
+        self.file = str(importlib.resources.files('sedkit')/ 'data/dwarf_sequence.txt')
 
     def test_init(self):
         """Test class initialization"""
