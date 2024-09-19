@@ -10,7 +10,7 @@ import os
 import dill
 import pickle
 from copy import copy
-import importlib_resources
+import importlib.resources
 import shutil
 
 from astropy.io import ascii
@@ -983,5 +983,5 @@ class MdwarfCatalog(Catalog):
         super().__init__(name='M Dwarf Catalog', **kwargs)
 
         # Read the names from the file
-        file = importlib_resources.files('sedkit')/ 'data/sources.txt'
+        file = str(importlib.resources.files('sedkit')/ 'data/sources.txt')
         self.from_file(file, run_methods=['find_SDSS', 'find_2MASS', 'find_WISE'])

@@ -1,6 +1,6 @@
 """A suite of tests for the utilities.py module"""
 import copy
-from pkg_resources import resource_filename
+import importlib.resources
 import pytest
 import unittest
 
@@ -294,7 +294,7 @@ def test_group_spectra():
 def test_spectrum_from_fits():
     """Test spectrum_from_fits function"""
     # Get the file
-    f = resource_filename('sedkit', '/data/Gl752B_NIR.fits')
+    f = str(importlib.resources.files('sedkit')/ '/data/Gl752B_NIR.fits')
 
     # Get the spectrum
     spec = u.spectrum_from_fits(f)

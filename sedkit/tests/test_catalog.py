@@ -83,7 +83,7 @@ class TestCatalog(unittest.TestCase):
     # def test_from_file(self):
     #     """Test from_file method"""
     #     cat = self.cat
-    #     file = resource_filename('sedkit', 'data/sources.txt')
+    #     file = str(importlib.resources.files('sedkit')/ 'data/sources.txt')
     #     cat.from_file(file)
     #     self.assertTrue(len(cat.results) > 0)
     #

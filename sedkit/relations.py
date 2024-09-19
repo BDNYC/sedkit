@@ -7,7 +7,7 @@ This is the code used to generate the polynomial relations
 used in sedkit's calculations
 """
 import os
-from pkg_resources import resource_filename
+import importlib.resources
 
 import astropy.io.ascii as ii
 import astropy.units as q
@@ -403,7 +403,7 @@ class DwarfSequence(Relation):
         Initialize a Relation object with the Dwarf Sequence data
         """
         # Get the file
-        file = resource_filename('sedkit', 'data/dwarf_sequence.txt')
+        file = str(importlib.resources.files('sedkit')/ 'data/dwarf_sequence.txt')
 
         # Replace '...' with NaN
         fill_values = [('...', np.nan), ('....', np.nan), ('.....', np.nan)]
@@ -494,7 +494,7 @@ class SpectralTypeRadius:
         # Boyajian AFGKM data
         # ====================================================================
 
-        afgk = resource_filename('sedkit', 'data/AFGK_radii.txt')
+        afgk = str(importlib.resources.files('sedkit')/ 'data/AFGK_radii.txt')
         afgk_data = ii.read(afgk, format='csv', comment='#')
 
         # ====================================================================
