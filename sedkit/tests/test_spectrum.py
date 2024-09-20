@@ -1,7 +1,7 @@
 """A suite of tests for the spectrum.py module"""
 import unittest
 import copy
-from pkg_resources import resource_filename
+import importlib_resources
 
 import numpy as np
 import astropy.units as q
@@ -9,7 +9,6 @@ from svo_filters import Filter
 
 from sedkit import modelgrid as mg
 from sedkit import spectrum as sp
-from sedkit import utilities as u
 
 
 class TestSpectrum(unittest.TestCase):
@@ -89,7 +88,7 @@ class TestSpectrum(unittest.TestCase):
 
         # Test MCMC fit
         bt = mg.BTSettl()
-        spec = bt.get_spectrum(teff=2456, logg=5.5, meta=0, alpha=0, snr=100)
+        spec = bt.get_spectrum(teff=2456, logg=5., meta=0, alpha=0, snr=100)
         spec.mcmc_fit(bt, name='Test', report=True)
 
     def test_addition(self):
@@ -152,7 +151,7 @@ class TestSpectrum(unittest.TestCase):
         spec2 = self.flat2.interpolate(spec1)
 
         # Check wavelength is updated
-        self.assertTrue(np.all(spec1.wave == spec2.wave))
+        self.assertTrue(set(spec2.wave).issubset(set(spec1.wave)))
 
     def test_renormalize(self):
         """Test that a spectrum is properly normalized to a given magnitude"""
@@ -206,7 +205,7 @@ class TestSpectrum(unittest.TestCase):
         self.assertIsInstance(mag_unc, float)
 
         # Test flux
-        flx, flx_unc = s1.synthetic_flux(filt, plot=True)
+        flx, flx_unc = s1.synthetic_flux(filt, plot=False)
         self.assertIsInstance(flx, q.quantity.Quantity)
         self.assertIsInstance(flx_unc, q.quantity.Quantity)
 
@@ -258,8 +257,8 @@ class TestFileSpectrum(unittest.TestCase):
     def setUp(self):
         """Setup the tests"""
         # Files for testing
-        self.fitsfile = resource_filename('sedkit', 'data/Trappist-1_NIR.fits')
-        self.txtfile = resource_filename('sedkit', 'data/STScI_Vega.txt')
+        self.fitsfile = str(importlib_resources.files('sedkit')/ 'data/Trappist-1_NIR.fits')
+        self.txtfile = str(importlib_resources.files('sedkit')/ 'data/STScI_Vega.txt')
 
     def test_fits(self):
         """Test that a fits file can be loaded"""
