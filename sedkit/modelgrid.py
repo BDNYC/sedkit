@@ -216,10 +216,10 @@ class ModelGrid:
         # Make the dictionary of new data
         kwargs.update({'spectrum': spectrum, 'filepath': filepath, 'label': label})
         new_rec = pd.DataFrame({k: [v] for k, v in kwargs.items()})
+        # Concatenate the new data with the empty dataframe
 
-        # Add it to the index
-        print(self.index.columns, new_rec.keys())
-        self.index.loc[len(self.index)] = new_rec
+        self.index = pd.concat([new_rec, self.index], ignore_index=True)
+
 
     @staticmethod
     def closest_value(input_value, possible_values, n_vals=1):

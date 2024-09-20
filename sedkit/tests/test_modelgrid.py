@@ -55,7 +55,7 @@ class TestModelGrid(unittest.TestCase):
     def test_photometry(self):
         """Test the photometry method"""
         phot_mg = self.bt.photometry(['2MASS.J', '2MASS.H', '2MASS.Ks'])
-        self.assertEqual(phot_mg.index.iloc[0]['spectrum'][0].size, 3)
+        self.assertEqual(phot_mg.index['spectrum'][0][0].size, 3)
 
     def test_plot(self):
         """Test that the plot method works"""
