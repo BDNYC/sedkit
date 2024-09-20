@@ -502,10 +502,10 @@ class SpectralTypeRadius:
         # ====================================================================
 
         # Get the data
-        cat1 = V.query_constraints('J/ApJ/810/158/table1')[0]
-        cat2 = V.query_constraints('J/ApJ/810/158/table9')[0]
+        cat1 = V.query_constraints(catalog='J/ApJ/810/158/table1')[0]
+        cat2 = V.query_constraints(catalog='J/ApJ/810/158/table9')[0]
 
-        # Join the tables to getthe spectral types and radii in one table
+        # Join the tables to get the spectral types and radii in one table
         mlty_data = at.join(cat1, cat2, keys='ID', join_type='outer')
 
         # Only keep field age
