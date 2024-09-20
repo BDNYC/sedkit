@@ -856,17 +856,20 @@ class SED:
 
         if spec is not None:
 
-            if rebin and fit_to == 'spec':
-                model = model.resamp(spec.spectrum[0])
+            # If you want to resample, you need to trim here
+            # if rebin and fit_to == 'spec':
+            #     model = model.resamp(spec.spectrum[0])
+            #
+            # # Fit the model to the SED
+            # gstat, yn, xn = list(spec.fit(model, wave_units='AA'))
+            # wave = model.wave * xn
+            # flux = model.flux * yn
 
-            # Fit the model to the SED
-            gstat, yn, xn = list(spec.fit(model, wave_units='AA'))
-            wave = model.wave * xn
-            flux = model.flux * yn
+            normed = model.norm_to_spec(spec)
 
             # Plot the SED with the model on top
             fig = self.plot(output=True)
-            fig.line(wave, flux)
+            fig.line(normed.wave, normed.flux, color='red')
 
             show(fig)
 
@@ -1262,10 +1265,14 @@ class SED:
         """
         Search for SDSS spectra
         """
+        # Manual or parent radius
+        if search_radius is None:
+            search_radius = self.search_radius
+
         if 'optical' in surveys:
 
             # Query spectra
-            data, ref, header = qu.query_SDSS_optical_spectra(target=self.name, sky_coords=self.sky_coords, verbose=self.verbose, radius=search_radius or self.search_radius, **kwargs)
+            data, ref, header = qu.query_SDSS_optical_spectra(target=self.name, sky_coords=self.sky_coords, verbose=self.verbose, radius=search_radius, **kwargs)
 
             # Add the spectrum to the SED
             if data is not None:
@@ -1277,7 +1284,7 @@ class SED:
         if 'apogee' in surveys:
 
             # Query spectra
-            data, ref, header = qu.query_SDSS_apogee_spectra(target=self.name, sky_coords=self.sky_coords, verbose=self.verbose, search_radius=search_radius or self.search_radius, **kwargs)
+            data, ref, header = qu.query_SDSS_apogee_spectra(target=self.name, sky_coords=self.sky_coords, verbose=self.verbose, search_radius=search_radius, **kwargs)
 
             # Add the spectrum to the SED
             if data is not None:
@@ -1916,7 +1923,8 @@ class SED:
             if len(infer_froms) > 0:
                 infer_from = infer_froms[0]
         if infer_from not in infer_froms or infer_from is None:
-            raise ValueError("{}: Please choose valid relation to infer the radius. Try {}".format('None' if infer_from is None else infer_from, infer_froms))
+            self.message('Could not calculate radius without spectral_type, Lbol, M_2MASS.J, or M_2MASS.Ks')
+            # raise ValueError("{}: Please choose valid relation to infer the radius. Try {}".format('None' if infer_from is None else infer_from, infer_froms))
 
         # Try model isochrones
         if infer_from == 'evo_model':

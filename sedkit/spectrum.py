@@ -855,6 +855,10 @@ class Spectrum:
         spec0 = slf.data
         spec1 = spec.data[:, idx]
 
+        # Fix shape mismatch
+        if len(spec0[0]) < len(spec1[0]):
+            spec1 = spec1[:, 1:]
+
         # Find the normalization factor
         norm = u.minimize_norm(spec1[1], spec0[1], **kwargs)
 
@@ -1053,7 +1057,9 @@ class Spectrum:
         wave = wave.value
 
         # Bin the spectrum
+        print(wave, self.wave)
         binned = u.spectres(wave, self.wave, self.flux, self.unc)
+        print(binned[0])
 
         # Update the spectrum
         spectrum = [i * Q for i, Q in zip(binned, self.units)]
