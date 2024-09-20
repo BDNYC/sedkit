@@ -1057,7 +1057,9 @@ class Spectrum:
         wave = wave.value
 
         # Bin the spectrum
+        print(wave, self.wave)
         binned = u.spectres(wave, self.wave, self.flux, self.unc)
+        print(binned[0])
 
         # Update the spectrum
         spectrum = [i * Q for i, Q in zip(binned, self.units)]

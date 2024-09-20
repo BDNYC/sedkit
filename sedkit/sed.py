@@ -856,17 +856,20 @@ class SED:
 
         if spec is not None:
 
-            if rebin and fit_to == 'spec':
-                model = model.resamp(spec.spectrum[0])
+            # If you want to resample, you need to trim here
+            # if rebin and fit_to == 'spec':
+            #     model = model.resamp(spec.spectrum[0])
+            #
+            # # Fit the model to the SED
+            # gstat, yn, xn = list(spec.fit(model, wave_units='AA'))
+            # wave = model.wave * xn
+            # flux = model.flux * yn
 
-            # Fit the model to the SED
-            gstat, yn, xn = list(spec.fit(model, wave_units='AA'))
-            wave = model.wave * xn
-            flux = model.flux * yn
+            normed = model.norm_to_spec(spec)
 
             # Plot the SED with the model on top
             fig = self.plot(output=True)
-            fig.line(wave, flux)
+            fig.line(normed.wave, normed.flux, color='red')
 
             show(fig)
 

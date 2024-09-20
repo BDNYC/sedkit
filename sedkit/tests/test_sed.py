@@ -173,7 +173,7 @@ class TestSED(unittest.TestCase):
         """Test for the compare_model method"""
         v = sed.VegaSED()
         bt = mg.BTSettl()
-        v.compare_model(bt, teff=3000)
+        v.compare_model(bt, teff=10000)
 
     def test_plot(self):
         """Test plotting method"""
