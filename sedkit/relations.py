@@ -272,9 +272,14 @@ class Relation:
 
                 if plot:
                     plt = self.plot(rel_name, xunits=xunits, yunits=yunits)
-                    plt.circle([x_val.value if hasattr(x_val, 'unit') else x_val], [y_val.value if hasattr(y_val, 'unit') else y_val], color='red', size=10, legend_label='{}({})'.format(rel['yparam'], x_val))
-                    if y_upper:
-                        plt.line([x_val, x_val], [y_val - y_lower, y_val + y_upper], color='red')
+                    xv = x_val.value if hasattr(x_val, 'unit') else x_val
+                    yv = y_val.value if hasattr(y_val, 'unit') else y_val
+                    plt.scatter([xv], [yv], color='red', size=10, legend_label='{}({})'.format(rel['yparam'], x_val))
+                    print(y_val, y_upper, y_lower)
+                    if y_upper is not None:
+                        yvl = y_lower.value if hasattr(y_lower, 'unit') else y_lower
+                        yvu = y_upper.value if hasattr(y_upper, 'unit') else y_upper
+                        plt.line([xv, xv], [yv - yvl, yv + yvu], color='red')
                     show(plt)
 
                 # Restore full relation
@@ -362,7 +367,7 @@ class Relation:
             fig.yaxis.axis_label = '{}{}'.format(yparam, '[{}]'.format(yunits or rel['yunit']))
 
         # Draw points
-        fig.circle(x * xu, y * yu, legend_label='Data', **kwargs)
+        fig.scatter(x * xu, y * yu, legend_label='Data', **kwargs)
 
         return fig
 
@@ -619,7 +624,7 @@ class SpectralTypeRadius:
 
             # Add the data
             if n == 0:
-                fig.circle(data['data']['spt'], data['data']['radius'], size=8,
+                fig.scatter(data['data']['spt'], data['data']['radius'], size=8,
                            color=color, legend_label=data['ref'])
             else:
                 fig.square(data['data']['spt'], data['data']['radius'], size=8,

@@ -1,6 +1,6 @@
 import unittest
 import os
-from pkg_resources import resource_filename
+import importlib_resources
 
 import astropy.units as q
 
@@ -15,7 +15,9 @@ class TestModelGrid(unittest.TestCase):
         # Make Model class for testing
         params = ['spty']
         grid = mg.ModelGrid('Test', params, q.AA, q.erg/q.s/q.cm**2/q.AA)
-        path = resource_filename('sedkit', 'data/models/atmospheric/spexprismlibrary')
+
+        model_path = 'data/models/atmospheric/spexprismlibrary'
+        path = importlib_resources.files('sedkit')/ model_path
 
         # Delete the pickle so the models need to be indexed
         os.remove(os.path.join(path, 'index.p'))
@@ -72,7 +74,7 @@ def test_load_model():
     """Test the load_model function"""
     # Get the XML file
     path = 'data/models/atmospheric/spexprismlibrary/spex-prism_2MASPJ0345432+254023_20030905_BUR06B.txt.xml'
-    filepath = resource_filename('sedkit', path)
+    filepath = importlib_resources.files('sedkit') / path
 
     # Load the model
     meta = mg.load_model(filepath)
