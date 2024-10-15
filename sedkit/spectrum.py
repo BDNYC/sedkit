@@ -528,7 +528,7 @@ class Spectrum:
         if self.unc is None:
             unc = None
         else:
-            term1 = (self.spectrum[2] * distance[0] / target_distance).to(flux_units)
+            term1 = (self.spectrum[2] * (distance[0] / target_distance)**2).to(flux_units)
             term2 = (2 * self.spectrum[1] * (distance[1] * distance[0] / target_distance**2)).to(flux_units)
             unc = np.sqrt(term1**2 + term2**2)
 
