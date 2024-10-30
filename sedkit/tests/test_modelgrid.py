@@ -1,11 +1,11 @@
 import unittest
 import os
-from pkg_resources import resource_filename
+import importlib_resources
 
 import astropy.units as q
 
-from .. import modelgrid as mg
-from .. import utilities as u
+from sedkit import modelgrid as mg
+from sedkit import utilities as u
 
 
 class TestModelGrid(unittest.TestCase):
@@ -15,10 +15,12 @@ class TestModelGrid(unittest.TestCase):
         # Make Model class for testing
         params = ['spty']
         grid = mg.ModelGrid('Test', params, q.AA, q.erg/q.s/q.cm**2/q.AA)
-        path = resource_filename('sedkit', 'data/models/atmospheric/spexprismlibrary')
+
+        model_path = 'data/models/atmospheric/spexprismlibrary'
+        path = importlib_resources.files('sedkit')/ model_path
 
         # Delete the pickle so the models need to be indexed
-        os.system('rm {}'.format(os.path.join(path, 'index.p')))
+        os.remove(os.path.join(path, 'index.p'))
 
         # Load the model grid
         grid.load(path)
@@ -72,7 +74,7 @@ def test_load_model():
     """Test the load_model function"""
     # Get the XML file
     path = 'data/models/atmospheric/spexprismlibrary/spex-prism_2MASPJ0345432+254023_20030905_BUR06B.txt.xml'
-    filepath = resource_filename('sedkit', path)
+    filepath = importlib_resources.files('sedkit') / path
 
     # Load the model
     meta = mg.load_model(filepath)
@@ -82,11 +84,11 @@ def test_load_model():
 def test_load_ModelGrid():
     """Test the load_ModelGrid function"""
     grid = mg.BTSettl()
-    path = './test.p'
-    grid.save(path)
-    lmg = mg.load_ModelGrid(path)
+    test_p = './test.p'
+    grid.save(test_p)
+    lmg = mg.load_ModelGrid(test_p)
     assert isinstance(lmg, mg.ModelGrid)
-    os.system('rm test.p')
+    os.remove(test_p)
 
 
 def test_BTSettl():

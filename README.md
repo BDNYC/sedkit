@@ -21,12 +21,10 @@ or via `conda` with
 ```
 git clone https://github.com/hover2pi/sedkit.git
 cd sedkit
-conda env create -f env/environment-<python_version>.yml --force
+conda env create -f env/environment-3.11.yml --force
 conda activate sedkit
 python setup.py install
 ```
-
-where `<python_version>` is `3.7` or `3.8`.
 
 ## Demo
 
