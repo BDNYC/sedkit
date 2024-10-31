@@ -1,6 +1,6 @@
 import unittest
 import copy
-from pkg_resources import resource_filename
+import importlib_resources
 
 import numpy as np
 import astropy.units as q
@@ -48,7 +48,7 @@ class TestSED(unittest.TestCase):
         s = copy.copy(self.sed)
 
         # Add the photometry
-        f = resource_filename('sedkit', 'data/L3_photometry.txt')
+        f = str(importlib_resources.files('sedkit')/ 'data/L3_photometry.txt')
         s.add_photometry_table(f)
         self.assertEqual(len(s.photometry), 8)
 
@@ -173,7 +173,7 @@ class TestSED(unittest.TestCase):
         """Test for the compare_model method"""
         v = sed.VegaSED()
         bt = mg.BTSettl()
-        v.compare_model(bt, teff=3000)
+        v.compare_model(bt, teff=10000)
 
     def test_plot(self):
         """Test plotting method"""
@@ -225,6 +225,8 @@ class TestSED(unittest.TestCase):
         s = sed.SED()
         s.sky_coords = SkyCoord('0h8m05.63s +14d50m23.3s', frame='icrs')
         s.find_SDSS_spectra(search_radius=20 * q.arcsec)
+        s.find_SDSS()
+        s.plot()
 
     def test_run_methods(self):
         """Test that the method_list argument works"""
@@ -279,7 +281,7 @@ class TestSED(unittest.TestCase):
     #     s.add_spectrum(self.spec1)
     #
     #     # Add photometry
-    #     f = resource_filename('sedkit', 'data/L3_photometry.txt')
+    #     f = str(importlib_resources.files('sedkit')/ 'data/L3_photometry.txt')
     #     s.add_photometry_file(f)
     #
     #     # Fit with SPL

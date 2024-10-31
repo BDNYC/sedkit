@@ -602,7 +602,7 @@ class Spectrum:
         spec = u.scrub(self.data)
 
         # Integrate the spectrum
-        val = (np.trapz(spec[1], x=spec[0]) * m).to(units)
+        val = (np.trapezoid(spec[1], x=spec[0]) * m).to(units)
 
         if self.unc is None:
             vunc = None
@@ -615,7 +615,7 @@ class Spectrum:
             uvals = []
             for n in range(n_samples):
                 usamp = np.random.normal(spec[1], spec[2])
-                err = (np.trapz(usamp, x=spec[0]) * m).to(units)
+                err = (np.trapezoid(usamp, x=spec[0]) * m).to(units)
                 uvals.append(abs(err.value - val.value))
 
             # Get 1-sigma of distribution
@@ -855,6 +855,10 @@ class Spectrum:
         spec0 = slf.data
         spec1 = spec.data[:, idx]
 
+        # Fix shape mismatch
+        if len(spec0[0]) < len(spec1[0]):
+            spec1 = spec1[:, 1:]
+
         # Find the normalization factor
         norm = u.minimize_norm(spec1[1], spec0[1], **kwargs)
 
@@ -1053,7 +1057,9 @@ class Spectrum:
         wave = wave.value
 
         # Bin the spectrum
+        print(wave, self.wave)
         binned = u.spectres(wave, self.wave, self.flux, self.unc)
+        print(binned[0])
 
         # Update the spectrum
         spectrum = [i * Q for i, Q in zip(binned, self.units)]
@@ -1153,7 +1159,7 @@ class Spectrum:
             idx = np.where([not np.isnan(i) for i in f])[0]
 
             # Calculate the flux
-            flx = (np.trapz(f[idx] * rsr[0][idx], x=wav[idx]) / np.trapz(rsr[0][idx], x=wav[idx])).to(self.flux_units)
+            flx = (np.trapezoid(f[idx] * rsr[0][idx], x=wav[idx]) / np.trapezoid(rsr[0][idx], x=wav[idx])).to(self.flux_units)
 
             # Calculate uncertainty
             if self.unc is not None:

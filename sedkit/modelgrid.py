@@ -12,10 +12,10 @@ import fileinput
 import glob
 import itertools
 import pickle
-from copy import copy
 from functools import partial
 from multiprocessing import Pool
-from pkg_resources import resource_filename
+import importlib_resources
+from pathlib import Path
 
 import astropy.units as q
 import astropy.io.votable as vo
@@ -24,8 +24,8 @@ import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
 from svo_filters import svo
 
-from . import utilities as u
-from .spectrum import Spectrum
+from sedkit import utilities as u
+from sedkit.spectrum import Spectrum
 
 
 def interp_flux(flux, params, values):
@@ -198,10 +198,10 @@ class ModelGrid:
             setattr(self, key, val)
 
         # Make the empty table
-        columns = self.parameters+['filepath', 'spectrum', 'label']
+        columns = self.parameters+['filepath', 'spectrum', 'label', 'weights']
         self.index = pd.DataFrame(columns=columns)
 
-    def add_model(self, spectrum, label=None, filepath=None, **kwargs):
+    def add_model(self, spectrum, label=None, filepath=None, weights=1, **kwargs):
         """Add the given model with the specified parameter values as kwargs
 
         Parameters
@@ -214,11 +214,10 @@ class ModelGrid:
             raise ValueError("Must have kwargs for", self.parameters)
 
         # Make the dictionary of new data
-        kwargs.update({'spectrum': spectrum, 'filepath': filepath, 'label': label})
-        new_rec = pd.DataFrame({k: [v] for k, v in kwargs.items()})
+        kwargs.update({'spectrum': spectrum, 'filepath': filepath, 'label': label, 'weights': weights})
+        new_rec = {k: kwargs[k] for k in kwargs.keys()}
 
         # Add it to the index
-        print(self.index.columns, new_rec.keys())
         self.index.loc[len(self.index)] = new_rec
 
     @staticmethod
@@ -365,7 +364,7 @@ class ModelGrid:
 
         # Update attributes
         if parameters is None:
-            parameters = [col for col in self.index.columns if col not in ['filepath', 'spectrum', 'label']]
+            parameters = [col for col in self.index.columns if col not in ['filepath', 'spectrum', 'label', 'weights']]
         self.parameters = parameters
 
     def _in_range(self, **kwargs):
@@ -478,7 +477,7 @@ class ModelGrid:
         self.index_path = os.path.join(dirname, 'index.p')
 
         if not os.path.isfile(self.index_path):
-            os.system("touch {}".format(self.index_path))
+            Path(self.index_path).touch()
 
             # Index the models
             self.index_models(parameters=self.parameters, **kwargs)
@@ -575,9 +574,7 @@ class ModelGrid:
         """
         # Copy the ModelGrid and empty the index
         phot = ModelGrid(name=self.name, parameters=self.parameters)
-        dic = copy(self.__dict__)
-        dic['index'] = dic['index'][:0]
-        phot.__dict__ = dic
+        phot.__dict__.update({k:v for k, v in self.__dict__.items() if k != 'index'})
 
         # Iterate over the rows
         for n, row in self.index.iterrows():
@@ -698,6 +695,7 @@ class ModelGrid:
                 pars['label'] = spec.name
                 pars['spectrum'] = spec.data
                 pars['filepath'] = 'interp'
+                pars['weights'] = 1
 
                 # Add line to the new dataframe
                 new_index = pd.concat([new_index, pd.DataFrame([pars])], ignore_index=True)
@@ -732,7 +730,8 @@ class ModelGrid:
 
             # Make the file if necessary
             if not os.path.isfile(file):
-                os.system('touch {}'.format(file))
+                Path(file).touch()
+
 
             # Write the file
             f = open(file, 'wb')
@@ -762,7 +761,7 @@ class BTSettl(ModelGrid):
 
         # Load the model grid
         modeldir = 'data/models/atmospheric/btsettl'
-        root = root or resource_filename('sedkit', modeldir)
+        root = root or importlib_resources.files('sedkit')/ modeldir
         self.load(root)
 
 
@@ -778,7 +777,7 @@ class SpexPrismLibrary(ModelGrid):
 
         # Load the model grid
         model_path = 'data/models/atmospheric/spexprismlibrary'
-        root = resource_filename('sedkit', model_path)
+        root = importlib_resources.files('sedkit')/ model_path
         self.load(root)
 
         # Add numeric spectral type
