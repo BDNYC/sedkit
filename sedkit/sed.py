@@ -1943,8 +1943,8 @@ class SED:
                 radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
 
             # Store the value
-            self.radius = [radius[0].round(3), radius[1].round(3),radius[2].round(3),radius[3]] if radius is not None else radius
-
+            self.radius = [radius[0].round(3), radius[1].round(3), radius[2].round(3), radius[3]] if radius is not None else radius
+            print(self.radius)
         # Try radius(spt) relation
         elif infer_from == 'spt':
 
@@ -2046,7 +2046,7 @@ class SED:
                 teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
 
             # Store the value
-            self.Teff = [teff[0].round(0), teff[1].round(0), teff[2].round(0),teff[3]] if teff is not None else teff
+            self.Teff = [teff[0].round(0), teff[1].round(0), teff[2].round(0), teff[3]] if teff is not None else teff
 
         else:
 
@@ -3131,8 +3131,10 @@ class SED:
                 raise TypeError("{} values must be {}".format(param, 'unitless' if units is None else "astropy.units.quantity.Quantity of the appropriate units , e.g. '{}'".format(units)))
 
             # Ensure valid range but don't throw error
-            vmin = vmin or (-np.inf * (units or 1))
-            vmax = vmax or (np.inf * (units or 1))
+
+            vmin = vmin if vmin is not None else -np.inf * (1 if units is None else units)
+            vmax = vmax if vmax is not None else np.inf * (1 if units is None else units)
+
 
             if (values[0] < vmin) or (values[0] > vmax):
                 self.message("{}: {} value is not in valid range [{}, {}].".format(values, param, vmin, vmax))
@@ -3211,7 +3213,7 @@ class VegaSED(SED):
         self.find_SDSS()
         self.find_2MASS()
         self.find_WISE()
-        self.radius = 2.818 * q.Rsun, 0.008 * q.Rsun, '2010ApJ...708...71Y'
+        self.radius = 2.818 * q.Rsun, 0.008 * q.Rsun, 0.008 * q.Rsun, '2010ApJ...708...71Y'
         self.age = 455 * q.Myr, 13 * q.Myr, '2010ApJ...708...71Y'
         self.logg = 4.1, 0.1, '2006ApJ...645..664A'
 
