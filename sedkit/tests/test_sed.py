@@ -148,7 +148,7 @@ class TestSED(unittest.TestCase):
         """Test that a purely photometric SED can be creted"""
         s = copy.copy(self.sed)
         s.age = 455*q.Myr, 13*q.Myr
-        s.radius = 2.362*q.Rsun, 0.02*q.Rjup
+        s.radius = 2.362*q.Rsun, 0.02*q.Rjup, 0.02*q.Rjup
         s.parallax = 130.23*q.mas, 0.36*q.mas
         s.spectral_type = 'A0V'
         s.add_photometry('2MASS.J', -0.177, 0.206)
@@ -185,10 +185,10 @@ class TestSED(unittest.TestCase):
         fig = v.plot(integral=True, synthetic_photometry=True, best_fit=True)
 
     def test_no_photometry(self):
-        """Test that a purely photometric SED can be creted"""
+        """Test that a purely photometric SED can be created"""
         s = copy.copy(self.sed)
         s.age = 455*q.Myr, 13*q.Myr
-        s.radius = 2.362*q.Rsun, 0.02*q.Rjup
+        s.radius = 2.362*q.Rsun, 0.02*q.Rjup,0.02*q.Rjup
         s.parallax = 130.23*q.mas, 0.36*q.mas
         s.spectral_type = 'A0V'
         s.add_spectrum(self.spec1)
