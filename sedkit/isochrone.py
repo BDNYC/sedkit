@@ -155,10 +155,8 @@ class Isochrone:
         age = age[0], age[1].to(age[0].unit)
 
         # Check if the xval has an uncertainty
-        no_xerr = False
         if not isinstance(xval, (tuple, list)):
             xval = (xval, xval * 0)
-            no_xerr = True
 
         # Test the age range is inbounds
         if age[0] < self.ages.min() or age[0] > self.ages.max():
