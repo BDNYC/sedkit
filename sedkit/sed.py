@@ -762,7 +762,6 @@ class SED:
                   # Calculate abs_flux values
                   for n, row in enumerate(table):  
                       abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'], units=self.flux_units)
-
                       table['abs_flux'][n] = abs_flux
                       table['abs_flux_unc'][n] = abs_flux_unc
                        
