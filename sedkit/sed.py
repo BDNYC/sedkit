@@ -3082,7 +3082,6 @@ class SED:
         """
         self._validate_and_set_param('Teff', teff, q.K, True, vmin=0 * q.K, vmax=50000 * q.K)
 
-    # def _validate_and_set_param(self, param, values, units, set_uncalculated=True, trigger=[], vmin=None, vmax=None):
     def _validate_and_set_param(self, param, values, units, set_uncalculated=True, trigger=[], vmin=None, vmax=None):
         """
         Method to validate and set a calculated quantity
