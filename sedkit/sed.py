@@ -1944,7 +1944,7 @@ class SED:
 
             # Store the value
             self.radius = [radius[0].round(3), radius[1].round(3), radius[2].round(3), radius[3]] if radius is not None else radius
-            print(self.radius)
+
         # Try radius(spt) relation
         elif infer_from == 'spt':
 
@@ -2546,7 +2546,10 @@ class SED:
             self.make_sed()
 
         # Distinguish between apparent and absolute magnitude
-        pre = 'app_' if app else 'abs_'
+        if self.distance is None:
+            pre = 'app_'
+        else:
+            pre = 'app_' if app else 'abs_'
 
         # Calculate reasonable axis limits
         full_SED = getattr(self, pre + 'SED')
@@ -2601,13 +2604,11 @@ class SED:
         # Plot spectra
         if spectra and len(self.spectra) > 0:
 
-
             if (spectra == 'all' and app is False):
                 for n, spec in enumerate(self.spectra['spectrum']):
                     self.fig = spec.plot(fig=self.fig, components=True, const=(spec.flux_calibrate(self.distance).flux/spec.flux))
             elif (spectra == 'all' and app is True):
                 for n, spec in enumerate(self.spectra['spectrum']):
-                    print(const)
                     self.fig = spec.plot(fig=self.fig, components=True, const=const)
             else:
                 self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, alpha=0.8, name='spectrum', legend_label='Spectrum')
@@ -3127,7 +3128,6 @@ class SED:
 
             # Make sure it's in correct units
             if not all([u.equivalent(val, units) for val in values]):
-                print(values)
                 raise TypeError("{} values must be {}".format(param, 'unitless' if units is None else "astropy.units.quantity.Quantity of the appropriate units , e.g. '{}'".format(units)))
 
             # Ensure valid range but don't throw error
@@ -3215,7 +3215,7 @@ class VegaSED(SED):
         self.find_WISE()
         self.radius = 2.818 * q.Rsun, 0.008 * q.Rsun, 0.008 * q.Rsun, '2010ApJ...708...71Y'
         self.age = 455 * q.Myr, 13 * q.Myr, '2010ApJ...708...71Y'
-        self.logg = 4.1, 0.1, '2006ApJ...645..664A'
+        self.logg = 4.1, 0.1, 0.1, '2006ApJ...645..664A'
 
         # Get the spectrum
         self.add_spectrum(sp.Vega(snr=100))
