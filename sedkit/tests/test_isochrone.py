@@ -1,35 +1,37 @@
 """Series of unit tests for the isochrone.py module"""
 import unittest
-
+import pytest
 import astropy.units as q
 
 from .. import isochrone as iso
 from .. import utilities as u
 
 
+@pytest.mark.parametrize('xval,age,xparam,yparam', [
+    ((-4, 0.1), (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass'),  # With uncertainties
+    (-4, (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass'),  # No xparam uncertainty
+    ((-4, 0.1), 4 * q.Gyr, 'Lbol', 'mass'),  # No yparam uncertainty
+    (-4, 4 * q.Gyr, 'Lbol', 'mass')  # No xparam and yparam uncertainties
+])
+def test_evaluate( xval, age, xparam, yparam):
+    # average, lower, upper
+    """Test the evaluate method"""
+    hsa = iso.Isochrone('hybrid_solar_age')
+    result = hsa.evaluate(xval, age, xparam, yparam)
+    assert (isinstance(result, tuple)) is True
+    # assert (np.isclose(result[0],value,))
+    # try == first but if it can't happen then use isclose
+    # test the value of the y param uncertainties (the three values - lower,average and upper)
+    # test lbol to radius
+    # test lbol to logg
+    # test for different lbols and age/age ranges (cold, mid-temp, warm object)
+    # Add the three results for the three different values
+
 class TestIsochrone(unittest.TestCase):
     """Tests for the hybrid_solar_age model isochrones"""
     def setUp(self):
         # Make Spectrum class for testing
         self.hsa = iso.Isochrone('hybrid_solar_age')
-
-    def test_evaluate(self):
-        """Test the evaluate method"""
-        # With uncertainties
-        result = self.hsa.evaluate((-4, 0.1), (4*q.Gyr, 0.1*q.Gyr), 'Lbol', 'mass')
-        self.assertTrue(isinstance(result, tuple))
-
-        # No xparam uncertainty
-        result = self.hsa.evaluate(-4, (4*q.Gyr, 0.1*q.Gyr), 'Lbol', 'mass')
-        self.assertTrue(isinstance(result, tuple))
-
-        # No yparam uncertainty
-        result = self.hsa.evaluate((-4, 0.1), 4*q.Gyr, 'Lbol', 'mass')
-        self.assertTrue(isinstance(result, tuple))
-
-        # No xparam and yparam uncertainties
-        result = self.hsa.evaluate(-4, 4*q.Gyr, 'Lbol', 'mass')
-        self.assertTrue(isinstance(result, tuple))
 
     def test_interp(self):
         """Test that the model isochrone can be interpolated"""
