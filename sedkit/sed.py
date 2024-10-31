@@ -2798,62 +2798,6 @@ class SED:
         self.calculated = True
 
         return at.Table(np.asarray(rows), names=('param', 'value', 'unc', 'units'))
-    # def results(self):
-    #     """
-    #     A property for displaying the results
-    #     """
-    #     # Make the SED to get the most recent results
-    #     if not self.calculated:
-    #         self.make_sed()
-    #
-    #     # Get the params to display
-    #     params = copy(self.params)
-    #     print(params)
-    #     # Add best fits
-    #     for name, fit in self.best_fit.items():
-    #         params.append(name)
-    #
-    #     # Get the params
-    #     rows = []
-    #     for param in params:
-    #
-    #         # Get the values and format
-    #         attr = getattr(self, param, None)
-    #
-    #         if attr is None:
-    #             attr = '--'
-    #
-    #         if isinstance(attr, (tuple, list)):
-    #             val,lower_unc,upper_unc = attr[:3]
-    #             unit = val.unit if hasattr(val, 'unit') else '--'
-    #             val = val.value if hasattr(val, 'unit') else val
-    #             lower_unc = lower_unc.value if hasattr(lower_unc, 'unit') else lower_unc
-    #             upper_unc = upper_unc.value if hasattr(upper_unc, 'unit') else upper_unc
-    #             if val < 1E-3 or val > 1e5:
-    #                 val = float('{:.2e}'.format(val))
-    #                 if lower_unc is None:
-    #                     lower_unc = '--'
-    #                 else:
-    #                     lower_unc = float('{:.2e}'.format(lower_unc))
-    #                 if upper_unc is None:
-    #                     upper_unc = '--'
-    #                 else:
-    #                     upper_unc = float('{:.2e}'.format(upper_unc))
-    #             rows.append([param, val, lower_unc,upper_unc, unit])
-    #
-    #         elif isinstance(attr, (str, float, bytes, int)):
-    #             rows.append([param, attr, '--', '--','--'])
-    #
-    #         elif hasattr(attr, 'deg'):
-    #             rows.append([param, attr.deg, '--', '--','deg'])
-    #
-    #         else:
-    #             pass
-    #
-    #     # Set as calculated
-    #     self.calculated = True
-    #
-    #     return at.Table(np.asarray(rows), names=('param', 'value', 'lower_unc','upper_unc', 'units'))
 
     def run_methods(self, method_list):
         """
