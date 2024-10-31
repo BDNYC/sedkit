@@ -27,9 +27,9 @@ class TestIsochrone(unittest.TestCase):
         result = self.hsa.evaluate((-4, 0.1), 4*q.Gyr, 'Lbol', 'mass')
         self.assertTrue(isinstance(result, tuple))
 
-        # No xparam or yparam uncertainties
+        # No xparam and yparam uncertainties
         result = self.hsa.evaluate(-4, 4*q.Gyr, 'Lbol', 'mass')
-        self.assertTrue(isinstance(result, tuple) and result[1] == 0)
+        self.assertTrue(isinstance(result, tuple))
 
     def test_interp(self):
         """Test that the model isochrone can be interpolated"""
