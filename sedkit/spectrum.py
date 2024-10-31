@@ -619,7 +619,6 @@ class Spectrum:
                 uvals.append(abs(err.value - val.value))
 
             # Get 1-sigma of distribution
-            # vunc = np.max(abs(np.asarray(uvals))) * units
             vunc = np.median(abs(np.asarray(uvals))) * units
 
         return val, vunc
