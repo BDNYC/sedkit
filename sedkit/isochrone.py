@@ -330,9 +330,7 @@ class Isochrone:
         color_mapper = LinearColorMapper(palette='Viridis256',
                                          low=self.ages.min().value,
                                          high=self.ages.max().value)
-        # color_mapper = LinearColorMapper(palette='Viridis256',
-        #                                  low=.05,
-        #                                  high=.15)
+     
         color_bar = ColorBar(color_mapper=color_mapper, ticker=BasicTicker(),
                              label_standoff=5, border_line_color=None,
                              title='Age [{}]'.format(self.age_units),
