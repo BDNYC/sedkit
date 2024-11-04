@@ -2,18 +2,19 @@
 import unittest
 import pytest
 import astropy.units as q
+import numpy as np
 
 from .. import isochrone as iso
 from .. import utilities as u
 
 
 @pytest.mark.parametrize('xval,age,xparam,yparam,expected_result', [
-    ((-4, 0.1), (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass',0.072),  # With uncertainties
-    (-4, (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass',0.072),  # No xparam uncertainty
-    ((-4, 0.1), 4 * q.Gyr, 'Lbol', 'mass',0.072),  # No yparam uncertainty
-    (-4, 4 * q.Gyr, 'Lbol', 'mass',0.020)  # No xparam and yparam uncertainties
+    ((-4, 0.1), (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.072),  # With uncertainties
+    (-4, (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.072),  # No xparam uncertainty
+    ((-4, 0.1), 4 * q.Gyr, 'Lbol', 'mass', 0.072),  # No yparam uncertainty
+    (-4, 4 * q.Gyr, 'Lbol', 'mass', 0.020)  # No xparam and yparam uncertainties
 ])
-def test_evaluate( xval, age, xparam, yparam,expected_result):
+def test_evaluate(xval, age, xparam, yparam, expected_result):
     # average, lower, upper
     """Test the evaluate method"""
     hsa = iso.Isochrone('hybrid_solar_age')
