@@ -203,9 +203,9 @@ class Isochrone:
         Q2_hist = np.interp(0.50, cum_PDF_hist, cum_PDF_hist_x )    # median
         Q3_hist = np.interp(error_upper_per, cum_PDF_hist, cum_PDF_hist_x)  # upper error
 
-        # assigning units to values
-        lower_err = Q1_hist * unit
-        upper_err = Q3_hist * unit
+
+        lower_err = (Q2_hist - Q1_hist) * unit
+        upper_err = (Q3_hist - Q2_hist) * unit
         average = Q2_hist * unit
 
 
