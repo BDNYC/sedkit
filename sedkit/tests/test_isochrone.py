@@ -8,24 +8,41 @@ from .. import isochrone as iso
 from .. import utilities as u
 
 
-@pytest.mark.parametrize('xval,age,xparam,yparam,expected_result', [
-    ((-4, 0.1), (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.072),  # With uncertainties
-    (-4, (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.072),  # No xparam uncertainty
-    ((-4, 0.1), 4 * q.Gyr, 'Lbol', 'mass', 0.072),  # No yparam uncertainty
-    (-4, 4 * q.Gyr, 'Lbol', 'mass', 0.020)  # No xparam and yparam uncertainties
+@pytest.mark.parametrize('xval,age,xparam,yparam,expected_result,expected_result_low,expected_result_up', [
+    # Mass
+    ((-4, 0.1), (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.072, 0.072, 0.072),  # With uncertainties
+    (-4, (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.072, 0.072, 0.072),  # No xparam uncertainty
+    ((-4, 0.1), 4 * q.Gyr, 'Lbol', 'mass', 0.072, 0.072, 0.072),  # No yparam uncertainty
+    (-4, 4 * q.Gyr, 'Lbol', 'mass', 0.020, 0, 0.058),  # No xparam and yparam uncertainties
+    # Radius
+    ((-4, 0.1), (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'radius', 0.095, 0.095, 0.095),  # With uncertainties
+    (-4, (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'radius', 0.095, 0.095, 0.095),  # No xparam uncertainty
+    ((-4, 0.1), 4 * q.Gyr, 'Lbol', 'radius', 0.095, 0.095, 0.095),  # No yparam uncertainty
+    (-4, 4 * q.Gyr, 'Lbol', 'radius', 0.045, 0.01, 0.080),  # No xparam and yparam uncertainties
+    # Logg
+    ((-4, 0.1), (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.345, 5.34, 5.35),  # With uncertainties
+    (-4, (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.345, 5.34, 5.35),  # No xparam uncertainty
+    ((-4, 0.1), 4 * q.Gyr, 'Lbol', 'logg', 5.345, 5.34, 5.35),  # No yparam uncertainty
+    (-4, 4 * q.Gyr, 'Lbol', 'logg', 5.395, 5.36, 5.43)  # No xparam and yparam uncertainties
 ])
-def test_evaluate(xval, age, xparam, yparam, expected_result):
+def test_evaluate(xval, age, xparam, yparam, expected_result, expected_result_low, expected_result_up):
     # average, lower, upper
     """Test the evaluate method"""
     hsa = iso.Isochrone('hybrid_solar_age')
     result = hsa.evaluate(xval, age, xparam, yparam)
+    average = result[0]  # Average yparam value
+    lower = result[0] - result[1]   # Lower yparam value
+    upper = result[0] + result[2]   # Upper yparam value
     assert (isinstance(result, tuple)) is True
-    assert (np.isclose(result[0].value, expected_result, atol=0.005))
-    # assert (np.isclose(result[0],value,))
-    # try == first but if it can't happen then use isclose
-    # test the value of the y param uncertainties (the three values - lower,average and upper)
-    # test lbol to radius
-    # test lbol to logg
+    if yparam == 'logg':
+        assert (np.isclose(average, expected_result, atol=0.005))
+        assert (np.isclose(lower, expected_result_low, atol=0.01))
+        assert (np.isclose(upper, expected_result_up, atol=0.01))
+    else:
+        assert (np.isclose(average.value, expected_result, atol=0.005))
+        assert (np.isclose(lower.value, expected_result_low, atol=0.01))
+        assert (np.isclose(upper.value, expected_result_up, atol=0.01))
+
     # test for different lbols and age/age ranges (cold, mid-temp, warm object)
     # Add the three results for the three different values
 
