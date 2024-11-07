@@ -23,10 +23,17 @@ from .. import utilities as u
     ((-4, 0.1), (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.345, 5.34, 5.35),  # With uncertainties
     (-4, (4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.345, 5.34, 5.35),  # No xparam uncertainty
     ((-4, 0.1), 4 * q.Gyr, 'Lbol', 'logg', 5.345, 5.34, 5.35),  # No yparam uncertainty
-    (-4, 4 * q.Gyr, 'Lbol', 'logg', 5.395, 5.36, 5.43)  # No xparam and yparam uncertainties
+    (-4, 4 * q.Gyr, 'Lbol', 'logg', 5.395, 5.36, 5.43),  # No xparam and yparam uncertaintiesd
+    # Young age
+    ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.0515, 0.045, 0.055),   # mass with uncertainties
+    ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.08, 5.01, 5.15),   # logg with uncertainties
+    ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'radius', 0.105, 0.10, 0.11),  # radius with uncertainties
+    # Old age
+    ((-4, 0.1), (9 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.074, 0.070, 0.080),  # mass with uncertainties
+    ((-4, 0.1), (9 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.345, 5.34, 5.35),  # logg with uncertainties
+    ((-4, 0.1), (9 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'radius', 0.095, 0.09, 0.10)  # radius with uncertainties
 ])
 def test_evaluate(xval, age, xparam, yparam, expected_result, expected_result_low, expected_result_up):
-    # average, lower, upper
     """Test the evaluate method"""
     hsa = iso.Isochrone('hybrid_solar_age')
     result = hsa.evaluate(xval, age, xparam, yparam)
@@ -43,8 +50,6 @@ def test_evaluate(xval, age, xparam, yparam, expected_result, expected_result_lo
         assert (np.isclose(lower.value, expected_result_low, atol=0.01))
         assert (np.isclose(upper.value, expected_result_up, atol=0.01))
 
-    # test for different lbols and age/age ranges (cold, mid-temp, warm object)
-    # Add the three results for the three different values
 
 class TestIsochrone(unittest.TestCase):
     """Tests for the hybrid_solar_age model isochrones"""
