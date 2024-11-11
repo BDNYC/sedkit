@@ -562,7 +562,7 @@ class Spectrum:
         self._flux_units = flux_units
         self._set_units()
 
-    def integrate(self, units=None, n_samples=10):
+    def integrate(self, units=None, n_samples=1000):
         """Calculate the area under the spectrum
 
         Parameters
@@ -619,7 +619,7 @@ class Spectrum:
                 uvals.append(abs(err.value - val.value))
 
             # Get 1-sigma of distribution
-            vunc = np.max(abs(np.asarray(uvals))) * units
+            vunc = np.median(abs(np.asarray(uvals))) * units
 
         return val, vunc
 
@@ -1057,9 +1057,9 @@ class Spectrum:
         wave = wave.value
 
         # Bin the spectrum
-        print(wave, self.wave)
+
         binned = u.spectres(wave, self.wave, self.flux, self.unc)
-        print(binned[0])
+
 
         # Update the spectrum
         spectrum = [i * Q for i, Q in zip(binned, self.units)]

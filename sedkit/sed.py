@@ -8,13 +8,13 @@ and calculate fundamental and atmospheric parameters
 
 Author: Joe Filippazzo, jfilippazzo@stsci.edu
 """
-
 from copy import copy
 import os
 import shutil
 import time
 import warnings
 
+import itertools
 import astropy.table as at
 import astropy.units as q
 import astropy.io.ascii as ii
@@ -513,7 +513,7 @@ class SED:
         age: sequence
             The age and uncertainty in distance units
         """
-        self._validate_and_set_param('age', age, q.Gyr, True, vmin=0 * q.Myr, vmax=13.8 * q.Gyr)
+        self._validate_and_set_param('age', age, q.Gyr, True, vmin=0 * q.Gyr, vmax=13.8 * q.Gyr)
 
     def _calculate_sed(self):
         """
@@ -595,6 +595,7 @@ class SED:
             else:
                 Lbol_unc = Lbol * np.sqrt((self.fbol[1] / self.fbol[0]).value**2 + (2 * self.distance[1] / self.distance[0]).value**2)
                 Lbol_sun_unc = round(abs(Lbol_unc / (Lbol * np.log(10))).value, 3)
+
 
             # Update the attributes
             self.Lbol = Lbol, Lbol_unc, 'This Work'
@@ -711,9 +712,10 @@ class SED:
                 Teff_unc = None
             else:
                 Teff_unc = (Teff * np.sqrt((self.Lbol[1] / self.Lbol[0]).value**2 + (2 * self.radius[1] / self.radius[0]).value**2) / 4.).astype(int)
+                Teff_unc_u = (Teff * np.sqrt((self.Lbol[1] / self.Lbol[0]).value**2 + (2 * self.radius[2] / self.radius[0]).value**2) / 4.).astype(int)
 
             # Update the attribute
-            self.Teff = Teff, Teff_unc, 'This Work'
+            self.Teff = Teff, Teff_unc,Teff_unc_u, 'This Work'
 
     def _calibrate_photometry(self, name='photometry'):
         """
@@ -750,19 +752,19 @@ class SED:
 
                 # Calculate absolute mags and fluxes
                 if self.distance is not None:
+            
+                  # Calculate abs_mags
+                  for n,row in enumerate(table):
+                      M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance[0], row['app_magnitude_unc'], self.distance[1])
+                      table['abs_magnitude'][n] = M
+                      table['abs_magnitude_unc'][n] = M_unc
 
-                    for n, row in enumerate(table):
-
-                        # Calculate abs_mags
-                        M, M_unc = u.flux_calibrate(row['app_magnitude'], self.distance[0], row['app_magnitude_unc'], self.distance[1])
-                        table['abs_magnitude'][n] = M
-                        table['abs_magnitude_unc'][n] = M_unc
-
-                        # Calculate abs_flux values
-                        abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'], units=self.flux_units)
-                        table['abs_flux'][n] = abs_flux
-                        table['abs_flux_unc'][n] = abs_flux_unc
-
+                  # Calculate abs_flux values
+                  for n, row in enumerate(table):  
+                      abs_flux, abs_flux_unc = u.mag2flux(row['bandpass'], row['abs_magnitude'], sig_m=row['abs_magnitude_unc'], units=self.flux_units)
+                      table['abs_flux'][n] = abs_flux
+                      table['abs_flux_unc'][n] = abs_flux_unc
+                       
             # Store the table
             setattr(self, '_{}'.format(name), table)
 
@@ -1103,13 +1105,14 @@ class SED:
         # Absolute spectral SED
         if self.abs_spec_SED is not None:
             specpath = os.path.join(dirpath, '{}_absolute_SED.txt'.format(name))
-            header = '{} absolute spectrum (erg/s/cm2/A) as a function of wavelength (um)'.format(name)
+            header = '{} absolute spectrum (erg/s/cm2/A) at 10 pc as a function of wavelength (um)'.format(name)
             self.abs_spec_SED.export(specpath, header=header)
 
         # All photometry
         if self.photometry is not None:
             photpath = os.path.join(dirpath, '{}_photometry.txt'.format(name))
             phot_table = copy(self.photometry)
+            # print(phot_table)
             for colname in phot_table.colnames:
                 phot_table.rename_column(colname, colname.replace('/', '_'))
             phot_table.write(photpath, format='ipac')
@@ -1820,8 +1823,7 @@ class SED:
                 self.message("Could not calculate surface gravity.")
 
             # Store the value
-            self.logg = [logg[0].round(2), logg[1].round(2), logg[2]] if logg is not None else logg
-
+            self.logg = [logg[0].round(2), logg[1].round(2),logg[2].round(2),logg[3]] if logg is not None else logg
         # No dice
         else:
             self.message('Could not calculate logg without Lbol and age')
@@ -1856,7 +1858,7 @@ class SED:
                 mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', plot=plot)
 
             # Store the value
-            self.mass = [mass[0].round(3), mass[1].round(3), mass[2]] if mass is not None else mass
+            self.mass = [mass[0].round(0),  mass[1].round(0), mass[2].round(0), mass[3]] if mass is not None else mass
 
         else:
 
@@ -1883,7 +1885,7 @@ class SED:
                 self.message('Could not calculate mass without Lbol, M_2MASS.J, or M_2MASS.Ks')
 
 
-    def infer_radius(self, radius_units=q.Rsun, infer_from=None, plot=False):
+    def infer_radius(self, radius_units=q.Rsun, infer_from='Lbol', plot=False):
         """
         Estimate the radius from model isochrones given an age and Lbol
 
@@ -1940,7 +1942,7 @@ class SED:
                 radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
 
             # Store the value
-            self.radius = [radius[0].round(3), radius[1].round(3), radius[2]] if radius is not None else radius
+            self.radius = [radius[0].round(3), radius[1].round(3), radius[2].round(3), radius[3]] if radius is not None else radius
 
         # Try radius(spt) relation
         elif infer_from == 'spt':
@@ -2043,7 +2045,7 @@ class SED:
                 teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
 
             # Store the value
-            self.Teff = [teff[0].round(0), teff[1].round(0), teff[2]] if teff is not None else teff
+            self.Teff = [teff[0].round(0), teff[1].round(0), teff[2].round(0), teff[3]] if teff is not None else teff
 
         else:
 
@@ -2497,9 +2499,9 @@ class SED:
         self._photometry.sort('eff')
         return self._photometry
 
-    def plot(self, app=True, photometry=True, spectra=True, integral=True, synthetic_photometry=False,
+    def plot(self, app=False, photometry=True, spectra=True, integral=True, synthetic_photometry=False,
              best_fit=True, normalize=None, scale=['log', 'log'], output=False, fig=None,
-             color='#1f77b4', one_color=False, label=None, **kwargs):
+             color='#3a243b', one_color=False, label=None, **kwargs):
         """
         Plot the SED
 
@@ -2543,7 +2545,10 @@ class SED:
             self.make_sed()
 
         # Distinguish between apparent and absolute magnitude
-        pre = 'app_' if app else 'abs_'
+        if self.distance is None:
+            pre = 'app_'
+        else:
+            pre = 'app_' if app else 'abs_'
 
         # Calculate reasonable axis limits
         full_SED = getattr(self, pre + 'SED')
@@ -2586,7 +2591,8 @@ class SED:
 
         # ...or make a new plot
         else:
-            TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
+            # TOOLS = ['pan', 'reset', 'box_zoom', 'wheel_zoom', 'save']
+            TOOLS = ['pan', 'reset', 'box_zoom', 'save']
             xlab = 'Wavelength [{}]'.format(self.wave_units)
             ylab = 'Flux Density [{}]'.format(str(self.flux_units))
             self.fig = figure(width=900, height=400, title=self.name,
@@ -2597,14 +2603,12 @@ class SED:
         # Plot spectra
         if spectra and len(self.spectra) > 0:
 
-            if spectra == 'all':
-
+            if (spectra == 'all' and app is False):
                 for n, spec in enumerate(self.spectra['spectrum']):
-
-                    # Normalize to the integral
-                    norm_spec = spec.norm_to_spec(full_SED)
-                    self.fig.line(norm_spec.wave, norm_spec.flux * const, color=next(COLORS), alpha=0.8, name='spectra', legend_label=spec.name)
-
+                    self.fig = spec.plot(fig=self.fig, components=True, const=(spec.flux_calibrate(self.distance).flux/spec.flux))
+            elif (spectra == 'all' and app is True):
+                for n, spec in enumerate(self.spectra['spectrum']):
+                    self.fig = spec.plot(fig=self.fig, components=True, const=const)
             else:
                 self.fig.line(spec_SED.wave, spec_SED.flux * const, color=color, alpha=0.8, name='spectrum', legend_label='Spectrum')
 
@@ -2613,29 +2617,36 @@ class SED:
 
             # Set up hover tool
             phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
-            # hover = HoverTool(name=['photometry', 'nondetection'], tooltips=phot_tips)
-            hover = HoverTool(name='photometry', tooltips=phot_tips)
-            self.fig.add_tools(hover)
 
             # Plot points with errors
             pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if not any([(np.isnan(i) or i <= 0) for i in [wav, flx, err]])], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
-                self.fig.circle('x', 'y', source=source, legend_label='Photometry', name='photometry', color=color, fill_alpha=0.7, size=8)
+                c1 = self.fig.circle('x', 'y', source=source, legend_label='Photometry', name='photometry', color='#a64d79', fill_alpha=0.7, size=8)
+                self.fig.circle('x', 'y', source=source, legend_label='Photometry', name='photometry', color='#a64d79', fill_alpha=0.7, size=8)
                 self.fig = u.errorbars(self.fig, 'x', 'y', yerr='z', source=source, color=color)
+                hover = HoverTool(tooltips=phot_tips, renderers=[c1])
+                self.fig.add_tools(hover)
+
+
 
             # Plot points without errors
             pts = np.array([(bnd, wav, flx * const, err * const) for bnd, wav, flx, err in np.array(self.photometry['band', 'eff', pre + 'flux', pre + 'flux_unc']) if (np.isnan(err) or err <= 0) and not np.isnan(flx)], dtype=[('desc', 'S20'), ('x', float), ('y', float), ('z', float)])
             if len(pts) > 0:
                 source = ColumnDataSource(data=dict(x=pts['x'], y=pts['y'], z=pts['z'], desc=[b.decode("utf-8") for b in pts['desc']]))
+                c2 = self.fig.circle('x', 'y', source=source, legend_label='Limit', name='nondetection', color=color,fill_alpha=0, size=8)
                 self.fig.circle('x', 'y', source=source, legend_label='Limit', name='nondetection', color=color, fill_alpha=0, size=8)
+                hover1 = HoverTool(tooltips=phot_tips, renderers=[c2])
+                self.fig.add_tools(hover1)
+
 
         # Plot photometry
         if synthetic_photometry and len(self.synthetic_photometry) > 0:
 
             # Set up hover tool
-            phot_tips = [('Band', '@desc'), ('Wave', '@x'), ('Flux', '@y'), ('Unc', '@z')]
-            hover = HoverTool(name='synthetic photometry', tooltips=phot_tips)
+            phot_tips = [('Band', '@{desc}'), ('Wave', '@{x}'), ('Flux', '@{y}'), ('Unc', '@{z}')]
+            hover = HoverTool(name='synthetic photometry', tooltips=phot_tips, mode='vline')
+
             self.fig.add_tools(hover)
 
             # Plot points with errors
@@ -2657,9 +2668,9 @@ class SED:
                 mod = mod_fit['full_model']
                 mod.wave_units = self.wave_units
                 if mod_fit['fit_to'] == 'phot':
-                    self.fig.square(mod.wave, mod.flux, alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], name='best_fit_phot', size=12)
+                    self.fig.square(mod.wave, mod.flux, alpha=0.9, color=color if one_color else next(col_list), legend_label=mod_fit['label'], size=12)
                 else:
-                    self.fig.line(mod.wave, mod.flux, alpha=0.3, color=color if one_color else next(col_list), legend_label=mod_fit['label'], name='best_fit_spec', line_width=2)
+                    self.fig.line(mod.wave, mod.flux, alpha=0.9, color=color if one_color else next(col_list), legend_label=mod_fit['label'], line_width=2)
 
         self.fig.legend.location = "top_right"
         self.fig.legend.click_policy = "hide"
@@ -2737,25 +2748,42 @@ class SED:
         # Get the params
         rows = []
         for param in params:
-
             # Get the values and format
             attr = getattr(self, param, None)
-
             if attr is None:
                 attr = '--'
-
+            # error = '$ ^{+0.004}_{-0.004}$'
             if isinstance(attr, (tuple, list)):
-                val, unc = attr[:2]
-                unit = val.unit if hasattr(val, 'unit') else '--'
-                val = val.value if hasattr(val, 'unit') else val
-                unc = unc.value if hasattr(unc, 'unit') else unc
-                if val < 1E-3 or val > 1e5:
-                    val = float('{:.2e}'.format(val))
-                    if unc is None:
-                        unc = '--'
+                if ((param == 'logg') or (param =='mass') or (param == 'radius') or (param == 'Teff')):
+                    val = attr[0]
+                    lower_err = attr[1]
+                    upper_err = attr[2]
+                    unit = val.unit if hasattr(val, 'unit') else '--'
+                    val = val.value if hasattr(val, 'unit') else val
+                    unc_l = lower_err.value * -1 if hasattr(lower_err, 'unit') else lower_err * -1
+                    unc_u = upper_err.value if hasattr(upper_err, 'unit') else upper_err
+                    if val < 1E-3 or val > 1e5:
+                        if param == 'mass':
+                            val = float('{:.0f}'.format(val))
+                            unc =  str('{:+.0f}'.format(unc_l) + ' ' + '{:+.0f}'.format(unc_u))
+                        else:
+                            val = float('{:.2e}'.format(val))
+                            unc = str('{:-.2e}'.format(unc_l) + ' ' + '{:+.2e}'.format(unc_u))
                     else:
-                        unc = float('{:.2e}'.format(unc))
-                rows.append([param, val, unc, unit])
+                        unc = str('{:-.2f}'.format(unc_l) + ' ' + '{:+.2f}'.format(unc_u))
+                    rows.append([param, val, unc, unit])
+                else:
+                    val, unc = attr[:2]
+                    unit = val.unit if hasattr(val, 'unit') else '--'
+                    val = val.value if hasattr(val, 'unit') else val
+                    unc = unc.value if hasattr(unc, 'unit') else unc
+                    if val < 1E-3 or val > 1e5:
+                        val = float('{:.2e}'.format(val))
+                        if unc is None:
+                            unc = '--'
+                        else:
+                            unc = float('{:.2e}'.format(unc))
+                    rows.append([param, val, unc, unit])
 
             elif isinstance(attr, (str, float, bytes, int)):
                 rows.append([param, attr, '--', '--'])
@@ -3029,7 +3057,6 @@ class SED:
             self.message("Setting {} to 'None'".format(param))
 
         else:
-
             # If the last value is string, it's the reference
             if isinstance(values[-1], str):
                 ref = values[-1]
@@ -3038,7 +3065,7 @@ class SED:
                 ref = None
 
             # Make sure it's a sequence
-            if not u.issequence(values, length=[2, 3]):
+            if not u.issequence(values, length=[2, 3, 4, 5]):
                 raise TypeError("{} must be a sequence of (value, error) or (value, lower_error, upper_error).".format(param))
 
             # Make sure it's in correct units
@@ -3046,8 +3073,11 @@ class SED:
                 raise TypeError("{} values must be {}".format(param, 'unitless' if units is None else "astropy.units.quantity.Quantity of the appropriate units , e.g. '{}'".format(units)))
 
             # Ensure valid range but don't throw error
+
             vmin = vmin if vmin is not None else -np.inf * (1 if units is None else units)
             vmax = vmax if vmax is not None else np.inf * (1 if units is None else units)
+
+
             if (values[0] < vmin) or (values[0] > vmax):
                 self.message("{}: {} value is not in valid range [{}, {}].".format(values, param, vmin, vmax))
 
@@ -3125,9 +3155,9 @@ class VegaSED(SED):
         self.find_SDSS()
         self.find_2MASS()
         self.find_WISE()
-        self.radius = 2.818 * q.Rsun, 0.008 * q.Rsun, '2010ApJ...708...71Y'
+        self.radius = 2.818 * q.Rsun, 0.008 * q.Rsun, 0.008 * q.Rsun, '2010ApJ...708...71Y'
         self.age = 455 * q.Myr, 13 * q.Myr, '2010ApJ...708...71Y'
-        self.logg = 4.1, 0.1, '2006ApJ...645..664A'
+        self.logg = 4.1, 0.1, 0.1, '2006ApJ...645..664A'
 
         # Get the spectrum
         self.add_spectrum(sp.Vega(snr=100))
