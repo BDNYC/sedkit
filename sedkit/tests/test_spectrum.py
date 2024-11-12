@@ -145,6 +145,16 @@ class TestSpectrum(unittest.TestCase):
         self.assertAlmostEqual(fbol[0].value, 4000, places=1)
         self.assertNotEqual(str(fbol[1].value), 'nan')
 
+    def test_flux_calibrate(self):
+        """ Test that flux calibrate is working properly"""
+        # 1 parsec Distance
+        close_distance = 1 * q.pc
+        abs_sed = self.flat1.flux_calibrate(close_distance)
+
+        # 15 parsec Distance
+        far_distance = 15 * q.pc
+        abs_sed = self.flat1.flux_calibrate(far_distance)
+
     def test_interpolate(self):
         """Test interpolate method"""
         spec1 = self.flat1
