@@ -147,13 +147,13 @@ class TestSpectrum(unittest.TestCase):
 
     def test_flux_calibrate(self):
         """ Test that flux calibrate is working properly"""
-        # 1 parsec Distance
-        close_distance = 1 * q.pc
-        abs_sed = self.flat1.flux_calibrate(close_distance)
+        # 1 parsec Distance with unc
+        close_distance = 1 * q.pc, 0.05 * q.pc
+        abs_sed = sp.Spectrum.flux_calibrate(self.flat1, close_distance)
 
-        # 15 parsec Distance
-        far_distance = 15 * q.pc
-        abs_sed = self.flat1.flux_calibrate(far_distance)
+        # 15 parsec Distance with unc
+        far_distance = 15 * q.pc, 5 * q.pc
+        abs_sed = sp.Spectrum.flux_calibrate(self.flat1, far_distance)
 
     def test_interpolate(self):
         """Test interpolate method"""
