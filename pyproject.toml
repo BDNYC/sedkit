@@ -38,6 +38,8 @@ dependencies = [
 dynamic = ["version"]
 readme = "README.md"
 
+[tool.setuptools_scm]
+
 [project.optional-dependencies]
 test = [
     "pytest",
