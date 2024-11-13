@@ -3,6 +3,8 @@
 [![Build Status](https://github.com/hover2pi/sedkit/actions/workflows/ci.yml/badge.svg)](https://github.com/hover2pi/sedkit/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/hover2pi/sedkit/badge.svg?branch=master&service=github)](https://coveralls.io/github/hover2pi/sedkit?branch=master)
 [![Documentation Status](https://readthedocs.org/projects/sedkit/badge/?version=latest)](https://sedkit.readthedocs.io/en/latest/?badge=latest)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14014658.svg)](https://doi.org/10.5281/zenodo.14014658)
+
 
 ## Introduction
 
@@ -14,16 +16,6 @@ Install via PyPI with
 
 ```
 pip install sedkit
-```
-
-or via `conda` with
-
-```
-git clone https://github.com/hover2pi/sedkit.git
-cd sedkit
-conda env create -f env/environment-3.11.yml --force
-conda activate sedkit
-python setup.py install
 ```
 
 ## Demo
@@ -201,7 +193,7 @@ trap1.evo_model = 'DUSTY00'
 trap1.infer_mass()
 ```
 
-<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_mass.png" height="400">
+<img src="https://github.com/bdnyc/sedkit/blob/master/sedkit/data/figures/Lbol_v_mass.png" height="400">
 
 A variety of atmospheric model grids can be fit to the data with or without MCMC analysis,
 
@@ -223,13 +215,13 @@ Inspect the SED at any time with the interactive plotting method.
 trap1.plot(integral=True, best_fit=True)
 ```
 
-<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/sed_plot.png" height="500">
+<img src="https://github.com/bdnyc/sedkit/blob/master/sedkit/data/figures/sed_plot.png" height="500">
 
 References for all data can be accessed via the `refs` attribute.
 
 Entire catalogs of `SED` objects can also be created and their properties can be arbitrarily compared and analyzed with the `sedkit.catalog.Catalog()` object.
 
-<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_SpT.png" height="500">
+<img src="https://github.com/bdnyc/sedkit/blob/master/sedkit/data/figures/Lbol_v_SpT.png" height="500">
 
 Please read the full documentation for details on this functionality and much more.
 
@@ -239,12 +231,6 @@ Full documentation for the latest build can be found on [ReadTheDocs](https://se
 
 The package also contains detailed Jupyter notebooks highlighting the core functionality of its primary classes, including
 
-- [sedkit.spectrum.Spectrum](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/working_with_spectra.ipynb)
-- [sedkit.sed.SED](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_sed.ipynb)
-- [sedkit.catalog.Catalog](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_catalog.ipynb)
-
-If you use or reference this software, please cite [Filippazzo et al. (submitted to PASP)]()
-
-## Licensed
-
-This project is Copyright (c) Joe Filippazzo and licensed under the terms of the BSD 3-Clause license. See the licenses folder for more information.
+- [sedkit.spectrum.Spectrum](https://github.com/bdnyc/sedkit/blob/master/sedkit/notebooks/working_with_spectra.ipynb)
+- [sedkit.sed.SED](https://github.com/bdnyc/sedkit/blob/master/sedkit/notebooks/create_sed.ipynb)
+- [sedkit.catalog.Catalog](https://github.com/bdnyc/sedkit/blob/master/sedkit/notebooks/create_catalog.ipynb)
