@@ -1,0 +1,13 @@
+authors:
+- affiliation: Space Telescope Science Institute
+  family-names: Joe Filippazzo
+- affiliation: CUNY Hunter College
+  family-names: Kelle Cruz
+- family-names: Sherelyn Alejandro Merchan
+cff-version: 1.2.0
+doi: 10.5281/zenodo.14014658
+license:
+- cc-by-4.0
+repository-code: https://github.com/BDNYC/sedkit/
+title: 'sedkit'
+type: software
