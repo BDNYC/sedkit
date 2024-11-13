@@ -1,5 +1,6 @@
 """A suite of tests for the spectrum.py module"""
 import unittest
+import pytest
 import copy
 import importlib_resources
 
@@ -71,6 +72,7 @@ class TestSpectrum(unittest.TestCase):
         self.assertEqual(s.spectrum[1].unit, fu)
         self.assertEqual(s.spectrum[2].unit, fu)
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_model_fit(self):
         """Test that a model grid can be fit"""
         # Empty fit results
