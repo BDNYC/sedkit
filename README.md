@@ -13,14 +13,14 @@
 
 ## Installation
 
-Install in an environment with at least Python 3.11
+Install in an environment with Python 3.11 or 3.12.
 
 ```
 pip install sedkit
 ```
 ### Developer Instructions
 
-If you plan to modify and/or contribute to the code, install an editable version of the package and the requirements for running the tests.
+If you plan to modify and/or contribute to the code, clone the repository and then install an editable version of the package and the requirements for running the tests.
 
 ```
 pip install -e ".[test]"
