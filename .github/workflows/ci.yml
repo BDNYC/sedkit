@@ -1,4 +1,4 @@
-name: CI
+name: Run tests
 
 on: 
   pull_request:
@@ -10,12 +10,11 @@ jobs:
   SEDkit-CI:
 
     name: Python - ${{ matrix.python-version }}
+    runs-on: macos-latest    
     strategy:
       max-parallel: 5
       matrix:
-        os: ['macos-latest']
         python-version: [ '3.11',"3.12","3.13" ]
-    runs-on:  ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
