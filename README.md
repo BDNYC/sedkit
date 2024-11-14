@@ -10,6 +10,7 @@
 
 `sedkit` is a collection of pure Python modules for simple SED construction and analysis. Users can create individual SEDs or SED catalogs from spectra and/or photometry and calculate fundamental parameters (f<sub>bol</sub>, M<sub>bol</sub>, L<sub>bol</sub>, T<sub>eff</sub>, mass, log(g)) using the methods presented in [Filippazzo et al. (2015)](http://adsabs.harvard.edu/abs/2015ApJ...810..158F) and described in the documentation: https://sedkit.readthedocs.io/.
 
+
 ## Installation
 
 Install via PyPI with
@@ -195,12 +196,11 @@ trap1.infer_mass()
 
 <img src="sedkit/data/figures/Lbol_v_mass.png" height="400">
 
-# A variety of atmospheric model grids can be fit to the data with or without MCMC analysis,
-#
-# ```python
-# from sedkit import BTSettl
-# trap1.fit_modelgrid(BTSettl(), mcmc=True)
-# ```
+<!-- A variety of atmospheric model grids can be fit to the data with or without MCMC analysis,
+```python
+from sedkit import BTSettl
+trap1.fit_modelgrid(BTSettl(), mcmc=True)
+``` -->
 
 Any arbitrary atlas of models (stored in `data\models\atmospheric`) can be used to fit the data with or without MCMC analysis. 
 
