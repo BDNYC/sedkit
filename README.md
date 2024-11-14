@@ -13,7 +13,7 @@
 
 ## Installation
 
-Install via PyPI with
+Install in an environment with at least Python 3.11
 
 ```
 pip install sedkit
