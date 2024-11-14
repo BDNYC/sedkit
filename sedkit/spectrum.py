@@ -11,7 +11,7 @@ from itertools import groupby
 from operator import itemgetter
 from multiprocessing import Pool
 import os
-from pkg_resources import resource_filename
+import importlib.resources
 
 import astropy.constants as ac
 import astropy.units as q
@@ -1523,7 +1523,7 @@ class Vega(Spectrum):
             The desired flux units
         """
         # Get the data and apply units
-        vega_file = resource_filename('sedkit', 'data/STScI_Vega.txt')
+        vega_file = str(importlib.resources.files('sedkit')/ 'data/STScI_Vega.txt')
         ref = '2007ASPC..364..315B, 2004AJ....127.3508B, 2005MSAIS...8..189K'
         wave, flux = np.genfromtxt(vega_file, unpack=True)
         wave *= q.AA
