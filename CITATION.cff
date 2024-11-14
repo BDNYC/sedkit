@@ -1,13 +1,17 @@
 authors:
-- affiliation: Space Telescope Science Institute
-  family-names: Joe Filippazzo
-- affiliation: CUNY Hunter College
-  family-names: Kelle Cruz
-- family-names: Sherelyn Alejandro Merchan
+- family-names: Filippazzo
+  given-names: Joseph
+  orcid: https://orcid.org/0000-0002-0201-8306
+- family-names: Alejandro Merchan
+  given-names: Sherelyn
+  orcid: https://orcid.org/0000-0003-0548-0093
+- family-names: Cruz
+  given-names: Kelle
+  orcid: https://orcid.org/0000-0002-1821-0650
 cff-version: 1.2.0
 doi: 10.5281/zenodo.14014658
-license:
-- cc-by-4.0
 repository-code: https://github.com/BDNYC/sedkit/
 title: 'sedkit'
 type: software
+message: "If you use this software, please cite the Zenodo record"
+license: BSD-3-Clause

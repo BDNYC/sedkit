@@ -234,3 +234,11 @@ The package also contains detailed Jupyter notebooks highlighting the core funct
 - [sedkit.spectrum.Spectrum](sedkit/notebooks/working_with_spectra.ipynb)
 - [sedkit.sed.SED](sedkit/notebooks/create_sed.ipynb)
 - [sedkit.catalog.Catalog](sedkit/notebooks/create_catalog.ipynb)
+
+## Developer Instructions
+
+If you plan to modify and/or contribute to the code, install an editable version of the package and the requirements for running the tests.
+
+```
+pip install sedkit -e .[test]
+```
