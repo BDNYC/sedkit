@@ -10,7 +10,7 @@ jobs:
   SEDkit-CI:
 
     name: Python - ${{ matrix.python-version }}
-    runs-on: macos-latest    
+    runs-on: ubuntu-latest    
     strategy:
       max-parallel: 5
       matrix:
