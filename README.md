@@ -8,7 +8,7 @@
 
 ## Introduction
 
-`sedkit` is a collection of pure Python modules for simple SED construction and analysis. Users can create individual SEDs or SED catalogs from spectra and/or photometry and calculate fundamental parameters (f<sub>bol</sub>, M<sub>bol</sub>, L<sub>bol</sub>, T<sub>eff</sub>, mass, log(g)) using the methods presented in [Filippazzo et al. (2015)](http://adsabs.harvard.edu/abs/2015ApJ...810..158F).
+`sedkit` is a collection of pure Python modules for simple SED construction and analysis. Users can create individual SEDs or SED catalogs from spectra and/or photometry and calculate fundamental parameters (f<sub>bol</sub>, M<sub>bol</sub>, L<sub>bol</sub>, T<sub>eff</sub>, mass, log(g)) using the methods presented in [Filippazzo et al. (2015)](http://adsabs.harvard.edu/abs/2015ApJ...810..158F) and described in the documentation: https://sedkit.readthedocs.io/.
 
 ## Installation
 
@@ -195,18 +195,18 @@ trap1.infer_mass()
 
 <img src="sedkit/data/figures/Lbol_v_mass.png" height="400">
 
-A variety of atmospheric model grids can be fit to the data with or without MCMC analysis,
+# A variety of atmospheric model grids can be fit to the data with or without MCMC analysis,
+#
+# ```python
+# from sedkit import BTSettl
+# trap1.fit_modelgrid(BTSettl(), mcmc=True)
+# ```
 
-```python
-from sedkit import BTSettl
-trap1.fit_modelgrid(BTSettl(), mcmc=True)
-```
-
-And any arbitrary atlas of models can be applied as well.
+Any arbitrary atlas of models (stored in `data\models\atmospheric`) can be used to fit the data with or without MCMC analysis. 
 
 ```python
 from sedkit import SpexPrismLibrary
-trap1.fit_modelgrid(SpexPrismLibrary())
+trap1.fit_modelgrid(SpexPrismLibrary(), mcmc=True)
 ```
 
 Inspect the SED at any time with the interactive plotting method.
@@ -223,11 +223,11 @@ Entire catalogs of `SED` objects can also be created and their properties can be
 
 <img src="sedkit/data/figures/Lbol_v_SpT.png" height="500">
 
-Please read the full documentation for details on this functionality and much more.
+Please read the [full documentation](https://sedkit.readthedocs.io/en/latest/) for details on this functionality and much more.
 
-## Documentation
+## Documentation and Notebooks
 
-Full documentation for the latest build can be found on [ReadTheDocs](https://sedkit.readthedocs.io/en/latest/).
+Full documentation is available: https://sedkit.readthedocs.io/.
 
 The package also contains detailed Jupyter notebooks highlighting the core functionality of its primary classes, including
 
