@@ -34,6 +34,7 @@ jobs:
           pip list
 
       - name: Test with pytest
-        run: |
-          pytest  
-        # pytest --tb=no --disable-warnings
+        # tb=no: no traceback
+        # disable-warnings: disable pytest warnings
+        run: |  
+          pytest --tb=no --disable-warnings
