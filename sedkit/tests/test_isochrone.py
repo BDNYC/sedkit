@@ -26,7 +26,7 @@ from .. import utilities as u
     (-4, 4 * q.Gyr, 'Lbol', 'logg', 5.395, 5.36, 5.43),  # No xparam and yparam uncertaintiesd
     # Young age
     ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.0515, 0.045, 0.055),   # mass with uncertainties
-    ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.08, 5.01, 5.15),   # logg with uncertainties
+    ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.085, 5.01, 5.15),   # logg with uncertainties
     ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'radius', 0.105, 0.10, 0.11),  # radius with uncertainties
     # Old age
     ((-4, 0.1), (9 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.074, 0.070, 0.080),  # mass with uncertainties

@@ -16,15 +16,6 @@ Install via PyPI with
 
     pip install sedkit
 
-or via ``conda`` with
-
-.. code::
-
-    git clone https://github.com/hover2pi/sedkit.git
-    cd sedkit
-    conda env create -f environment.yml --force
-    conda activate sedkit
-    python setup.py install
 
 Contents
 ========

@@ -3,27 +3,27 @@
 [![Build Status](https://github.com/hover2pi/sedkit/actions/workflows/ci.yml/badge.svg)](https://github.com/hover2pi/sedkit/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/hover2pi/sedkit/badge.svg?branch=master&service=github)](https://coveralls.io/github/hover2pi/sedkit?branch=master)
 [![Documentation Status](https://readthedocs.org/projects/sedkit/badge/?version=latest)](https://sedkit.readthedocs.io/en/latest/?badge=latest)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14014658.svg)](https://doi.org/10.5281/zenodo.14014658)
+
 
 ## Introduction
 
-`sedkit` is a collection of pure Python modules for simple SED construction and analysis. Users can create individual SEDs or SED catalogs from spectra and/or photometry and calculate fundamental parameters (f<sub>bol</sub>, M<sub>bol</sub>, L<sub>bol</sub>, T<sub>eff</sub>, mass, log(g)) using the methods presented in [Filippazzo et al. (2015)](http://adsabs.harvard.edu/abs/2015ApJ...810..158F).
+`sedkit` is a collection of pure Python modules for simple SED construction and analysis. Users can create individual SEDs or SED catalogs from spectra and/or photometry and calculate fundamental parameters (f<sub>bol</sub>, M<sub>bol</sub>, L<sub>bol</sub>, T<sub>eff</sub>, mass, log(g)) using the methods presented in [Filippazzo et al. (2015)](http://adsabs.harvard.edu/abs/2015ApJ...810..158F) and described in the documentation: https://sedkit.readthedocs.io/.
+
 
 ## Installation
 
-Install via PyPI with
+Install in an environment with Python 3.11 or 3.12.
 
 ```
 pip install sedkit
 ```
+### Developer Instructions
 
-or via `conda` with
+If you plan to modify and/or contribute to the code, clone the repository and then install an editable version of the package and the requirements for running the tests.
 
 ```
-git clone https://github.com/hover2pi/sedkit.git
-cd sedkit
-conda env create -f env/environment-3.11.yml --force
-conda activate sedkit
-python setup.py install
+pip install -e ".[test]"
 ```
 
 ## Demo
@@ -58,7 +58,7 @@ Spectrum arrays or ASCII/FITS files can also be added to the SED data.
 from pkg_resources import resource_filename
 spec_file = resource_filename('sedkit', 'data/Trappist-1_NIR.fits')
 import astropy.units as u
-trap1.add_spectrum_file(spec_file, wave_units=u.um, flux_units=u.erg/u.s/q.cm**2/u.AA)
+trap1.add_spectrum_file(spec_file, wave_units=u.um, flux_units=u.erg/u.s/u.cm**2/u.AA)
 ```
 
 Other data which may affect the calculated and inferred fundamantal parameters can be set at any time.
@@ -201,20 +201,19 @@ trap1.evo_model = 'DUSTY00'
 trap1.infer_mass()
 ```
 
-<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_mass.png" height="400">
+<img src="sedkit/data/figures/Lbol_v_mass.png" height="400">
 
-A variety of atmospheric model grids can be fit to the data with or without MCMC analysis,
-
+<!-- A variety of atmospheric model grids can be fit to the data with or without MCMC analysis,
 ```python
 from sedkit import BTSettl
 trap1.fit_modelgrid(BTSettl(), mcmc=True)
-```
+``` -->
 
-And any arbitrary atlas of models can be applied as well.
+Any arbitrary atlas of models (stored in `data\models\atmospheric`) can be used to fit the data with or without MCMC analysis. 
 
 ```python
 from sedkit import SpexPrismLibrary
-trap1.fit_modelgrid(SpexPrismLibrary())
+trap1.fit_modelgrid(SpexPrismLibrary(), mcmc=True)
 ```
 
 Inspect the SED at any time with the interactive plotting method.
@@ -223,28 +222,22 @@ Inspect the SED at any time with the interactive plotting method.
 trap1.plot(integral=True, best_fit=True)
 ```
 
-<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/sed_plot.png" height="500">
+<img src="sedkit/data/figures/sed_plot.png" height="500">
 
 References for all data can be accessed via the `refs` attribute.
 
 Entire catalogs of `SED` objects can also be created and their properties can be arbitrarily compared and analyzed with the `sedkit.catalog.Catalog()` object.
 
-<img src="https://github.com/hover2pi/sedkit/blob/master/sedkit/data/figures/Lbol_v_SpT.png" height="500">
+<img src="sedkit/data/figures/Lbol_v_SpT.png" height="500">
 
-Please read the full documentation for details on this functionality and much more.
+Please read the [full documentation](https://sedkit.readthedocs.io/en/latest/) for details on this functionality and much more.
 
-## Documentation
+## Documentation and Notebooks
 
-Full documentation for the latest build can be found on [ReadTheDocs](https://sedkit.readthedocs.io/en/latest/).
+Full documentation is available: https://sedkit.readthedocs.io/.
 
 The package also contains detailed Jupyter notebooks highlighting the core functionality of its primary classes, including
 
-- [sedkit.spectrum.Spectrum](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/working_with_spectra.ipynb)
-- [sedkit.sed.SED](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_sed.ipynb)
-- [sedkit.catalog.Catalog](https://github.com/hover2pi/sedkit/blob/master/sedkit/notebooks/create_catalog.ipynb)
-
-If you use or reference this software, please cite [Filippazzo et al. (submitted to PASP)]()
-
-## Licensed
-
-This project is Copyright (c) Joe Filippazzo and licensed under the terms of the BSD 3-Clause license. See the licenses folder for more information.
+- [sedkit.spectrum.Spectrum](sedkit/notebooks/working_with_spectra.ipynb)
+- [sedkit.sed.SED](sedkit/notebooks/create_sed.ipynb)
+- [sedkit.catalog.Catalog](sedkit/notebooks/create_catalog.ipynb)
