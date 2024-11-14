@@ -4,7 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sedkit"
-
 authors = [
     {name = "Joe Filippazzo", email = "jfilippazzo@stsci.edu"},
 	{name= "Sherelyn Alejandro Merchan"}
@@ -37,6 +36,9 @@ dependencies = [
 	"importlib-resources"
 ]
 dynamic = ["version"]
+readme = "README.md"
+
+[tool.setuptools_scm]
 
 [project.optional-dependencies]
 test = [

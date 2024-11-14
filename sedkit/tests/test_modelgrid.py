@@ -1,4 +1,5 @@
 import unittest
+import pytest
 import os
 import importlib_resources
 
@@ -32,6 +33,7 @@ class TestModelGrid(unittest.TestCase):
 
         self.bt = mg.BTSettl()
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_get_spectrum(self):
         """Test the get_spectrum method"""
         # On grid specific
@@ -43,27 +45,32 @@ class TestModelGrid(unittest.TestCase):
         # Off grid
         spec = self.bt.get_spectrum(teff=3456, logg=5., alpha=0, meta=0)
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_resample_grid(self):
         """Test resample_grid method"""
         bt = self.bt
         new = bt.resample_grid(teff=[3500, 3600, 3700], logg=[5.], meta=[0], alpha=[0])
         self.assertTrue(len(bt.index) > len(new.index))
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_filter(self):
         """Test the filter metod works"""
         filt = self.bt.filter(teff=3500)
         self.assertEqual(len(filt), 1)
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_photometry(self):
         """Test the photometry method"""
         phot_mg = self.bt.photometry(['2MASS.J', '2MASS.H', '2MASS.Ks'])
         self.assertEqual(phot_mg.index.iloc[0]['spectrum'][0].size, 3)
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_plot(self):
         """Test that the plot method works"""
         plt = self.bt.plot(teff=3500, draw=False)
         self.assertEqual(str(type(plt)), "<class 'bokeh.plotting._figure.figure'>")
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_save(self):
         """Test the save method works"""
         self.bt.save('test.p')
@@ -80,7 +87,7 @@ def test_load_model():
     meta = mg.load_model(filepath)
     assert isinstance(meta, dict)
 
-
+@pytest.mark.skip(reason="BTSettl grid is not currently available")
 def test_load_ModelGrid():
     """Test the load_ModelGrid function"""
     grid = mg.BTSettl()
@@ -90,7 +97,7 @@ def test_load_ModelGrid():
     assert isinstance(lmg, mg.ModelGrid)
     os.remove(test_p)
 
-
+@pytest.mark.skip(reason="BTSettl grid is not currently available")
 def test_BTSettl():
     """Test the BTSettl grid"""
     grid = mg.BTSettl()

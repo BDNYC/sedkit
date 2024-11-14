@@ -1,4 +1,5 @@
 import unittest
+import pytest
 import copy
 import importlib_resources
 
@@ -6,9 +7,9 @@ import numpy as np
 import astropy.units as q
 from astropy.coordinates import SkyCoord
 
-from .. import sed
-from .. import spectrum as sp
-from .. import modelgrid as mg
+from sedkit import sed
+from sedkit import spectrum as sp
+from sedkit import modelgrid as mg
 
 
 class TestSED(unittest.TestCase):
@@ -169,12 +170,14 @@ class TestSED(unittest.TestCase):
         # Radius from spectral type
         s.results
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_compare_model(self):
         """Test for the compare_model method"""
         v = sed.VegaSED()
         bt = mg.BTSettl()
         v.compare_model(bt, teff=10000)
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_plot(self):
         """Test plotting method"""
         v = sed.VegaSED()
@@ -241,6 +244,7 @@ class TestSED(unittest.TestCase):
 
         self.assertTrue(len(v.synthetic_photometry) > 0)
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_fit_spectral_type(self):
         """Test that the SED can be fit by a spectral type atlas"""
         # Grab the SPL
@@ -254,6 +258,7 @@ class TestSED(unittest.TestCase):
         # Fit with SPL
         s.fit_spectral_type()
 
+    @pytest.mark.skip(reason="BTSettl grid is not currently available")
     def test_fit_modelgrid(self):
         """Test that the SED can be fit by a model grid"""
         # Grab BTSettl
