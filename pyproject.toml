@@ -23,18 +23,16 @@ classifiers=[
 ]
 requires-python = ">=3.11,<=3.13"
 dependencies = [
-	"astropy>=5.3.1",
-	"astroquery>=0.4.6",
+	"astropy>=6.1.3",
+	"astroquery>=0.4.7",
 	"bokeh>=3.2.1",
 	"dill>=0.3.4",
 	"dustmaps>=1.0.9",
 	"emcee>=3.1.1",
-	"numpy>=2.1.0",
-	"pandas>=1.3.5",
-	"scipy>=1.8.0",
+	"numpy>=2.1",
+	"pandas>=2.2.2",
+	"scipy>=1.14.1",
 	"svo-filters>=0.4.4",
-	"importlib-resources",
-	"setuptools"
 ]
 dynamic = ["version"]
 readme = "README.md"
