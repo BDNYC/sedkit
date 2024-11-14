@@ -10,7 +10,7 @@ from bokeh.plotting import figure
 import numpy as np
 from svo_filters import Filter
 
-from .. import utilities as u
+from sedkit import utilities as u
 
 
 def test_convert_mag():

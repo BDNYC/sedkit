@@ -5,7 +5,7 @@ import unittest
 import astropy.units as q
 import numpy as np
 
-from .. import relations as rel
+from sedkit import relations as rel
 
 
 class TestSpectralTypeRadius(unittest.TestCase):

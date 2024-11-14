@@ -13,7 +13,7 @@
 
 ## Installation
 
-Install in an environment with Python 3.11 or 3.12.
+Install in an environment with Python 3.11, 3.12, 3.13.
 
 ```
 pip install sedkit

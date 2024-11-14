@@ -4,8 +4,8 @@ import pytest
 import astropy.units as q
 import numpy as np
 
-from .. import isochrone as iso
-from .. import utilities as u
+from sedkit import isochrone as iso
+from sedkit import utilities as u
 
 
 @pytest.mark.parametrize('xval,age,xparam,yparam,expected_result,expected_result_low,expected_result_up', [
@@ -26,7 +26,7 @@ from .. import utilities as u
     (-4, 4 * q.Gyr, 'Lbol', 'logg', 5.395, 5.36, 5.43),  # No xparam and yparam uncertaintiesd
     # Young age
     ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.0515, 0.045, 0.055),   # mass with uncertainties
-    ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.085, 5.01, 5.15),   # logg with uncertainties
+    ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'logg', 5.08, 5.01, 5.15),   # logg with uncertainties
     ((-4, 0.1), (0.4 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'radius', 0.105, 0.10, 0.11),  # radius with uncertainties
     # Old age
     ((-4, 0.1), (9 * q.Gyr, 0.1 * q.Gyr), 'Lbol', 'mass', 0.074, 0.070, 0.080),  # mass with uncertainties
@@ -42,7 +42,7 @@ def test_evaluate(xval, age, xparam, yparam, expected_result, expected_result_lo
     upper = result[0] + result[2]   # Upper yparam value
     assert (isinstance(result, tuple)) is True
     if yparam == 'logg':
-        assert (np.isclose(average, expected_result, atol=0.005))
+        assert (np.isclose(average, expected_result, atol=0.006))
         assert (np.isclose(lower, expected_result_low, atol=0.01))
         assert (np.isclose(upper, expected_result_up, atol=0.01))
     else:

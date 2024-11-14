@@ -1,6 +1,7 @@
 """A suite of tests for the spectrum.py module"""
 import unittest
 import pytest
+import os
 import copy
 import importlib_resources
 
@@ -128,6 +129,7 @@ class TestSpectrum(unittest.TestCase):
         """Test export method"""
         # Good export
         self.flat1.export('test.txt', header='Foo')
+        os.remove('test.txt')
 
         # Bad dirname
         self.assertRaises(IOError, self.flat1.export, '/foo/bar/baz.txt')
