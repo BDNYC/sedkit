@@ -15,7 +15,7 @@ description="Spectral energy distribution construction and analysis tools"
 keywords=['astronomy']
 classifiers=[
 	'Intended Audience :: Science/Research',
-	"License :: OSI Approved :: MIT License",
+	'License :: OSI Approved :: BSD 3-Clause License',
 	'Operating System :: OS Independent',
 	'Programming Language :: Python :: 3',
 	'Topic :: Scientific/Engineering :: Astronomy',
@@ -35,7 +35,6 @@ dependencies = [
 	"pandas>=2.2.2",
 	"scipy>=1.14.1",
 	"svo-filters>=0.4.4",
-	"setuptools>=64",
 	"setuptools>=64",
 ]
 dynamic = ["version"]
