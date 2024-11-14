@@ -23,7 +23,7 @@ pip install sedkit
 If you plan to modify and/or contribute to the code, install an editable version of the package and the requirements for running the tests.
 
 ```
-pip install sedkit -e .[test]
+pip install -e ".[test]"
 ```
 
 ## Demo
