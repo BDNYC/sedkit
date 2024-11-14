@@ -33,6 +33,7 @@ dependencies = [
 	"pandas>=2.2.2",
 	"scipy>=1.14.1",
 	"svo-filters>=0.4.4",
+	"setuptools>=64",
 ]
 dynamic = ["version"]
 readme = "README.md"
