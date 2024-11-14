@@ -4,8 +4,8 @@ import pytest
 import astropy.units as q
 import numpy as np
 
-from .. import isochrone as iso
-from .. import utilities as u
+from sedkit import isochrone as iso
+from sedkit import utilities as u
 
 
 @pytest.mark.parametrize('xval,age,xparam,yparam,expected_result,expected_result_low,expected_result_up', [
