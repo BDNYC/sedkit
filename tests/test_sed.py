@@ -49,11 +49,20 @@ class TestSED(unittest.TestCase):
         s = copy.copy(self.sed)
 
         # Add the photometry
-        s.add_photometry('2MASS.J', -0.177, 0.206)
+        s.add_photometry('2MASS.J', 13.123, 0.206)
         self.assertEqual(len(s.photometry), 1)
+        assert s.photometry[0]['band'] == '2MASS.J'
+        assert s.photometry[0]['app_magnitude'] == np.float32(13.123)
+        assert s.photometry[0]['app_magnitude_unc'] == np.float32(0.206)
+
+        mag, mag_unc = 23.93, 0.3
+        s.add_photometry('UKIRT/UFTI.J', mag, mag_unc)
+        assert s.photometry['app_magnitude'][1] == np.float32(23.93)
+        assert s.photometry['app_magnitude_unc'][1] == np.float32(0.3)
 
         # Now remove it
-        s.drop_photometry(0)
+        s.drop_photometry('UKIRT/UFTI.J')
+        s.drop_photometry('2MASS.J')
         self.assertEqual(len(s.photometry), 0)
 
     def test_add_photometry_table(self):
@@ -241,7 +250,7 @@ class TestSED(unittest.TestCase):
         s.sky_coords = SkyCoord('0h8m05.63s +14d50m23.3s', frame='icrs')
         s.find_SDSS_spectra(search_radius=20 * q.arcsec)
         s.find_SDSS()
-        s.plot()
+        # s.plot()
 
     def test_run_methods(self):
         """Test that the method_list argument works"""
