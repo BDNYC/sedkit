@@ -38,8 +38,8 @@ class TestSED(unittest.TestCase):
         mag = 23.93
         mag_unc = 0.3
         s.add_photometry('2MASS.J', mag, mag_unc)
-        self.assertEqual(s.photometry['app_magnitude'], mag)
-        self.assertEqual(s.photometry['app_magnitude_unc'], mag_unc)
+        assert np.equal(s.photometry['app_magnitude'], mag)
+        assert np.equal(s.photometry['app_magnitude_unc'], mag_unc)
 
     def test_add_photometry(self):
         """Test that photometry is added properly"""
