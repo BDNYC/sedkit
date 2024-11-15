@@ -27,7 +27,6 @@ from astropy.utils.exceptions import AstropyWarning
 from bokeh.plotting import figure, show
 from bokeh.models import HoverTool, Range1d, ColumnDataSource
 from bokeh.palettes import Category10
-import itertools
 from dustmaps.bayestar import BayestarWebQuery
 from svo_filters import svo
 
@@ -191,16 +190,16 @@ class SED:
         self.best_fit = {}
 
         # Make empty spectra table
-        spec_cols = ('name', 'spectrum', 'wave_min', 'wave_max', 'wave_bins', 'resolution', 'history', 'ref')
-        spec_typs = ('O', 'O', np.float16, np.float16, int, int, 'O', 'O')
-        self._spectra = at.QTable(names=spec_cols, dtype=spec_typs)
+        spec_col_names = ('name', 'spectrum', 'wave_min', 'wave_max', 'wave_bins', 'resolution', 'history', 'ref')
+        spec_dtypes = ('O', 'O', np.float32, np.float32, int, int, 'O', 'O')
+        self._spectra = at.QTable(names=spec_col_names, dtype=spec_dtypes)
         for col in ['wave_min', 'wave_max']:
             self._spectra[col].unit = self._wave_units
 
         # Make empty photometry table
         self.mag_system = 'Vega'
         phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc', 'app_flux', 'app_flux_unc', 'abs_magnitude', 'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc', 'bandpass', 'ref')
-        phot_typs = ('U16', np.float16, np.float32, np.float32, float, float, np.float16, np.float16, float, float, 'O', 'O')
+        phot_typs = ('U16', np.float32, np.float32, np.float32, float, float, np.float32, np.float32, float, float, 'O', 'O')
         self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
         for col in ['app_flux', 'app_flux_unc', 'abs_flux', 'abs_flux_unc']:
             self._photometry[col].unit = self._flux_units
@@ -310,7 +309,7 @@ class SED:
             # Make a dict for the new point
             mag = round(mag, 3)
             mag_unc = mag_unc if np.isnan(mag_unc) else round(mag_unc, 3)
-            eff = bp.wave_eff.astype(np.float16)
+            eff = bp.wave_eff.astype(np.float32)
             new_photometry = {'band': band, 'eff': eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
 
             # Add the kwargs
@@ -444,8 +443,8 @@ class SED:
         spec.flux_units = self.flux_units
 
         # Add the spectrum object to the list of spectra
-        mn = spec.wave_min#.astype(np.float16)
-        mx = spec.wave_max#.astype(np.float16)
+        mn = spec.wave_min
+        mx = spec.wave_max
         res = int(((mx - mn) / np.nanmean(np.diff(spec.wave))).value)
 
         # Make sure it's not a duplicate
@@ -688,7 +687,7 @@ class SED:
                         if mag is not None and not np.isnan(mag):
 
                             # Make a dict for the new point
-                            new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float16), 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'ref': 'sedkit'}
+                            new_photometry = {'band': band, 'eff': bp.wave_eff.astype(np.float32), 'bandpass': bp, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'ref': 'sedkit'}
 
                             # Add it to the table
                             self._synthetic_photometry.add_row(new_photometry)
