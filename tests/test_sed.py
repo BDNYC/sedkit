@@ -217,10 +217,10 @@ class TestSED(unittest.TestCase):
         s.add_spectrum(self.spec1)
 
         # Smooth it
-        s.edit_spectrum(0, smooth={'beta': 5}, plot=True)
+        s.edit_spectrum(0, smooth={'beta': 5}, plot=False)
 
         # Unsmooth it
-        s.edit_spectrum(0, restore=True)
+        s.edit_spectrum(0, restore=True, plot=False)
 
         # Bad beta
         self.assertRaises((ValueError, TypeError), s.edit_spectrum, idx=0, smooth={'beta': 'foo'})
