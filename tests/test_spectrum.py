@@ -279,12 +279,12 @@ class TestFileSpectrum(unittest.TestCase):
 
     def test_fits(self):
         """Test that a fits file can be loaded"""
-        spec = sp.FileSpectrum(self.fitsfile, wave_units='um', flux_units='erg/s/cm2/AA')
+        spec = sp.FileSpectrum(self.fitsfile, wave_units='um', flux_units='erg s-1 cm-2 AA-1')
         assert spec
 
     def test_txt(self):
         """Test that a txt file can be loaded"""
-        spec = sp.FileSpectrum(self.txtfile, wave_units='um', flux_units='erg/s/cm2/AA')
+        spec = sp.FileSpectrum(self.txtfile, wave_units='um', flux_units='erg s-1 cm-2 AA-1')
         assert spec
 
 
