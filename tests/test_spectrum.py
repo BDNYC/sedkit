@@ -240,7 +240,7 @@ class TestSpectrum(unittest.TestCase):
         s2 = self.flat2
 
         # Normalize 1 to 2 and check that they are close
-        s3 = s1.norm_to_spec(s2, plot=True)
+        s3 = s1.norm_to_spec(s2, plot=False)
         self.assertAlmostEqual(np.nanmean(s2.flux), np.nanmean(s3.flux), places=4)
         self.assertNotEqual(s2.size, s3.size)
         self.assertEqual(s1.size, s3.size)
@@ -250,24 +250,23 @@ class TestSpectrum(unittest.TestCase):
         # Test include
         s1 = copy.copy(self.flat1)
         trimmed = s1.trim(include=[(0.8 * q.um, 2 * q.um)], concat=False)
-        # self.assertTrue(len(trimmed) == 1)
-        # self.assertNotEqual(self.flat1.size, trimmed[0].size)
+        assert len(trimmed[0].wave) == 115
 
         # Test exclude
         s1 = copy.copy(self.flat1)
         trimmed = s1.trim(exclude=[(0.8 * q.um, 3 * q.um)], concat=False)
-        # self.assertNotEqual(self.flat1.size, trimmed[0].size)
+        assert len(trimmed[0].wave) == 115
 
         # Test split
         s1 = copy.copy(self.flat1)
         trimmed = s1.trim(exclude=[(0.8 * q.um, 0.9 * q.um)], concat=False)
-        # self.assertTrue(len(trimmed) == 2)
-        # self.assertNotEqual(self.flat1.size, trimmed[0].size)
+        assert len(trimmed[0].wave) == 115
+
 
         # Test concat
         s1 = copy.copy(self.flat1)
         trimmed = s1.trim(exclude=[(0.8 * q.um, 0.9 * q.um)], concat=True)
-        # self.assertNotEqual(self.flat1.size, trimmed.size)
+        assert len(trimmed.wave) == 173
 
 
 class TestFileSpectrum(unittest.TestCase):
@@ -281,10 +280,12 @@ class TestFileSpectrum(unittest.TestCase):
     def test_fits(self):
         """Test that a fits file can be loaded"""
         spec = sp.FileSpectrum(self.fitsfile, wave_units='um', flux_units='erg/s/cm2/AA')
+        assert spec
 
     def test_txt(self):
         """Test that a txt file can be loaded"""
         spec = sp.FileSpectrum(self.txtfile, wave_units='um', flux_units='erg/s/cm2/AA')
+        assert spec
 
 
 class TestVega(unittest.TestCase):
