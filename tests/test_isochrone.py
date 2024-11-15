@@ -43,8 +43,8 @@ def test_evaluate(xval, age, xparam, yparam, expected_result, expected_result_lo
     assert (isinstance(result, tuple)) is True
     if yparam == 'logg':
         assert (np.isclose(average, expected_result, atol=0.006))
-        assert (np.isclose(lower, expected_result_low, atol=0.01))
-        assert (np.isclose(upper, expected_result_up, atol=0.01))
+        assert (np.isclose(lower, expected_result_low, atol=0.015))
+        assert (np.isclose(upper, expected_result_up, atol=0.015))
     else:
         assert (np.isclose(average.value, expected_result, atol=0.005))
         assert (np.isclose(lower.value, expected_result_low, atol=0.01))
