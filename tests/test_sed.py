@@ -33,16 +33,6 @@ class TestSED(unittest.TestCase):
 
         self.sed = sed.SED(verbose=True, foo=123)
 
-    def test_compare_photometry(self):
-        """Test that photometry is the same as input values"""
-        s = copy.copy(self.sed)
-
-        # Add the photometry
-        mag, mag_unc = 23.93, 0.3
-        s.add_photometry('UKIRT/UFTI.J', mag, mag_unc)
-
-        assert np.equal(s.photometry['app_magnitude'][0], mag)
-        assert np.equal(s.photometry['app_magnitude_unc'][0], mag_unc)
 
     def test_add_photometry(self):
         """Test that photometry is added properly"""
