@@ -3,7 +3,7 @@ import unittest
 import astropy.units as q
 import numpy as np
 
-from .. import uncertainties as un
+from sedkit import uncertainties as un
 
 
 class TestUnum(unittest.TestCase):

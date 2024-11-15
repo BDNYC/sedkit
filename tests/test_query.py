@@ -3,7 +3,7 @@
 import astropy.units as q
 from astropy.coordinates import SkyCoord
 
-from .. import query
+from sedkit import query
 
 
 def test_query_vizier():

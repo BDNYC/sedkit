@@ -1,6 +1,6 @@
 """A suite of tests for the utilities.py module"""
 import copy
-import importlib_resources
+import importlib.resources
 import pytest
 import unittest
 
@@ -10,7 +10,7 @@ from bokeh.plotting import figure
 import numpy as np
 from svo_filters import Filter
 
-from .. import utilities as u
+from sedkit import utilities as u
 
 
 def test_convert_mag():
@@ -294,7 +294,7 @@ def test_group_spectra():
 def test_spectrum_from_fits():
     """Test spectrum_from_fits function"""
     # Get the file
-    f = str(importlib_resources.files('sedkit')/'/data/Gl752B_NIR.fits')
+    f = str(importlib.resources.files('sedkit')/ '/data/Gl752B_NIR.fits')
 
     # Get the spectrum
     spec = u.spectrum_from_fits(f)
