@@ -200,7 +200,7 @@ class SED:
         # Make empty photometry table
         self.mag_system = 'Vega'
         phot_cols = ('band', 'eff', 'app_magnitude', 'app_magnitude_unc', 'app_flux', 'app_flux_unc', 'abs_magnitude', 'abs_magnitude_unc', 'abs_flux', 'abs_flux_unc', 'bandpass', 'ref')
-        phot_typs = ('U16', np.float16, np.float32, np.float32, float, float, np.float32, np.float32, float, float, 'O', 'O')
+        phot_typs = ('U16', np.float16, np.float16, np.float16, float, float, np.float16, np.float16, float, float, 'O', 'O')
         self._photometry = at.QTable(names=phot_cols, dtype=phot_typs)
         for col in ['app_flux', 'app_flux_unc', 'abs_flux', 'abs_flux_unc']:
             self._photometry[col].unit = self._flux_units
@@ -310,7 +310,7 @@ class SED:
             # Make a dict for the new point
             mag = round(mag, 3)
             mag_unc = mag_unc if np.isnan(mag_unc) else round(mag_unc, 3)
-            eff = bp.wave_eff.astype(np.float32)
+            eff = bp.wave_eff.astype(np.float16)
             new_photometry = {'band': band, 'eff': eff, 'app_magnitude': mag, 'app_magnitude_unc': mag_unc, 'bandpass': bp, 'ref': ref}
 
             # Add the kwargs
@@ -361,8 +361,8 @@ class SED:
         # Add photometry to phot table
         for idx, band in enumerate(bands):
             if band in row.colnames:
-                goodmag = isinstance(row[band], (float, np.float32, np.float32))
-                goodunc = isinstance(row[unc_wildcard.replace('*', band)], (float, np.float32, np.float32))
+                goodmag = isinstance(row[band], (float, np.float16, np.float32))
+                goodunc = isinstance(row[unc_wildcard.replace('*', band)], (float, np.float16, np.float32))
                 if goodmag:
                     mag = row[band]
                     unc = row[unc_wildcard.replace('*', band)] if goodunc else np.nan
