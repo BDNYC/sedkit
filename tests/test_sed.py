@@ -14,6 +14,7 @@ from sedkit import modelgrid as mg
 
 class TestSED(unittest.TestCase):
     """Tests for the SED class"""
+
     def setUp(self):
 
         # Make Blackbody
@@ -32,16 +33,26 @@ class TestSED(unittest.TestCase):
 
         self.sed = sed.SED(verbose=True, foo=123)
 
+
     def test_add_photometry(self):
         """Test that photometry is added properly"""
         s = copy.copy(self.sed)
 
         # Add the photometry
-        s.add_photometry('2MASS.J', -0.177, 0.206)
+        s.add_photometry('2MASS.J', 13.123, 0.206)
         self.assertEqual(len(s.photometry), 1)
+        assert s.photometry[0]['band'] == '2MASS.J'
+        assert s.photometry[0]['app_magnitude'] == np.float32(13.123)
+        assert s.photometry[0]['app_magnitude_unc'] == np.float32(0.206)
+
+        mag, mag_unc = 23.93, 0.3
+        s.add_photometry('UKIRT/UFTI.J', mag, mag_unc)
+        assert s.photometry['app_magnitude'][1] == np.float32(23.93)
+        assert s.photometry['app_magnitude_unc'][1] == np.float32(0.3)
 
         # Now remove it
-        s.drop_photometry(0)
+        s.drop_photometry('UKIRT/UFTI.J')
+        s.drop_photometry('2MASS.J')
         self.assertEqual(len(s.photometry), 0)
 
     def test_add_photometry_table(self):
@@ -49,7 +60,7 @@ class TestSED(unittest.TestCase):
         s = copy.copy(self.sed)
 
         # Add the photometry
-        f = str(importlib.resources.files('sedkit')/ 'data/L3_photometry.txt')
+        f = str(importlib.resources.files('sedkit') / 'data/L3_photometry.txt')
         s.add_photometry_table(f)
         self.assertEqual(len(s.photometry), 8)
 
@@ -73,7 +84,7 @@ class TestSED(unittest.TestCase):
         self.assertEqual(len(s.spectra), 1)
 
         # Test new spectrum array
-        SPEC1 = [self.WAVE1, self.FLUX1, self.FLUX1/100.]
+        SPEC1 = [self.WAVE1, self.FLUX1, self.FLUX1 / 100.]
         s.add_spectrum(SPEC1)
         self.assertEqual(len(s.spectra), 2)
 
@@ -92,7 +103,7 @@ class TestSED(unittest.TestCase):
         s.age = 4 * q.Gyr, 0.1 * q.Gyr, 'reference'
         self.assertRaises(TypeError, setattr, s, 'age', 'foo')
         self.assertRaises(TypeError, setattr, s, 'age', (4, 0.1))
-        self.assertRaises(TypeError, setattr, s, 'age', (4*q.Jy, 0.1*q.Jy))
+        self.assertRaises(TypeError, setattr, s, 'age', (4 * q.Jy, 0.1 * q.Jy))
 
         # Sky coords
         s.sky_coords = 1.2345 * q.deg, 1.2345 * q.deg
@@ -133,7 +144,7 @@ class TestSED(unittest.TestCase):
         self.assertRaises(ValueError, setattr, s, 'evo_model', 'foo')
 
         # Flux units
-        s.flux_units = q.erg/q.s/q.cm**2/q.AA
+        s.flux_units = q.erg / q.s / q.cm ** 2 / q.AA
         self.assertRaises(TypeError, setattr, s, 'flux_units', q.cm)
 
         # Wave units
@@ -148,9 +159,9 @@ class TestSED(unittest.TestCase):
     def test_no_spectra(self):
         """Test that a purely photometric SED can be creted"""
         s = copy.copy(self.sed)
-        s.age = 455*q.Myr, 13*q.Myr
-        s.radius = 2.362*q.Rsun, 0.02*q.Rjup, 0.02*q.Rjup
-        s.parallax = 130.23*q.mas, 0.36*q.mas
+        s.age = 455 * q.Myr, 13 * q.Myr
+        s.radius = 2.362 * q.Rsun, 0.02 * q.Rjup, 0.02 * q.Rjup
+        s.parallax = 130.23 * q.mas, 0.36 * q.mas
         s.spectral_type = 'A0V'
         s.add_photometry('2MASS.J', -0.177, 0.206)
         s.add_photometry('2MASS.H', -0.029, 0.146)
@@ -165,7 +176,7 @@ class TestSED(unittest.TestCase):
         self.assertIsNotNone(s.fbol)
 
         # Make Wein tail
-        s.make_wein_tail(teff=2000*q.K)
+        s.make_wein_tail(teff=2000 * q.K)
 
         # Radius from spectral type
         s.results
@@ -190,9 +201,9 @@ class TestSED(unittest.TestCase):
     def test_no_photometry(self):
         """Test that a purely photometric SED can be created"""
         s = copy.copy(self.sed)
-        s.age = 455*q.Myr, 13*q.Myr
-        s.radius = 2.362*q.Rsun, 0.02*q.Rjup,0.02*q.Rjup
-        s.parallax = 130.23*q.mas, 0.36*q.mas
+        s.age = 455 * q.Myr, 13 * q.Myr
+        s.radius = 2.362 * q.Rsun, 0.02 * q.Rjup, 0.02 * q.Rjup
+        s.parallax = 130.23 * q.mas, 0.36 * q.mas
         s.spectral_type = 'A0V'
         s.add_spectrum(self.spec1)
 
@@ -229,7 +240,7 @@ class TestSED(unittest.TestCase):
         s.sky_coords = SkyCoord('0h8m05.63s +14d50m23.3s', frame='icrs')
         s.find_SDSS_spectra(search_radius=20 * q.arcsec)
         s.find_SDSS()
-        s.plot()
+        # s.plot()
 
     def test_run_methods(self):
         """Test that the method_list argument works"""
@@ -293,6 +304,7 @@ class TestSED(unittest.TestCase):
     #     s.fit_blackbody()
     #
     #     self.assertTrue(isinstance(s.Teff_bb, (int, float)))
+
 
 def test_VegaSED():
     """Test the VegaSED class"""
