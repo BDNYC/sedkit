@@ -14,6 +14,7 @@ from sedkit import modelgrid as mg
 
 class TestSED(unittest.TestCase):
     """Tests for the SED class"""
+
     def setUp(self):
 
         # Make Blackbody
@@ -31,15 +32,17 @@ class TestSED(unittest.TestCase):
         self.spec2 = sp.Spectrum(*SPEC2)
 
         self.sed = sed.SED(verbose=True, foo=123)
+
     def test_compare_photometry(self):
         """Test that photometry is the same as input values"""
         s = copy.copy(self.sed)
+
         # Add the photometry
-        mag = 23.93
-        mag_unc = 0.3
-        s.add_photometry('2MASS.J', mag, mag_unc)
-        assert np.equal(s.photometry['app_magnitude'], mag)
-        assert np.equal(s.photometry['app_magnitude_unc'], mag_unc)
+        mag, mag_unc = 23.93, 0.3
+        s.add_photometry('UKIRT/UFTI.J', mag, mag_unc)
+
+        assert (np.equal(s.photometry['app_magnitude'], mag)) is True
+        assert (np.equal(s.photometry['app_magnitude_unc'], mag_unc)) is True
 
     def test_add_photometry(self):
         """Test that photometry is added properly"""
@@ -58,7 +61,7 @@ class TestSED(unittest.TestCase):
         s = copy.copy(self.sed)
 
         # Add the photometry
-        f = str(importlib.resources.files('sedkit')/ 'data/L3_photometry.txt')
+        f = str(importlib.resources.files('sedkit') / 'data/L3_photometry.txt')
         s.add_photometry_table(f)
         self.assertEqual(len(s.photometry), 8)
 
@@ -82,7 +85,7 @@ class TestSED(unittest.TestCase):
         self.assertEqual(len(s.spectra), 1)
 
         # Test new spectrum array
-        SPEC1 = [self.WAVE1, self.FLUX1, self.FLUX1/100.]
+        SPEC1 = [self.WAVE1, self.FLUX1, self.FLUX1 / 100.]
         s.add_spectrum(SPEC1)
         self.assertEqual(len(s.spectra), 2)
 
@@ -101,7 +104,7 @@ class TestSED(unittest.TestCase):
         s.age = 4 * q.Gyr, 0.1 * q.Gyr, 'reference'
         self.assertRaises(TypeError, setattr, s, 'age', 'foo')
         self.assertRaises(TypeError, setattr, s, 'age', (4, 0.1))
-        self.assertRaises(TypeError, setattr, s, 'age', (4*q.Jy, 0.1*q.Jy))
+        self.assertRaises(TypeError, setattr, s, 'age', (4 * q.Jy, 0.1 * q.Jy))
 
         # Sky coords
         s.sky_coords = 1.2345 * q.deg, 1.2345 * q.deg
@@ -142,7 +145,7 @@ class TestSED(unittest.TestCase):
         self.assertRaises(ValueError, setattr, s, 'evo_model', 'foo')
 
         # Flux units
-        s.flux_units = q.erg/q.s/q.cm**2/q.AA
+        s.flux_units = q.erg / q.s / q.cm ** 2 / q.AA
         self.assertRaises(TypeError, setattr, s, 'flux_units', q.cm)
 
         # Wave units
@@ -157,9 +160,9 @@ class TestSED(unittest.TestCase):
     def test_no_spectra(self):
         """Test that a purely photometric SED can be creted"""
         s = copy.copy(self.sed)
-        s.age = 455*q.Myr, 13*q.Myr
-        s.radius = 2.362*q.Rsun, 0.02*q.Rjup, 0.02*q.Rjup
-        s.parallax = 130.23*q.mas, 0.36*q.mas
+        s.age = 455 * q.Myr, 13 * q.Myr
+        s.radius = 2.362 * q.Rsun, 0.02 * q.Rjup, 0.02 * q.Rjup
+        s.parallax = 130.23 * q.mas, 0.36 * q.mas
         s.spectral_type = 'A0V'
         s.add_photometry('2MASS.J', -0.177, 0.206)
         s.add_photometry('2MASS.H', -0.029, 0.146)
@@ -174,7 +177,7 @@ class TestSED(unittest.TestCase):
         self.assertIsNotNone(s.fbol)
 
         # Make Wein tail
-        s.make_wein_tail(teff=2000*q.K)
+        s.make_wein_tail(teff=2000 * q.K)
 
         # Radius from spectral type
         s.results
@@ -199,9 +202,9 @@ class TestSED(unittest.TestCase):
     def test_no_photometry(self):
         """Test that a purely photometric SED can be created"""
         s = copy.copy(self.sed)
-        s.age = 455*q.Myr, 13*q.Myr
-        s.radius = 2.362*q.Rsun, 0.02*q.Rjup,0.02*q.Rjup
-        s.parallax = 130.23*q.mas, 0.36*q.mas
+        s.age = 455 * q.Myr, 13 * q.Myr
+        s.radius = 2.362 * q.Rsun, 0.02 * q.Rjup, 0.02 * q.Rjup
+        s.parallax = 130.23 * q.mas, 0.36 * q.mas
         s.spectral_type = 'A0V'
         s.add_spectrum(self.spec1)
 
@@ -302,6 +305,7 @@ class TestSED(unittest.TestCase):
     #     s.fit_blackbody()
     #
     #     self.assertTrue(isinstance(s.Teff_bb, (int, float)))
+
 
 def test_VegaSED():
     """Test the VegaSED class"""
