@@ -23,7 +23,7 @@ from bokeh.models import ColumnDataSource, HoverTool
 import numpy as np
 from pandas import DataFrame
 from svo_filters import Filter
-
+import warnings
 
 from . import mcmc as mc
 from . import utilities as u
@@ -528,7 +528,7 @@ class Spectrum:
         if self.unc is None:
             unc = None
         else:
-            term1 = (self.spectrum[2] * distance[0] / target_distance).to(flux_units)
+            term1 = (self.spectrum[2] * (distance[0] / target_distance) ** 2).to(flux_units)
             term2 = (2 * self.spectrum[1] * (distance[1] * distance[0] / target_distance**2)).to(flux_units)
             unc = np.sqrt(term1**2 + term2**2)
 
@@ -1494,7 +1494,11 @@ class FileSpectrum(Spectrum):
 
         # Sanity check for wave_units
         if data[0].min() > 100 and wave_units == q.um:
-            print("WARNING: Your wavelength range ({} - {}) looks like Angstroms. Are you sure it's {}?".format(data[0].min(), data[0].max(), wave_units))
+            msg = (
+                f"Your wavelength range ({data[0].min()} - {data[0].max()})"
+                f"looks like Angstroms. Are you sure it's {wave_units}?"
+            )
+            warnings.warn(msg)
 
         # Apply units
         wave = data[0] * wave_units
