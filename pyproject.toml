@@ -15,8 +15,8 @@ description="Spectral energy distribution construction and analysis tools"
 keywords=['astronomy']
 classifiers=[
 	'Intended Audience :: Science/Research',
-	'License-Expression :: BSD-3-Clause',
 	'Operating System :: OS Independent',
+	'License :: OSI Approved :: BSD License',
 	'Programming Language :: Python :: 3',
 	'Topic :: Scientific/Engineering :: Astronomy',
 	'Topic :: Software Development :: Libraries :: Python Modules',
