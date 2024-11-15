@@ -31,6 +31,15 @@ class TestSED(unittest.TestCase):
         self.spec2 = sp.Spectrum(*SPEC2)
 
         self.sed = sed.SED(verbose=True, foo=123)
+    def test_compare_photometry(self):
+        """Test that photometry is the same as input values"""
+        s = copy.copy(self.sed)
+        # Add the photometry
+        mag = 23.93
+        mag_unc = 0.3
+        s.add_photometry('2MASS.J', mag, mag_unc)
+        self.assertEqual(s.photometry['app_magnitude'], mag)
+        self.assertEqual(s.photometry['app_magnitude_unc'], mag_unc)
 
     def test_add_photometry(self):
         """Test that photometry is added properly"""
