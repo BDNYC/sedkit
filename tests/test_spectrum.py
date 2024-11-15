@@ -1,8 +1,9 @@
 """A suite of tests for the spectrum.py module"""
 import unittest
 import pytest
+import os
 import copy
-import importlib_resources
+import importlib.resources
 
 import numpy as np
 import astropy.units as q
@@ -128,6 +129,7 @@ class TestSpectrum(unittest.TestCase):
         """Test export method"""
         # Good export
         self.flat1.export('test.txt', header='Foo')
+        os.remove('test.txt')
 
         # Bad dirname
         self.assertRaises(IOError, self.flat1.export, '/foo/bar/baz.txt')
@@ -259,8 +261,8 @@ class TestFileSpectrum(unittest.TestCase):
     def setUp(self):
         """Setup the tests"""
         # Files for testing
-        self.fitsfile = str(importlib_resources.files('sedkit')/ 'data/Trappist-1_NIR.fits')
-        self.txtfile = str(importlib_resources.files('sedkit')/ 'data/STScI_Vega.txt')
+        self.fitsfile = str(importlib.resources.files('sedkit')/ 'data/Trappist-1_NIR.fits')
+        self.txtfile = str(importlib.resources.files('sedkit')/ 'data/STScI_Vega.txt')
 
     def test_fits(self):
         """Test that a fits file can be loaded"""

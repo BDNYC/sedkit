@@ -34,8 +34,8 @@ Spectrum arrays or ASCII/FITS files can also be added to the SED data.
 
 .. code:: python
 
-    from pkg_resources import resource_filename
-    spec_file = resource_filename('sedkit', 'data/Trappist-1_NIR.fits')
+    import importlib.resources
+    spec_file = str(importlib.resources.files('sedkit')/ 'data/Trappist-1_NIR.fits')
     import astropy.units as q
     trap1.add_spectrum_file(spec_file, wave_units=q.um, flux_units=q.erg / q.s / q.cm**2 / q.AA)
 

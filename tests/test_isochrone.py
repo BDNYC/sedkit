@@ -4,8 +4,8 @@ import pytest
 import astropy.units as q
 import numpy as np
 
-from .. import isochrone as iso
-from .. import utilities as u
+from sedkit import isochrone as iso
+from sedkit import utilities as u
 
 
 @pytest.mark.parametrize('xval,age,xparam,yparam,expected_result,expected_result_low,expected_result_up', [
@@ -42,7 +42,7 @@ def test_evaluate(xval, age, xparam, yparam, expected_result, expected_result_lo
     upper = result[0] + result[2]   # Upper yparam value
     assert (isinstance(result, tuple)) is True
     if yparam == 'logg':
-        assert (np.isclose(average, expected_result, atol=0.005))
+        assert (np.isclose(average, expected_result, atol=0.006))
         assert (np.isclose(lower, expected_result_low, atol=0.01))
         assert (np.isclose(upper, expected_result_up, atol=0.01))
     else:

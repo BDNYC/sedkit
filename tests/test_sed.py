@@ -1,7 +1,7 @@
 import unittest
 import pytest
 import copy
-import importlib_resources
+import importlib.resources
 
 import numpy as np
 import astropy.units as q
@@ -49,7 +49,7 @@ class TestSED(unittest.TestCase):
         s = copy.copy(self.sed)
 
         # Add the photometry
-        f = str(importlib_resources.files('sedkit')/ 'data/L3_photometry.txt')
+        f = str(importlib.resources.files('sedkit')/ 'data/L3_photometry.txt')
         s.add_photometry_table(f)
         self.assertEqual(len(s.photometry), 8)
 
@@ -286,7 +286,7 @@ class TestSED(unittest.TestCase):
     #     s.add_spectrum(self.spec1)
     #
     #     # Add photometry
-    #     f = str(importlib_resources.files('sedkit')/ 'data/L3_photometry.txt')
+    #     f = str(importlib.resources.files('sedkit')/ 'data/L3_photometry.txt')
     #     s.add_photometry_file(f)
     #
     #     # Fit with SPL

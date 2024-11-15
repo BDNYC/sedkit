@@ -9,7 +9,7 @@ sedkit ingestion
 
 from glob import glob
 import os
-from pkg_resources import resource_filename
+import importlib.resources
 
 from astropy.io import ascii
 import astropy.table as at
@@ -19,7 +19,7 @@ def process_dmestar(dir=None, filename='dmestar_solar.txt'):
     """Combine all DMESTAR isochrones into one text file"""
     # Get the filenames
     if dir is None:
-        dir = resource_filename('sedkit', 'data/models/evolutionary/DMESTAR/')
+        dir = str(importlib.resources.files('sedkit')/ 'data/models/evolutionary/DMESTAR/')
 
     files = glob(os.path.join(dir, '*'))
 
@@ -40,7 +40,7 @@ def process_dmestar(dir=None, filename='dmestar_solar.txt'):
     if len(tables) > 0:
         table = at.vstack(tables)
         table.meta = None
-        path = resource_filename('sedkit', 'data/models/evolutionary/')
+        path = str(importlib.resources.files('sedkit')/ 'data/models/evolutionary/')
         table.write(os.path.join(path, filename), format='csv')
 
     else:
