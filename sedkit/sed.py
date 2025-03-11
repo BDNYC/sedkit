@@ -41,11 +41,11 @@ from .uncertainties import Unum
 
 Vizier.columns = ["**", "+_r"]
 Simbad.add_votable_fields(
-    "parallax",
+    "parallax", # add bundle of columns related to parallax
     "sp", # add bundle of columns related to spectral type
-    "diameter",
-    "ids",
-    "flux",
+    "diameter", #add bundle of columns related to angular diameter
+    "ids", # all names concatenated with a pipe (|)
+    "flux", # add bundle of columns related to fluxes
 )
 
 warnings.simplefilter('ignore', category=AstropyWarning)
@@ -1338,7 +1338,7 @@ class SED:
             n_rec = len(viz_cat)
             self.message("{} record{} for {} found in Simbad.".format(n_rec, '' if n_rec == 1 else 's', crit))
             viz_cat.pprint()
-            print(viz_cat.colnames)
+            # print(viz_cat.colnames)  # see what Simbad columns are available
 
             # Choose the record
             obj = viz_cat[idx]
@@ -1380,6 +1380,7 @@ class SED:
                 self.radius = obj['mesdiameter.diameter'] / 2. * du, obj['mesdiameter.error'] * du, obj['mesdiameter.bibcode']
 
             # Check for UBVRI photometry
+            ## CURRENTLY BROKEN ##
             if 'photometry' in include:
                 for band, label in zip(['Generic/Johnson.U', 'Generic/Johnson.B', 'Generic/Johnson.V', 'Cousins.R', 'Cousins.I'], ['U', 'B', 'V', 'R', 'I']):
                     flx = obj['FLUX_{}'.format(label)]
