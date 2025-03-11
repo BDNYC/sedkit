@@ -40,7 +40,13 @@ from .uncertainties import Unum
 
 
 Vizier.columns = ["**", "+_r"]
-Simbad.add_votable_fields('parallax', 'sptype', 'diameter', 'ids', 'flux(U)', 'flux_error(U)', 'flux_bibcode(U)', 'flux(B)', 'flux_error(B)', 'flux_bibcode(B)', 'flux(V)', 'flux_error(V)', 'flux_bibcode(V)', 'flux(R)', 'flux_error(R)', 'flux_bibcode(R)', 'flux(I)', 'flux_error(I)', 'flux_bibcode(I)')
+Simbad.add_votable_fields(
+    "parallax",
+    "sp", # add bundle of columns related to spectral type
+    "diameter",
+    "ids",
+    "flux",
+)
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -1331,13 +1337,15 @@ class SED:
             # Print info
             n_rec = len(viz_cat)
             self.message("{} record{} for {} found in Simbad.".format(n_rec, '' if n_rec == 1 else 's', crit))
+            viz_cat.pprint()
+            print(viz_cat.colnames)
 
             # Choose the record
             obj = viz_cat[idx]
 
             # Get the list of names
-            main_ID = obj['MAIN_ID']
-            self.all_names += obj['IDS'].split('|')
+            main_ID = obj['main_id']
+            self.all_names += obj['ids'].split('|')
 
             # Remove duplicates
             self.all_names = list(set(self.all_names))
@@ -1351,25 +1359,25 @@ class SED:
 
             # Save the coordinates
             if self.sky_coords is None:
-                sky_coords = tuple(viz_cat[0][['RA', 'DEC']])
+                sky_coords = tuple(viz_cat[0][['ra', 'dec']])
                 sky_coords = SkyCoord(ra=sky_coords[0], dec=sky_coords[1], unit=(q.degree, q.degree), frame='icrs')
                 self.sky_coords = sky_coords
 
             # Check for a parallax
-            if 'parallax' in include and not hasattr(obj['PLX_VALUE'], 'mask'):
-                self.parallax = obj['PLX_VALUE'] * q.mas, obj['PLX_ERROR'] * q.mas, obj['PLX_BIBCODE']
+            if 'parallax' in include and not hasattr(obj['plx_value'], 'mask'):
+                self.parallax = obj['plx_value'] * q.mas, obj['plx_err'] * q.mas, obj['plx_bibcode']
 
             # Check for a spectral type
-            if 'spectral_type' in include and not hasattr(obj['SP_TYPE'], 'mask'):
+            if 'spectral_type' in include and not hasattr(obj['sp_type'], 'mask'):
                 try:
-                    self.spectral_type = obj['SP_TYPE'], obj['SP_BIBCODE']
+                    self.spectral_type = obj['sp_type'], obj['sp_bibcode']
                 except IndexError:
                     pass
 
             # Check for a radius
-            if 'radius' in include and not hasattr(obj['Diameter_diameter'], 'mask'):
-                du = q.Unit(obj['Diameter_unit'])
-                self.radius = obj['Diameter_diameter'] / 2. * du, obj['Diameter_error'] * du, obj['Diameter_bibcode']
+            if 'radius' in include and not hasattr(obj['mesdiameter.diameter'], 'mask'):
+                du = q.Unit(obj['mesdiameter.unit'])
+                self.radius = obj['mesdiameter.diameter'] / 2. * du, obj['mesdiameter.error'] * du, obj['mesdiameter.bibcode']
 
             # Check for UBVRI photometry
             if 'photometry' in include:
