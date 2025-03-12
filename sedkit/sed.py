@@ -1338,7 +1338,6 @@ class SED:
             n_rec = len(viz_cat)
             self.message("{} record{} for {} found in Simbad.".format(n_rec, '' if n_rec == 1 else 's', crit))
             viz_cat.pprint()
-            # print(viz_cat.colnames)  # see what Simbad columns are available
 
             # Choose the record
             obj = viz_cat[idx]
