@@ -1928,7 +1928,7 @@ class SED:
             infer_froms.append('M_Ks')
 
         # Check infer_from value
-        if infer_from is not None:
+        if infer_from is None:
             if len(infer_froms) > 0:
                 infer_from = infer_froms[0]
         if infer_from not in infer_froms or infer_from is None:
