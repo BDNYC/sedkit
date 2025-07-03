@@ -157,6 +157,7 @@ class SED:
         self._membership = None
         self._sky_coords = None
         self._evo_model = None
+        self._age_distribution = None
 
         # Static attributes
         self.evo_model = None
@@ -166,6 +167,7 @@ class SED:
         self.multiple = False
         self.HRsequence = rel.DwarfSequence()
         self.substellar = substellar
+        self.age_distribution = None
 
         # Dictionary to keep track of references
         self._refs = {}
@@ -1074,6 +1076,33 @@ class SED:
         # Set as uncalculated
         self.calculated = False
 
+    @property
+    def age_distribution(self):
+        """
+        A getter for the age distribution
+        """
+        return self._age_distribution
+
+    @age_distribution.setter
+    def age_distribution(self, distribution):
+        """
+        A setter for the age distribution
+
+        Parameters
+        ----------
+        distribution: str
+            The chosen age distribution
+        """
+        if distribution is None:
+            self._age_distribution = 'uniform'
+            self.message("Setting age distribution to uniform")
+        else:
+            if distribution == 'normal':
+                self._age_distribution = 'normal'
+                self.message("Setting age distribution to normal")
+            else:
+                raise ValueError("Please use either 'uniform' or 'normal' for age_distribution parameter")
+
     def export(self, parentdir='.', dirname=None, zipped=False):
         """
         Exports the photometry and results tables and a file of the
@@ -1813,6 +1842,9 @@ class SED:
         """
         self._logg = None
 
+        # Checking the age distribution
+        age_distribution = self.age_distribution
+
         # Try model isochrones
         if self.evo_model is not None and self.age is not None and self.Lbol_sun is not None:
 
@@ -1823,7 +1855,8 @@ class SED:
             if self.Lbol_sun[1] is None:
                 self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the surface gravity.'.format(self))
             else:
-                logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg', plot=plot)
+                logg = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'logg', distribution=age_distribution,
+                                               plot=plot)
 
             # Print a message if None
             if logg is None:
@@ -1848,6 +1881,9 @@ class SED:
         """
         self._mass = None
 
+        # Checking the age distribution
+        age_distribution = self.age_distribution
+
         if self.substellar:
             mass_units = q.Mjup
 
@@ -1862,7 +1898,8 @@ class SED:
                 self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the mass.'.format(self))
             else:
                 self.evo_model.mass_units = mass_units
-                mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', plot=plot)
+                mass = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'mass', distribution=age_distribution,
+                                               plot=plot)
 
             # Store the value
             self.mass = [mass[0].round(0),  mass[1].round(0), mass[2].round(0), mass[3]] if mass is not None else mass
@@ -1907,6 +1944,9 @@ class SED:
         """
         self._radius = None
 
+        # Checking the age distribution
+        age_distribution = self.age_distribution
+
         # Change units to Jupiter radii for substellar objects
         if self.substellar:
             radius_units = q.Rjup
@@ -1946,7 +1986,8 @@ class SED:
                 self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the radius.'.format(self))
             else:
                 self.evo_model.radius_units = radius_units
-                radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius', plot=plot)
+                radius = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'radius',
+                                                 distribution=age_distribution, plot=plot)
 
             # Store the value
             self.radius = [radius[0].round(3), radius[1].round(3), radius[2].round(3), radius[3]] if radius is not None else radius
@@ -2038,6 +2079,9 @@ class SED:
         """
         self._Teff = None
 
+        # Checking the age distribution
+        age_distribution = self.age_distribution
+
         # Try model isochrones
         if self.evo_model is not None and self.age is not None and self.Lbol_sun is not None:
 
@@ -2049,7 +2093,7 @@ class SED:
                 self.message('Lbol={0.Lbol}. Uncertainties are needed to calculate the teff.'.format(self))
             else:
                 self.evo_model.teff_units = teff_units
-                teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', plot=plot)
+                teff = self.evo_model.evaluate(self.Lbol_sun, self.age, 'Lbol', 'teff', distribution=age_distribution, plot=plot)
 
             # Store the value
             self.Teff = [teff[0].round(0), teff[1].round(0), teff[2].round(0), teff[3]] if teff is not None else teff

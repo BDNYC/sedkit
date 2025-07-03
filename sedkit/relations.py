@@ -236,9 +236,9 @@ class Relation:
 
                 # Get the relation
                 full_rel = self.relations[rel_name]
-                out_xunits = full_rel['xunit'].to(xunits) * xunits if xunits is not None else full_rel['xunit'] or 1
-                out_yunits = full_rel['yunit'].to(yunits) * yunits if yunits is not None else full_rel['yunit'] or 1
 
+                out_xunits = '{:.{p}}'.format(full_rel['xunit'].to(xunits), p=3) * xunits if xunits is not None else full_rel['xunit'] or 1
+                out_yunits = '{:.{p}}'.format(full_rel['yunit'].to(yunits), p=3) * yunits if yunits is not None else full_rel['yunit'] or 1
                 # Use local points for relation
                 if isinstance(fit_local, int) and fit_local is not False:
 
@@ -479,7 +479,7 @@ class SpectralTypeRadius:
             fig.triangle([spt], [radius.value], color='red', size=15, legend_label=u.specType(spt))
             show(fig)
 
-        return radius.round(3), radius_unc.round(3)
+        return radius, radius_unc
 
     def generate(self, orders):
         """

@@ -121,7 +121,7 @@ class Isochrone:
         # Get the min and max ages
         self.ages = np.array(np.unique(self.data['age']))*self.age_units
 
-    def evaluate(self, xval, age, xparam, yparam, plot=False):
+    def evaluate(self, xval, age, xparam, yparam, distribution, plot=False):
         """Interpolate the value and uncertainty of *yparam* given an
         x-value and age range
 
@@ -135,6 +135,8 @@ class Isochrone:
             The name of the parameter on the x-axis
         yparam: str
             The name of the parameter on the y-axis
+        distribution: str
+            The type of distribution used for the Monte Carlo approach, either 'uniform' or 'normal'
         plot: bool
             Plot all isochrones and the interpolated value
 
@@ -168,8 +170,17 @@ class Isochrone:
         mu, sigma = xval[0], xval[1]  # mean and standard deviation for values on the x-axis
         mu_a, sigma_a = age[0].value, age[1].value  # mean and standard deviation for the age range provided
 
+        # Generate random sample for values on the x-axis
         xsample = np.random.normal(mu, sigma, 10000)
-        ysample = np.random.uniform(mu_a-sigma_a, mu_a+sigma_a, 10000)
+
+        # Generate random sample for the age range provided
+        if distribution == 'uniform':
+            ysample = np.random.uniform(mu_a-sigma_a, mu_a+sigma_a, 10000)
+        elif distribution == 'normal':
+            ysample = np.random.normal(mu_a, sigma_a, 10000)
+        else:
+            raise ValueError("Distribution must be set to 'uniform' or 'normal'.")
+
         values_list = []
         nan_counter = 0
 
