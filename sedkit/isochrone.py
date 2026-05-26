@@ -33,7 +33,10 @@ NYMG_AGES = {'AB Dor': (149 * q.Myr, 51 * q.Myr, '2015MNRAS.454..593B'),
 
 # A list of all supported evolutionary models
 try:
-    EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in glob.glob(str(importlib.resources.files('sedkit')/ 'data/models/evolutionary/*'))]
+    EVO_MODELS = [os.path.basename(m).replace('.txt', '') for m in
+                  glob.glob(str(importlib.resources.files('sedkit') / 'data/models/evolutionary/*.txt')) +
+                  glob.glob(str(importlib.resources.files('sedkit') / 'data/models/evolutionary/SANDee/*.txt'))]
+
 # Fails RTD build for some reason
 except:
     EVO_MODELS = ['COND03', 'dmestar_solar', 'DUSTY00', 'f2_solar_age', 'hybrid_solar_age', 'nc+03_age','nc+0.0_age', 'nc-03_age', 'nc_solar_age','nc+0.5_age','nc-0.5_age', 'parsec12_solar','ATMO_NEQ_strong','ATMO_NEQ_strong_MIRI','chaubrier_2022.txt']
@@ -54,7 +57,10 @@ class Isochrone:
 
         # Set the path
         self.name = name
-        self.path = str(importlib.resources.files('sedkit')/ 'data/models/evolutionary/{}.txt').format(self.name)
+        self.path = str(importlib.resources.files('sedkit') / 'data/models/evolutionary/{}.txt').format(self.name)
+
+        if not os.path.exists(self.path):
+            self.path = str(importlib.resources.files('sedkit') / 'data/models/evolutionary/SANDee/{}.txt').format(self.name)
         self._age_units = None
         self._mass_units = None
         self._radius_units = None
